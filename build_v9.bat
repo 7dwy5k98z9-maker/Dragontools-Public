@@ -101,30 +101,12 @@ for %%F in (
   )
 )
 
-REM Externe Tools, die im Build gebuendelt werden.
-for %%F in (
-  "third_party\FFmpeg\ffmpeg.exe"
-  "third_party\FFmpeg\ffprobe.exe"
-  "third_party\GPAC\mp4box.exe"
-  "third_party\dovi_tool\dovi_tool.exe"
-  "third_party\hdr10plus_tool\hdr10plus_tool.exe"
-  "third_party\Mediainfo\MediaInfo.exe"
-) do (
-  if not exist %%F (
-    echo [FEHLER] Externes Build-Tool fehlt: %%~F
-    goto :BUILD_FAILED
-  )
-)
-for %%D in (
-  "third_party\rmts"
-  "third_party\HandBrake"
-  "third_party\MKVToolNix"
-  "third_party\MakeMKV"
-) do (
-  if not exist %%D (
-    echo [FEHLER] Externer Build-Ordner fehlt: %%~D
-    goto :BUILD_FAILED
-  )
+REM Das oeffentliche Programmpaket enthaelt bewusst keine Drittanbieterprogramme.
+REM Anwender laden benoetigte Werkzeuge von den offiziellen Projektseiten herunter
+REM und konfigurieren deren Pfade in DragonTools. Siehe TOOLS_INSTALLIEREN.txt.
+if not exist "TOOLS_INSTALLIEREN.txt" (
+  echo [FEHLER] Werkzeughinweise fehlen: TOOLS_INSTALLIEREN.txt
+  goto :BUILD_FAILED
 )
 
 REM Vor dem Source-Release-Check alte App-Bundles entfernen.
@@ -199,23 +181,22 @@ REM Versionsinfo fuer reproduzierbare Build-Logs.
   --add-data "Aenderungshistorie\CHANGELOGV7.txt;Aenderungshistorie" ^
   --add-data "Bilder\banner.png;Bilder" ^
   --add-data "Bilder\splash_Intro.png;Bilder" ^
-  --add-data "third_party\rmts;Programme\rmts" ^
-  --add-data "third_party\HandBrake;Programme\handbrake" ^
+  --add-data "TOOLS_INSTALLIEREN.txt;Programme" ^
   --add-data "dragontools\config;dragontools\config" ^
-  --add-data "third_party\MKVToolNix;Programme\mkvtoolnix" ^
-  --add-data "third_party\MakeMKV;Programme\MakeMKV" ^
   --add-data "dragontools;Python\dragontools" ^
   --add-data "DragonToolsV9.py;Python" ^
-  --add-binary "third_party\FFmpeg\ffmpeg.exe;Programme" ^
-  --add-binary "third_party\FFmpeg\ffprobe.exe;Programme" ^
-  --add-binary "third_party\GPAC\mp4box.exe;Programme" ^
-  --add-binary "third_party\dovi_tool\dovi_tool.exe;Programme" ^
-  --add-binary "third_party\hdr10plus_tool\hdr10plus_tool.exe;Programme" ^
-  --add-binary "third_party\Mediainfo\MediaInfo.exe;Programme" ^
   DragonToolsV9.py
 
 if errorlevel 1 (
   echo [FEHLER] PyInstaller-Build fehlgeschlagen.
+  goto :BUILD_FAILED
+)
+
+REM Die Werkzeuganleitung liegt zusaetzlich direkt neben der EXE, damit sie
+REM vor dem ersten Programmstart ohne Suche auffindbar ist.
+copy /Y "TOOLS_INSTALLIEREN.txt" "%DIST_ROOT%\TOOLS_INSTALLIEREN.txt" >nul
+if errorlevel 1 (
+  echo [FEHLER] Werkzeuganleitung konnte nicht in den Build kopiert werden.
   goto :BUILD_FAILED
 )
 
@@ -228,6 +209,8 @@ for %%F in (
   "%DATA_ROOT%\help.html"
   "%DATA_ROOT%\Handbuch\Handbuch.pdf"
   "%DATA_ROOT%\Aenderungshistorie\CHANGELOG.json"
+  "%DIST_ROOT%\TOOLS_INSTALLIEREN.txt"
+  "%DATA_ROOT%\Programme\TOOLS_INSTALLIEREN.txt"
   "%DATA_ROOT%\dragontools\config\default_profiles.json"
   "%DATA_ROOT%\dragontools\config\default_renamer_rules.json"
   "%DATA_ROOT%\Python\dragontools\__init__.py"

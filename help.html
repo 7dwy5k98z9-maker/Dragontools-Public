@@ -4,7 +4,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1" name="viewport"/>
-<title>Dragon Tools V9.8 – Hilfe</title>
+<title>Dragon Tools V9.8.1 – Hilfe</title>
 <style>
 body {
   font-family: "Segoe UI", Arial, sans-serif;
@@ -105,7 +105,7 @@ summary { font-weight: 600; padding: 7px 10px; background: #f0f4f8; }
 </head>
 <body>
 <div class="container">
-<h1>🐉 Dragon Tools V9.8</h1>
+<h1>🐉 Dragon Tools V9.8.1</h1>
 <p style="text-align:center;color:#64748b;">
   Multifunktionales Video-Konvertierungstool · H.264 · H.265 · AV1 · DV · HDR10+ · Remux · ISO-Remux · Videomerge  
 
@@ -1749,12 +1749,13 @@ in das Testfeld ein. Klicke "🔍 Testen".</p>
 <li><strong>V9.5 → V9.6:</strong> Renamer Überarbeitung und Flexibilisierung, Stabilitätsverbesserung, Datenbankoptimierung, Refaktoring</li>
 <li><strong>V9.6 → V9.7:</strong> zentrale Versionsquelle und reproduzierbarer Build, quellenabhängige DV-/HDR10+-Erhaltungslogik, robuste Config-Typnormalisierung, vollständige Encoder-/Skalierungs-Overrides pro Datei und Mehrfachauswahl, wählbare MKV-/MP4-Zielcontainer, DV-MKV über mkvmerge, DV-Level-5-/AutoCrop-Abgleich, freie Seriensuche im Renamer und Preflight sowie der direkte HDR10+-5-Schritt-Pfad ohne große source.hevc-/encoded.mkv-Zwischenstufen. Refactoring</li>
 <li><strong>V9.7 → V9.8:</strong> Windows-Neustartschutz für laufende Jobs, Benutzerabfrage im Leerlauf, 15-Minuten-Aufschub, Freigabe eigener DragonTools-Shutdowns, Release-Smoke-Erweiterung und finale Refactoring-/Versionsnacharbeit.</li>
+<li><strong>V9.8 → V9.8.1:</strong> optionale GitHub-Updateprüfung beim Programmstart und über das Hilfe-Menü, öffentliche anonymisierte Bereitstellung und getrennte Release-Downloads. Updates werden nur angeboten und niemals automatisch installiert.</li>
 </ul>
 </div>
 <!-- CHANGELOG -->
 <a name="changelog"></a><h2 id="changelog"><span style="color:#64748b;font-size:.85em;margin-right:6px;">53.</span>🕘 Änderungshistorie &amp; Versionen</h2>
 <div class="panel">
-<p>Hier findest du die aktuelle V9.8-Historie und getrennt davon die Legacy-Historien der älteren Entwicklungsstände. Der V9-Dialog verwendet jetzt eine <strong>seitenbasierte Darstellung</strong> statt eines langen Scrolltextes.</p>
+<p>Hier findest du die aktuelle V9.8.1-Historie und getrennt davon die Legacy-Historien der älteren Entwicklungsstände. Der V9-Dialog verwendet jetzt eine <strong>seitenbasierte Darstellung</strong> statt eines langen Scrolltextes.</p>
 <ul>
 <li><strong>Aktuelle Änderungshistorie:</strong> V9-Log öffnen mit <kbd>F12</kbd> oder über das Hilfe-Menü.</li>
 <li><strong>Bereichsauswahl:</strong> die vollständigen Abschnittsnamen stehen in einer breiten Auswahlliste; die alte Button-Matrix mit abgeschnittenen Überschriften entfällt.</li>
@@ -1888,7 +1889,7 @@ Profile und Logs bleiben erhalten.</p>
 <!-- LIZENZEN -->
 <a name="lizenzen"></a><h2 id="lizenzen"><span style="color:#64748b;font-size:.85em;margin-right:6px;">57.</span>📄 Lizenzen &amp; Danksagung</h2>
 <div class="panel">
-<h3>Dragon Tools V9.8</h3>
+<h3>Dragon Tools V9.8.1</h3>
 <p>Entwickelt von Dragon Developer · Entwicklungszeitraum: 2025–2026</p>
 <h3>Verwendete Drittanbieter-Bibliotheken</h3>
 <table class="table" style="border-collapse:collapse;">
@@ -1936,7 +1937,7 @@ und der gesamten Open-Source-Community im Video-Encoding-Bereich.</p>
 <tr><td><strong>Regel-Schemas</strong></td><td>Kontrolliert die Default-Dateien für Audio, Untertitel, Move, Renamer und Profile gegen die zentrale Schemaversion. Aktuell: Audio 4, Untertitel 4, Move 1, Renamer 1 und Profile 3. Eine falsche Default-Schemaversion gilt als Release-Fehler.</td></tr>
 <tr><td><strong>Python-Paket-Smoke-Test</strong></td><td>Im Quellprojekt wird <code>dragontools</code> geprüft; im Onedir-Build die tatsächliche Quellkopie unter <code>Daten\Python\dragontools</code>. <code>Daten\dragontools</code> ist dagegen der Runtime-Datenbereich für Konfigurationen.</td></tr>
 <tr><td><strong>Release-Bytecode</strong></td><td><code>__pycache__</code>, <code>*.pyc</code>, <code>*.pyo</code> und typische Test-/Lint-Caches gelten im Release als Fehler. Der Source-Packer filtert sie zusätzlich aus und prüft das ZIP per CRC.</td></tr>
-<tr><td><strong>Quellprojekt</strong></td><td><code>release_manifest.json</code> beschreibt V9.8 als Source-with-Build mit dynamischer PyInstaller-CLI-Strategie. Requirements-Dateien dokumentieren Runtime, optionale Bildanalyse, Tests und Buildumgebung reproduzierbar.</td></tr>
+<tr><td><strong>Quellprojekt</strong></td><td><code>release_manifest.json</code> beschreibt V9.8.1 als Source-with-Build mit dynamischer PyInstaller-CLI-Strategie. Requirements-Dateien dokumentieren Runtime, optionale Bildanalyse, Tests und Buildumgebung reproduzierbar.</td></tr>
 <tr><td><strong>Optionale Abhängigkeiten</strong></td><td>OpenCV/NumPy verbessern den Audio-Video-Matcher. Fehlen sie, bleibt der FFmpeg/dHash-Fallback nutzbar.</td></tr>
 <tr><td><strong>Testumgebung</strong></td><td><code>pytest.ini</code> setzt PyQt6 und registriert <code>media_integration</code> sowie <code>dv_hdr_integration</code>. Reale DV/HDR-Tests brauchen zusätzlich die externen Tools und passende Fixtures.</td></tr>
 <tr><td><strong>Teststand nach dem Refactoring · 09.09.2026</strong></td><td>Der aktuelle Quellstand umfasst 583 Python-Dateien. Der zuletzt dokumentierte vollständige Windows/Python-3.14.6-Lauf über alle 148 Testdateien endete mit 1.106 bestandenen Tests, 2 gezielten Skips und 0 Fehlern. Zusätzlich liefen 427 Produktivmodule durch den Import-Smoke-Test. Die beiden Skips betreffen nur die nicht konfigurierte reale DV/HDR-Tool-/MP4Box-Integration.</td></tr>
@@ -1946,15 +1947,15 @@ und der gesamten Open-Source-Community im Video-Encoding-Bereich.</p>
 <div class="callout ok"><strong>Was ich für V9.8 zusätzlich abgesichert habe:</strong> Converter, DV-Remux, MP4-Remux und Audio-Mux verwenden denselben transaktionalen Output-Commit mit Journal, Backup und Rollback. Regel- und Profildateien werden atomar gespeichert; beschädigte Benutzerdateien sichere ich vor dem Fallback als <code>*.corrupt_&lt;Zeitstempel&gt;.json</code>. Beim HDR10+-Pfad sind ToolRunner, MuxService und Bitstream-Metadaten getrennt. Kann ein vorhandener Audio-Donor nicht zuverlässig analysiert werden, bricht der Lauf fail-closed ab, statt unbemerkt eine MP4 ohne Audio zu erzeugen.</div>
 <div class="callout ok"><strong>Letzte technische Korrekturen bis V9.8:</strong> Der Failure-Cleanup löscht nur Sidecars, die zum aktuellen Job gehören; bereits vorhandene gleichnamige Untertitel bleiben unangetastet. Vor jedem DV-Job setze ich den Sidecar-Ergebniszustand zurück, damit nach einem Fehler keine alten Pfade gemeldet werden. Das Move-Journal trennt Video-, Companion- und Cleanup-Phasen und kann nach einem Crash mit bereits verschobenem Video fortsetzen. Die Mediathek wird erst nach erfolgreichem Companion-Commit aktualisiert. <code>mkvpropedit</code> nutzt den konfigurierten Pfad, ordinales <code>track:n</code> und behandelt Returncode 1 als Warnung. Lange FFmpeg-Hilfsprozesse laufen über die zentrale Abort-/Timeout-Logik; die Rules-Preview bleibt dabei Qt-unabhängig.</div>
 <div class="callout ok"><strong>Refactoring-Abnahme vom 09.09.2026:</strong> ToolRunner-Prozesssteuerung, Move-Batch-Ausführung, Pipeline-Capabilities/-Policy, Audioplan-Policy, TMDB-Resolver/-Vorschläge/-Transport, TheTVDB-Kandidaten, Sidecar-Planung, Move-Transaktionen, Mediathek-Pfade, Converter-Fortschritt, Override-Normalisierung, Medienanalyse sowie Medienvertrag und Output-Prüfung sind fachlich getrennt. Ein verlorener Legacy-Hook für <code>move_thread.os.replace</code> wurde wiederhergestellt. Die Release-Smoke-Prüfung umfasst nun 37 beteiligte Refactoring-Module und erkennt fehlende Paketdateien vor der Auslieferung.</div>
-<div class="callout warn"><strong>Build-Hinweis:</strong> Der nächste verwendbare Build muss als <code>dist\DragonToolsV9.8</code> neu erzeugt und anschließend mit der Release-/Build-Prüfung kontrolliert werden. Ältere dist-Ordner gehören nicht zum aktuellen V9.8-Quellstand.</div>
+<div class="callout ok"><strong>Release V9.8.1:</strong> Der öffentliche Build wird als <code>dist\DragonToolsV9.8.1</code> erzeugt und mit der Release-/Build-Prüfung kontrolliert. Drittanbieterprogramme werden nicht mitverteilt; die Datei <code>TOOLS_INSTALLIEREN.txt</code> nennt die offiziellen Downloadquellen.</div>
 <div class="callout warn"><strong>Grenze der Release-Prüfung:</strong> Sie kontrolliert die Struktur und die grundlegende Paketkonsistenz, testet aber nicht jede Funktion der externen Programme. FFmpeg, MediaInfo, MKVToolNix, dovi_tool usw. prüfst du zusätzlich mit <kbd>F9</kbd> bzw. dem erweiterten Systemtest.</div>
 </div>
 
 <!-- ÜBER -->
-<a name="über"></a><h2 id="über"><span style="color:#64748b;font-size:.85em;margin-right:6px;">60.</span>ℹ️ Über Dragon Tools V9.8</h2>
+<a name="über"></a><h2 id="über"><span style="color:#64748b;font-size:.85em;margin-right:6px;">60.</span>ℹ️ Über Dragon Tools V9.8.1</h2>
 <div class="panel">
 <table class="info-table"><colgroup><col style="width:290px;"/><col/></colgroup>
-<tr><td><strong>Version</strong></td><td>V9.8</td></tr>
+<tr><td><strong>Version</strong></td><td>V9.8.1</td></tr>
 <tr><td><strong>Autor</strong></td><td>Dragon Developer</td></tr>
 <tr><td><strong>Plattform</strong></td><td>Windows 10/11 64-bit</td></tr>
 <tr><td><strong>Architektur</strong></td><td>Eigenständige V9-Architektur – produktive Altpfade entfernt; gezielte Kompatibilitätsfassaden bleiben erhalten</td></tr>
@@ -2002,7 +2003,7 @@ und der gesamten Open-Source-Community im Video-Encoding-Bereich.</p>
 <p>Mit V9.8 habe ich den modularen Aufbau von V9 weiter ausgebaut. Das <code>dragontools/</code>-Paket ist in GUI · Core · Worker · Rules · Subtitle und Tests gegliedert. Durch Lazy Loading werden Registerkarten und Teilfunktionen erst beim Öffnen geladen. Dadurch startet Dragon Tools schneller und Fehler lassen sich leichter einem Bereich zuordnen. Dauerhafte Änderungen an einer ausgelieferten EXE benötigen weiterhin einen neuen Build.</p></div>
 
 <div class="panel" style="text-align:center;margin-top:32px;">
-<span class="muted">© 2026 – Dragon Tools V9.8 · Eigenständiger Neuaufbau · bereinigte V9-Architektur</span>
+<span class="muted">© 2026 – Dragon Tools V9.8.1 · Dragon Developer · Eigenständiger Neuaufbau</span>
 </div>
 <!-- /container -->
 </body>

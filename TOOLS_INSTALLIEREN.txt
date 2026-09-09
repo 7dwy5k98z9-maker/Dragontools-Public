@@ -1,0 +1,28 @@
+DragonTools V9.8.1 - externe Werkzeuge
+========================================
+
+Dieses Programmpaket enthaelt bewusst keine Drittanbieterprogramme.
+DragonTools selbst kann gestartet werden, einzelne Funktionen werden jedoch erst
+verfuegbar, nachdem die dafuer benoetigten Werkzeuge eingerichtet wurden.
+
+Die Werkzeugpfade koennen in DragonTools unter den Einstellungen fuer externe
+Werkzeuge ausgewaehlt werden. Bitte lade Programme ausschliesslich von ihren
+offiziellen Projektseiten herunter und beachte die jeweiligen Lizenzen.
+
+Kernfunktionen:
+- FFmpeg / FFprobe: https://ffmpeg.org/download.html
+- MKVToolNix: https://mkvtoolnix.download/downloads.html
+- MediaInfo CLI: https://mediaarea.net/en/MediaInfo/Download/Windows
+
+Optionale Arbeitsablaeufe:
+- GPAC / MP4Box: https://gpac.io/downloads/gpac-nightly-builds/
+- dovi_tool: https://github.com/quietvoid/dovi_tool/releases
+- hdr10plus_tool: https://github.com/quietvoid/hdr10plus_tool/releases
+- HandBrake: https://handbrake.fr/downloads.php
+- MakeMKV: https://www.makemkv.com/download/
+- Rename My TV Series 2:
+  https://www.tweaking4all.com/home-theatre/rename-my-tv-series-v2/
+
+Ausfuehrliche Hinweise und die empfohlene Ordnerstruktur stehen in der README
+des Quellprojekts:
+https://github.com/7dwy5k98z9-maker/Dragontools-Public

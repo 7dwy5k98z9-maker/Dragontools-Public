@@ -1,3 +1,12 @@
+[09.09.2026] V9.8.1 - GitHub-Updatepruefung und oeffentliche Bereitstellung
+- DragonTools prueft nach dem Programmstart verzoegert und ohne Blockierung der Oberflaeche das neueste stabile Release im oeffentlichen GitHub-Release-Repository.
+- Ueber Hilfe -> Nach Updates suchen kann dieselbe Pruefung jederzeit manuell gestartet werden.
+- Nur bei einer neueren Version erscheint ein Hinweis; erst nach Zustimmung wird die GitHub-Downloadseite im Browser geoeffnet.
+- DragonTools laedt oder installiert keine Aktualisierung automatisch.
+- Das oeffentliche Windows-Paket enthaelt DragonTools samt Python-Laufzeit, aber keine Drittanbieterprogramme. Offizielle Downloadquellen liegen als TOOLS_INSTALLIEREN.txt bei.
+- Quellcode und Release-Paket werden getrennt in Dragontools-Public und Dragontools-Releases veroeffentlicht.
+- Die oeffentliche Fassung verwendet ausschliesslich Dragon Developer als Entwicklername und wurde auf persoenliche Marker geprueft.
+
 [09.09.2026] Refactoring-Blöcke 1-12 geprüft und abgeschlossen
 - ToolRunner-Prozesssteuerung, Move-Batch-Ausführung, Pipeline-Capabilities/-Policy und Audioplan-Policy wurden aus den bisherigen Orchestratoren ausgelagert.
 - TMDB besteht nun aus schlanker Client-Fassade sowie Resolver-, Vorschlags- und Transportmodul; die TheTVDB-Episodenkandidaten liegen in einem eigenen Fachmodul.

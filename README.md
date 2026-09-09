@@ -1,4 +1,4 @@
-# DragonTools V9.8
+# DragonTools V9.8.1
 
 DragonTools ist eine Windows-Anwendung zur Analyse, Konvertierung und Verwaltung von Video-, Audio- und Untertiteldateien. Das Projekt bündelt die benötigten Drittanbieterprogramme nicht im Git-Repository. Sie müssen separat von den jeweiligen Projektseiten heruntergeladen werden.
 
@@ -53,7 +53,7 @@ Die Programme werden bewusst nicht mit diesem Repository verteilt. Lade sie auss
 | MakeMKV | ISO-, DVD- und Blu-ray-Workflows | [MakeMKV Download](https://www.makemkv.com/download/) | kompletter Programmordner unter `third_party/MakeMKV/`, mit `makemkvcon64.exe` oder `makemkvcon.exe` |
 | Rename My TV Series | Optionales externes Werkzeug zur Serienumbenennung | [Rename My TV Series 2](https://www.tweaking4all.com/home-theatre/rename-my-tv-series-v2/) | kompletter Programmordner unter `third_party/rmts/`, mit `RenameMyTVSeries.exe` |
 
-Nicht jede Funktion benötigt alle Werkzeuge. Fehlende optionale Werkzeuge deaktivieren oder begrenzen nur die zugehörigen Arbeitsabläufe. Der vollständige EXE-Build erwartet hingegen sämtliche oben genannten Ordner und Programme.
+Nicht jede Funktion benötigt alle Werkzeuge. Fehlende optionale Werkzeuge deaktivieren oder begrenzen nur die zugehörigen Arbeitsabläufe. Das öffentliche Windows-Paket enthält diese Drittanbieterprogramme nicht. Installiere nur die Werkzeuge, die du für deine Arbeitsabläufe brauchst, und wähle ihre Pfade anschließend in DragonTools aus.
 
 ## Alternative Werkzeugkonfiguration
 
@@ -63,7 +63,7 @@ Beim Start aus dem Quellcode sucht DragonTools Werkzeuge in dieser Reihenfolge:
 2. im Windows-`PATH`,
 3. in den bekannten Unterordnern von `third_party`.
 
-Die Pfade können in DragonTools unter den Einstellungen für externe Werkzeuge ausgewählt werden. Das ist praktisch, wenn die Programme bereits an anderer Stelle installiert sind. Für `build_v9.bat` müssen sie trotzdem in der oben beschriebenen `third_party`-Struktur vorhanden sein.
+Die Pfade können in DragonTools unter den Einstellungen für externe Werkzeuge ausgewählt werden. Das ist praktisch, wenn die Programme bereits an anderer Stelle installiert sind. Alternativ können die Programme in der oben beschriebenen `third_party`-Struktur liegen.
 
 ## Empfohlene Ordnerstruktur
 
@@ -117,7 +117,13 @@ Kontrolliere anschließend, dass alle externen Werkzeuge unter `third_party` vor
 build_v9.bat
 ```
 
-Der fertige Build wird unter `dist/DragonToolsV9.8/` abgelegt. `build/` und `dist/` sind lokale Ausgaben und werden nicht in Git gespeichert.
+Der fertige Build wird unter `dist/DragonToolsV9.8.1/` abgelegt. Der öffentliche Build enthält DragonTools und seine Python-Laufzeit, aber keine externen Medienprogramme. `build/` und `dist/` sind lokale Ausgaben und werden nicht in Git gespeichert.
+
+## Fertige Windows-Version
+
+Wer DragonTools nur verwenden möchte, kann unter [GitHub Releases](https://github.com/7dwy5k98z9-maker/Dragontools-Releases/releases) das Paket `DragonToolsV9.8.1-win64.zip` herunterladen. Python und Git werden dafür nicht benötigt.
+
+Nach dem Entpacken wird `DragonToolsV9.8.1.exe` gestartet. Die Datei `TOOLS_INSTALLIEREN.txt` im Programmpaket erklärt, welche externen Werkzeuge benötigt werden und wo sie erhältlich sind. Vor dem Start sollte die veröffentlichte SHA-256-Prüfsumme kontrolliert werden.
 
 ## Programm-Updates über GitHub
 

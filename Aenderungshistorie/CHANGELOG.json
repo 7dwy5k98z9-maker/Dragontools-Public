@@ -1,7 +1,7 @@
 {
   "format_version": 1,
-  "title": "Dragon Tools V9.8 – Änderungshistorie",
-  "app_version": "9.8",
+  "title": "Dragon Tools V9.8.1 – Änderungshistorie",
+  "app_version": "9.8.1",
   "updated": "2026-09-09",
   "sections": [
     {
@@ -10,15 +10,22 @@
       "blocks": [
         "PyQt6-App: Dragon Tools – Multifunktionales Videobearbeitungstool\nAutor: Dragon Developer (GUI-Port)",
         "Dragon Tools ist ein modular aufgebautes PyQt6-Tool zur Video-Konvertierung,\nUntertitelverwaltung, Pfadorganisation und automatisierten Verarbeitung.\nSchwerpunkt der V9-Entwicklung liegt auf Stabilität, Release-Sicherheit,\nHDR/DV-Korrektheit, Fehlerdiagnose und wartbarer Modulstruktur.",
-        "Version: 9.8 (Release-Build)\nStand: 2026-09-09\nPlattform: Windows 10/11 (64-bit)",
-        "Diese Datei dokumentiert alle Änderungen der V9-Entwicklung in einer\ntechnisch gegliederten Struktur. Die Änderungen sind bewusst nicht nach\nV9.0, V9.1, V9.2, V9.3, V9.4, V9.5, V9.6, V9.7 und V9.8 getrennt, sondern nach Funktionsbereichen\nzusammengeführt.",
+        "Version: 9.8.1 (Release-Build)\nStand: 2026-09-09\nPlattform: Windows 10/11 (64-bit)",
+        "Diese Datei dokumentiert alle Änderungen der V9-Entwicklung in einer\ntechnisch gegliederten Struktur. Die Änderungen sind bewusst nicht nach\nV9.0, V9.1, V9.2, V9.3, V9.4, V9.5, V9.6, V9.7, V9.8 und V9.8.1 getrennt, sondern nach Funktionsbereichen\nzusammengeführt.",
         "Versionsbezogene Punkte bleiben erhalten, wenn sie selbst eine technische\nRelease-, Build- oder Kompatibilitätsänderung dokumentieren.",
-        "Hinweis zur historischen Einordnung:\nÄltere Änderungsblöcke beschreiben den damaligen Entwicklungsstand.\nAktuelle Gegenprüfungen des V9.8-Quellstands haben Vorrang, wenn ältere\nBuild-/Release-Aussagen aufgrund früherer Projektstände heute abweichen.",
+        "Hinweis zur historischen Einordnung:\nÄltere Änderungsblöcke beschreiben den damaligen Entwicklungsstand.\nAktuelle Gegenprüfungen des V9.8.1-Quellstands haben Vorrang, wenn ältere\nBuild-/Release-Aussagen aufgrund früherer Projektstände heute abweichen.",
         "Dragon Tools V8 ist in CHANGELOGV8.txt dokumentiert.\nÄltere Versionen (V1–V7) sind in CHANGELOGV7.txt dokumentiert.\nMenü: Hilfe → Änderungshistorie Legacy V8 / Legacy V7"
       ]
     },
     {
-      "title": "V9.8 – AKTUELLER STAND 09.09.2026",
+      "title": "V9.8.1 – UPDATE UND ÖFFENTLICHE BEREITSTELLUNG 09.09.2026",
+      "icon": "🔄",
+      "blocks": [
+        "[09.09.2026] V9.8.1: optionale GitHub-Updateprüfung und öffentliche Bereitstellung\n- DragonTools prüft nach dem Programmstart verzögert und ohne Blockierung der Oberfläche das neueste stabile Release im öffentlichen GitHub-Release-Repository.\n- Über Hilfe → Nach Updates suchen kann dieselbe Prüfung jederzeit manuell gestartet werden.\n- Nur bei einer neueren Version erscheint ein Hinweis; erst nach Zustimmung wird die GitHub-Downloadseite im Browser geöffnet.\n- DragonTools lädt oder installiert keine Aktualisierung automatisch.\n- Das öffentliche Windows-Paket enthält DragonTools samt Python-Laufzeit, aber keine Drittanbieterprogramme. Offizielle Downloadquellen und Konfigurationshinweise liegen dem Paket als TOOLS_INSTALLIEREN.txt bei.\n- Quellcode und Release-Paket werden getrennt in Dragontools-Public und Dragontools-Releases veröffentlicht.\n- Die öffentliche Fassung verwendet ausschließlich Dragon Developer als Entwicklername und wurde auf persönliche Marker geprüft."
+      ]
+    },
+    {
+      "title": "V9.8 – STAND VOR V9.8.1 09.09.2026",
       "icon": "🛡️",
       "blocks": [
         "[09.09.2026] V9.8: Windows-Neustartschutz und finale Refactoring-Nacharbeit\n- DragonTools installiert beim Hauptfenster einen Windows-Neustartschutz für laufende Jobs.\n- Windows-Update-Neustarts werden während aktiver Konvertierungen, Moves, Remux-, Analyse- oder Hilfsworker abgelehnt, damit keine laufenden Dateioperationen beschädigt werden.\n- Windows bekommt über ShutdownBlockReasonCreate einen sichtbaren Grund, warum DragonTools den Neustart verzögert.\n- Ist die DragonTools-Option 'Herunterfahren nach Abschluss' aktiv, wird der Windows-Neustart ebenfalls bis zum Batch-Ende blockiert; danach gibt DragonTools den eigenen Shutdown frei.\n- Läuft kein Job, fragt DragonTools bei einer Windows-Neustartanforderung nach: Zulassen, blockieren oder 15 Minuten aufschieben.\n- Von DragonTools selbst gestartete Shutdowns werden vor dem shutdown.exe-Aufruf ausdrücklich freigegeben, damit der Schutz die eigene Aktion nicht blockiert.\n- Der Neustartschutz ist in eine Qt-unabhängige Policy und ein GUI-Modul getrennt; neue Regressionstests sichern die Entscheidungspfade ab.\n- Release-Smoke-Prüfung, Help, Über-Dialog, Manifest und Changelog kennen die neuen Schutzmodule und den V9.8-Stand.",

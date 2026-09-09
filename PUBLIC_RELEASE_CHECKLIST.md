@@ -47,4 +47,4 @@ Das GitHub-Repository zunächst leer anlegen: ohne README, `.gitignore` oder Liz
 6. ZIP, Prüfsumme und verständliche Release-Hinweise anhängen.
 7. Das Release darf weder Entwurf noch Vorabversion sein, wenn es von der normalen Updateprüfung gefunden werden soll.
 
-Die aktuelle Anwendungsversion ist `9.8`. Erst ein Release mit einer höheren Versionsnummer löst den Updatehinweis aus.
+Die aktuelle Anwendungsversion ist `9.8.1`. Dieses Release löst bei V9.8 den Updatehinweis aus. Nach der Installation meldet sich erst eine höhere Version, beispielsweise `v9.8.2`, wieder als Update.
