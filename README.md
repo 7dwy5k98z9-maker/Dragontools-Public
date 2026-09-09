@@ -111,7 +111,7 @@ Installiere zunächst die Build-Abhängigkeiten:
 python -m pip install -r requirements-build.txt
 ```
 
-Kontrolliere anschließend, dass alle externen Werkzeuge unter `third_party` vorhanden sind, und starte den Build aus einer Eingabeaufforderung im Projektordner:
+Der öffentliche Build benötigt keine externen Medienprogramme. Starte ihn aus einer Eingabeaufforderung im Projektordner:
 
 ```cmd
 build_v9.bat
