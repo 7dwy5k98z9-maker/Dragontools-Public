@@ -1,0 +1,24 @@
+DragonTools V9.7 - Review Patch Block 2
+Datum: 2026-09-06
+
+Schwerpunkt: Daten- und Persistenzsicherheit
+
+Aenderungen:
+- Neuer zentraler, Qt-unabhaengiger Commit-Service dragontools/core/output_replace.py.
+- Same-Path-Overwrite ueber PathSwapTransaction + ReplaceJournal + automatischen Rollback.
+- Containerwechsel werden vor dem Loeschen des Originals durable journalisiert.
+- Cleanup-Fehler am Original bleiben als cleanup_pending fuer Replace-Recovery erhalten.
+- Haupt-ReplaceService auf den zentralen Commit-Service umgestellt.
+- DV-Remux, MP4-Remux und AudioMux verwenden keinen eigenen direkten os.replace-Overwrite mehr.
+- Regeldateien werden ueber write_json_atomic() gespeichert.
+- Benutzerprofile und automatische Profilmigrationen werden ueber write_json_atomic() gespeichert.
+- Neue Regressionstests fuer zentralen Commit-Service-Nutzung und atomare Persistenz.
+
+Validierung:
+- 45/45 gezielte Block-2-/Rollback-/Persistenztests bestanden.
+- 957 Tests bestanden, 12 erwartete Skips bei Ausschluss der zwei bekannten
+  1-Sekunden-Timeout-Testdateien.
+- Die beiden bekannten Timeout-Testdateien unveraendert: 9 bestanden, 3 in
+  dieser Linux-Sandbox wegen ~1.3 s Python-Prozessstart fehlgeschlagen.
+- Release-Validator Source-Modus: 0 Fehler, 6 Warnungen.
+  Warnungen: kein dist/PyInstaller-Build im Sourcepaket + 5 bekannte Datenschutz-Hinweise.

@@ -1,0 +1,2009 @@
+<!DOCTYPE html>
+
+<html lang="de">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1" name="viewport"/>
+<title>Dragon Tools V9.8 – Hilfe</title>
+<style>
+body {
+  font-family: "Segoe UI", Arial, sans-serif;
+  line-height: 1.6;
+  color: #1a202c;
+  background: #ffffff;
+  margin: 0; padding: 0;
+}
+.container { padding: 16px 20px; }
+h1 {
+  font-weight: 700;
+  text-align: center; margin: 8px 0 4px; color: #1a202c;
+}
+h2 {
+  font-weight: 700;
+  margin: 22px 0 8px;
+  padding: 5px 10px;
+  border-left: 4px solid #1d4ed8;
+  background: #f0f4f8;
+  color: #1a202c;
+}
+h3 { font-weight: 700; color: #1d4ed8; margin: 12px 0 4px; }
+p  { margin: 4px 0; }
+a  { color: #1d4ed8; }
+
+/* Tabellenüberschriften grundsätzlich linksbündig ausrichten.
+   Gilt auch für Tabellen ohne .table-Klasse, z.B. die Aufschlüsselung im Über-Bereich. */
+th { text-align: left; }
+.muted { color: #64748b; }
+.panel {
+  border: 1px solid #cbd5e1;
+  border-radius: 5px;
+  padding: 10px 12px;
+  margin: 6px 0 12px;
+  background: #f8fafc;
+}
+.callout {
+  border-left: 4px solid #1d4ed8;
+  padding: 7px 11px; margin: 7px 0;
+  background: #eff6ff;
+}
+.callout.ok   { border-left-color: #059669; background: #f0fdf4; }
+.callout.warn { border-left-color: #d97706; background: #fffbeb; }
+.callout.err  { border-left-color: #dc2626; background: #fef2f2; }
+.table { width: 100%; border-collapse: collapse; margin: 5px 0; }
+.table th {
+  font-weight: 600; color: #1d4ed8;
+  border-bottom: 2px solid #cbd5e1;
+  padding: 6px 8px; text-align: left;
+  }
+.table td { border-bottom: 1px solid #e2e8f0; padding: 5px 8px; }
+
+.info-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  margin: 5px 0;
+}
+.info-table td {
+  border-bottom: 1px solid #e2e8f0;
+  padding: 5px 8px;
+  vertical-align: top;
+}
+.info-table td:first-child {
+  width: 290px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.info-table td:last-child {
+  padding-left: 0;
+}
+
+code {
+  background: #f1f5f9; border: 1px solid #e2e8f0;
+  padding: 1px 4px; border-radius: 3px;
+  font-family: Consolas, monospace; }
+pre {
+  background: #f1f5f9; border: 1px solid #e2e8f0;
+  padding: 8px; border-radius: 3px; margin: 5px 0;
+  font-family: Consolas, monospace; }
+kbd {
+  background: #e2e8f0; border: 1px solid #cbd5e1;
+  padding: 1px 5px; border-radius: 3px;
+  font-family: Consolas, monospace; }
+details { border: 1px solid #cbd5e1; border-radius: 3px; margin: 5px 0; }
+summary { font-weight: 600; padding: 7px 10px; background: #f0f4f8; }
+.content { padding: 7px 10px; }
+.badge { padding: 1px 5px; border: 1px solid #cbd5e1; color: #64748b; }
+.tag-new { color: #1d4ed8; border-color: #1d4ed8; background: #dbeafe; }
+.tag-tip { color: #059669; border-color: #059669; background: #d1fae5; }
+.shortcut-table td:first-child { font-family: Consolas, monospace; color: #1d4ed8; }
+.grid { margin: 5px 0; }
+.toc-title { font-weight: 700; text-align: center; margin-bottom: 10px; }
+.toc-table td { padding: 4px 16px 4px 0; vertical-align: top; }
+.toc-table td:last-child { padding-right: 0; }
+.toc-table a { font-weight: 600; text-decoration: none; color: #1d4ed8; }
+</style>
+</head>
+<body>
+<div class="container">
+<h1>🐉 Dragon Tools V9.8</h1>
+<p style="text-align:center;color:#64748b;">
+  Multifunktionales Video-Konvertierungstool · H.264 · H.265 · AV1 · DV · HDR10+ · Remux · ISO-Remux · Videomerge  
+
+</p>
+<!-- TOC -->
+<div class="panel">
+<div class="toc-title">Inhaltsverzeichnis</div>
+<table class="toc-table" style="border-collapse:collapse;width:100%;border:none;margin-top:8px;"><tr><td><a href="#quickstart">1. 🚀 Quickstart</a></td><td><a href="#tabs">2. 🗂️ Registerkarten</a></td><td><a href="#pfade">3. 📁 Zielpfade</a></td></tr><tr><td><a href="#dateiliste">4. 🗃️ Dateiliste &amp; Datei-Einstellungen</a></td><td><a href="#queue">5. 🧠 Queue &amp; Live-Steuerung</a></td><td><a href="#videolisteneu">6. 🗂️ Erweiterte Videoliste &amp; Zoom-Fenster</a></td></tr><tr><td><a href="#overridefunktion">7. 🎛️ Override-Funktion</a></td><td><a href="#preflight">8. 📦 Preflight &amp; Verschiebe-Vorabprüfung</a></td><td><a href="#statusui">9. 🔥 Restdauer, Gesamtfortschritt &amp; Banner</a></td></tr><tr><td><a href="#shutdown">10. 📴 Shutdown-Verhalten</a></td><td><a href="#encoder">11. ⚙️ Encoder &amp; Qualität</a></td><td><a href="#pipeline">12. 🔄 Automatische Pipeline-Erkennung</a></td></tr><tr><td><a href="#dvremux">13. 📦 DV-Remux</a></td><td><a href="#remuxneu">14. 📦 Remux-Funktionen</a></td><td><a href="#isohandling">15. 💿 ISO Handling</a></td></tr><tr><td><a href="#audio">16. 🔊 Audio-Regeln</a></td><td><a href="#untertitel">17. 💬 Untertitel</a></td><td><a href="#imax">18. 🎬 IMAX &amp; Auto-Crop</a></td></tr><tr><td><a href="#cropimaxsettings">19. 🎬 Auto-Crop- &amp; IMAX-Feinsteuerung</a></td><td><a href="#profile">20. 💾 Profile</a></td><td><a href="#regeln">21. 📋 Regeln-Editor</a></td></tr><tr><td><a href="#workflows">22. 🧭 Typische Workflows</a></td><td><a href="#mergewidgetneu">23. 🔗 Merge-Widget</a></td><td><a href="#einstellungen">24. ⚙️ Einstellungen</a></td></tr><tr><td><a href="#standardreset">25. 🔄 Standardwerte &amp; Reset</a></td><td><a href="#werkzeuge">26. 🔧 Werkzeuge</a></td><td><a href="#toolsupdate">27. 🔄 Tools &amp; Updates</a></td></tr><tr><td><a href="#kompat">28. 🔌 Kompatibilität &amp; Container</a></td><td><a href="#medieninfo">29. 📊 Medieninfo</a></td><td><a href="#medieninfoerweitert">30. 📊 Erweiterte Medieninfo &amp; Regel-/Profil-Simulator</a></td></tr><tr><td><a href="#medienanalyse">31. 🔍 Medienanalyse</a></td><td><a href="#outputvalidierung">32. 🛠️ Output-Validierung &amp; automatische Reparatur</a></td><td><a href="#validierungspolitik">33. ✅ Validierungs- &amp; Reparaturpolitik</a></td></tr><tr><td><a href="#hdrvergleich">34. 🌈 HDR / HDR10+ / Dolby Vision</a></td><td><a href="#audiodynamik">35. 🔊 Audio-Dynamik &amp; Normalisierung</a></td><td><a href="#videopruefung">36. 🧪 Videoverarbeitung &amp; Quellbildprüfung</a></td></tr><tr><td><a href="#filmumbenennung">37. 🎞️ Renamer</a></td><td><a href="#renamerrules">38. 🧩 Renamer-Regeln &amp; Release-Normalisierung</a></td><td><a href="#renamercandidates">39. 🎯 Kandidaten, Provider &amp; Fuzzy-Bewertung</a></td></tr><tr><td><a href="#mediathekdb">40. 🗄️ Mediathek-Datenbank &amp; Speicherpfad-Import</a></td><td><a href="#mediatheksuche">41. 🔎 Mediathek-Suche, Qualitätsfilter &amp; Abweichungen</a></td><td><a href="#tmdbpreflight">42. 🌐 Online-Metadaten &amp; Preflight</a></td></tr><tr><td><a href="#forcedsubtitlecheck">43. 💬 Forced-Subtitle-Prüfung</a></td><td><a href="#audiovideomatcher">44. 🎧 Audio-Video-Matcher</a></td><td><a href="#shortcuts">45. ⌨️ Shortcuts</a></td></tr><tr><td><a href="#logs">46. 📝 Logs &amp; Diagnose</a></td><td><a href="#logbereinigung">47. 🧹 Log-Bereinigung</a></td><td><a href="#fehlerberichte">48. 📄 Fehlerberichte</a></td></tr><tr><td><a href="#diagnosepaket">49. 🧪 Diagnosepaket</a></td><td><a href="#supportworkflow">50. 🧭 Support-Workflow V9.8</a></td><td><a href="#troubleshooting">51. 🆘 Troubleshooting</a></td></tr><tr><td><a href="#versionshinweise">52. 📝 Zusätzliche Versionshinweise</a></td><td><a href="#changelog">53. 🕘 Änderungshistorie &amp; Versionen</a></td><td><a href="#faq">54. ❓ FAQ</a></td></tr><tr><td><a href="#system">55. 💻 Systemvoraussetzungen</a></td><td><a href="#datenschutz">56. 🔒 Daten &amp; Privatsphäre</a></td><td><a href="#lizenzen">57. 📄 Lizenzen &amp; Danksagung</a></td></tr><tr><td><a href="#backuprestore">58. 🔐 Backup &amp; Restore</a></td><td><a href="#releasecheck">59. ✅ Release-/Build-Prüfung</a></td><td><a href="#über">60. ℹ️ Über Dragon Tools V9.8</a></td></tr></table>
+<div class="callout warn">
+<strong>Wichtig – Bessere Optik:</strong><br/>
+  Da in der App keine Webengine verwendet werden kann, wird die Datei im QTextBrowser dargestellt. Es gibt aktuell zwei Optionen:
+  <ol>
+<li>Mit der schlechteren Formatierung und Lesbarkeit zurechtkommen</li>
+<li>Auf den Button <strong>🌐 Im Browser öffnen</strong> klicken dort wird die html Ansicht korrekt dargestellt</li>
+</ol>
+</div>
+</div>
+<a name="quickstart"></a><h2 id="quickstart"><span style="color:#64748b;font-size:.85em;margin-right:6px;">1.</span>🚀 Quickstart</h2>
+<div class="panel">
+<p><strong>Für einen normalen Lauf reichen vier Schritte:</strong></p>
+<ol>
+<li>Wechsle in den passenden Tab (z.B. <strong>H.265</strong>)</li>
+<li>Ziehe eine oder mehrere Videodateien in die Dateiliste <em>(Drag &amp; Drop)</em></li>
+<li>Klicke <strong>🔄 Konvertierung starten</strong></li>
+<li>Im <strong>H.265 / DV / HDR10+</strong>-Tab erkennt die App die passende Pipeline automatisch. Standardmäßig wird DV/DV+HDR10+ als MP4 und Standard/HDR10+ als MKV ausgegeben; beide Container-Vorgaben kannst du in den Einstellungen ändern.</li>
+</ol>
+<div class="callout ok">
+<strong>Was automatisch passiert:</strong> Dolby Vision und HDR10+ werden ohne manuelle Auswahl erkannt. Im H.265-Tab laufen dafür meine HEVC-Spezialpipelines. Im AV1-Tab gibt es zusätzlich getrennte Beta-Pfade für AV1 Dolby Vision Profile 10 und AV1 HDR10+. H.264 verwendet weiterhin keine DV-/HDR10+-Erhaltungspipeline.
+</div>
+<div class="callout warn">
+<strong>DV/HDR10+ bewusst nicht erhalten:</strong><br/>
+  Dolby Vision und HDR10+ können jetzt gezielt entfernt bzw. nicht erhalten werden. Das geht global über die entsprechende Checkbox oder pro Datei über die Override-/Datei-Einstellungen. Die Datei läuft dann nicht durch die DV- bzw. HDR10+-Erhaltungs-Pipeline, sondern wird als normale H.265-Ausgabe verarbeitet.
+</div>
+<div class="callout">
+<strong>💡 Live-Queue:</strong>
+<ul>
+<li><strong>Jobreihenfolge ändern:</strong> Die Reihenfolge der Dateien kann jederzeit per Drag &amp; Drop angepasst werden – auch während die Konvertierung läuft.</li>
+<li><strong>Dateien bearbeiten:</strong> Alle noch nicht gestarteten Dateien können weiterhin geändert werden.</li>
+<li><strong>Parameter anpassen:</strong> Für noch nicht verarbeitete Dateien lassen sich Audio-, Video- und Untertitel-Einstellungen jederzeit neu setzen.</li>
+</ul>
+<p><strong>Hinweis:</strong> Die Dateiliste bleibt während der gesamten Verarbeitung vollständig editierbar.</p>
+</div>
+<div class="callout warn">
+<strong>Freien Speicher im Blick behalten:</strong><br/>
+  Während der Konvertierung wird zusätzlicher Speicher benötigt:
+  <ul>
+<li><strong>Standard-Konvertierung:</strong> bis zu 2× Dateigröße</li>
+<li><strong>Dolby Vision (DV):</strong> typischerweise etwa 3,5× bis 4× Dateigröße; je nach Quelle und Encode kann der Bedarf abweichen</li>
+</ul>
+  Stelle sicher, dass vor dem Start genügend freier Speicherplatz vorhanden ist.
+</div>
+</div>
+<!-- TABS -->
+<a name="tabs"></a><h2 id="tabs"><span style="color:#64748b;font-size:.85em;margin-right:6px;">2.</span>🗂️ Registerkarten</h2>
+<div class="panel">
+<table class="table" style="border-collapse:collapse;">
+<tr><th>Tab</th><th>Beschreibung</th></tr>
+<tr><td><strong>H.265 / DV / HDR10+</strong></td><td>H.265 HEVC Encoding. DV und HDR10+ werden automatisch erkannt und können erhalten oder bewusst nicht erhalten werden.</td></tr>
+<tr><td><strong>H.264</strong></td><td>H.264 AVC – für ältere Geräte (Blu-ray-Player, Smart-TVs bis 2015). Keine DV-/HDR10+-Erhaltungs-Pipeline.</td></tr>
+<tr><td><strong>AV1</strong></td><td>AV1 – sehr effiziente Kompression; je nach Encoder und Hardware deutlich rechenintensiver. AV1 HDR10+ und Dolby Vision Profile 10 sind als getrennte Beta-Pipelines verfügbar; derzeit fail-closed und für die Metadaten-Erhaltung zunächst CPU-basiert.</td></tr>
+<tr><td><strong>ISO</strong></td><td>Verarbeitet ISO/IMG sowie entpackte Blu-ray-/DVD-Strukturen (Disc-Root, BDMV oder VIDEO_TS). MakeMKV ist der bevorzugte Pfad; FFmpeg dient nur als Fallback für direkt lesbare, unverschlüsselte Strukturen.</td></tr>
+<tr><td><strong>Merge</strong></td><td>Fügt kompatible Videodateien in definierter Reihenfolge zusammen und erzeugt eine gemeinsame Ausgabedatei.</td></tr>
+<tr><td><strong>MP4-Remux</strong></td><td>Remuxt geeignete Medien ohne Video-Neukodierung in einen MP4-orientierten Workflow; Stream- und Container-Kompatibilität werden dabei berücksichtigt.</td></tr>
+<tr><td><strong>Audio Muxer</strong></td><td>Passt Audio-Spuren an (kein Video Re-Encoding) und erstellt eine neue MKV-Datei unabhängig vom Ausgangsformat.</td></tr>
+<tr><td><strong>Audio-Video-Matcher</strong></td><td>Vergleicht zwei Videoversionen per FFmpeg/OpenCV-Bildanalyse, erkennt Offset, lineare Drift oder Schnittunterschiede und erstellt eine MKV mit Zielvideo und synchronisierter deutscher Audiospur.</td></tr>
+<tr><td><strong>Untertitel</strong></td><td>Extrahieren, Einfügen, Konvertieren, Flags setzen.</td></tr>
+<tr><td><strong>Renamer</strong></td><td>Eigener Vorschlagsbereich für Filme und Serienfolgen: Release-Namen bereinigen, Metadaten-Treffer prüfen, Treffer per Dropdown wählen, Zielnamen bearbeiten und erst nach manueller Annahme umbenennen.</td></tr>
+<tr><td><strong>Qualitätstester</strong></td><td>Erstellt kurze Testsegmente mit frei wählbaren Encoderläufen und zeigt technische Analysewerte wie Größe, Bitrate, Pixelformat, SSIM und VMAF sofern verfügbar.</td></tr>
+</table>
+<p class="muted">Tabs sind verschiebbar (Drag), schließbar (❌ oder Mausrad) und können unter 
+<strong>Ansicht → Registerkarten verwalten</strong> ein-/ausgeblendet werden.</p>
+</div>
+<!-- PFADE -->
+<a name="pfade"></a><h2 id="pfade"><span style="color:#64748b;font-size:.85em;margin-right:6px;">3.</span>📁 Zielpfade</h2>
+<div class="panel">
+<p>Jeder Konverter-Tab hat drei Zielpfade: <strong>TV</strong>, <strong>Anime</strong>, <strong>Film</strong>.</p>
+<ul>
+<li>Serien (S01E01-Format) landen automatisch in TV oder Anime</li>
+<li>Dateien ohne Serien-Muster landen in Film</li>
+<li>Die Checkbox links deaktiviert einen Pfad – das Feld wird rot mit ⛔ angezeigt</li>
+<li>Deaktivierte Pfade werden beim Verschieben übersprungen</li>
+</ul>
+<div class="callout">
+<strong>Standard-Pfade:</strong><br/>
+Wenn keine eigenen Pfade eingetragen sind, legt Dragon Tools automatisch Ordner unter
+<code>Dokumente\DragonTools\Ausgabe</code> an, zum Beispiel:<br/>
+<code>Dokumente\DragonTools\Ausgabe\H265\TV</code><br/>
+<code>Dokumente\DragonTools\Ausgabe\H265\Anime</code><br/>
+<code>Dokumente\DragonTools\Ausgabe\H265\Filme</code>
+</div>
+<p>Pfade können pro Codec unterschiedlich sein (H265 → anderer Ordner als AV1).
+Konfiguration unter <strong>⚙️ Einstellungen</strong>.</p>
+</div>
+<!-- ENCODER -->
+<a name="dateiliste"></a><h2 id="dateiliste"><span style="color:#64748b;font-size:.85em;margin-right:6px;">4.</span>🗃️ Dateiliste &amp; Datei-Einstellungen</h2>
+<div class="panel">
+<p>In der Dateiliste passiert die meiste tägliche Arbeit. Dort kannst du einzelne Dateien anders behandeln als den Rest des Batches, ohne dafür globale Regeln umzubauen.</p>
+<table class="table" style="border-collapse:collapse;">
+<tr><th>Funktion</th><th>Beschreibung</th></tr>
+<tr><td>Datei entfernen</td><td>Entfernt die markierte Datei nur aus der Liste. Die Quelldatei auf der Festplatte bleibt unverändert.</td></tr>
+<tr><td>Rechtsklick-Menü</td><td>Schneller Zugriff auf Medieninfo, Regel-/Profil-Simulator, Strip-Only, Datei-Einstellungen, <strong>Encoder / Skalierung</strong>, Encoder-Profil, IMAX und Quellbildprüfung. Bei einer aktuell laufenden Datei erscheint zusätzlich „FFmpeg für diese laufende Datei beenden“.</td></tr>
+<tr><td>Datei-Einstellungen</td><td>Überschreibt bei Bedarf globale Regeln gezielt nur für diese eine Datei. Dazu gehören jetzt auch Encoder-Backend, Qualität, Preset, Skalierung und die erweiterten Encoderoptionen.</td></tr>
+<tr><td>Statusanzeige</td><td>Zeigt Merkmale wie IMAX oder besondere Datei-Optionen direkt in der Liste an.</td></tr>
+<tr><td>Live-Anpassung</td><td>Noch nicht gestartete Dateien können auch während eines laufenden Jobs weiter bearbeitet werden.</td></tr>
+<tr><td>Reihenfolge</td><td>Die Jobreihenfolge kann per Drag &amp; Drop geändert werden, solange die Datei noch nicht in Bearbeitung ist.</td></tr>
+</table>
+<div class="callout">
+<strong>Queue-Badges:</strong> Die Liste trennt Verarbeitung und Nacharbeit sichtbar. Beispiele:
+<code>[Encode: Standard]</code>, <code>[Encode: DV]</code>, <code>[Encode: DV + HDR10+]</code>,
+<code>[Verarbeitung: Strip-Only]</code> und <code>[Postprocessing: NFO + Trickplay]</code>.
+</div>
+<div class="callout">
+<strong>Sinnvoll für Sonderfälle:</strong> Wenn nur eine einzelne Datei abweichende Audio-, Untertitel- oder IMAX-Einstellungen braucht, änderst du das direkt an der Datei statt den ganzen Batch umzubauen.
+</div>
+<div class="callout ok">
+<strong>Praktisch bei großen Batches:</strong> Du kannst eine große Liste direkt starten und die noch wartenden Dateien danach weiter anpassen, ohne den kompletten Batch neu aufbauen zu müssen.
+</div>
+<div class="callout">
+<strong>Automatisches Leeren:</strong>
+Nach erfolgreichem Abschluss oder nach einem Abbruch wird die Liste automatisch geleert. Dadurch bleiben keine alten Jobs versehentlich in der UI stehen.
+</div>
+</div>
+<!-- QUEUE -->
+<a name="queue"></a><h2 id="queue"><span style="color:#64748b;font-size:.85em;margin-right:6px;">5.</span>🧠 Queue &amp; Live-Steuerung</h2>
+<div class="panel">
+<p>Dragon Tools arbeitet eine Queue ab: Eine oder mehrere Dateien können gerade laufen, der Rest wartet und bleibt bis zum Start editierbar.</p>
+<table class="table" style="border-collapse:collapse;">
+<tr><th>Bereich</th><th>Verhalten</th></tr>
+<tr><td>Aktueller Job</td><td>Die gerade laufende Datei wird mit ihren bereits übernommenen Einstellungen verarbeitet.</td></tr>
+<tr><td>Wartende Jobs</td><td>Noch nicht gestartete Dateien können neu sortiert, entfernt oder mit neuen Datei-Einstellungen versehen werden.</td></tr>
+<tr><td>Datei-spezifische Parameter</td><td>Audio-, Video-, Untertitel- und IMAX-Optionen können für wartende Dateien weiterhin angepasst werden. Encoder/Skalierung lässt sich auch gesammelt auf mehrere markierte wartende Dateien anwenden.</td></tr>
+<tr><td>Globale Einstellungen</td><td>Globale Optionen gelten grundsätzlich als Ausgangspunkt; Datei-Einstellungen überschreiben diese gezielt pro Datei.</td></tr>
+</table>
+<div class="callout ok">
+<strong>Live-Synchronisierung:</strong>
+Die sichtbare UI-Liste und die interne Worker-Queue werden laufend synchronisiert.
+<ul>
+<li>Entfernte wartende Dateien werden sofort auch aus der internen Queue entfernt</li>
+<li>Die Reihenfolge per Drag &amp; Drop wird in die laufende Queue übernommen</li>
+<li>Die aktuell laufende Datei kann nicht mitten im Encode aus der Verarbeitung entfernt werden, wird aber nach Abschluss verworfen wenn sie vorher aus der Liste entfernt wurde</li>
+</ul>
+</div>
+<div class="callout">
+<strong>Abbruch:</strong>
+Bei <em>Sofort abbrechen</em> wird der laufende Vorgang direkt beendet. Bei <em>Abbruch nach Datei</em> wird der Stopp erst nach der aktuellen Datei ausgeführt; solange er nur vorgemerkt ist, kann er über denselben Button wieder zurückgenommen werden. Nach einem tatsächlichen globalen Abbruch wird die sichtbare Liste geleert und der interne Worker-/Queue-Zustand vollständig zurückgesetzt.
+</div>
+<div class="callout warn">
+<strong>Nur das Encoding der aktuellen Datei beenden:</strong><br/>
+Rechtsklick auf den <em>aktiven</em> Queue-Eintrag → <strong>⏹ FFmpeg für diese laufende Datei beenden</strong>.
+Dragon Tools prüft, ob genau diese Datei aktiv ist und ob der aktuelle Teilprozess wirklich <code>ffmpeg</code> ist. Dann wird nur dessen Prozessbaum beendet. Es wird <strong>kein globales Abort-Flag</strong> gesetzt; die betroffene Datei läuft in den normalen Fehler-/Cleanup-Pfad und die restliche Queue wird anschließend weiterverarbeitet. Bei parallelen Läufen wird gezielt der Worker der ausgewählten aktiven Datei angesprochen.
+</div>
+<div class="callout warn">
+<strong>Wichtig:</strong> Änderungen an einer Datei wirken nur dann direkt auf den Job, wenn die Datei noch nicht aktiv verarbeitet wird. Eine bereits laufende Datei kann zwar markiert und nachträglich verworfen werden, aber nicht mitten im aktuellen Encode rückwirkend umgebaut werden.
+</div><div class="callout">
+<strong>So nutze ich die Queue am sinnvollsten:</strong> Starte den Batch früh, kontrolliere danach die restlichen Einträge in der Liste und passe Sonderfälle direkt pro Datei an.
+</div>
+</div>
+<!-- KOMPAT -->
+<a name="videolisteneu"></a><h2 id="videolisteneu"><span style="color:#64748b;font-size:.85em;margin-right:6px;">6.</span>🗂️ Erweiterte Videoliste &amp; Zoom-Fenster</h2>
+<div class="panel">
+<p>Die erweiterte Videoliste vereinfacht das Arbeiten mit großen Dateimengen. Der frühere Menüpunkt <strong>Warteschlange</strong> wurde zu einem Zoom-Bereich erweitert und öffnet vergrößerte Ansichten für Warteschlange und Logging.</p>
+<table class="table" style="border-collapse:collapse;">
+<tr><th>Bereich</th><th>Funktion</th></tr>
+<tr><td>Warteschlange</td><td>Vergrößerte Ansicht der aktuellen Dateiliste für große Batches und lange Dateinamen.</td></tr>
+<tr><td>Logging-Fenster</td><td>Vergrößerte Logansicht zur besseren Kontrolle laufender Jobs und Fehleranalysen.</td></tr>
+</table>
+<ul>
+<li>größere Ansicht der aktuellen Videoliste</li>
+<li>Reihenfolge per Drag &amp; Drop ändern</li>
+<li>Videodateien direkt hinzufügen</li>
+<li>besseres Arbeiten bei großen Warteschlangen und langen Dateinamen</li>
+<li>bessere Lesbarkeit langer Logs während Konvertierung, Remux, Move und Fehleranalyse</li>
+</ul>
+<div class="callout ok">
+<strong>Bei großen Warteschlangen:</strong> Das zusätzliche Zoom-Fenster macht lange Dateilisten und Logs deutlich übersichtlicher. Du kannst die Reihenfolge leichter kontrollieren, Einträge nachpflegen und laufende Jobs besser verfolgen.
+</div>
+</div>
+<a name="overridefunktion"></a><h2 id="overridefunktion"><span style="color:#64748b;font-size:.85em;margin-right:6px;">7.</span>🎛️ Override-Funktion</h2>
+<div class="panel">
+<p>Wenn einzelne Dateien andere Einstellungen brauchen als der Rest des Batches, musst du dafür nicht die globalen Regeln ändern. Über <strong>Rechtsklick auf eine Videodatei in der Liste → Datei-Einstellungen</strong> legst du die Abweichungen direkt für diese Datei fest.</p>
+<ul>
+<li>Overrides für das Audio-Handling</li>
+<li>Overrides für das Untertitel-Handling</li>
+<li>Overrides für IMAX und Sonderfälle</li>
+<li>gezieltes Erhalten oder bewusstes Nicht-Erhalten von Dolby Vision und HDR10+ pro Datei</li>
+<li>Encoder-Override pro Datei: CPU, NVENC, QSV oder AMF, Qualitätswert, Preset, Skalierung und backend-spezifische erweiterte Optionen</li>
+<li>Mehrfachauswahl: Rechtsklick → <strong>Encoder / Skalierung für Auswahl</strong> wendet dieselben Encoder-/Skalierungswerte auf mehrere markierte Dateien an, ohne deren Audio-/Untertitel-/HDR-/Remux-Overrides zu verändern</li>
+<li>gezielte Anpassung pro Datei statt Änderung des gesamten Batches</li>
+</ul>
+<div class="callout">
+<strong>Wann das sinnvoll ist:</strong> Vor allem bei Problemdateien oder Ausnahmen, die andere Audio-, Untertitel- oder HDR/DV-Regeln brauchen als der Rest der Warteschlange.
+</div>
+<div class="callout warn">
+<strong>DV/HDR10+ per Datei deaktivieren:</strong><br/>
+Wird der Erhalt von Dolby Vision oder HDR10+ in den Datei-Einstellungen deaktiviert, wird diese Datei trotz erkannter Metadaten nicht über die jeweilige Erhaltungs-Pipeline verarbeitet. Das ist sinnvoll, wenn maximale Kompatibilität wichtiger ist als der Erhalt dynamischer Metadaten.
+</div>
+</div>
+<a name="preflight"></a><h2 id="preflight"><span style="color:#64748b;font-size:.85em;margin-right:6px;">8.</span>📦 Preflight &amp; Verschiebe-Vorabprüfung</h2>
+<div class="panel">
+<p>Bevor Dragon Tools die fertigen Dateien verschiebt, kannst du die geplanten Ziele prüfen. Serien, Staffeln und Filme werden dabei vorab zugeordnet, sodass du problematische Treffer erkennst, bevor tatsächlich Dateien verschoben oder ersetzt werden.</p>
+<table class="table" style="border-collapse:collapse;">
+<tr><th>Bereich</th><th>Nutzen</th></tr>
+<tr><td>Serien</td><td>Serienordner und Staffel-Unterordner werden gesammelt erkannt und vorbereitet.</td></tr>
+<tr><td>Filme</td><td>Einzelfilme und Filmreihen können vor dem Start dem korrekten Zielordner zugeordnet werden.</td></tr>
+<tr><td>Ordnerstruktur</td><td>Benötigte Zielordner können schon vor der Verarbeitung angelegt werden.</td></tr>
+<tr><td>Batch-Ablauf</td><td>Nach dem Encode läuft das spätere Verschieben deutlich kontrollierter und mit weniger Rückfragen.</td></tr>
+<tr><td>Bericht</td><td>Optional kann vor dem Start ein lokaler Preflight-Bericht mit Eingaben, Zielpfaden, Regelvorschau und Warnungen gespeichert werden.</td></tr>
+</table>
+<div class="callout">
+<strong>Warum das hilft:</strong> Die Entscheidung, wohin Dateien später verschoben werden, passiert nicht mehr erst im letzten Moment. Das macht große Batches planbarer und reduziert Fehler bei Serien, Staffeln und Filmreihen.
+</div>
+<div class="callout ok">
+<strong>Gut geeignet für:</strong> Bei vielen Episoden, mehreren Staffeln oder gemischten Film-/Serien-Batches spart die Vorabprüfung später viel manuelle Nacharbeit.
+</div>
+<div class="callout">
+<strong>Speicherbarer Preflight-Bericht:</strong> Im Zielordner-Dialog kann der Bericht per Checkbox aktiviert werden. Dragon Tools speichert ihn lokal unter <code>Dokumente\DragonTools\PreflightReports</code>. Enthalten sind Quelle, erkannter Datei-Typ, geplanter Zielordner, Regel-/Systemvorschau, Pipeline, Audio-/Untertitelentscheidungen sowie Warnungen wie Zielkonflikte oder fehlende Zielpfade.
+</div>
+<div class="callout ok">
+<strong>Gleichnamige Serienordner:</strong> Gibt es mehrere passende Serienordner mit unterschiedlichem Jahr, zieht Dragon Tools das erkannte oder online gefundene Serienjahr zur Entscheidung heran. Titelvarianten wie <strong>Ranma 1/2</strong> und <strong>Ranma ½</strong> werden dabei gleich behandelt. Bleiben mehrere echte Treffer übrig, zeigt der Preflight eine Auswahl statt still einen Ordner zu raten.
+</div>
+<div class="callout warn">
+<strong>Move-Recovery nach einem Absturz:</strong> Ein vorhandenes Ziel allein gilt nicht als erfolgreicher Commit. Nur wenn das Ziel existiert und die Quelle bereits entfernt ist, darf ein temporäres Altbestand-Backup automatisch bereinigt werden. Existieren Quelle und Ziel gleichzeitig, behandelt Dragon Tools den Zustand als mehrdeutig, erhält das Backup und zeigt den Recovery-Hinweis in der offenen Verschiebequeue an.
+</div>
+</div>
+<!-- STATUS UI -->
+<a name="statusui"></a><h2 id="statusui"><span style="color:#64748b;font-size:.85em;margin-right:6px;">9.</span>🔥 Restdauer, Gesamtfortschritt &amp; Banner</h2>
+<div class="panel">
+<p>Während ein Batch läuft, zeigt Dragon Tools nicht nur einen Balken, sondern auch Restzeit, Gesamtfortschritt und den Status der gerade aktiven Dateien. So lässt sich schneller erkennen, ob der Lauf normal weiterarbeitet oder irgendwo hängt.</p>
+<table class="table" style="border-collapse:collapse;">
+<tr><th>Anzeige</th><th>Bedeutung</th></tr>
+<tr><td>Restdauer</td><td>Zeigt in der Dateiliste vor dem Dateinamen die geschätzte verbleibende Zeit der aktuell verarbeiteten Datei.</td></tr>
+<tr><td>Gesamtfortschritt</td><td>Der Batch-Fortschritt wird live mitgeführt und nicht nur pro Datei separat angezeigt.</td></tr>
+<tr><td>Aktive gesamt</td><td>Bei paralleler Bearbeitung wird der Fortschritt der gerade aktiven Dateien kombiniert, damit der Balken nicht zwischen Datei 1 und Datei 2 springt.</td></tr>
+<tr><td>Datei-Fokus</td><td>Über die kleine Auswahl im Fortschrittsbereich kann bei parallelen Läufen trotzdem gezielt eine einzelne aktive Datei angezeigt werden.</td></tr>
+<tr><td>Banner</td><td>Das Feuer-und-Eis-Banner ersetzt die frühere reine Log-Optik im Kopfbereich und visualisiert den Arbeitsmodus der App.</td></tr>
+</table>
+<div class="callout">
+<strong>Symbolik des Banners:</strong> Feuer steht für die große, rohe Quelldatei, Eis für den Encoder mit Effizienz und Kompression. Im Zentrum treffen beide Gegensätze aufeinander – als Sinnbild für das Abwägen zwischen Qualität, Dateigröße und Geschwindigkeit.
+</div>
+<div class="callout ok">
+<strong>Während eines laufenden Batches:</strong> Du siehst schnell, ob die Verarbeitung weiterläuft, wie lange die aktuelle Datei ungefähr noch braucht und wie weit die gesamte Warteschlange ist.
+</div>
+</div>
+<!-- DATEILISTE -->
+</div>
+<a name="shutdown"></a><h2 id="shutdown"><span style="color:#64748b;font-size:.85em;margin-right:6px;">10.</span>📴 Shutdown-Verhalten</h2>
+<div class="panel">
+<p>Wenn ein langer Batch unbeaufsichtigt laufen soll, kann Dragon Tools den Rechner danach automatisch herunterfahren. Die Option gilt absichtlich nur für den aktuellen Lauf und wird beim nächsten Programmstart wieder ausgeschaltet.</p>
+<table class="table" style="border-collapse:collapse;">
+<tr><th>Verhalten</th><th>Beschreibung</th></tr>
+<tr><td>Beim Start</td><td>Die Shutdown-Option ist immer deaktiviert.</td></tr>
+<tr><td>Während des Jobs</td><td>Sie kann für den aktuellen Batch manuell aktiviert oder wieder deaktiviert werden.</td></tr>
+<tr><td>Nach Neustart</td><td>Die Einstellung wird nicht gespeichert und nicht automatisch wiederhergestellt.</td></tr>
+<tr><td>Ausführung</td><td>Der Windows-Shutdown wird erst nach abgeschlossenem Batch bzw. Verschieben geplant und erhält einen kurzen Puffer, damit Logs und Abschlusszustand sauber geschrieben werden.</td></tr>
+<tr><td>Windows-Update-Neustart</td><td>Während laufender DragonTools-Jobs lehnt das Programm Windows-Neustarts ab und zeigt Windows einen Blockiergrund an. So wird verhindert, dass Konvertierung, Verschieben, Remux oder Nachbearbeitung mitten im Datei-Commit unterbrochen werden.</td></tr>
+<tr><td>Leerlauf</td><td>Wenn Windows einen Neustart anfragt und kein DragonTools-Job läuft, erscheint ein Dialog mit Zulassen, Blockieren oder 15 Minuten Aufschub.</td></tr>
+</table>
+<div class="callout warn">
+<strong>Wichtig:</strong> Das automatische Herunterfahren gehört absichtlich nicht zu den persistent gespeicherten GUI-Einstellungen. So wird verhindert, dass ein alter Zustand unbemerkt in einen neuen Batch übernommen wird.
+</div>
+<div class="callout ok">
+<strong>Warum ich das so gelöst habe:</strong> Normale Encoder- und GUI-Optionen bleiben gespeichert. Den automatischen Shutdown musst du dagegen für jeden Lauf neu einschalten, damit kein alter Zustand unbemerkt übernommen wird.
+</div>
+<div class="callout ok">
+<strong>Neustartschutz in V9.8:</strong> DragonTools nutzt den Windows-Session-Dialog und einen sichtbaren Blockiergrund. Eigene DragonTools-Shutdowns werden vorher freigegeben; ausstehende Windows-Updates behandelt Windows beim anschließenden Herunterfahren nach seinem eigenen Update-Status.
+</div>
+</div>
+<!-- PREFLIGHT -->
+<a name="encoder"></a><h2 id="encoder"><span style="color:#64748b;font-size:.85em;margin-right:6px;">11.</span>⚙️ Encoder &amp; Qualität</h2>
+<details>
+<summary>CRF / Qualitätsfaktor</summary>
+<div class="content">
+<p>CRF (Constant Rate Factor) steuert die Qualität:</p>
+<table class="table" style="border-collapse:collapse;">
+<tr><th>Codec</th><th>Empfehlung</th><th>Erklärung</th></tr>
+<tr><td>H.264</td><td>18–24</td><td>18=sehr gut/groß, 24=gut/klein</td></tr>
+<tr><td>H.265</td><td>20–26</td><td>23=Standard (≈ H.264 bei CRF 18)</td></tr>
+<tr><td>AV1</td><td>25–33</td><td>28=Standard (≈ H.265 bei CRF 23)</td></tr>
+</table>
+<div class="callout warn">Niedriger Wert = bessere Qualität = größere Datei</div>
+</div>
+</details>
+<details>
+<summary>Encoder-Wahl: CPU vs GPU</summary>
+<div class="content">
+<table class="table" style="border-collapse:collapse;">
+<tr><th>Encoder</th><th>Geschwindigkeit</th><th>Qualität</th><th>Wann?</th></tr>
+<tr><td>🖥️ CPU</td><td>Langsam</td><td>⭐⭐⭐ Beste</td><td>Qualitätskritische Archivierung</td></tr>
+<tr><td>🤖 Auto</td><td>Schnell</td><td>⭐⭐ Gut</td><td>Empfohlen – erkennt GPU automatisch</td></tr>
+<tr><td>🟢 NVENC</td><td>Sehr schnell</td><td>⭐⭐ Gut</td><td>NVIDIA-GPU vorhanden</td></tr>
+<tr><td>🔵 QSV</td><td>Schnell</td><td>⭐⭐ Gut</td><td>Intel-CPU mit iGPU</td></tr>
+<tr><td>🔴 AMF</td><td>Schnell</td><td>⭐⭐ Gut</td><td>AMD-GPU vorhanden</td></tr>
+</table>
+<div class="callout ok">
+<strong>Auto-Modus:</strong> Erkennt deine GPU automatisch (NVIDIA bevorzugt vor AMD, Intel).
+Das Ergebnis wird im Log angezeigt: <em>🤖 GPU-Auto: NVENC erkannt.</em>
+</div>
+</div>
+</details>
+<details>
+<summary>NVENC-Optionen (B-Frames, B-Ref, Lookahead-Level, Multipass)</summary>
+<div class="content">
+<table class="table" style="border-collapse:collapse;">
+<tr><th>Option</th><th>Empfehlung</th><th>Erklärung</th></tr>
+<tr><td>Preset</td><td>p6</td><td>p1=schnell, p7=langsam/besser. p4 = guter Mittelweg</td></tr>
+<tr><td>B-Frames</td><td>4</td><td>Mehr B-Frames = bessere Kompression, mehr Speicher</td></tr>
+<tr><td>B-Ref-Mode</td><td>middle</td><td>middle=beste Qualität, disabled=max. Kompatibilität</td></tr>
+<tr><td>Lookahead</td><td>32</td><td>Vorab-Analyse für bessere Bitrate-Verteilung; wird nur gesetzt, wenn B-Frames aktiv sind</td></tr>
+<tr><td>Lookahead-Level</td><td>Auto; manuell 0–3</td><td>Zusätzliche NVENC-Qualitäts-/Entscheidungsstufe für Lookahead. <strong>Nicht mit dem Frame-Lookahead (<code>rc-lookahead</code>) verwechseln:</strong> <code>rc-lookahead</code> ist die Zahl vorausanalysierter Frames, <code>lookahead_level</code> ist die Stufe 0–3. Auto übergibt keinen <code>-lookahead_level</code>-Parameter. Dragon Tools setzt den manuellen Wert nur bei aktivem B-Frame-/Lookahead-Pfad.</td></tr>
+<tr><td>Multipass</td><td>Auto/Default; disabled / qres / fullres</td><td>Steuert NVENC-Multipass für die Bitverteilung. Auto übergibt keinen <code>-multipass</code>-Parameter. <code>qres</code> analysiert mit reduzierter Auflösung und ist ressourcenschonender; <code>fullres</code> kann effizienter verteilen, benötigt aber mehr Analyseleistung.</td></tr>
+<tr><td>Spatial AQ</td><td>✅ An</td><td>Passt Bitrate räumlich an (mehr Detail in komplexen Bereichen)</td></tr>
+<tr><td>Temporal AQ</td><td>✅ An</td><td>Passt Bitrate zeitlich an und schützt sichtbare Qualitätsbereiche über mehrere Frames</td></tr>
+</table>
+<div class="callout">
+<strong>System prüfen:</strong> Über <kbd>F9</kbd> zeigt Dragon Tools an, ob die verwendete FFmpeg-Version NVENC, <code>lookahead_level</code> und <code>multipass</code> meldet. Nicht jede GPU/FFmpeg-Kombination unterstützt jede Stufe gleich.
+</div>
+</div>
+</details>
+<details>
+<summary>Intel-QSV-Optionen</summary>
+<div class="content">
+<table class="table" style="border-collapse:collapse;">
+<tr><th>Option</th><th>Empfehlung</th><th>Erklärung</th></tr>
+<tr><td>Preset</td><td>medium / slow</td><td>Steuert Geschwindigkeit gegen Kompression und Qualität</td></tr>
+<tr><td>Q</td><td>23</td><td>Qualitätsziel für QSV. Niedriger = besser/größer, höher = kleiner/schwächer</td></tr>
+<tr><td>Lookahead</td><td>✅ Immer an</td><td>QSV schaut Frames voraus, um Bitrate und Szenenwechsel besser zu verteilen; abschaltbar ist nur noch indirekt über den Encoder selbst, nicht in Dragon Tools</td></tr>
+<tr><td>Lookahead-Tiefe</td><td>40</td><td>Anzahl der vorausgeprüften Frames; 20-60 ist ein guter Praxisbereich</td></tr>
+</table>
+</div>
+</details>
+<details>
+<summary>x265-CPU-Optionen (H.265 CPU-Encoding)</summary>
+<div class="content">
+<table class="table" style="border-collapse:collapse;">
+<tr><th>Option</th><th>Empfehlung</th><th>Erklärung</th></tr>
+<tr><td>Tune</td><td>none / grain</td><td>grain: Film-Körnung erhalten. animation: für Anime</td></tr>
+<tr><td>AQ-Mode</td><td>2</td><td>Adaptives Quantisieren. 2=Varianz-basiert (Standard)</td></tr>
+<tr><td>AQ-Stärke</td><td>1.0</td><td>Regelt, wie stark x265 Bits zugunsten komplexer Bildbereiche verschiebt</td></tr>
+<tr><td>psy-rd</td><td>2.0</td><td>Psycho-visuelle Optimierung. Höher=schärfer</td></tr>
+<tr><td>psy-rdoq</td><td>1.0</td><td>Psycho-visuelle Quantisierung. Zu hohe Werte können künstlich wirken oder Dateien vergrößern</td></tr>
+<tr><td>B-Frames</td><td>8</td><td>8 ist optimal für H.265; Lookahead wird nur mit aktiven B-Frames gesetzt</td></tr>
+<tr><td>Lookahead</td><td>40</td><td>Analysiert kommende Frames für bessere Szenen- und Bitratenentscheidungen</td></tr>
+</table>
+</div>
+</details>
+<!-- PIPELINE -->
+<a name="pipeline"></a><h2 id="pipeline"><span style="color:#64748b;font-size:.85em;margin-right:6px;">12.</span>🔄 Automatische Pipeline-Erkennung</h2>
+<div class="panel">
+<p>Dragon Tools entscheidet pro Datei anhand der Quelle und der aktivierten Erhaltungs-Policy. Im H.265-Tab gibt es dafür den Standard-, Dolby-Vision-, HDR10+- und den kombinierten DV+HDR10+-Pfad. Im AV1-Tab habe ich getrennte Beta-Pipelines für AV1 Dolby Vision Profile 10 und AV1 HDR10+ eingebaut. Die Haken bedeuten immer nur „erhalten, wenn vorhanden“. H.264 verwendet keine dynamische HDR-Erhaltungspipeline.</p>
+<p><strong>AV1-Priorität bei DV + HDR10+:</strong> Sind bei einer AV1-Zielkonvertierung beide Erhaltungsoptionen aktiv und enthält die Quelle beide Metadatenarten, wird nur Dolby Vision als AV1 Profile 10 über SVT-AV1 erhalten. HDR10+ wird bewusst nicht übernommen; der Kurzlog weist dies als INFO aus. Der HEVC/H.265-Kombipfad bleibt davon unberührt.</p>
+<div class="callout warn">
+<strong>Global oder pro Datei abschaltbar:</strong><br/>
+Dolby Vision und HDR10+ können trotz Erkennung bewusst nicht erhalten werden. Das kann global über die entsprechende Checkbox oder gezielt pro Datei über die Override-/Datei-Einstellungen gesteuert werden.
+</div>
+<table class="table" style="border-collapse:collapse;">
+<tr><th>Erkannt</th><th>Pipeline</th><th>Standardausgabe</th><th>Finaler Mux</th></tr>
+<tr><td>Dolby Vision (DV), Erhalt aktiv</td><td>DV-Pipeline</td><td>MP4; optional MKV</td><td>MP4Box bzw. mkvmerge</td></tr>
+<tr><td>HDR10+, Erhalt aktiv</td><td>HDR10+-Pipeline</td><td>MKV; optional MP4</td><td>mkvmerge bzw. MP4Box</td></tr>
+<tr><td>Dolby Vision + HDR10+, Erhalt aktiv</td><td>DV+HDR10+-Kombipfad</td><td>MP4; optional MKV</td><td>MP4Box bzw. mkvmerge</td></tr>
+<tr><td>DV/HDR10+ erkannt, Erhalt deaktiviert</td><td>Standard-H.265-Pipeline</td><td>MKV; optional MP4</td><td>Standard-Containerpfad</td></tr>
+<tr><td>AV1 + Dolby Vision, Erhalt aktiv</td><td>AV1-DV10 Beta</td><td>MP4; optional MKV</td><td>FFmpeg/libsvtav1, finale DV-Prüfung</td></tr>
+<tr><td>AV1 + HDR10+, Erhalt aktiv</td><td>AV1-HDR10+ Beta</td><td>MKV; optional MP4</td><td>FFmpeg/libaom-av1 T.35/OBU, finale HDR10+-Prüfung; deutlich langsamer als SVT-AV1</td></tr>
+<tr><td>AV1 + DV + HDR10+, beide Erhaltungsoptionen aktiv</td><td>AV1-DV10 Beta</td><td>MP4; optional MKV</td><td>Dolby Vision hat Priorität; HDR10+ wird bewusst nicht übernommen und als INFO im Kurzlog gemeldet</td></tr>
+<tr><td>Standard</td><td>Standard-Pipeline</td><td>MKV; optional MP4</td><td>FFmpeg; MP4 mit Faststart</td></tr>
+</table>
+<div class="callout warn">
+<strong>AV1-DV/HDR10+ Beta-Grenzen:</strong><br/>
+AV1 Dolby Vision wird derzeit nativ über FFmpeg/libsvtav1 als Profile 10 geschrieben. Profil 7 sowie Crop/Skalierung und Untertitel-Burn-In im AV1-DV-Pfad werden fail-closed abgelehnt. AV1 HDR10+ nutzt FFmpeg/libaom-av1 für die T.35/OBU-Metadaten; dieser Pfad ist deutlich langsamer als der normale SVT-AV1-Pfad und wird deshalb als Spezialoption behandelt. Für beide Metadatenpfade ist die Erhaltung derzeit nur mit CPU freigegeben; NVENC/QSV/AMF brechen ab, statt Metadaten still zu verlieren. Enthält eine AV1-Quelle gleichzeitig Dolby Vision und HDR10+ und sind beide Erhaltungsoptionen aktiv, hat Dolby Vision Priorität: Dragon Tools nutzt AV1-DV10/SVT-AV1, übernimmt HDR10+ bewusst nicht und zeigt dazu eine INFO im Kurzlog. Ein expliziter per-Datei-Override auf AV1-HDR10+ bleibt möglich.
+</div>
+<div class="callout ok">
+<strong>DV-Ablauf in V9.8:</strong><br/>
+Der normale Log zeigt sieben echte Hauptschritte: Quell-HEVC extrahieren → DV-Profil auf einen passenden 8.1-Pfad bringen → RPU extrahieren → Video direkt als HEVC encodieren → RPU-Level-5/Crop abgleichen → dynamische Metadaten injizieren und prüfen → final muxen.
+<br/><br/>
+Bei DV Profil 5 wird der Base Layer vor dem Encode mit <code>libplacebo</code> von ICtCp nach BT.2020/PQ gewandelt. Auto-Crop und RPU-Level-5 werden miteinander verglichen: bis 20 Pixel Abweichung gewinnt automatisch der weniger aggressive Crop; bei größeren Unterschieden entscheidet der Benutzer. Dynamische IMAX-/Level-5-Wechsel werden nicht auf einen einzigen globalen Crop reduziert.
+<br/><br/>
+Als Zielcontainer ist MP4 der Standard und MKV optional. MP4 wird mit MP4Box und <code>-inter 500</code> erzeugt; MKV wird aus dem bereits injizierten DV-HEVC-Bitstream mit <code>mkvmerge</code> gebaut. Ein FFmpeg-Fallback für den finalen DV-MKV-Mux ist bewusst nicht vorgesehen.
+</div>
+<div class="callout ok">
+<strong>DV+HDR10+-Kombipfad:</strong><br/>
+Wenn eine HEVC-Datei Dolby Vision und HDR10+ enthält und beide Erhalt-Optionen aktiv sind, wird HDR10+ aus dem Quell-HEVC extrahiert, in den neuen Encode injiziert und danach die DV-RPU final gesetzt. Die abschließende Prüfung extrahiert HDR10+ erneut aus dem finalen HEVC und vergleicht die dynamischen Metadaten semantisch mit der Quelle; nur werkzeugabhängiges <code>ToolInfo</code> wird ignoriert. Alte JSON-/HEVC-Zielartefakte werden vor jedem Extract/Inject-Lauf entfernt, damit ein fehlgeschlagener Retry keine alten Ergebnisse weiterverwendet.
+</div>
+<div class="callout ok">
+<strong>DV-/HDR10+-Fehlerdiagnose:</strong><br/>
+Scheitert eine Pipeline-Stufe, übernimmt der Fehlerbericht die konkrete Stufe, Ursache, Tool, Kommando und die letzte Toolausgabe. Meldungen wie <code>Unknown metadata block ... Level 253</code> bleiben dadurch sichtbar und werden nicht mehr nur als generisches „Pipeline-Ausführung fehlgeschlagen“ ausgegeben. RPU- und HDR10+-Prüfungen bleiben fail-closed; Metadaten werden nicht still verworfen.
+</div>
+<div class="callout">
+<strong>HDR10+-Ablauf in 5 Schritten:</strong> HDR10+-Metadaten direkt aus der Matroska-Quelle lesen → Video direkt nach <code>encoded.hevc</code> encodieren und Audio/Untertitel nur als kleinen <code>streams.mkv</code>-Donor vorbereiten → Metadaten in den HEVC-Stream injizieren → final als MKV mit <code>mkvmerge</code> oder als MP4 mit MP4Box <code>-inter 500</code> muxen → dynamische HDR10+-Metadaten im fertigen Ziel semantisch verifizieren. Die früheren großen Zwischenstufen <code>source.hevc</code> und <code>encoded.mkv → encoded.hevc</code> entfallen bei normalen MKV-Quellen.
+</div>
+<div class="callout warn">
+<strong>Wenn Erhalt deaktiviert ist:</strong> Die Spezialschritte für RPU-/HDR10+-Metadaten werden übersprungen. Das Ergebnis ist eine normale H.265-Datei ohne gezielten DV-/HDR10+-Erhalt.
+</div>
+<div class="callout">
+<strong>Speicherbedarf Standard-Pipeline:</strong><br/>
+Beim normalen Re-Encoding entstehen temporäre Zwischenstände. Plane dafür bis zu <strong>2× die Größe der Quelldatei</strong> ein.
+</div>
+<div class="callout warn">
+<strong>Speicherbedarf DV-Pipeline:</strong><br/>
+Durch die optimierte DV-Pipeline ohne temporäre Zwischen-MKV reduziert sich der Speicherbedarf typischerweise auf ca. <strong>3,5× bis 4× die Größe der Quelldatei</strong>. Der genaue Wert hängt vom Kompressionsfaktor, der Quelldatei und den temporären HEVC-/RPU-/Muxing-Dateien ab.
+</div>
+</div>
+<!-- AUDIO -->
+<!-- DV-REMUX -->
+<a name="dvremux"></a><h2 id="dvremux"><span style="color:#64748b;font-size:.85em;margin-right:6px;">13.</span>📦 DV-Remux</h2>
+<div class="panel">
+<p>Der <strong>📦 DV-Remux</strong>-Button remuxt Dolby-Vision-Dateien ohne Video-Re-Encoding. Der Zielcontainer folgt der Einstellung <strong>Dolby Vision / DV+HDR10+ / DV-Remux</strong> und kann <strong>MP4</strong> oder <strong>MKV</strong> sein. Der Button zeigt den aktuell gewählten Zielcontainer direkt an.</p>
+<table class="table" style="border-collapse:collapse;">
+<tr><th>Was passiert</th><th>Detail</th></tr>
+<tr><td><strong>Video</strong></td><td>Wird 1:1 kopiert – kein Re-Encoding, DV-Metadaten vollständig erhalten</td></tr>
+<tr><td><strong>Audio</strong></td><td>Folgt den zentralen Audioregeln. Bei MP4 werden nicht kompatible Codecs wie TrueHD/DTS automatisch in einen geeigneten MP4-Codec überführt; bei MKV kann Stream-Copy erhalten bleiben, wenn die Audioregeln dies zulassen.</td></tr>
+<tr><td><strong>Untertitel</strong></td><td><strong>MP4:</strong> Die globale Option <em>MP4-Sidecars aktivieren</em> entscheidet über die Ablage. Aktiv = ausgewählte Untertitel extern als Sidecars. Deaktiviert = Textuntertitel (z. B. SRT, ASS/SSA, WebVTT) werden zu <code>mov_text/tx3g</code> konvertiert und intern gespeichert; PGS/SUP und VobSub/DVD-Sub bleiben externe Sidecars. <strong>MKV:</strong> ausgewählte Untertitel werden intern gemuxt.</td></tr>
+</table>
+<div class="callout">
+<strong>Untertitel bei DV-MP4:</strong> Bei aktivierter Option <em>MP4-Sidecars aktivieren</em> werden die ausgewählten Untertitel wie bisher als separate Dateien im gleichen Ordner gespeichert. Ist die Option deaktiviert, werden textbasierte Spuren intern als <code>mov_text/tx3g</code> gemuxt; nur PGS/SUP und VobSub/DVD-Sub bleiben aus Kompatibilitätsgründen externe Sidecars. Bei DV-MKV werden die ausgewählten Untertitel direkt im Container gespeichert.
+</div>
+<p><strong>Voraussetzungen:</strong> Für MP4 muss MP4Box verfügbar sein, für MKV mkvmerge/MKVToolNix (F9 prüfen). Der Videostream wird in beiden Fällen nicht neu encodiert; MP4 wird mit MP4Box, MKV mit mkvmerge final gemuxt.</p>
+</div>
+<a name="remuxneu"></a><h2 id="remuxneu"><span style="color:#64748b;font-size:.85em;margin-right:6px;">14.</span>📦 Remux-Funktionen</h2>
+<div class="panel">
+<h3>MKV-Remux über MKVToolNix</h3>
+<p>Der MKV-Remux nutzt MKVToolNix für verlustfreies Remuxing ohne Video-Re-Encoding. Damit lassen sich vorhandene Streams neu in einen MKV-Container schreiben, Spuren übernehmen, ungeeignete Spuren weglassen und Container-Probleme sauberer beheben als mit einem vollständigen Encode.</p>
+<ul>
+<li>verlustfreies Remuxing ohne Qualitätsverlust</li>
+<li>geeignet zum Neuverpacken vorhandener Video-, Audio- und Untertitelspuren</li>
+<li>sinnvoll bei Containerkorrekturen, Spurübernahme und bereinigten MKV-Ausgaben</li>
+</ul>
+<h3>MP4-Remux – Eigenbau</h3>
+<p>Der MP4-Remux remuxt gezielt nach MP4 und wendet – abhängig von den gewählten Einstellungen – zusätzliche Verarbeitungsschritte an, damit die Ausgabe besser für Kompatibilität und Streaming vorbereitet ist.</p>
+<ul>
+<li>Anwendung der Audioregeln</li>
+<li>Untertitel gemäß globaler MP4-Regel übernehmen: wahlweise Sidecars oder kompatible Textspuren intern als <code>mov_text/tx3g</code></li>
+<li>optional: Untertitel ignorieren</li>
+<li>Faststart für Streaming / bessere Startfähigkeit beim Abspielen aus dem Netzwerk</li>
+</ul>
+<div class="callout">
+<strong>Wichtig dabei:</strong> Mein MP4-Remux ist mehr als ein einfacher Containerwechsel. Er bereitet die Ausgabe gezielt für MP4-Kompatibilität und Streaming vor.
+</div>
+</div>
+<a name="isohandling"></a><h2 id="isohandling"><span style="color:#64748b;font-size:.85em;margin-right:6px;">15.</span>💿 ISO Handling</h2>
+<div class="panel">
+<p>Im ISO-Handling können DVD-/Blu-ray-ISO-Dateien, IMG-Dateien und bereits entpackte Disc-Ordner abgelegt und verarbeitet werden. Der bevorzugte Weg läuft über MakeMKV; wenn MakeMKV scheitert, kann Dragon Tools optional einen FFmpeg-Fallback versuchen.</p>
+<ul>
+<li>Unterstützung für DVD-ISO</li>
+<li>Unterstützung für Blu-ray-ISO</li>
+<li>Unterstützung für direkte Blu-ray-Ordnerauswahl als Disc-Root oder direktes <code>BDMV</code>-Verzeichnis</li>
+<li>Unterstützung für direkte DVD-Ordnerauswahl als Disc-Root oder direktes <code>VIDEO_TS</code>-Verzeichnis</li>
+<li>Extraktion der enthaltenen Videostruktur über MakeMKV</li>
+<li>Optionaler FFmpeg-Fallback für unverschlüsselte, direkt lesbare ISO-/Disc-Strukturen</li>
+<li>Ablage des Hauptfilms als MKV</li>
+</ul>
+<div class="callout">
+<strong>Erwartete Blu-ray-Struktur:</strong><br/>
+Wähle entweder den Disc-Ordner oder direkt den <code>BDMV</code>-Ordner. Dragon Tools erwartet mindestens <code>BDMV/index.bdmv</code>, <code>BDMV/PLAYLIST/*.mpls</code>, <code>BDMV/STREAM/*.m2ts</code> und <code>BDMV/CLIPINF/*.clpi</code>. Ein zusätzlicher <code>CERTIFICATE</code>-Ordner ist optional.
+</div>
+<div class="callout warn">
+<strong>MakeMKV-Lizenz:</strong><br/>
+Dragon Tools kann MakeMKV automatisch erkennen und für das ISO-Handling aufrufen, bringt aber keinen persönlichen MakeMKV-Lizenzschlüssel mit. MakeMKV muss separat lizenziert oder über eine zeitlich begrenzte Test-/Beta-Lizenz freigeschaltet werden.
+</div>
+<div class="callout">
+<strong>Wenn MakeMKV nicht freigeschaltet ist:</strong> Das Tool kann zwar gefunden werden, die ISO-Extraktion kann aber trotzdem fehlschlagen oder eine Aktivierung verlangen. Ist der FFmpeg-Fallback im ISO-Tab aktiviert, versucht Dragon Tools danach einen reinen Stream-Copy-Remux. Dieser Weg ist nur für unverschlüsselte, direkt lesbare Strukturen gedacht und bei Menüs, Playlists, Kapiteln, Untertiteln und mehreren Filmfassungen fehleranfälliger als MakeMKV.
+</div>
+<div class="callout ok">
+<strong>Praktischer Nutzen:</strong> Disc-Backups lassen sich damit direkt in eine weiterverwendbare MKV-Datei überführen, ohne die komplette Disc-Struktur von Hand durchgehen zu müssen.
+</div>
+<div class="callout warn">
+<strong>Hinweis:</strong> Die Qualität wird dabei nicht neu encodiert, solange nur extrahiert wird. Die resultierende MKV kann anschließend normal in Dragon Tools weiterverarbeitet, remuxt oder konvertiert werden.
+</div>
+</div>
+<a name="audio"></a><h2 id="audio"><span style="color:#64748b;font-size:.85em;margin-right:6px;">16.</span>🔊 Audio-Regeln</h2>
+<div class="panel">
+<p>Die Audio-Logik ist vollständig konfigurierbar unter <strong>📋 Regeln → Audio-Regeln</strong>.</p>
+<div class="callout ok">
+<strong>Mehrere Audiospuren:</strong>
+Dragon Tools kann mehrere Audiospuren gleichzeitig übernehmen. Welche Spuren übernommen werden, richtet sich nach den Audio-Regeln (bevorzugte Sprache, Fallback-Sprache und maximale Anzahl an Spuren).
+</div>
+<div class="callout">
+<strong>Blu-ray/M2TS-Streamzuordnung:</strong>
+Dragon Tools nutzt bei der Analyse zusätzlich ffprobe, damit GUI, Regeln und FFmpeg-Mapping denselben globalen Streamindex verwenden. Das ist besonders wichtig bei Blu-ray-Quellen, bei denen z.B. Untertitel vor Audio liegen können und <code>Audio 1</code> nicht automatisch <code>Stream #0:1</code> bedeutet.
+</div>
+<details>
+<summary>Wie werden Tonspuren ausgewählt?</summary>
+<div class="content">
+<ol>
+<li>Bevorzugte Sprache suchen (Standard: Deutsch / de / deu / ger)</li>
+<li>Falls nicht gefunden: Fallback-Sprache (Standard: Englisch)</li>
+<li>Falls gar nichts gefunden: erste verfügbare Spur</li>
+</ol>
+</div>
+</details>
+<details>
+<summary>Wie funktioniert Multi-Audio?</summary>
+<div class="content">
+<p>Wenn in den Audio-Regeln mehr als eine Zielspur erlaubt ist, übernimmt Dragon Tools mehrere passende Audiospuren statt nur einer einzelnen.</p>
+<ul>
+<li>Bevorzugte Sprache zuerst</li>
+<li>danach definierte Fallback-Sprachen</li>
+<li>maximale Anzahl der Spuren gemäß Regel</li>
+</ul>
+<p>Bei Dolby Vision werden diese Audiospuren auch im finalen MP4-Ausgabeschritt korrekt übernommen.</p>
+</div>
+</details>
+<details>
+<summary>Wann wird transkodiert?</summary>
+<div class="content">
+<table class="table" style="border-collapse:collapse;">
+<tr><th>Situation</th><th>Aktion</th></tr>
+<tr><td>TrueHD, DTS-HD MA, FLAC, PCM</td><td>Immer → E-AC3 (nicht container-kompatibel)</td></tr>
+<tr><td>E-AC3 5.1, Bitrate unter Grenze</td><td>Kopieren (passthrough)</td></tr>
+<tr><td>E-AC3, Bitrate über Grenze</td><td>Auf Grenze transkodieren</td></tr>
+<tr><td>AAC/AC3/E-AC3 Stereo im Kopierbereich (Standard: 192-256 kbps)</td><td>Kopieren</td></tr>
+<tr><td>AAC/AC3/E-AC3 5.1 im Kopierbereich (Standard: 428-640 kbps)</td><td>Kopieren, sofern kein Downmix erzwungen wird</td></tr>
+<tr><td>AAC/AC3/E-AC3 7.1 im Kopierbereich (Standard: 768-1536 kbps)</td><td>Kopieren, wenn 7.1 auf "nie downmixen" steht</td></tr>
+<tr><td>Audio außerhalb des Kopierbereichs</td><td>Auf Ziel-Codec und Ziel-Bitrate transkodieren</td></tr>
+<tr><td>7.1-/8-Kanal-Spur</td><td>Je nach 7.1-Regel: behalten, auf 5.1 reduzieren oder auf Stereo downmixen</td></tr>
+</table>
+<p>Bitrate-Regeln sind konfigurierbar: Stereo, 5.1 und 7.1 besitzen jeweils einen Kopierbereich und eine separate Ziel-Bitrate für Neukodierung. Vorhandene E-AC3-7.1-Spuren können per Passthrough unverändert kopiert werden, wenn der 7.1-Downmix nicht erzwungen ist und die Bitrate im Kopierbereich liegt. Beim Neu-Encoding unterstützt FFmpeg für E-AC3/AC3 aber nur bis 5.1; Dragon Tools begrenzt diese Codecs deshalb automatisch auf maximal 5.1. Für echtes 7.1-Neu-Encoding sollte AAC verwendet werden.</p>
+</div>
+</details>
+<details>
+<summary>DRC / Audio-"Normalisierung" / Nachtmodus</summary>
+<div class="content">
+<p>Der Bereich <strong>Audio-Dynamik / Lautheit</strong> enthält zwei getrennte Funktionen:</p>
+<ul>
+<li><strong>DRC / Nachtmodus:</strong> nutzt Dynamic-Range-Control-Metadaten aus AC3/E-AC3-Quellen. Der Wert ist von 0,0 bis 4,0 in 0,1-Schritten einstellbar. 1,0 entspricht normaler DRC, 2,6-3,0 ist ein deutlicher Nachtmodus, 3,1-4,0 ist extrem und nicht als Standard empfohlen.</li>
+<li><strong>Lautheitsnormalisierung:</strong> nutzt FFmpeg <code>loudnorm</code> codecübergreifend. Der Zielwert ist als LUFS-Wert einstellbar, Standard ist -18 LUFS.</li>
+</ul>
+<div class="callout warn">
+<strong>Wichtig:</strong> DRC greift nur bei AC3/E-AC3-Quellen und nur wenn die Audiospur dekodiert und neu kodiert wird. Wenn DRC bei einer passenden Quelle aktiv ist, verhindert Dragon Tools Stream-Copy automatisch. Loudnorm erzwingt ebenfalls eine Neukodierung.
+</div>
+</div>
+</details>
+<details>
+<summary>Datei-spezifische Audio-Einstellungen</summary>
+<div class="content">
+<p>Rechtsklick auf eine Datei in der Liste → <strong>⚙️ Datei-Einstellungen</strong></p>
+<ul>
+<li><strong>auto:</strong> Regeln werden angewendet</li>
+<li><strong>copy:</strong> Spur immer kopieren (kein Transcode)</li>
+<li><strong>eac3:</strong> Immer auf E-AC3 transkodieren</li>
+<li><strong>aac:</strong> Immer auf AAC transkodieren</li>
+<li><strong>Audio-Dynamik / Lautheit:</strong> DRC und Loudnorm können pro Datei auf Regeln übernehmen, aktivieren oder deaktivieren gesetzt werden.</li>
+</ul>
+</div>
+</details>
+</div>
+<!-- UNTERTITEL -->
+<a name="untertitel"></a><h2 id="untertitel"><span style="color:#64748b;font-size:.85em;margin-right:6px;">17.</span>💬 Untertitel</h2>
+<div class="panel">
+<details>
+<summary>Automatisches Burn-In</summary>
+<div class="content">
+<p>Forced-Untertitel (z.B. fremdsprachige Passagen in deutschen Filmen) werden automatisch 
+eingebrannt wenn:</p>
+<ul>
+<li>Eine deutsche Audiospur vorhanden ist</li>
+<li>Genau ein Forced-Untertitel auf Deutsch gefunden wird</li>
+<li>"Forced-Untertitel automatisch einbrennen" in den Regeln aktiv ist</li>
+<li>die Forced-Plausibilitätsprüfung keinen Full-Sub-Verdacht meldet</li>
+</ul>
+<div class="callout warn">
+Eingebrannte Untertitel sind permanent und können nicht mehr entfernt werden.
+</div>
+</div>
+</details>
+<details>
+<summary>Burn-In Typen</summary>
+<div class="content">
+<table class="table" style="border-collapse:collapse;">
+<tr><th>Typ</th><th>Filter</th><th>Beispiel</th></tr>
+<tr><td>SRT / ASS (Text)</td><td><code>subtitles=</code></td><td>Normale Textuntertitel</td></tr>
+<tr><td>PGS / VobSub (Grafik)</td><td><code>overlay=</code></td><td>Blu-ray-Untertitel, DVD</td></tr>
+</table>
+</div>
+</details>
+<details>
+<summary>Untertitel-Tab: Werkzeuge</summary>
+<div class="content">
+<table class="table" style="border-collapse:collapse;">
+<tr><th>Funktion</th><th>Tool</th><th>Beschreibung</th></tr>
+<tr><td>Extrahieren</td><td>ffmpeg</td><td>Alle Untertitelspuren aus MKV/MP4 in Dateien</td></tr>
+<tr><td>Einfügen</td><td>mkvmerge/ffmpeg</td><td>Untertitel-Datei in Container einfügen</td></tr>
+<tr><td>SRT → ASS</td><td>Intern</td><td>Konvertierung mit konfigurierbarem Stil</td></tr>
+<tr><td>→ TXT</td><td>Intern</td><td>Textuntertitel als bearbeitbare TXT-Datei mit Zeitstempeln exportieren</td></tr>
+<tr><td>TXT → SRT</td><td>Intern</td><td>Zeitgestempelte TXT-Dateien wieder als nummerierte SRT-Datei aufbauen</td></tr>
+<tr><td>TXT → ASS</td><td>Intern</td><td>Zeitgestempelte TXT-Dateien direkt als ASS-Datei erzeugen</td></tr>
+<tr><td>Flags setzen</td><td>mkvpropedit</td><td>Sprach-Tag und Forced-Flag ändern</td></tr>
+</table>
+<div class="callout">
+<strong>Hinweis:</strong> Der Rückweg von TXT zu SRT/ASS funktioniert für TXT-Dateien, die Zeitstempelzeilen im Format <code>00:00:00,000 --&gt; 00:00:00,000</code> enthalten.
+</div>
+</div>
+</details>
+<details>
+<summary>Untertitel Regeln</summary>
+<div class="content">
+<p>Untertitel-Regeln können allgemein definiert werden</p>
+<ul>
+<li>Forced Untertitel automatisch einbrennen wenn eine deutsche Audiospur vorhanden ist</li>
+<li>Wenn mehr als ein Forced-Untertitel auf Deutsch gefunden wird, geht es nach der Reihenfolge die in "Bevorzugte Formate" festgelegt wurde</li>
+<li>Forced-Untertitel werden vor dem Burn-In anhand der Events pro Minute geprüft, sofern die Analyse eine Eventanzahl liefert.</li>
+<li>0-3 Events pro Minute gelten als plausibel, über 3 Events pro Minute wird gewarnt, über 5 Events pro Minute wird Burn-In blockiert.</li>
+<li>Bei blockiertem Burn-In wird die verdächtige Forced-Spur nicht gelöscht. Bei MP4 folgt ihre Ablage der globalen MP4-Regel; bei nicht einbrennenden Remux-Pfaden wird sie ebenfalls erhalten.</li>
+<li>Man kann auch entscheiden welche Untertitel behalten werden sollen</li>
+<li>Die Option <strong>MP4-Sidecars aktivieren</strong> gilt global für Standard-Encoding, Strip/Remux, HDR10+, AV1 und Dolby Vision.</li>
+<li>Ist die MP4-Sidecar-Option deaktiviert, werden textbasierte Untertitel intern als <code>mov_text/tx3g</code> gespeichert; PGS/SUP und VobSub/DVD-Sub bleiben Sidecars. MKV speichert die ausgewählten Spuren intern.</li>
+<li>Die Grenzen für maximale Sprachen und Untertitel je Sprache gelten unabhängig vom Zielcontainer und von der gewählten MP4-Ablage.</li>
+<li>Bei mehreren passenden Spuren gilt weiterhin die konfigurierte Format-/Prioritätslogik.</li>
+</ul>
+<div class="callout warn">
+Eingebrannte Untertitel sind permanent und können nicht mehr entfernt werden.
+</div>
+</div>
+</details>
+<details>
+<summary>Untertitel bei Dolby Vision (DV)</summary>
+<p>Die Dateinamen werden eindeutig aufgebaut, damit mehrere Untertitelspuren sich nicht gegenseitig überschreiben.</p>
+<div class="content">
+<p>Für Dolby Vision gilt dieselbe globale Untertitelregel wie für alle anderen Ausgabepfade: <strong>MP4 folgt der Option „MP4-Sidecars aktivieren“, MKV speichert intern im Container</strong>.</p>
+<ul>
+<li>Bei DV-MP4 können Forced-Untertitel eingebrannt werden. Keep-Spuren werden bei aktivierter MP4-Sidecar-Option extern gespeichert; sonst werden Textspuren intern als <code>mov_text/tx3g</code> gemuxt und nur PGS/SUP bzw. VobSub/DVD-Sub extern abgelegt.</li>
+<li>Bei DV-MKV werden die ausgewählten Keep-Spuren intern in den Matroska-Container gemuxt.</li>
+<li>Beim normalen DV-Encoding wird eine tatsächlich eingebrannte Forced-Spur nicht zusätzlich intern dupliziert.</li>
+<li>Beim reinen DV-Remux ist Burn-In ohne Video-Re-Encoding nicht möglich; eine solche ausgewählte Spur wird deshalb im MKV intern erhalten.</li>
+</ul>
+<p>Externe MP4-Sidecars werden automatisch passend benannt. Intern gespeicherte MP4-Textspuren erhalten Sprache, Titel und nach Möglichkeit die Forced-Kennzeichnung; MKV-Spuren erhalten Sprache, Titel und Forced-Flag.</p>
+<div class="callout">
+<strong>Hinweis:</strong> Das Verhalten richtet sich nach deinen Untertitel-Regeln. Die Checkbox <em>MP4-Sidecars aktivieren</em> ist nicht DV-spezifisch, sondern steuert die Untertitelablage für alle MP4-Ausgaben. MKV übernimmt die ausgewählten Spuren weiterhin intern.
+</div>
+<div class="callout">
+<strong>Formatwahl bei mehreren passenden Spuren:</strong><br/>
+Dragon Tools verwendet dieselbe zentrale Untertitelpriorität für MP4 und MKV. MP4 speichert je nach globaler Option alles als Sidecar oder kompatible Textspuren intern; MKV speichert die Auswahl intern.
+</div>
+<div class="callout ok">
+<strong>VLC-/Jellyfin-kompatible externe Untertitel:</strong><br/>
+Extrahierte Untertitel werden so benannt, dass VLC und Jellyfin sie zuverlässig erkennen können.
+Beispiele:
+<ul>
+<li><code>Film.de.srt</code></li>
+<li><code>Film.de.forced.srt</code></li>
+<li><code>Film.de.1.srt</code> und <code>Film.de.2.srt</code> bei mehreren deutschen Untertiteln</li>
+</ul>
+Forced-Untertitel erhalten eine eindeutige Forced-Markierung. Mehrere gleichsprachige Spuren werden nummeriert, damit keine Dateien überschrieben werden.
+</div>
+</div>
+</details>
+</div>
+<!-- IMAX -->
+<a name="imax"></a><h2 id="imax"><span style="color:#64748b;font-size:.85em;margin-right:6px;">18.</span>🎬 IMAX &amp; Auto-Crop</h2>
+<div class="panel">
+<details>
+<summary>Auto-Crop (schwarze Balken entfernen)</summary>
+<div class="content">
+<p>Auto-Crop analysiert die ersten 75 Sekunden (30s vorspulen, 45s analysieren) und 
+erkennt schwarze Balken automatisch.</p>
+<ul>
+<li>Häufigster Crop-Wert wird gewählt (robust gegen Ausreißer)</li>
+<li>Mindestgröße: 50% der Originalbreite/-höhe</li>
+<li>Weniger als 4 Pixel Differenz: kein Crop nötig</li>
+</ul>
+<p>Globale Aktivierung/Deaktivierung über die <strong>Auto-Crop</strong>-Checkbox im Optionen-Bereich.</p>
+</div>
+</details>
+<details>
+<summary>IMAX-Modus</summary>
+<div class="content">
+<p>IMAX-Filme wechseln während des Films zwischen 16:9 und nahezu 4:3 (z.B. Top Gun: Maverick, 
+Interstellar). Auto-Crop würde dabei das Bild falsch abschneiden.</p>
+<p><strong>IMAX-Modus deaktiviert Auto-Crop für diese Datei.</strong></p>
+<p>Aktivieren:</p>
+<ul>
+<li>Rechtsklick auf Datei → <strong>🎬 IMAX AN/AUS</strong></li>
+<li>Rechtsklick → <strong>⚙️ Datei-Einstellungen</strong> → IMAX-Checkbox</li>
+<li><strong>🎬 IMAX alle AN</strong> / <strong>🚫 IMAX alle AUS</strong> für alle Dateien</li>
+</ul>
+<p>Im Dateinamen wird <code>[IMAX]</code> angezeigt wenn aktiv.</p>
+</div>
+</details>
+</div>
+<!-- PROFILE -->
+<a name="cropimaxsettings"></a><h2 id="cropimaxsettings"><span style="color:#64748b;font-size:.85em;margin-right:6px;">19.</span>🎬 Auto-Crop- &amp; IMAX-Feinsteuerung</h2>
+<div class="panel">
+<p>Auto-Crop und IMAX-Auto-Erkennung sind getrennte Entscheidungen: Auto-Crop entfernt schwarze Balken, IMAX schützt Dateien mit wechselndem Bildformat vor falschem Cropping.</p>
+<h3>Auto-Crop</h3>
+<ul>
+<li><strong>Ein Prüfpunkt:</strong> bisheriges Standardverhalten, schnell und für normale Letterbox-Dateien ausreichend.</li>
+<li><strong>Mehrere Prüfpunkte:</strong> prüft den Film an mehreren Stellen und ist robuster gegen Logos, Intros oder ungewöhnliche Anfangsszenen.</li>
+<li><strong>Startpunkt, Prüfdauer, Intervall:</strong> werden zentral unter Einstellungen → Auto-Crop gespeichert.</li>
+</ul>
+<h3>IMAX-Auto-Erkennung</h3>
+<ul>
+<li>prüft die aktive Bildfläche per cropdetect statt nur die technische Auflösung</li>
+<li>Standard: alle 90 Sekunden, jeweils 3 Sekunden Analyse</li>
+<li>Mindestabweichung und Mindestanzahl verwertbarer Prüfpunkte sind einstellbar</li>
+<li>wenn IMAX erkannt wird, bleibt Auto-Crop für diese Datei aus</li>
+</ul>
+<div class="callout">
+<strong>Zur Einstellung:</strong> Kürzere Intervalle erkennen Formatwechsel zuverlässiger, verlängern aber die Voranalyse. Für normale Serien reicht der Standard in der Regel aus.
+</div>
+</div>
+<!-- LOGBEREINIGUNG -->
+<a name="profile"></a><h2 id="profile"><span style="color:#64748b;font-size:.85em;margin-right:6px;">20.</span>💾 Profile</h2>
+<div class="panel">
+<p>Profile speichern: CRF, Preset, Skalierung und Encoder-Optionen für einen Medientyp.</p>
+<table class="table" style="border-collapse:collapse;">
+<tr><th>Profil</th><th>Symbol</th><th>Löschbar?</th></tr>
+<tr><td>film, tv, anime</td><td>🔒 Standard</td><td>Nein – immer vorhanden</td></tr>
+<tr><td>Eigene Namen</td><td>📝 Benutzerprofil</td><td>Ja</td></tr>
+</table>
+<p><strong>Speichern:</strong> Klicke <strong>💾 Profil speichern</strong> – wähle einen 
+bestehenden Namen (überschreibt) oder gib einen neuen ein.</p>
+<p><strong>Laden:</strong> Klicke <strong>📂 Profil laden</strong> – nach dem Laden kannst du 
+eigene Profile auch löschen.</p>
+<p>Eigene Profile dürfen denselben sichtbaren Namen mehrfach verwenden, solange Codec oder Encoder unterschiedlich sind. So kann z. B. <strong>Allgemein</strong> getrennt für CPU, NVENC und QSV gespeichert werden; in Auswahllisten wird zur Unterscheidung der Kontext angezeigt.</p>
+<p><strong>Profil-Assistent:</strong> Klicke <strong>🧭 Profil-Assistent</strong>, um ein empfohlenes Startprofil für den aktuellen Codec zu übernehmen. Für H.265 gibt es erweiterte Startprofile für Anime-Serien, TV-Serien, Anime-Filme, TV-Filme, 4K-Anime und 4K-TV, jeweils als CPU-/Qualitätsprofil und schnelles NVENC-Profil mit kleiner oder mittlerer Zielgröße. Danach bleiben alle Expertenwerte normal editierbar und können bei Bedarf als eigenes Profil gespeichert werden.</p>
+<table class="table" style="border-collapse:collapse;">
+<tr><th>Assistentenprofil</th><th>Typischer Nutzen</th></tr>
+<tr><td>Anime klein</td><td>H.265 CPU/x265 mit Tune animation, guter Ausgangspunkt für kleine Anime-/Serien-Dateien.</td></tr>
+<tr><td>Film ausgewogen</td><td>H.265 CPU/x265 mit CRF/Preset-Balance für normale Filme.</td></tr>
+<tr><td>Archiv-Qualität</td><td>Langsameres, hochwertigeres Profil für wichtige Quellen.</td></tr>
+<tr><td>NVENC schnell / Qualität</td><td>GPU-Profile für schnelle Verarbeitung oder etwas höhere Qualität.</td></tr>
+<tr><td>AV1 klein / ausgewogen / Archiv</td><td>SVT-AV1-Profile mit numerischen Presets, passend zum AV1-Encoderpfad.</td></tr>
+</table>
+<div class="callout ok">
+Standard-Profile (🔒) können nicht überschrieben und gelöscht werden. 
+Sie sind immer als Ausgangspunkt verfügbar.
+</div>
+<div class="callout">
+<strong>Versionsmigration:</strong> Eigene Profile werden beim Laden automatisch auf das aktuelle <strong>Profil-Schema 3</strong> gebracht. Fehlen neue Encoder-Optionen, ergänzt Dragon Tools sinnvolle Standardwerte. Das frühere QSV-Bool-Feld <code>lookahead</code>/<code>qsv_la</code> wird entfernt; QSV verwendet nur noch die echte <code>lookahead_depth</code>. Migrationshinweise landen unter <code>Dokumente\DragonTools\Logging\MIGRATION</code> und im Änderungsprotokoll <code>Logging\SettingsChanges</code>.
+</div>
+</div>
+<!-- REGELN -->
+<a name="regeln"></a><h2 id="regeln"><span style="color:#64748b;font-size:.85em;margin-right:6px;">21.</span>📋 Regeln-Editor</h2>
+<div class="panel">
+<p>Öffnen über: Menü <strong>Regeln</strong> oder direkt in der Menüleiste.</p>
+<div class="callout ok">
+<strong>Regel-Migration:</strong> Audio-, Untertitel- und Move-Regeln besitzen eine Schema-Version. Alte JSON-Dateien werden beim Laden automatisch ergänzt, z. B. um neue Downmix-Optionen, Stereo-Kopierbereiche oder Formatprioritäten.
+</div>
+<details>
+<summary>Tab: Serien-Erkennung</summary>
+<div class="content">
+<p>Du musst <strong>keine Regex kennen</strong>. Gib einfach deine Dateinamen ein 
+und klicke <strong>🔍 Testen</strong>:</p>
+<pre>Stargate - S01E01E02 - Tor zum Universum.mkv
+Spider-Man - S01E01 - Titel.mkv  
+Das A-Team S02E05.mkv
+Interstellar.2014.mkv</pre>
+<p>Bereits eingebaut – erkannt ohne eigene Regeln:</p>
+<table class="table" style="border-collapse:collapse;">
+<tr><th>Format</th><th>Beispiel</th></tr>
+<tr><td>Standard</td><td>S01E01, S01E01E02, S01E01E02E03</td></tr>
+<tr><td>Mit Trenner</td><td>S01E01-E02, S01E01 E02</td></tr>
+<tr><td>Alternativ</td><td>1x01, 1x01x02</td></tr>
+<tr><td>Bindestrich im Namen</td><td>Spider-Man, Das A-Team, Das Boot</td></tr>
+</table>
+<p>Eigene Muster nur nötig für exotische Formate wie <code>Staffel 1 Folge 01</code>.<br/>
+Klicke dafür auf <strong>❓ Wie schreibe ich ein Muster?</strong></p>
+</div>
+</details>
+<details>
+<summary>Tab: Audio-Regeln</summary>
+<div class="content">
+<p>Konfiguriere für jede Kanal-Stufe separat:</p>
+<ul>
+<li><strong>Ziel-Codec:</strong> AAC (Stereo), E-AC3 (Surround)</li>
+<li><strong>Kopierbereiche:</strong> Stereo, 5.1 und 7.1 können eigene Bereiche besitzen; passende Spuren werden direkt kopiert</li>
+<li><strong>Ziel-Bitrate:</strong> wird verwendet, wenn Stereo oder Mehrkanalton transkodiert werden muss</li>
+</ul>
+<p>Außerdem: welche Codecs immer transkodiert werden (TrueHD, DTS-HD usw.).</p>
+<p>Die <strong>🔍 Vorschau</strong> zeigt sofort was mit einem bestimmten Codec/Kanäle/Bitrate 
+passiert – ohne eine Datei zu verarbeiten.</p>
+</div>
+</details>
+<details>
+<summary>Tab: Untertitel-Flags</summary>
+<div class="content">
+<p>Setzt <strong>Sprach-Tag</strong> und <strong>Forced-Flag</strong> direkt auf bestehenden 
+MKV-Dateien (ohne Re-Encoding) via mkvpropedit.</p>
+<p>Track-Index = 0-basiert (erste Untertitelspur = Index 0).</p>
+</div>
+</details>
+</div>
+<!-- SHORTCUTS -->
+<a name="workflows"></a><h2 id="workflows"><span style="color:#64748b;font-size:.85em;margin-right:6px;">22.</span>🧭 Typische Workflows</h2>
+<div class="panel">
+<details>
+<summary>Standard-Serie schnell konvertieren</summary>
+<div class="content">
+<ol>
+<li>Passenden Codec-Tab öffnen</li>
+<li>Dateien per Drag &amp; Drop einfügen</li>
+<li>Optionen prüfen und Konvertierung starten</li>
+<li>Während der erste Job läuft, die restlichen Episoden in der Liste kontrollieren und bei Bedarf pro Datei anpassen</li>
+</ol>
+</div>
+</details>
+<details>
+<summary>Einzelne Problemdatei mit Sonderregeln behandeln</summary>
+<div class="content">
+<ol>
+<li>Datei in die Liste aufnehmen</li>
+<li>Per Rechtsklick <strong>Datei-Einstellungen</strong> öffnen</li>
+<li>Audio-Modus, Untertitel oder IMAX gezielt nur für diese Datei setzen</li>
+<li>Globalen Batch unverändert lassen</li>
+</ol>
+</div>
+</details>
+<details>
+<summary>Dolby Vision korrekt weiterverarbeiten</summary>
+<div class="content">
+<ol>
+<li>Datei im H.265 / DV / HDR10+-Tab laden</li>
+<li>Automatische Erkennung prüfen</li>
+<li>Entscheiden, ob DV erhalten bleiben soll oder bewusst nicht erhalten wird</li>
+<li>Bei DV+HDR10+ beide Erhalt-Optionen aktiv lassen, damit HDR10+ zusätzlich im DV-Pfad gesichert wird</li>
+<li>Bei aktivem DV-Erhalt die DV-Pipeline laufen lassen oder bei Containerwechsel den DV-Remux verwenden</li>
+<li>Nach Abschluss Ergebniscontainer und externe Untertitel kontrollieren</li>
+</ol>
+</div>
+</details>
+<details>
+<summary>DV/HDR10+ bewusst entfernen</summary>
+<div class="content">
+<ol>
+<li>Datei im H.265 / DV / HDR10+-Tab laden</li>
+<li>Global die Erhaltung von DV/HDR10+ deaktivieren oder per Rechtsklick die Datei-Einstellungen öffnen</li>
+<li>Für einzelne Dateien den Erhalt gezielt abschalten</li>
+<li>Konvertierung starten; die Datei wird dann als normale H.265-Ausgabe verarbeitet</li>
+</ol>
+<div class="callout warn">
+<strong>Konsequenz:</strong> Dynamische DV-/HDR10+-Metadaten werden dabei nicht gezielt in die Ausgabedatei übernommen.
+</div>
+</div>
+</details>
+<details>
+<summary>Große Liste effizient abarbeiten</summary>
+<div class="content">
+<p>Große Batches startest du am besten direkt. Danach sortierst du die Warteschlange um, entfernst falsche Einträge und setzt Sonderregeln nur dort, wo sie wirklich nötig sind. Die Dateiliste aktualisiert Fortschritt und Queue-Fenster gedrosselt, damit sehr große Warteschlangen auch bei vielen Fortschrittsmeldungen bedienbar bleiben.</p>
+</div>
+</details>
+<details>
+<summary>Nur verschieben ohne Konvertierung oder Remux</summary>
+<div class="content">
+<p>Dragon Tools kann auch als reines Verschiebe-Werkzeug genutzt werden.</p>
+<ol>
+<li>Dateien in die Liste aufnehmen</li>
+<li>Zielpfade prüfen oder über die Preflight-Vorabprüfung festlegen</li>
+<li>Verschieben starten, ohne vorher zu konvertieren oder zu remuxen</li>
+</ol>
+<div class="callout">
+<strong>Praktisch:</strong> Bereits korrekt vorbereitete Dateien kannst du direkt in die Serien-/Filmstruktur einsortieren.
+</div>
+</div>
+</details>
+<div class="callout ok">
+<strong>Externe Untertitel werden mit verschoben:</strong><br/>
+Beim Verschieben werden automatisch auch passende externe Untertiteldateien wie <code>.srt</code>, <code>.ass</code> oder bildbasierte Sidecars mitgenommen, sofern sie zur Videodatei gehören. Das betrifft MP4-Ausgaben mit aktivierter Sidecar-Option sowie PGS/SUP- und VobSub-Sidecars im internen Textmodus.
+</div>
+</div>
+<!-- LOGS -->
+<a name="mergewidgetneu"></a><h2 id="mergewidgetneu"><span style="color:#64748b;font-size:.85em;margin-right:6px;">23.</span>🔗 Merge-Widget</h2>
+<div class="panel">
+<p>Mit dem Merge-Widget können mehrere einzelne Videodateien verlustfrei zu einer gemeinsamen MKV- oder MP4-Datei zusammengeführt werden, sofern sie technisch zueinander passen.</p>
+<ul>
+<li>lossless Merge nach MKV</li>
+<li>lossless Merge nach MP4</li>
+<li>vorherige technische Prüfung der Dateien auf Kompatibilität</li>
+<li>bei Abweichungen werden Hinweise ausgegeben und der Merge wird nicht erzwungen</li>
+</ul>
+<div class="callout warn">
+<strong>Wichtig:</strong> Das Mergen funktioniert nur zuverlässig, wenn die Quelldateien ausreichend kompatibel sind. Stimmen wichtige Parameter nicht überein, wird nicht blind zusammengefügt, sondern mit Hinweis abgebrochen.
+</div>
+</div>
+<a name="einstellungen"></a><h2 id="einstellungen"><span style="color:#64748b;font-size:.85em;margin-right:6px;">24.</span>⚙️ Einstellungen</h2>
+<div class="panel">
+<details>
+<summary>Zielpfade je Codec</summary>
+<div class="content">
+<p>Jeder Codec (H.264, H.265, AV1) hat eigene Zielpfade für TV, Anime, Film.
+So kannst du z.B. AV1-Dateien in einen anderen Ordner als H.265 ablegen.</p>
+<p>Standardmäßig werden die Ordner automatisch unter
+<code>Dokumente\DragonTools\Ausgabe\H264</code>,
+<code>Dokumente\DragonTools\Ausgabe\H265</code> und
+<code>Dokumente\DragonTools\Ausgabe\AV1</code> angelegt. Leere Felder fallen auf diesen Standard zurück.</p>
+</div>
+</details>
+<details>
+<summary>DV/HDR10+-Erhalt</summary>
+<div class="content">
+<p>Der Erhalt von Dolby Vision und HDR10+ ist für H.265 vollständig und für AV1 als getrennte Beta-Pipeline verfügbar. H.265 und AV1 besitzen dafür jeweils eigene gespeicherte Checkbox-Einstellungen.</p>
+<ul>
+<li><strong>Aktiv:</strong> DV und HDR10+ werden im H.265- bzw. AV1-Tab erkannt und über die jeweilige codec-spezifische Pipeline verarbeitet.</li>
+<li><strong>Deaktiviert:</strong> Erkannte DV-/HDR10+-Metadaten werden nicht gezielt erhalten; die Datei läuft über die normale Pipeline des gewählten Zielcodecs.</li>
+<li><strong>Override:</strong> Einzelne Dateien können unabhängig von der globalen Checkbox abweichend eingestellt werden.</li>
+</ul>
+<div class="callout warn">
+<strong>Wichtig:</strong> H.265 nutzt die normalen HEVC-Spezialpfade von Dragon Tools. Für AV1 habe ich eigene Beta-Pfade mit separater Capability- und Endprüfung ergänzt. H.264 verwendet keine DV-/HDR10+-Erhaltungspipeline.
+</div>
+</div>
+</details>
+<details>
+<summary>Tool-Pfade</summary>
+<div class="content">
+<p>Normalerweise findet Dragon Tools alle Tools automatisch (im PATH oder im App-Bundle).</p>
+<p>Nur ausfüllen wenn ein Tool <strong>nicht gefunden</strong> wird (F9 prüfen).</p>
+<table class="table" style="border-collapse:collapse;">
+<tr><th>Tool</th><th>Funktion</th><th>Pflicht?</th></tr>
+<tr><td>ffmpeg/ffprobe</td><td>Kern-Encoder und Analyse</td><td>✅ Ja</td></tr>
+<tr><td>MKVToolNix</td><td>MKV-Container, Untertitel</td><td>⚠️ Für Untertitel-Tab</td></tr>
+<tr><td>dovi_tool</td><td>Dolby Vision</td><td>⚠️ Nur für DV</td></tr>
+<tr><td>hdr10plus_tool</td><td>HDR10+</td><td>⚠️ Nur für HDR10+</td></tr>
+<tr><td>MP4Box</td><td>MP4-Muxing für DV/HDR10+ und MP4-Reparaturpfade</td><td>⚠️ Für entsprechende MP4-Spezialpfade</td></tr>
+<tr><td>MediaInfo</td><td>Erweiterte HDR-Erkennung</td><td>❌ Optional</td></tr>
+</table>
+</div>
+</details>
+<details>
+<summary>Online-Metadaten</summary>
+<div class="content">
+<p>Der Hauptmenüpunkt <strong>Online-Metadaten</strong> verwaltet optionale Metadatenzugriffe für Filmreihen, Serienjahre, Episodentitel, NFO-Erstellung und den Renamer. Filme und Serien können getrennte Provider verwenden.</p>
+<ul>
+<li><strong>Film-Provider:</strong> TMDB, TheTVDB oder <em>Beide</em>. Standard ist TMDB.</li>
+<li><strong>Serien-Provider:</strong> TMDB, TheTVDB oder <em>Beide</em>. Standard ist TMDB.</li>
+<li><strong>Bevorzugt:</strong> nur aktiv, wenn für den jeweiligen Medientyp <em>Beide</em> gewählt ist. Standard ist TMDB. Der bevorzugte Dienst wird zuerst abgefragt; der zweite Provider dient als Fallback. In Trefferlisten können Ergebnisse beider Quellen verfügbar bleiben, wobei die Provider-Priorität vor der reinen Match-Sicherheit berücksichtigt wird.</li>
+<li><strong>TMDB API Read Access Token:</strong> bevorzugter Zugriff für TMDB-Abfragen.</li>
+<li><strong>TMDB API-Key:</strong> zusätzlicher Fallback, falls ein API-Pfad ihn benötigt.</li>
+<li><strong>TheTVDB API-Key / PIN / Bearer-Token:</strong> Zugriff über TheTVDB. Dragon Tools kann mit API-Key/PIN einen temporären Bearer-Token anfordern oder einen vorhandenen Token verwenden.</li>
+<li><strong>Zugangsdaten anzeigen (TMDB + TheTVDB):</strong> eine gemeinsame Checkbox im separaten Bereich „Zugangsdaten“. Sie schaltet alle fünf geheimen Felder beider Provider gemeinsam zwischen Passwort- und Klartextanzeige um.</li>
+<li><strong>Sprache / Fallback:</strong> Standard <code>de-DE</code>, Fallback <code>en-US</code>.</li>
+<li><strong>Cache:</strong> standardmäßig aktiv; Erneuerung nach 30 Tagen. Der Zeitraum ist von 1 bis 365 Tagen einstellbar.</li>
+<li><strong>Deutsche ASCII-Umlaute:</strong> Suchbegriffe wie <code>Kinderfluesterer</code> werden zunächst unverändert gesucht und bei Bedarf zusätzlich vorsichtig als Umlautvariante wie <code>Kinderflüsterer</code> probiert. Die Originalschreibweise bleibt immer die erste Anfrage.</li>
+<li><strong>Renamer:</strong> eigener Tab für manuelle Umbenennungsvorschläge. Dragon Tools entfernt technische Release-Tags aus der Suche, zeigt Editionen wie Director's Cut als Hinweis und schreibt standardmäßig nur saubere Titel mit Jahr bzw. SxxEyy-Folgenstruktur.</li>
+</ul>
+<p>Im Menü <strong>Online-Metadaten</strong> kannst du die Umbenennung öffnen, Metadaten-Verbindungen testen, einen Titel manuell suchen und den lokalen Metadaten-Cache leeren.</p>
+<p>Ist ein Film-Provider aktiviert, nutzt der Film-Preflight gefundene Collections als Vorschlag: Filme aus einer Collection werden automatisch als <strong>Filmreihe</strong> voreingestellt. Die Entscheidung bleibt im Preflight jederzeit manuell änderbar.</p>
+<p>Bei Serien bleibt die lokale Ordnersuche führend: Wird ein eindeutiger Serienordner gefunden, nutzt Dragon Tools dessen vorhandene Struktur. Gibt es mehrere gleichnamige Ordner mit Jahreszusatz, grenzt das erkannte oder online gefundene Serienjahr die Auswahl ein. Nur wenn kein lokaler Ordner gefunden wird, kann der Serien-Provider das Serienjahr vorschlagen und z.B. <strong>Serienname (2024)</strong> in das weiterhin editierbare Serienfeld eintragen.</p>
+<p>TMDB-Serientitel werden für Windows-Zielordner bereinigt. Ungültige oder dekorative Doppelpunkte werden nicht in den Ordner übernommen; dadurch wird z.B. <strong>Re:ZERO</strong> als <strong>ReZERO</strong> behandelt und ein vorhandener Ordner wie <strong>ReZERO - Starting Life in Another World (2016)</strong> wieder zuverlässig erkannt.</p>
+<p>Die Online-Vorschläge werden im Preflight im Hintergrund geladen. Der Dialog öffnet sofort, zeigt den Lade-/Cache-Status und übernimmt Vorschläge nur, wenn das Feld nicht bereits manuell geändert wurde.</p>
+<div class="callout">
+<strong>Datenschutz:</strong> Die Schlüssel werden lokal in den DragonTools-Einstellungen gespeichert. Diagnosepakete maskieren API-Keys, Read-Access-Token, PIN und Bearer-Token automatisch.
+</div>
+</div>
+</details>
+<details>
+<summary>Quellbildprüfung</summary>
+<div class="content">
+<p>Die Quellbildprüfung kann vor der Konvertierung mehrere kurze Bildausschnitte einer Datei analysieren. Sie soll klar defektes Ausgangsmaterial erkennen, z.B. nahezu leere Frames, auffällige einfarbige Flächen oder starkes Pixelrauschen.</p>
+<ul>
+<li><strong>Aktivierung:</strong> über Einstellungen → Quellbildprüfung.</li>
+<li><strong>Prüfintervall:</strong> z.B. 10 % prüft die Positionen 10, 20, 30 ... 90 % der Laufzeit.</li>
+<li><strong>Prüfdauer/FPS:</strong> legt fest, wie viele Frames je Prüfpunkt betrachtet werden.</li>
+<li><strong>Blockschwelle:</strong> erst wenn genügend Prüfpunkte auffällig sind, wird die Datei übersprungen.</li>
+<li><strong>Override:</strong> per Rechtsklick kann eine Datei bewusst freigegeben oder die Prüfung manuell ausgeführt werden.</li>
+</ul>
+<div class="callout warn">
+<strong>Hinweis:</strong> Die Prüfung ist bewusst konservativ. Einzelne dunkle Szenen oder kurze Störungen sollen nicht reichen; blockiert wird nur bei mehreren auffälligen Prüfpunkten.
+</div>
+</div>
+</details>
+<details>
+<summary>Jellyfin NFO / Trickplay</summary>
+<div class="content">
+<p>Dieser Einstellungsbereich erzeugt optionale Jellyfin-Zusatzdateien nach einer erfolgreichen Konvertierung. Sie werden als Sidecars an die fertige Videodatei gekoppelt und beim späteren Verschieben zusammen mit dem Video in den Zielordner verschoben.</p>
+<ul>
+<li><strong>Jellyfin-NFO:</strong> erstellt Film- oder Folgen-NFOs aus TMDB-Daten. Enthalten sind Titel, Originaltitel, Plot, Jahr, Laufzeit, TMDB-/IMDb-ID, Genres, Studios, Credits, Darsteller und Collection-Daten, sofern TMDB sie liefert.</li>
+<li><strong>Technische Dateiinfos:</strong> schreibt optional Video-/Audio-/Untertitelinformationen aus ffprobe in den fileinfo-Bereich der NFO.</li>
+<li><strong>Film-NFO im Ziel:</strong> in der Arbeitsablage bleibt die NFO eindeutig nach Videoname benannt. Beim Verschieben in einen Filmordner kann sie automatisch zu <code>movie.nfo</code> werden.</li>
+<li><strong>Serienfolgen:</strong> Folgen behalten ihren Dateinamen als NFO, z.B. <code>Serie - S01E01.nfo</code>.</li>
+<li><strong>Trickplay:</strong> erstellt Jellyfin-kompatible Kachelbilder unter <code>Filmname.trickplay\320 - 10x10\0.jpg</code>, <code>1.jpg</code> usw.</li>
+<li><strong>Trickplay-Konflikt:</strong> vorhandene Trickplaybilder können wie NFOs behalten, ersetzt oder vorher als Backup-Ordner gesichert werden. Beim Erzeugen erfolgt Overwrite/Backup transaktional: der Altbestand wird erst gesichert, die neue Partial-Struktur committed und ein temporäres Overwrite-Backup erst nach erfolgreichem Commit entfernt. Bei Commitfehler wird zurückgerollt; bei Rollbackfehler bleibt das Backup erhalten.</li>
+<li><strong>Trickplay-Quelle:</strong> wahlweise aus der konvertierten Ausgabedatei oder aus dem Ausgangsmaterial. Der erzeugte Ordner wird immer passend zur fertigen Ausgabedatei benannt. FFmpeg läuft über den zentralen ToolRunner; stderr/stdout werden laufend konsumiert, Abbruch/Pause werden unterstützt und ein Runtime-Timeout von 6 Stunden verhindert dauerhaft hängende Trickplay-Prozesse.</li>
+<li><strong>Jellyfin-Defaults:</strong> 320 px Breite, 10x10 Kacheln, 10 Sekunden Intervall, qscale 4 und JPEG-Qualität 90.</li>
+<li><strong>Hardwarepfad:</strong> CUDA kann für das Decoding genutzt werden. Falls das bei einer Datei nicht klappt, versucht Dragon Tools automatisch den CPU-Fallback.</li>
+<li><strong>Abschlussbericht:</strong> Zusatzdaten werden getrennt ausgewiesen. Der Bericht zeigt, ob NFO und Trickplay erstellt, beibehalten, ergänzt, ersetzt, gesichert oder mit Fehler übersprungen wurden.</li>
+<li><strong>Verschiebebericht:</strong> Untertitel, NFO und Trickplay werden getrennt gezählt. Konflikte zeigen zusätzlich, ob vorhandene Daten gelöscht, ersetzt, gesichert, umbenannt oder beibehalten wurden.</li>
+</ul>
+<div class="callout">
+<strong>Wichtig:</strong> NFOs enthalten keine Jellyfin-Nutzerdaten wie gesehen, Resume-Positionen oder lokale Serverpfade. Wenn TMDB nicht eingerichtet oder nicht erreichbar ist, wird die NFO-Erstellung übersprungen; die Videokonvertierung bleibt trotzdem erfolgreich.
+</div>
+</div>
+</details>
+<details>
+<summary>Parallele Bearbeitung</summary>
+<div class="content">
+<p>Hier wird festgelegt, wie viele Dateien gleichzeitig konvertiert werden dürfen. Der Wert <strong>1 Datei</strong> entspricht der bisherigen Verarbeitung nacheinander.</p>
+<ul>
+<li><strong>CPU-Encoder:</strong> gilt für Software-Encoding mit libx264, libx265 und SVT-AV1. Standard: 1 Datei parallel. x265 nutzt eine 8-Kern-CPU meist bereits gut aus; 2 parallele CPU-Encodes lohnen sich eher ab etwa 12–16 echten Kernen oder nach eigenem Test.</li>
+<li><strong>GPU-Encoder:</strong> gilt für NVENC, QSV und AMF. Standard: 2 Dateien parallel. Je nach Grafikkarte, Filterlast, Audio-/Untertitelarbeit und Datenträger können leistungsstarke NVIDIA-GPUs auch 3–4 parallele Videos schaffen.</li>
+<li><strong>Dynamischer Start:</strong> ist der Parallelwert größer als 1, nutzt Dragon Tools auch bei nur einer Startdatei den Parallel-Koordinator. Später hinzugefügte Dateien können dadurch direkt als weiterer Worker starten.</li>
+<li><strong>Queue:</strong> fertig konvertierte Dateien werden weiterhin normal protokolliert; noch nicht gestartete Dateien können weiter bearbeitet werden.</li>
+<li><strong>Fortschrittsanzeige:</strong> mehrere aktive Dateien werden standardmäßig als ruhiger kombinierter Balken dargestellt; per Auswahl kann eine einzelne aktive Datei fokussiert werden.</li>
+<li><strong>Job-Wiederaufnahme:</strong> parallele Läufe speichern mehrere aktive Dateien im Job-Journal, damit nach einem Absturz die Restqueue sauber rekonstruiert werden kann. Das Journal arbeitet fail-closed: kann der initiale Zustand nicht atomar gespeichert werden, startet der Konvertierungsworker nicht. Beim Abschluss wird zuerst das Archiv geschrieben und die aktive Journaldatei erst danach entfernt. Wenn du beim Start "Später entscheiden" wählst, bleibt das Journal erhalten und kann später über <strong>Datei → Offene Restqueue importieren</strong> geöffnet werden.</li>
+<li><strong>Speicherplatzprüfung:</strong> vor dem Start wird geschätzt, ob für die gleichzeitig laufenden temporären Ausgabedateien genug freier Platz vorhanden ist.</li>
+<li><strong>Temp-Isolation:</strong> temporäre und nicht überschreibende Ausgabepfade werden intern reserviert, damit parallele Jobs keine identischen Zieldateinamen verwenden.</li>
+</ul>
+<div class="callout">
+<strong>Zur Parallelisierung:</strong> Mehr parallele Jobs bringen nur etwas, wenn CPU/GPU, Datenträger und externe Tools genug Reserven haben. Bei CPU/x265, DV5/libplacebo, Burn-In oder vielen Reparatur-/Remux-Schritten ist ein niedrigerer Wert oft schneller und stabiler.
+</div>
+</div>
+</details>
+<details>
+<summary>Standardwerte wiederherstellen (Strg+R)</summary>
+<div class="content">
+<div class="callout warn">
+Löscht alle gespeicherten Einstellungen, Pfade, Fenstergrößen und Profilpfade.<br/>
+<strong>Gespeicherte Profile in Dokumente\DragonTools\ bleiben erhalten.</strong>
+</div>
+</div>
+</details>
+<details>
+<summary>Timeout-Grenzen</summary>
+<div class="content">
+<p>Für externe Prozesse können frei definierbare Timeout-Grenzen hinterlegt werden.</p>
+<ul>
+<li>FFmpeg-/ffprobe-Schritte</li>
+<li>dovi_tool-Schritte</li>
+<li>MP4Box-Muxing</li>
+<li>HDR10+-Extraktion und Injektion</li>
+</ul>
+<p>Damit lassen sich hängende Prozesse kontrolliert abbrechen, statt dass die App endlos wartet.</p>
+</div>
+</details>
+<details>
+<summary>Dateigrößen-Schutz beim Überschreiben</summary>
+<div class="content">
+<p>Für die Überschreiben-Logik können frei definierbare Grenzen aktiviert werden.</p>
+<ul>
+<li>Erlaubte Abweichung nach unten: z. B. 0–100 % kleiner</li>
+<li>Erlaubte Abweichung nach oben: z. B. 0–100 % größer</li>
+</ul>
+<p>Wird eine Grenze überschritten, wird das automatische Überschreiben des Originals außer Kraft gesetzt.</p>
+<div class="callout warn">
+<strong>Zweck:</strong> Schutz vor fehlerhaften Encodes, falschen Parametern oder unerwartet großen/kleinen Ausgabedateien.
+</div>
+</div>
+</details>
+</div>
+<!-- WERKZEUGE -->
+<a name="standardreset"></a><h2 id="standardreset"><span style="color:#64748b;font-size:.85em;margin-right:6px;">25.</span>🔄 Standardwerte &amp; Reset</h2>
+<div class="panel">
+<p>Der Reset über <kbd>Strg+R</kbd> löscht die gespeicherten Einstellungen und lädt anschließend passende Standardprofile für die aktiven Konverter-Tabs. Der finale Zustand wird danach <strong>explizit in QSettings gespeichert</strong>; Dragon Tools verlässt sich nicht mehr darauf, dass jedes zurückgesetzte Feld ein Änderungssignal auslöst.</p>
+<ul>
+<li>H.265 lädt abhängig von der erkannten Hardware das passende Filmprofil für NVENC, QSV, AMF oder CPU.</li>
+<li><strong>CPU/x265 für H.265 verwendet nach dem Werkreset CRF 22</strong>; B-Frames stehen auf 8 und Lookahead auf 40.</li>
+<li>H.264 lädt das H.264-Filmprofil; AV1 das AV1-Filmprofil.</li>
+<li>CPU-/x265-Detailwerte wie CRF, Preset, Tune, AQ, Psy-RD, B-Frames und Lookahead werden vollständig zurückgesetzt.</li>
+<li>Das alte QSV-Feld <code>qsv_la</code> wird beim Speichern entfernt; erhalten bleibt nur <code>qsv_la_depth</code>.</li>
+</ul>
+<div class="callout ok">
+<strong>Beim Zurücksetzen:</strong> Der Reset liefert jetzt auch nach Neustart oder Profilwechsel denselben definierten Zustand. Alte Encoderwerte tauchen nicht mehr wieder auf, nur weil beim Zurücksetzen kein <code>valueChanged</code>-Signal ausgelöst wurde.
+</div>
+</div>
+<!-- SUPPORTWORKFLOW -->
+<a name="werkzeuge"></a><h2 id="werkzeuge"><span style="color:#64748b;font-size:.85em;margin-right:6px;">26.</span>🔧 Werkzeuge</h2>
+<div class="panel">
+<p>Menü <strong>Werkzeuge</strong> enthält:</p>
+<ul>
+<li><strong>🔍 System prüfen / Werkzeuge (F9):</strong> Prüft gefundene Tools mit kleinen Versions-/Fähigkeitstests, z. B. ffmpeg-Filter, Encoder, MediaInfo, MKVToolNix, MP4Box, dovi_tool und HDR10+ Tool; Ergebnisse werden mit ✅ und ❌ deutlich markiert</li>
+<li><strong>🧪 Erweiterter Systemtest mit Mini-Dateien:</strong> erzeugt temporär eine 1-Sekunden-Testdatei und prüft praktisch, ob ffmpeg, ffprobe, MediaInfo, mkvmerge und MP4Box mit einfachen Mini-Jobs arbeiten können; DV-/HDR10+-Tools werden per CLI-Reaktion geprüft und ebenfalls mit ✅/❌/⚠️ markiert</li>
+<li><strong>🧪 Regel-/Profil-Simulator aktuelle Queue:</strong> Prüft alle Dateien der aktiven Warteschlange gegen Analyse-, Audio-, Untertitel-, Pipeline-, Profil- und Zielregeln, ohne einen Encode zu starten; Tabelle und Detailansicht zeigen Pipeline, Profil, Entscheidungsgründe und Hinweise, der Bericht kann als TXT gespeichert werden</li>
+<li><strong>🩺 Laufenden Job diagnostizieren:</strong> Zeigt während eines Encodes aktive Dateien, wartende Dateien, parallele Worker, Gesamtfortschritt, Prozess-ID und das aktuell laufende Werkzeugkommando</li>
+<li><strong>🧪 Qualitätstester öffnen:</strong> öffnet den separaten Testbereich für kurze Encoder-Vergleiche. Neue Testläufe werden über einen Assistenten angelegt: zuerst Codec, dann Encoder, anschließend passende Encoder-Optionen. Das freie Feld für zusätzliche FFmpeg-Parameter bleibt für Profis erhalten. Dragon Tools schreibt Ergebnisdateien und analysiert Größe, Bitrate, Codec, Pixelformat, SSIM und VMAF sofern verfügbar</li>
+<li><strong>🎧 Audio-Video-Matcher öffnen:</strong> öffnet den separaten Bereich zum Synchronisieren einer deutschen Audiospur auf eine andere Videoversion. Fall A erkennt reinen Offset, Fall B gleichmäßige Drift und Fall C unterschiedliche Schnitte mit anschließender Bereichs-Feinanalyse; wenn OpenCV verfügbar ist, wird es automatisch für robustere Bildvergleiche genutzt</li>
+<li><strong>✅ Release-/Build prüfen:</strong> kontrolliert in der fertigen App Startdatei, Datenordner, Help, Handbuch, Changelogs, Programme, Schemas und die Python-Paketstruktur; im Quellprojekt zusätzlich Build-/Datenschutzpunkte vor einer Veröffentlichung</li>
+<li><strong>🧪 Diagnosepaket erstellen:</strong> bündelt Logs, Einstellungen, Regeln, Profile, Werkzeugdiagnose, erweiterten Mini-Systemtest und Job-Journal in einer lokalen ZIP-Datei</li>
+<li><strong>🚀 HandBrake öffnen:</strong> Startet HandBrake in eigenem Fenster</li>
+<li><strong>📺 RMTS öffnen:</strong> Startet RenameMyTVSeries in eigenem Fenster</li>
+<li><strong>🎬 TMDB im Browser öffnen:</strong> Startet TMDB im hinterlegten Standardbrowser</li>
+</ul>
+<details>
+<summary>Audio-Video-Matcher: Fall A/B/C</summary>
+<div class="content">
+<p>Der Audio-Video-Matcher nutzt das Zielvideo als finale Videolänge und übernimmt dessen Videospur ohne Re-Encoding. Die deutsche Audiospur stammt aus der deutschen Quelle und wird je nach erkanntem Zeitmodell angepasst. Für die Bildanalyse verwendet Dragon Tools kleine FFmpeg-Graustufenframes; wenn OpenCV verfügbar ist, werden Zuschnitt, Kantenstruktur und Hashvergleich robuster berechnet. Fehlt OpenCV, bleibt der FFmpeg/dHash-Fallback aktiv.</p>
+<table class="table" style="border-collapse:collapse;">
+<tr><th>Fall</th><th>Bedeutung</th><th>Verarbeitung</th></tr>
+<tr><td>A</td><td>Konstanter Offset, z. B. Schwarzbild vor dem eigentlichen Inhalt</td><td>Audio am Anfang trimmen oder passend verzögern und auf Zielvideolänge schneiden</td></tr>
+<tr><td>B</td><td>Offset plus gleichmäßige lineare Drift, z. B. PAL-Speedup</td><td>Audio hochwertig strecken/stauchen und danach passend trimmen</td></tr>
+<tr><td>C</td><td>Unterschiedliche Schnitte innerhalb des gemeinsamen Inhalts</td><td>Ungefähre Schnittbereiche eingeben, danach automatische Feinanalyse und Segmentplan</td></tr>
+</table>
+<div class="callout">
+<strong>Wichtig:</strong> Abweichendes Material ausschließlich vor dem ersten gemeinsamen Bildbereich oder nach dem letzten gemeinsamen Bildbereich gilt nicht als Fall C. Fall C liegt nur vor, wenn sich der Offset innerhalb des gemeinsamen Hauptinhalts ändert und danach wieder gemeinsamer Inhalt folgt.
+</div>
+<div class="callout warn">
+Enthält das Zielvideo am Anfang oder Ende zusätzlichen Inhalt, für den keine deutsche Audioentsprechung gefunden wird, behandelt Dragon Tools das nicht als erfolgreich synchronisiert und blockiert die automatische Erstellung bei deutlicher Abweichung.
+</div>
+</div>
+</details>
+<div class="callout">
+Externe Programme werden <strong>außerhalb</strong> der App geöffnet (kein Einbetten).
+Der Pfad wird beim ersten Aufruf automatisch gesucht oder manuell gewählt und gespeichert.
+</div>
+</div>
+<!-- TROUBLESHOOTING -->
+<a name="toolsupdate"></a><h2 id="toolsupdate"><span style="color:#64748b;font-size:.85em;margin-right:6px;">27.</span>🔄 Tools &amp; Updates</h2>
+<div class="panel">
+<p>Dragon Tools steuert den Ablauf, greift für die eigentliche Medienarbeit aber auf spezialisierte Werkzeuge wie FFmpeg/ffprobe, MediaInfo, MKVToolNix, dovi_tool, hdr10plus_tool und MP4Box zurück. Diese Tools kannst du unabhängig von Dragon Tools aktualisieren, solange ihre Kommandozeilen-Schnittstellen kompatibel bleiben.</p>
+<div class="callout ok">
+<strong>DragonTools-Updates:</strong> Über <strong>Hilfe → Nach Updates suchen</strong> kannst du die öffentliche GitHub-Releasequelle manuell prüfen. DragonTools führt dieselbe Prüfung nach dem Programmstart verzögert im Hintergrund aus. Nur wenn eine neuere Version vorhanden ist, erscheint ein Hinweis mit der Frage, ob die Downloadseite geöffnet werden soll. Das Programm installiert nichts ohne deine Entscheidung.
+</div>
+<div class="callout">
+Ist die öffentliche Releasequelle noch nicht eingerichtet oder vorübergehend nicht erreichbar, bleibt die automatische Prüfung still. Bei einer manuellen Prüfung wird stattdessen eine verständliche Statusmeldung angezeigt.
+</div>
+<div class="callout">
+<strong>Typischer Speicherort:</strong><br/>
+<code>Daten\Programme\</code>
+</div>
+<div class="callout ok">
+<strong>Toolstand, den ich aktuell nutze (05.09.2026):</strong><br/>
+FFmpeg/ffprobe <code>2026-09-02-git-9fc8c785e2</code> · MediaInfo 26.05 · MKVToolNix 101.0 · MakeMKV 1.18.4 · hdr10plus_tool 1.7.2 · GPAC/MP4Box 26.07 · dovi_tool: <strong>eigener Build</strong> auf Basis des quietvoid/dovi_tool-Branch-Stands vom <strong>03.09.2026</strong>.
+</div>
+<table class="table" style="border-collapse:collapse;">
+<tr><th>Schritt</th><th>Beschreibung</th></tr>
+<tr><td>1. Neue Version laden</td><td>Lade die gewünschte neue Version des Tools aus einer vertrauenswürdigen Quelle herunter.</td></tr>
+<tr><td>2. Datei ersetzen</td><td>Ersetze die vorhandene <code>.exe</code> im Ordner <code>Daten\Programme\</code>.</td></tr>
+<tr><td>3. App neu starten</td><td>Starte Dragon Tools neu, damit die neue Version sicher übernommen wird.</td></tr>
+<tr><td>4. Prüfung durchführen</td><td>Kontrolliere mit <kbd>F9</kbd>, ob das Tool korrekt gefunden und verwendet wird.</td></tr>
+</table>
+<div class="callout ok">
+<strong>Praktisch:</strong> Viele Tool-Updates lassen sich übernehmen, ohne Dragon Tools selbst neu zu bauen. Nach einem Austausch solltest du F9 ausführen und bei FFmpeg/NVENC zusätzlich einen kurzen Testencode machen.
+</div>
+<div class="callout warn">
+<strong>Wichtig:</strong> Nicht jede neue Tool-Version ist automatisch sinnvoll. Unpassende FFmpeg-Builds oder inkompatible Einzelversionen können Analyse, Encoding oder Spezial-Workflows wie DV/HDR10+ stören.
+</div>
+</div>
+<!-- MEDIENINFO -->
+<a name="kompat"></a><h2 id="kompat"><span style="color:#64748b;font-size:.85em;margin-right:6px;">28.</span>🔌 Kompatibilität &amp; Container</h2>
+<div class="panel">
+<p>Die Containerwahl ist in V9.8 getrennt konfigurierbar. Unter <strong>Einstellungen → Ausgabecontainer</strong> gibt es einen Wert für <strong>Standard/HDR10+</strong> und einen zweiten für <strong>Dolby Vision/DV+HDR10+/DV-Remux</strong>.</p>
+<table class="table" style="border-collapse:collapse;">
+<tr><th>Pipeline</th><th>Standard</th><th>Alternative</th><th>Wichtiger Punkt</th></tr>
+<tr><td>Standard / HDR10+</td><td>MKV</td><td>MP4</td><td>Normales MP4 wird streamingfreundlich mit Faststart erzeugt; HDR10+-MP4 nutzt den spezialisierten MP4Box-Pfad.</td></tr>
+<tr><td>Dolby Vision / DV+HDR10+</td><td>MP4</td><td>MKV</td><td>MP4 läuft über MP4Box <code>-inter 500</code>; MKV über <code>mkvmerge</code>, damit der injizierte DV-Bitstream erhalten bleibt.</td></tr>
+<tr><td>DV-Remux</td><td>MP4</td><td>MKV</td><td>Folgt derselben Dolby-Vision-Containerwahl. MP4 nutzt MP4Box; die Untertitelablage folgt der globalen MP4-Sidecar-Option. MKV nutzt mkvmerge und speichert die ausgewählten Untertitel intern. Das Video bleibt ohne Re-Encoding.</td></tr>
+</table>
+<div class="callout">
+<strong>Als Standard gilt:</strong> Wenn du nichts änderst, bleibt Standard/HDR10+ bei MKV und Dolby Vision bei MP4. Die alternative Containerwahl ist für gezielte Kompatibilitätsfälle gedacht.
+</div>
+<div class="callout warn">
+<strong>Wichtig:</strong> Textuntertitel können für MP4 zu <code>mov_text/tx3g</code> konvertiert werden. Dabei gehen ASS/SSA-spezifische Styles und Positionierungen verloren. PGS/SUP und VobSub/DVD-Sub bleiben deshalb als externe Sidecars erhalten.
+</div>
+</div>
+<!-- WORKFLOWS -->
+<a name="medieninfo"></a><h2 id="medieninfo"><span style="color:#64748b;font-size:.85em;margin-right:6px;">29.</span>📊 Medieninfo</h2>
+<div class="panel">
+<p>Per <strong>Rechtsklick auf eine Datei in der Videoliste</strong> kann das Medieninfo-Fenster geöffnet werden. Es dient zur schnellen Kontrolle, bevor eine Datei konvertiert, remuxt oder verschoben wird.</p>
+<table class="table" style="border-collapse:collapse;">
+<tr><th>Bereich</th><th>Anzeige</th></tr>
+<tr><td>Video</td><td>Auflösung, Codec, PixFmt, HDR, HDR10+, Dolby Vision, Bit-Tiefe, Farbraum</td></tr>
+<tr><td>Audio</td><td>Alle erkannten Audiospuren mit Sprache, Codec, Kanalzahl und Bitrate</td></tr>
+<tr><td>Untertitel</td><td>Anzahl, Sprache, Format und Forced-Status</td></tr>
+<tr><td>Analysequelle</td><td>Zeigt an, ob MediaInfo.exe, FFmpeg/ffprobe oder beide verwendet wurden</td></tr>
+</table>
+<div class="callout ok">
+<strong>Vor dem Start:</strong> Du kannst schnell prüfen, ob eine Datei wirklich Dolby Vision oder HDR10+ enthält, ob die richtige Audiospur vorhanden ist und ob Forced-Untertitel erkannt wurden.
+</div>
+<div class="callout">
+<strong>Tipp:</strong> Gerade bei DV-, HDR10+- oder problematischen Dateien sollte die Medieninfo vor dem Start einmal kontrolliert werden.
+</div>
+</div>
+<!-- ERWEITERTE MEDIENINFO & REGEL-/PROFIL-SIMULATOR -->
+<a name="medieninfoerweitert"></a><h2 id="medieninfoerweitert"><span style="color:#64748b;font-size:.85em;margin-right:6px;">30.</span>📊 Erweiterte Medieninfo &amp; Regel-/Profil-Simulator</h2>
+<div class="panel">
+<p>Die Medieninfo wurde erweitert, damit technische Auffälligkeiten direkt aus der Videoliste kontrolliert werden können. Sie ist besonders hilfreich, wenn eine Datei später durch Regeln, DV/HDR-Erhaltung oder die automatische Reparatur verarbeitet wird.</p>
+<table class="table" style="border-collapse:collapse;">
+<tr><th>Bereich</th><th>Anzeige</th><th>Nutzen</th></tr>
+<tr><td>Video</td><td>Codec, Auflösung, Bit-Tiefe, Farbraum, Videodauer, Frames, Framerate und Framerate-Modus</td><td>Schnelle Prüfung, ob Laufzeit, FPS oder Metadaten plausibel wirken</td></tr>
+<tr><td>Audio</td><td>Codec, Sprache, Kanäle und Regelentscheidung</td><td>Kontrolle, ob die gewünschte Tonspur erhalten, kopiert oder konvertiert wird</td></tr>
+<tr><td>Untertitel</td><td>Sprache, Forced-Status, Format und geplante Behandlung</td><td>Hilft bei Forced-Untertiteln, eingebrannten Subs und Sprachregeln</td></tr>
+</table>
+<div class="callout ok">
+<strong>Regel-/Profil-Simulator ohne Encoding:</strong> Über die Datei-Einstellungen bzw. die Regelvorschau kannst du prüfen, welche Audio- und Untertitelspuren genommen würden, ohne die Datei vorher zu konvertieren. Im Menü <strong>Werkzeuge → Regel-/Profil-Simulator aktuelle Queue</strong> lässt sich dieselbe Prüfung für alle Dateien der aktiven Warteschlange als Tabelle öffnen. Die Tabelle zeigt jetzt zusätzlich Pipeline und Profil; die Detailansicht erklärt Pipeline, Profil, Audio-Auswahl, Untertitel/Burn-In, Overrides und geplantes Ziel als nachvollziehbare Entscheidungsgründe. Über <strong>Bericht speichern</strong> kann diese Auswertung als TXT-Datei abgelegt werden.
+</div>
+<div class="callout">
+<strong>Praktisch bei Problemdateien:</strong> Die Frame-Anzeige macht fehlerhafte oder widersprüchliche Laufzeiten schneller sichtbar, zum Beispiel wenn Containerdauer und echte Videoframes nicht zusammenpassen.
+</div>
+</div>
+<!-- MEDIENANALYSE -->
+<a name="medienanalyse"></a><h2 id="medienanalyse"><span style="color:#64748b;font-size:.85em;margin-right:6px;">31.</span>🔍 Medienanalyse</h2>
+<div class="panel">
+<p>Für die Medienanalyse verlässt sich Dragon Tools in erster Linie auf MediaInfo. ffprobe ergänzt fehlende Streamdetails und dient als Fallback, wenn MediaInfo bei einzelnen Feldern keine eindeutige Antwort liefert.</p>
+<h3>Analyse-Logik</h3>
+<ul>
+<li><strong>MediaInfo.exe</strong> ist die Hauptquelle für HDR-, Dolby-Vision-, Farbraum- und Metadaten-Erkennung.</li>
+<li><strong>FFmpeg / ffprobe</strong> dient als Fallback und Ergänzung für Streamdetails wie PixFmt, Stream-Indizes, Kanal-Layouts und weitere Container-Informationen.</li>
+</ul>
+<table class="table" style="border-collapse:collapse;">
+<tr><th>Tool</th><th>Rolle</th></tr>
+<tr><td>MediaInfo.exe</td><td>Hauptquelle für HDR, Dolby Vision, Profil-Erkennung, Farbraum und viele Metadaten</td></tr>
+<tr><td>FFmpeg / ffprobe</td><td>Fallback und Zusatzinformationen, wenn MediaInfo bestimmte Werte nicht liefert</td></tr>
+</table>
+<div class="callout ok">
+<strong>Wichtig:</strong> Die Medienanalyse läuft jetzt vorrangig über <strong>MediaInfo.exe</strong>. Das verbessert vor allem die Erkennung von Dolby Vision, HDR und Farbraum deutlich.
+</div>
+<div class="callout warn">
+<strong>Hinweis:</strong> Wenn HDR oder Dolby Vision nicht erkannt wird, liegt das meistens an fehlenden oder ungewöhnlich gespeicherten Metadaten in der Quelldatei oder an einer fehlenden MediaInfo-Installation.
+</div>
+</div>
+<!-- HDR VERGLEICH -->
+<!-- OUTPUT-VALIDIERUNG -->
+<a name="outputvalidierung"></a><h2 id="outputvalidierung"><span style="color:#64748b;font-size:.85em;margin-right:6px;">32.</span>🛠️ Output-Validierung &amp; automatische Reparatur</h2>
+<div class="panel">
+<p>Nach einer erfolgreichen Konvertierung prüft Dragon Tools die erzeugte Datei noch einmal. Dabei wird kontrolliert, ob Video, Audio und Laufzeit plausibel sind, bevor die Ausgabe als wirklich erfolgreich gilt.</p>
+<table class="table" style="border-collapse:collapse;">
+<tr><th>Stufe</th><th>Aktion</th><th>Ergebnis</th></tr>
+<tr><td>1</td><td>Laufzeitvergleich mit ffprobe</td><td>Quelle und Ausgabe dürfen nur innerhalb einer kleinen Toleranz abweichen</td></tr>
+<tr><td>2</td><td>Automatischer Container-Remux</td><td>MKV wird mit mkvmerge, MP4 mit MP4Box ohne Re-Encoding neu aufgebaut</td></tr>
+<tr><td>3</td><td>Timestamp-Reparatur</td><td>Nur bei eindeutigem Timingfehler: MP4 wird mit MP4Box neu getaktet; MKV nutzt den sicheren FFmpeg-setts-Pfad</td></tr>
+<tr><td>4</td><td>Archivierung</td><td>Bleibt die Laufzeit falsch, wird die Datei erhalten und in den Unterordner <code>Archiv</code> verschoben</td></tr>
+</table>
+<div class="callout ok">
+<strong>Wichtig:</strong> Die automatische Reparatur kodiert nicht erneut. Streams werden kopiert, Metadaten und Kapitel werden übernommen, und es wird maximal ein Reparaturdurchlauf gestartet.
+</div>
+<div class="callout warn">
+<strong>Nur bei Laufzeitfehlern:</strong> Andere Fehlerarten laufen weiterhin durch die normale Fehlerbehandlung und erzeugen bei Bedarf einen separaten Fehlerbericht.
+</div>
+</div>
+<a name="validierungspolitik"></a><h2 id="validierungspolitik"><span style="color:#64748b;font-size:.85em;margin-right:6px;">33.</span>✅ Validierungs- &amp; Reparaturpolitik</h2>
+<div class="panel">
+<p>Die Output-Validierung ist die Sicherheitsprüfung nach dem Encode. Sie entscheidet, ob eine erzeugte Datei als wirklich erfolgreich gilt oder ob Dragon Tools sie reparieren bzw. archivieren muss.</p>
+<table class="table" style="border-collapse:collapse;">
+<tr><th>Einstellung</th><th>Bedeutung</th><th>Standard</th></tr>
+<tr><td>Min. Dateigröße</td><td>Ausgaben unterhalb dieser Größe gelten als unplausibel klein.</td><td>1 KB</td></tr>
+<tr><td>Dauer-Untergrenze</td><td>Mindestens so viel Prozent der Quelldauer muss die Ausgabe erreichen.</td><td>90 %</td></tr>
+<tr><td>Dauer-Obergrenze</td><td>Maximal so viel Prozent der Quelldauer darf die Ausgabe haben.</td><td>125 %</td></tr>
+<tr><td>Zusätzliche Max-Toleranz</td><td>Zusätzlicher Sekundenpuffer nach oben, besonders hilfreich bei kurzen Dateien.</td><td>60 s</td></tr>
+<tr><td>Container-Remux</td><td>Erster Reparaturversuch bei unplausibler Laufzeit: MKV via MKVToolNix, MP4 via MP4Box.</td><td>aktiv</td></tr>
+<tr><td>Timestamp-Reparatur</td><td>Zweiter Reparaturversuch, wenn eine klare Videotimeline-Abweichung erkannt wird.</td><td>aktiv</td></tr>
+</table>
+<div class="callout ok">
+<strong>Wichtig:</strong> Video-, Audio- und Container-Grundprüfung bleiben immer aktiv. Die Einstellungen steuern nur die Schwellwerte und die Reparaturstufen.
+</div>
+</div>
+<!-- AUTOCROP IMAX SETTINGS -->
+<a name="hdrvergleich"></a><h2 id="hdrvergleich"><span style="color:#64748b;font-size:.85em;margin-right:6px;">34.</span>🌈 HDR / HDR10+ / Dolby Vision</h2>
+<div class="panel">
+<p>Dragon Tools unterscheidet zwischen klassischem HDR, HDR10+ und Dolby Vision. Diese Formate unterscheiden sich technisch deutlich. Der gezielte Erhalt von Dolby Vision und HDR10+ ist nur im H.265-Workflow aktiv.</p>
+<table class="table" style="border-collapse:collapse;">
+<tr><th>Format</th><th>Eigenschaft</th><th>Hinweis</th></tr>
+<tr><td><strong>HDR10</strong></td><td>Statische HDR-Metadaten</td><td>Grundlegendes HDR-Verfahren</td></tr>
+<tr><td><strong>HDR10+</strong></td><td>Dynamische Metadaten für Szenen bzw. Frames als Ganzes</td><td>Verbessert die Helligkeitssteuerung gegenüber statischem HDR</td></tr>
+<tr><td><strong>Dolby Vision</strong></td><td>Dynamische, deutlich feinere Metadaten bis hin zu pixelgenauer Steuerung</td><td>Eigenes DV-System mit Profilen und RPU-Metadaten</td></tr>
+</table>
+<div class="callout">
+<strong>Dolby Vision in Dragon Tools:</strong>
+Für Re-Encoding arbeitet Dragon Tools auf einen kompatiblen Single-Layer-Profil-8.1-Pfad hin. Bei Blu-ray-typischem Profil 7 wird der Enhancement Layer nicht als eigener zweiter Videolayer weitergeführt; erhalten wird die für den neuen Encode benötigte DV-RPU. Die sichtbare Qualitätsänderung entsteht vor allem durch das gewählte Re-Encoding, nicht durch einen zusätzlichen versteckten Container-Schritt.
+</div>
+<div class="callout warn">
+<strong>Dolby-Vision-Profile und kritische Unterschiede:</strong><br/>
+<ul>
+<li><strong>DV Profil 5:</strong> Single-Layer Dolby Vision ohne klassischen HDR10-Fallback. Dieses Profil ist beim Re-Encoding besonders kritisch, weil falsche Farbmatrix-/Range-Behandlung zu massiven Farbfehlern führen kann, z. B. Rot wird Lila.</li>
+<li><strong>DV Profil 7:</strong> Blu-ray-typisches Dual-Layer-Profil mit Base Layer und Enhancement Layer. Die vollständige Erhaltung ist komplex, weil mehrere Ebenen und RPU-Metadaten korrekt zusammenspielen müssen.</li>
+<li><strong>DV Profil 8 / 8.1:</strong> Single-Layer-Dolby-Vision. Dragon Tools nutzt bei Re-Encoding einen HDR10/PQ-kompatiblen Profil-8.1-Arbeitsweg, wenn die Quelle normalisiert werden muss.</li>
+</ul>
+<strong>Bei Dolby Vision Profil 5:</strong> Ich ändere nicht einfach nur die Tags. Vor dem Encode wandelt <code>libplacebo</code> den P5-Base-Layer von ICtCp nach BT.2020/PQ. Erst darauf baut der DV-8.1-kompatible Ausgabeweg auf; so vermeide ich die typischen massiven Farbfehler eines reinen Tag-Wechsels.
+</div>
+<div class="callout ok">
+<strong>Einfach gesagt:</strong>
+HDR10 = statisch, HDR10+ = dynamisch für ganze Frames/Szenen, Dolby Vision = die feinste und flexibelste Metadatensteuerung.
+</div>
+<div class="callout warn">
+<strong>Bewusster Verzicht:</strong>
+Wenn DV-/HDR10+-Erhalt global oder per Datei-Override deaktiviert wird, werden diese dynamischen Metadaten nicht gezielt in die Ausgabe übernommen. Das kann sinnvoll sein, wenn eine möglichst einfache, kompatible H.265-Datei gewünscht ist.
+</div>
+<div class="callout ok">
+<strong>Aktuelle DV-Pipeline:</strong> Der normale Log zählt nur noch die sieben tatsächlich vorhandenen Hauptschritte <code>1/7</code> bis <code>7/7</code>. Der historische, inzwischen entfernte zusätzliche HEVC-/Audio-Zwischenschritt wird nicht mehr als leere Nummer mitgeführt. Technische RPU-/HDR10+-Extraktionsdetails bleiben im VerboseLog verfügbar.
+</div>
+</div>
+</div>
+<a name="audiodynamik"></a><h2 id="audiodynamik"><span style="color:#64748b;font-size:.85em;margin-right:6px;">35.</span>🔊 Audio-Dynamik &amp; Normalisierung</h2>
+<div class="panel">
+<p>Dragon Tools trennt zwei Audiofunktionen bewusst: <strong>DRC/Nachtmodus</strong> und <strong>Lautheitsnormalisierung</strong>. Beide sind standardmäßig deaktiviert und können in den Audio-Regeln sowie pro Datei über die Datei-Einstellungen gesetzt werden.</p>
+<table class="table" style="border-collapse:collapse;">
+<tr><th>Funktion</th><th>Wirkt bei</th><th>Auswirkung</th></tr>
+<tr><td>DRC / Nachtmodus</td><td>AC3 und E-AC3 mit vorhandenen DRC-Metadaten</td><td>setzt <code>-drc_scale</code> vor den Input und reduziert nutzbare Dynamik je nach Wert</td></tr>
+<tr><td>Lautheitsnormalisierung</td><td>codecübergreifend bei erzwungener Audio-Neukodierung</td><td>nutzt <code>loudnorm</code>, um die Ziel-Lautheit gleichmäßiger zu treffen</td></tr>
+</table>
+<div class="callout warn">
+Sobald DRC oder Lautheitsnormalisierung aktiv eingreift, ist Stream-Copy für die betroffene Spur nicht mehr möglich. Dragon Tools kodiert die Audiospur dann nach den gewählten Audio-Regeln neu.
+</div>
+</div>
+<a name="videopruefung"></a><h2 id="videopruefung"><span style="color:#64748b;font-size:.85em;margin-right:6px;">36.</span>🧪 Videoverarbeitung &amp; Quellbildprüfung</h2>
+<div class="panel">
+<p>Die Quellbildprüfung untersucht vor dem Encode mehrere kurze Ausschnitte über die Laufzeit verteilt. Ziel ist, offensichtlich defektes Bildmaterial zu erkennen, bevor eine Datei unnötig konvertiert wird.</p>
+<ul>
+<li>Standardmäßig wird in prozentualen Intervallen geprüft, damit kurze Folgen und lange Filme ähnlich sinnvoll abgedeckt werden.</li>
+<li>Auffälligkeiten wie extrem geringe Bildvarianz, stark einfarbige Flächen oder dauerhaft kaputte Pixelmuster werden gesammelt bewertet.</li>
+<li>Bei verdächtigem Material blockiert Dragon Tools nicht blind, sondern zeigt eine Warnung und lässt eine bewusste Entscheidung zu.</li>
+<li>Die Prüfung ist unabhängig von Auto-Crop, IMAX-Erkennung und Output-Validierung.</li>
+</ul>
+<div class="callout">
+Die Funktion ist ein Schutznetz, kein Qualitätsurteil. Einzelne dunkle Szenen oder kurze Schwarzbilder sollen nicht reichen, um eine ansonsten brauchbare Datei zu blockieren.
+</div>
+</div>
+<a name="filmumbenennung"></a><h2 id="filmumbenennung"><span style="color:#64748b;font-size:.85em;margin-right:6px;">37.</span>🎞️ Renamer</h2>
+<div class="panel">
+<p>Der Renamer verarbeitet Filme und Serienfolgen in mehreren bewusst getrennten Stufen. Für Serien bleiben <strong>erkannter Originaltitel</strong>, <strong>Online-Suchbegriff</strong>, <strong>Online-Treffer</strong> und <strong>angezeigte Sicherheit</strong> getrennte Daten. Das verhindert, dass ein Fuzzy- oder Alias-Suchbegriff den eigentlichen Match-Score verfälscht.</p>
+<ul>
+<li>Release-Dateinamen werden vor der Suche normalisiert. Beispiel: <code>tvs-watson-eac3-51-ded-dl-18p-azhd-avc-s01e01</code> wird zu <code>Watson</code>, Staffel 1, Episode 1.</li>
+<li>Technische Tags wie DED, DL, EAC3, DD51, 18p, AZHD, AVC/HEVC, x264/x265, WEB-DL, BluRay, HDR und DoVi werden aus dem Serientitel entfernt.</li>
+<li>Eine Release-Gruppe wird nur noch an einer plausiblen Position hinter dem SxxExx-Marker interpretiert; technische Ketten wie <code>51-ded-dl-18p-azhd-avc</code> werden nicht fälschlich als Gruppe übernommen.</li>
+<li>Neue Dateien starten die Vorschlagssuche automatisch und inkrementell. Bereits analysierte Zeilen werden dabei nicht erneut abgefragt. <strong>Vorschläge suchen</strong> bleibt der vollständige manuelle Refresh.</li>
+<li>Das Vorschlagsfeld bleibt in der Tabelle schmal. Das geöffnete Dropdown verbreitert sich passend zum längsten Eintrag und wird auf die verfügbare Bildschirmbreite begrenzt.</li>
+<li>Konflikte werden vor dem Umbenennen erkannt; Dragon Tools überschreibt keine vorhandene Zieldatei still.</li>
+<li><strong>Unbekannter Episodentitel:</strong> Liefert TMDB/TheTVDB noch keinen echten Titel, verwendet Dragon Tools <code>Folge XX</code>. Der technische Quell-/Release-Dateiname wird niemals als Episodentitel übernommen.</li>
+</ul>
+<div class="callout">Die detaillierten Regeln, Alias-/Fuzzy-Logik und Providerbewertung stehen in den folgenden Kapiteln. Genau diese Trennung macht die Prozentwerte nachvollziehbar.</div>
+</div>
+<a name="renamerrules"></a><h2 id="renamerrules"><span style="color:#64748b;font-size:.85em;margin-right:6px;">38.</span>🧩 Renamer-Regeln &amp; Release-Normalisierung</h2><div class="panel">
+<p>Unter <strong>Regeln → Renamer-Regeln</strong> sowie im globalen Regelfenster befindet sich der aktuelle V9.8-Regelbereich für Dateinamen und Match-Logik.</p>
+<h3>Dateizeichen</h3>
+<table class="table"><tr><th>Standard</th><th>Ersetzung</th><th>Grund</th></tr>
+<tr><td><code>*</code></td><td><code>X</code></td><td>Windows-ungültiges Zeichen</td></tr>
+<tr><td><code>"</code></td><td><code>'</code></td><td>lesbare Ersatzschreibweise</td></tr>
+<tr><td><code>'</code></td><td><code>`</code></td><td>konfigurierbare Zielnamensregel</td></tr>
+<tr><td><code>/</code>, <code>\</code></td><td><code>-</code></td><td>unter Windows keine Dateinamenszeichen</td></tr>
+<tr><td><code># ? &lt; &gt; :</code></td><td>leer</td><td>entfernen</td></tr>
+<tr><td><code>|</code></td><td><code>.</code></td><td>lesbarer Ersatz</td></tr></table>
+<p>Die Liste ist editierbar: Regeln können geändert, gelöscht oder ergänzt werden. Vergleiche normalisieren außerdem unterschiedliche Bindestriche (<code>- – — −</code>) und Apostrophe (<code>' ` ´ ’</code>) sowie störende Endzeichen.</p>
+<h3>Matching-Defaults</h3>
+<ul><li>Mindestscore für Anzeige: <strong>60 %</strong></li><li>Manuelle Prüfung unter: <strong>72 %</strong></li><li>Sicher akzeptierbar ab: <strong>78 %</strong></li><li>Fuzzy-Fallback: standardmäßig aktiv</li><li>Retry ohne Jahr: standardmäßig aktiv</li></ul>
+<p>Alle Werte sind Regeln, keine im Renamer fest eingebrannten Grenzwerte.</p>
+</div><a name="renamercandidates"></a><h2 id="renamercandidates"><span style="color:#64748b;font-size:.85em;margin-right:6px;">39.</span>🎯 Kandidaten, Provider &amp; Fuzzy-Bewertung</h2><div class="panel">
+<p>Die Serienbewertung trennt vier Ebenen:</p>
+<pre>erkannter Titel → Suchvariante/Alias → Online-Kandidat → Score gegen erkannten Titel</pre>
+<ul>
+<li><strong>Aliasregel:</strong> z. B. <code>Daemons of the Shadow Realm → Das Band der Unterwelt</code>. Der Quelltitel bleibt erhalten; nur der Suchbegriff ändert sich. Ein explizit passender Alias kann als <code>100 % · Aliasregel</code> markiert werden.</li>
+<li><strong>Fuzzy-Fallback:</strong> erzeugt kontrollierte verkürzte Prefix-Suchen. Dadurch kann z. B. <code>The Forsaken Saint ...</code> einen Treffer <code>The Forsaken Saintess ...</code> finden.</li>
+<li><strong>Wichtig:</strong> Ein Fuzzy-Treffer wird gegen den ursprünglich erkannten Titel bewertet. Deshalb ergibt ein ähnlicher Treffer etwa 97 % statt fälschlich 100 %.</li>
+<li><strong>SxxExx:</strong> bestätigt, dass die Folge beim Provider existiert. Diese Validierung erhöht einen ähnlichen Titel nicht künstlich auf 100 %.</li>
+<li><strong>Offener Episodentitel:</strong> Generische Providerwerte wie <code>Episode 10</code>, <code>Folge 10</code> oder <code>S22E10</code> werden als <code>Folge 10</code> geführt. Weil damit kein echter Episodentitel bestätigt ist, wird die angezeigte Sicherheit gedeckelt und nicht als 100-%-Treffer dargestellt.</li>
+<li><strong>Episode noch nicht beim Provider:</strong> Ist die Serie eindeutig erkannt, die Folge aber noch nicht angelegt, bleibt der Provider-Serienname nutzbar und der Zielname erhält <code>Folge XX</code> als sicheren Platzhalter.</li>
+<li><strong>Manuelle Auswahl:</strong> verwendet dieselben konfigurierbaren Schwellen wie die automatische Bewertung.</li>
+</ul>
+<div class="callout ok">Score zuerst, Provider nur als Tie-Breaker: Ein perfekter TMDB-Kandidat darf vor einem schwächeren TheTVDB-Kandidaten stehen, auch wenn TheTVDB bevorzugt ist.</div>
+</div><a name="mediathekdb"></a><h2 id="mediathekdb"><span style="color:#64748b;font-size:.85em;margin-right:6px;">40.</span>🗄️ Mediathek-Datenbank &amp; Jellyfin-Import</h2><div class="panel">
+<p>Dragon Tools führt eine <strong>eigene SQLite-Mediathek</strong>. Eine Jellyfin-Datenbank dient nur als Importquelle: Dragon Tools liest daraus, schreibt aber nie zurück. Alternativ baut der Speicherpfad-Scan die Mediathek direkt aus den hinterlegten Film-, Anime- und TV-Ordnern mit MediaInfo auf.</p>
+<table class="table"><tr><th>Tabelle</th><th>Zweck</th></tr>
+<tr><td><code>meta</code></td><td>Schema-/Datenbank-Metadaten</td></tr>
+<tr><td><code>path_mappings</code></td><td>Übersetzt Jellyfin-/NAS-Pfadpräfixe auf lokale Arbeits-/Windows-Pfade</td></tr>
+<tr><td><code>media_items</code></td><td>Film-/Serien-/Episodendaten, Pfad, Auflösung, Video-Codec, HDR-Flags, Analysezustand, Aktivstatus</td></tr>
+<tr><td><code>media_streams</code></td><td>Video-, Audio- und Untertitelstreams mit Sprache, Codec, Kanälen und Zusatzdaten</td></tr></table>
+<ul><li>SQLite nutzt Foreign Keys und WAL.</li><li>Neue Mediatheken können leer angelegt, aus Jellyfin importiert oder aus den in Dragon Tools hinterlegten Speicherpfaden gescannt werden.</li><li>Der Speicherpfad-Scan nutzt MediaInfo und schreibt Video-, Audio-, Untertitel-, Auflösungs-, HDR-, DV- und HDR10+-Eigenschaften direkt in das DragonTools-Schema.</li><li>Nach einem Move kann der Bestand fortgeschrieben werden.</li><li>Jellyfin-Streamtypen werden beim Import auf das DragonTools-Schema normalisiert: <code>Video</code>, <code>Audio</code>, <code>Subtitle</code>, <code>Image</code>, <code>Data</code>.</li><li>Manuelle schreibende SQL-Befehle sichern vor der Änderung die DragonTools-Datenbank. Sicherheitsbackup und binärer DB-Export verwenden dafür einen SQLite-Online-Snapshot, sodass bereits commitete Daten aus dem WAL vollständig enthalten sind.</li><li>Der Jellyfin-Import liest aktive SQLite-Datenbanken ebenfalls über einen Read-only-Online-Snapshot statt über eine rohe Dateikopie. Commitete WAL-Daten werden dadurch mit übernommen, ohne die originale Jellyfin-Datenbank zu beschreiben.</li><li>Alle größeren Schreibaktionen laufen transaktional: unvollständige oder abgebrochene Vorgänge werden nicht als fertige Mediathek-Einträge übernommen.</li></ul>
+<div class="callout">Beim Öffnen oder Import können ältere Mediatheken auf Schema 2 gebracht werden. Alte Jellyfin-Werte wie Video=<code>1</code>, Untertitel=<code>2</code> oder Audio ohne Streamtyp werden dabei einmalig in die lesbaren DragonTools-Werte <code>Video</code>, <code>Audio</code>, <code>Subtitle</code>, <code>Image</code> und <code>Data</code> normalisiert.</div>
+<div class="callout ok"><strong>WAL-sichere Sicherungen:</strong> Dragon Tools kopiert die eigene SQLite-Datei nicht mehr roh. Die SQLite Online Backup API erzeugt einen konsistenten Snapshot aus Hauptdatenbank und WAL. Schlägt die Snapshot-Erzeugung fehl, wird ein Teilziel entfernt und die nachfolgende schreibende Aktion abgebrochen.</div>
+<div class="callout ok"><strong>WAL-sicherer Jellyfin-Import:</strong> Das Jellyfin-Original bleibt read-only. Import-Snapshot, Arbeitsdatenbank und finaler Replacement-Snapshot werden im Zielbereich aufgebaut; dadurch gibt es keinen atomaren Replace vom System-Temp auf ein anderes Windows-Laufwerk oder UNC-Share. Sicherheitsbackupnamen enthalten zusätzlich Mikrosekunden und einen UUID-Anteil.</div>
+<div class="callout ok"><strong>Pfad-Hinweise im Preflight:</strong> Dragon Tools unterscheidet jetzt zwischen einem bereits aktuellen DB-Pfad, einem aktuellen Jellyfin-/DB-Mapping, einem in der Mediathek gespeicherten Mapping und dem Umsetzen eines alten Speicherpfads auf die heutige TV-/Anime-Basis. TV, Anime und Filme verwenden dabei dieselbe zentrale Windows-/UNC-Pfadlogik; ein Mapping-Hinweis bedeutet nicht mehr pauschal nur „normalisiert“.</div>
+<div class="callout warn"><strong>Aktive Einträge:</strong> Bei einer erfolgreichen SxxExx-Ersetzung bleibt die Historie nachvollziehbar: alte Pfade werden auf <code>active=0</code> gesetzt, die neue Datei wird mit <code>active=1</code> geführt. Dadurch soll pro Serie/Staffel/Folge nur eine aktive Mediendatei in der Datenbank stehen.</div>
+</div><a name="mediatheksuche"></a><h2 id="mediatheksuche"><span style="color:#64748b;font-size:.85em;margin-right:6px;">41.</span>🔎 Mediathek-Suche, Qualitätsfilter &amp; Abweichungen</h2><div class="panel">
+<p>Die Mediathek-Suche arbeitet in mehreren Stufen. <strong>Abfrage</strong> wählt die Funktionsgruppe, <strong>Kriterium</strong> den eigentlichen Filter. <strong>Bereich</strong> und <strong>Typ</strong> grenzen den Bestand ein, etwa auf Filme, Anime, TV, Episoden, Videodateien oder Ordner. Das freie Suchfeld filtert zusätzlich nach Titel, Serie, Dateiname oder Pfad.</p>
+<table class="table"><tr><th>Abfrage</th><th>Beispiele</th></tr>
+<tr><td>Audio</td><td>Deutsch vorhanden/fehlend, mehrere Spuren, Stereo, 5.1, 7.1, AAC, AC3, EAC3, TrueHD, DTS, FLAC</td></tr>
+<tr><td>HDR / Dynamikumfang</td><td>SDR, HDR, HDR10+, Dolby Vision, unbekannt</td></tr>
+<tr><td>Auflösung</td><td>&lt; HD, 720p, 1080p, 1440p, 4K/UHD, unbekannt</td></tr>
+<tr><td>Video-Codec</td><td>H.264/AVC, H.265/HEVC, AV1, unbekannt</td></tr>
+<tr><td>Metadaten</td><td>unvollständig/fehlend oder Videoeigenschaften unbekannt</td></tr>
+<tr><td>Abweichungen</td><td>Deutsch, Auflösung, Video-Codec, HDR/SDR, Audio-Codec, Audiokanäle, Anzahl Audiospuren</td></tr>
+<tr><td>Doppelte aktive SxxExx</td><td>findet versehentlich gleichzeitig aktive Dateien mit identischer Serien-/Staffel-/Folgenkennung</td></tr></table>
+<h3>Auflösungslogik</h3><p>Breite und Höhe werden gemeinsam klassifiziert. Eine gecroppte Datei mit z. B. <code>1920×800</code> bleibt fachlich Full HD statt fälschlich unter 1080p zu fallen.</p>
+<h3>Bereich und Typ</h3><p><strong>Bereich</strong> nutzt das Pfad-Mapping der Mediathek, etwa Filme, Anime oder TV. <strong>Typ</strong> grenzt fachlich ein, ob Serienordner, Staffeln, Episoden, Filme, Videodateien oder Ordner angezeigt werden. Dadurch kann dieselbe Audio- oder HDR-Abfrage gezielt nur auf einen Bestandsteil angewendet werden.</p>
+<h3>SDR vs. unbekannt</h3><p><em>Kein HDR-Flag</em> reicht nicht für SDR. Dragon Tools erkennt eindeutige SDR-Hinweise wie <code>SDR</code>, <code>bt709</code> oder <code>Rec.709</code>. Ohne ausreichend bekannte Videoanalyse landet die Datei in <strong>HDR/SDR unbekannt</strong>, damit fehlende Metadaten nicht als SDR missverstanden werden.</p>
+<h3>Abweichungssuche</h3><p>Dateien werden primär über den gemeinsamen <code>parent_path</code> gruppiert. Bei einer strikten Mehrheit (&gt;50 %) erscheinen nur die Minderheitsdateien, z. B. 2 Folgen ohne Deutsch bei 10 von 12 Folgen mit Deutsch. Bei 6:6 wird keine Seite geraten; die Gruppe erscheint als <strong>uneinheitlich – keine klare Mehrheit</strong>.</p>
+<h3>SxxExx-Ersetzung und Erinnerung</h3><p>Beim Verschieben von Serienfolgen prüft Dragon Tools nicht nur den Dateinamen, sondern die erkannte Identität aus Serie, Staffel und Episode. Wenn im Zielordner bereits dieselbe Folge liegt, wird sie abhängig vom Verschiebevorgang ersetzt, auch wenn Titel oder Container abweichen. Der normale Log nennt alte Datei, neue Datei, erkannte SxxExx-Kennung, Zeitpunkt und Grund. Zusätzlich wird eine dauerhafte Ersetzungs-Erinnerung gespeichert, damit bewusste automatische Ersetzungen später bestätigt werden können.</p>
+<p>Ohne Shutdown erscheint die Erinnerung vor dem Abschlussbericht. Bei aktivem Herunterfahren blockiert sie nicht und wird beim nächsten Programmstart erneut angezeigt. <strong>Bestätigen</strong> löscht die Erinnerung; die Löschung wird jetzt mit der konkreten Erinnerungs-ID im normalen Log bestätigt. <strong>Erneut vorlegen</strong> oder das Schließen des Fensters behält sie.</p>
+<h3>CSV-Export</h3><p>Die aktuelle Trefferliste kann als CSV gespeichert werden. Zusätzlich kann die komplette DragonTools-Mediathek tabellenweise als CSV exportiert werden. Dabei entsteht auch eine ausgewertete <code>medien_uebersicht</code>, die <code>media_items</code> und <code>media_streams</code> zu Video, Bildgröße, Dynamikumfang, Audio und Untertiteln zusammenführt.</p>
+<div class="callout ok">Die Ergebnisspalte <strong>Abweichung</strong> erklärt den Ist-Wert und die erkannte Mehrheit, z. B. <code>720p – Mehrheit im Ordner: 1080p (11/12)</code>. CSV-Dateien werden Excel-freundlich mit UTF-8-BOM und Semikolon-Trennung geschrieben.</div>
+</div><a name="tmdbpreflight"></a><h2 id="tmdbpreflight"><span style="color:#64748b;font-size:.85em;margin-right:6px;">42.</span>🌐 Online-Metadaten &amp; Preflight</h2>
+<div class="panel">
+<p>TMDB und TheTVDB können getrennt oder gemeinsam verwendet werden. Bei <strong>Beide</strong> ist die Provider-Präferenz nur ein Tie-Breaker bei gleicher Match-Qualität; sie blendet den zweiten Provider nicht aus.</p>
+<table class="table" style="border-collapse:collapse;">
+<tr><th>Bereich</th><th>Verhalten in V9.8</th></tr>
+<tr><td>Nur ein Provider</td><td>Bis zu 6 gültige Kandidaten.</td></tr>
+<tr><td>TMDB + TheTVDB</td><td>Bis zu 6 Kandidaten je Provider, also maximal 12.</td></tr>
+<tr><td>Serienkandidaten</td><td>Mehrere echte Serienresultate werden geprüft. Existiert SxxExx beim Provider, wird der Episodentreffer verwendet. Ist die Episode noch nicht angelegt, kann ein eindeutiger Serientreffer mit <code>Folge XX</code> als abgesenktem Fallback weiterverwendet werden.</td></tr>
+<tr><td>Sortierung</td><td>1. Match-Qualität, 2. bei Gleichstand bevorzugter Provider, 3. stabiler Titelvergleich.</td></tr>
+<tr><td>Serienjahr</td><td>Das Providerjahr wird mitgeführt und trennt gleichnamige Serien bei Kandidatenbewertung, Mediathek-Suche und Preflight-Ordnerwahl.</td></tr>
+<tr><td>SxxExx</td><td>Dient als Existenz-/Plausibilitätsprüfung. Eine richtige Episode erzeugt keinen künstlichen Bonus auf 100 %.</td></tr>
+<tr><td>Cache</td><td>Reduziert wiederholte Online-Abfragen; die inkrementelle Renamer-Suche fragt vorhandene Ergebnisse nicht erneut ab.</td></tr>
+</table>
+<div class="callout warn">API-Schlüssel, Read-Access-Token, TheTVDB-PIN und Bearer-Token sind sensible Einstellungen und dürfen nicht in frei weitergegebenen Diagnosepaketen im Klartext landen.</div>
+</div>
+<a name="forcedsubtitlecheck"></a><h2 id="forcedsubtitlecheck"><span style="color:#64748b;font-size:.85em;margin-right:6px;">43.</span>💬 Forced-Subtitle-Prüfung</h2>
+<div class="panel">
+<p>Die Forced-Plausibilitätsprüfung schützt davor, versehentlich vollständige Untertitel einzubrennen, wenn eine Spur falsch als forced markiert wurde.</p>
+<ul>
+<li>Bis 3 Events pro Minute gilt eine Forced-Spur als unauffällig.</li>
+<li>Zwischen 3 und 5 Events pro Minute wird eine Warnung protokolliert.</li>
+<li>Über 5 Events pro Minute wird automatischer Burn-In blockiert; die Spur wird stattdessen behalten oder als Sidecar ausgegeben.</li>
+<li>Das Untertitel-Limit wird in diesem Schutzfall gezielt erweitert, damit die verdächtige Spur nicht verloren geht.</li>
+</ul>
+<div class="callout">
+Ein Event entspricht einem Untertitelblock mit eigenem Zeitstempel. Dadurch funktioniert die Prüfung unabhängig davon, ob der Text sehr kurz oder sehr lang ist.
+</div>
+</div>
+<a name="audiovideomatcher"></a><h2 id="audiovideomatcher"><span style="color:#64748b;font-size:.85em;margin-right:6px;">44.</span>🎧 Audio-Video-Matcher</h2>
+<div class="panel">
+<p>Der Audio-Video-Matcher ist ein eigenständiger Worker-Tab. Er vergleicht eine deutsche Quellvideodatei mit einem Zielvideo und erstellt eine neue MKV mit Zielvideo per Stream-Copy und synchronisierter deutscher Audiospur.</p>
+<table class="table" style="border-collapse:collapse;">
+<tr><th>Fall</th><th>Erkennung</th><th>Verarbeitung</th></tr>
+<tr><td>A</td><td>konstanter Offset, gleicher Hauptinhalt</td><td>Audio trimmen oder verzögern und auf Zielvideolänge schneiden</td></tr>
+<tr><td>B</td><td>Offset plus lineare Drift, z. B. PAL-Speedup</td><td>Audio zeitlich strecken/stauchen und passend ausrichten</td></tr>
+<tr><td>C</td><td>abweichender Bereich innerhalb des gemeinsamen Inhalts</td><td>Benutzer gibt grobe Schnittbereiche ein; Dragon Tools verfeinert und baut Segmentplan</td></tr>
+</table>
+<p>Für die Bildanalyse nutzt Dragon Tools FFmpeg zur Frame-Extraktion und OpenCV, wenn es verfügbar ist. Dadurch werden Kantenstruktur, Zuschnitt und Hashvergleich robuster. Fehlt OpenCV, bleibt der FFmpeg/dHash-Fallback aktiv.</p>
+<div class="callout warn">
+Zusatzmaterial nur vor dem ersten gemeinsamen Bildbereich oder nach dem letzten gemeinsamen Bildbereich ist kein Fall C. Enthält dagegen das Zielvideo zusätzlichen Inhalt ohne deutsche Entsprechung, wird gewarnt oder die automatische Erstellung blockiert.
+</div>
+</div>
+<a name="shortcuts"></a><h2 id="shortcuts"><span style="color:#64748b;font-size:.85em;margin-right:6px;">45.</span>⌨️ Shortcuts</h2>
+<div class="panel">
+<table class="table shortcut-table" style="border-collapse:collapse;">
+<tr><th>Taste</th><th>Funktion</th></tr>
+<tr><td><kbd>F1</kbd></td><td>Diese Hilfe öffnen</td></tr>
+<tr><td><kbd>F2</kbd></td><td>DragonToolsV9.8-PDF-Handbuch öffnen</td></tr>
+<tr><td><kbd>F9</kbd></td><td>System prüfen / Werkzeuge testen (ffmpeg, mkvmerge usw.)</td></tr>
+<tr><td><kbd>F11</kbd></td><td>Änderungshistorie Legacy V8 öffnen</td></tr>
+<tr><td><kbd>F12</kbd></td><td>Änderungshistorie V9 öffnen</td></tr>
+<tr><td><kbd>Strg+Q</kbd></td><td>Programm beenden</td></tr>
+<tr><td><kbd>Strg+W</kbd></td><td>Aktuellen Tab schließen</td></tr>
+<tr><td><kbd>Strg+Shift+Q</kbd></td><td>Warteschlange öffnen</td></tr>
+<tr><td><kbd>Strg+Shift+T</kbd></td><td>Letzten geschlossenen Tab wieder öffnen</td></tr>
+<tr><td><kbd>Strg+Shift+A</kbd></td><td>Alle Tabs wieder öffnen</td></tr>
+<tr><td><kbd>Strg+R</kbd></td><td>Standardwerte wiederherstellen</td></tr>
+<tr><td><kbd>Entf</kbd></td><td>Markierte Datei aus der Liste entfernen</td></tr>
+</table>
+</div>
+<!-- EINSTELLUNGEN -->
+<a name="logs"></a><h2 id="logs"><span style="color:#64748b;font-size:.85em;margin-right:6px;">46.</span>📝 Logs &amp; Diagnose</h2>
+<div class="panel">
+<p>Logs sind die schnellste Spur zurück zu einer Entscheidung im Batch: Quelle, Regeln, Pipeline, Werkzeugaufrufe, Fehler und Nacharbeit stehen dort in zeitlicher Reihenfolge. Bei DV-, HDR10+- oder Untertitel-Sonderfällen ist das normale Log fast immer der beste erste Blick.</p>
+<table class="table" style="border-collapse:collapse;">
+<tr><th>Bereich</th><th>Nutzen</th></tr>
+<tr><td>Startinformationen</td><td>Zeigen, mit welchen Grundeinstellungen ein Job gestartet wurde.</td></tr>
+<tr><td>Tool-Aufrufe</td><td>Erleichtern die Prüfung, ob ffmpeg, mkvmerge, dovi_tool oder andere Werkzeuge korrekt eingebunden wurden.</td></tr>
+<tr><td>Fehlermeldungen</td><td>Zeigen, an welcher Stelle ein Job abgebrochen ist oder warum eine Datei übersprungen wurde.</td></tr>
+<tr><td>Nachkontrolle</td><td>Hilft später nachzuvollziehen, welche Datei mit welchen Einstellungen verarbeitet wurde.</td></tr>
+<tr><td>Laufender Job</td><td>Der Menüpunkt Werkzeuge → Laufenden Job diagnostizieren zeigt aktive Dateien, wartende Queue, Parallel-Worker, Prozess-ID und aktuelles Werkzeugkommando.</td></tr>
+<tr><td>VerboseLog</td><td>Technischer Befehls- und Detailmitschnitt für Diagnose. Die normalen DV-/HDR10+-Logs zeigen nur noch die sieben fachlichen Hauptschritte und relevante Entscheidungen; Extraktions-/Injection-Details landen im VerboseLog. Dieses wird bei fehlerfreien Konverterläufen automatisch entfernt; bei Fehler, Abbruch oder Absturz bleibt es erhalten.</td></tr>
+<tr><td>CrashReports</td><td>Berichte über unsaubere Programmenden oder native Laufzeitfehler. Leere Fatal-Dateien werden bei sauberem Beenden wieder entfernt.</td></tr>
+</table>
+<div class="callout">
+<strong>Speicherort:</strong> Log-Dateien liegen lokal unter <code>Dokumente\DragonTools\Logging\Jahr\08-August\</code>.
+</div>
+<div class="callout">
+<strong>Separate Diagnoseordner:</strong><br/>
+<code>Dokumente\DragonTools\VerboseLog</code> enthält technische FFmpeg-/Pipeline-Befehle nur für Diagnosefälle.<br/>
+<code>Dokumente\DragonTools\Logging\Jahr\08-August\CrashReports</code> enthält Crash-/Unclean-Shutdown-Berichte.<br/>
+<code>Dokumente\DragonTools\Logging\SettingsChanges</code> enthält ein kurzes Änderungsprotokoll für gespeicherte Einstellungen, Regeländerungen, Profilaktionen und Migrationen.
+</div>
+<div class="callout ok">
+<strong>Tipp:</strong> Wenn etwas nicht wie erwartet läuft, sichere die betroffene Eingabedatei, das erzeugte Log und die verwendeten Datei-Einstellungen gemeinsam. Damit lassen sich Fehler deutlich schneller eingrenzen.
+</div>
+</div>
+<!-- FAQ -->
+<div class="callout ok">
+<strong>Erweitertes Diagnose-Logging:</strong><br/>
+Das Log dokumentiert jetzt besonders wichtige technische Entscheidungen:
+<ul>
+<li>Analysequelle und erkannte Medieninformationen</li>
+<li>globale Startparameter wie Skalierung, Überschreiben, Strip-Only, Encoder-Details, DV/HDR10+-Erhalt und Anzahl der Datei-Overrides</li>
+<li>Pipeline-Auswahl: Standard, DV oder HDR10+</li>
+<li>dateispezifische Overrides direkt beim jeweiligen Dateieintrag, z. B. manueller Encoder/Skalierung, Encoder-Profil, Strip-Only, Audio, Untertitel, DRC oder Lautheitsnormalisierung</li>
+<li>DV-Pipeline mit den sieben realen Hauptschritten HEVC, Profilnormalisierung, RPU-Extraktion, Encoding, RPU-Crop/Level-5, dynamische Metadaten und finalem Container-Mux (MP4Box oder mkvmerge)</li>
+<li>Timeout-Abbrüche und externe Tool-Fehler</li>
+<li>Dateigrößenprüfung und deaktivierte Überschreiben-Logik</li>
+<li>Verschiebebericht inklusive Untertitel, NFO, Trickplay und jeweiligem Konfliktverhalten</li>
+<li>Post-Processing-Status im Abschlussbericht: erstellt, beibehalten, ergänzt, ersetzt, gesichert oder Fehler</li>
+</ul>
+</div>
+<!-- FEHLERBERICHTE -->
+<a name="logbereinigung"></a><h2 id="logbereinigung"><span style="color:#64748b;font-size:.85em;margin-right:6px;">47.</span>🧹 Log-Bereinigung</h2>
+<div class="panel">
+<p>Die Log-Bereinigung entfernt alte Diagnose- und Verlaufsdateien im lokalen DragonTools-Logbereich. Sie löscht keine Medien und arbeitet nur innerhalb des konfigurierten Logordners.</p>
+<table class="table" style="border-collapse:collapse;">
+<tr><th>Logart</th><th>Inhalt</th><th>Standardauswahl</th></tr>
+<tr><td>Normale Logs</td><td>Tageslogs mit Batch-, Pipeline-, Audio-, Untertitel- und Verschiebeentscheidungen</td><td>aktiv</td></tr>
+<tr><td>ErrorReports</td><td>separate Fehlerberichte für abgebrochene oder unplausible Dateien</td><td>aktiv</td></tr>
+<tr><td>CrashReports</td><td>Berichte über unsauberes Beenden oder unbehandelte Ausnahmen</td><td>aktiv</td></tr>
+<tr><td>VerboseLogs</td><td>technische Befehlsmitschnitte für tiefe Diagnose</td><td>aktiv</td></tr>
+</table>
+<div class="callout ok">
+<strong>Schutz:</strong> Der aktive Crash-Marker <code>crash_state.json</code> wird nicht gelöscht, damit ein laufender oder gerade überwachter Programmzustand nicht verloren geht.
+</div>
+</div>
+<!-- DIAGNOSEPAKET -->
+<a name="fehlerberichte"></a><h2 id="fehlerberichte"><span style="color:#64748b;font-size:.85em;margin-right:6px;">48.</span>📄 Fehlerberichte</h2>
+<div class="panel">
+<p>Wenn eine Datei abbricht oder nach der Validierung auffällig bleibt, erstellt Dragon Tools zusätzlich zum normalen Log einen kompakten Fehlerbericht. Dieser Bericht ist für spätere Analyse, Support und Nachkontrolle gedacht.</p>
+<table class="table" style="border-collapse:collapse;">
+<tr><th>Inhalt</th><th>Beschreibung</th></tr>
+<tr><td>Datei und Pipeline</td><td>Quelle, Ziel, gewählter Workflow, Container und verwendete Regeln</td></tr>
+<tr><td>Werkzeuge</td><td>Verwendete Programme, Pfade, relevante Befehle und Rückgabewerte</td></tr>
+<tr><td>Validierung</td><td>Quelllaufzeit, Ausgabelaufzeit, Reparaturversuche und Ergebnis</td></tr>
+<tr><td>Fehlerdetails</td><td>Letzte Logzeilen, Tool-Ausgabe und technische Ausnahmeinformationen</td></tr>
+</table>
+<div class="callout">
+<strong>Ablage:</strong> Fehlerberichte liegen unter <code>Dokumente\DragonTools\Logging\Jahr\08-August\ErrorReports</code> und sind getrennt vom normalen Tageslog.
+</div>
+<div class="callout ok">
+<strong>Bei der Fehlersuche:</strong> Der normale Log bleibt bewusst kompakter. Im Fehlerbericht stehen dagegen die technischen Details, die ich für eine genauere Analyse brauche.
+</div>
+</div>
+<a name="diagnosepaket"></a><h2 id="diagnosepaket"><span style="color:#64748b;font-size:.85em;margin-right:6px;">49.</span>🧪 Diagnosepaket</h2>
+<div class="panel">
+<p>Das Diagnosepaket sammelt die wichtigsten Informationen für Fehlersuche und Support in einer lokalen ZIP-Datei. Es wird nicht automatisch versendet.</p>
+<table class="table" style="border-collapse:collapse;">
+<tr><th>Enthalten</th><th>Zweck</th></tr>
+<tr><td>Manifest und Systeminfo</td><td>Version, Zeitpunkt, Python-/Systeminformationen</td></tr>
+<tr><td>Werkzeugdiagnose</td><td>gefundene Tools, Versionen und unterstützte Features</td></tr>
+<tr><td>Einstellungen</td><td>aktuelle DragonTools-Registry-Einstellungen als JSON</td></tr>
+<tr><td>Regeln und Profile</td><td>gespeicherte Audio-/Untertitel-/Profilkonfigurationen</td></tr>
+<tr><td>Aktuelle Logs</td><td>Normal-, Error-, Crash- und VerboseLogs für die Nachanalyse</td></tr>
+<tr><td>Job-Journal</td><td>letzter Laufstatus mit gestarteten, erfolgreichen, fehlerhaften und zuletzt aktiven Dateien; kann nach Absturz die Restqueue wiederherstellen</td></tr>
+</table>
+<div class="callout warn">
+<strong>Hinweis:</strong> Das Paket enthält lokale Pfade und Dateinamen aus Logs. Es wird nur lokal erstellt und nicht automatisch versendet.
+</div>
+</div>
+<!-- STANDARDRESET -->
+<a name="supportworkflow"></a><h2 id="supportworkflow"><span style="color:#64748b;font-size:.85em;margin-right:6px;">50.</span>🧭 Support-Workflow V9.8</h2>
+<div class="panel">
+<p>Bei einem Fehlerfall ist die schnellste Analyse meistens ein klarer Ablauf aus Log prüfen, Fehlerbericht sichern und Diagnosepaket erstellen.</p>
+<ol>
+<li><strong>Normales Log prüfen:</strong> zeigt Quelle, Pipeline, Regeln, Encoder und letzte Toolausgabe.</li>
+<li><strong>ErrorReport prüfen:</strong> enthält kompakte technische Details zur betroffenen Datei.</li>
+<li><strong>CrashReport prüfen:</strong> nur relevant, wenn die App unerwartet beendet wurde.</li>
+<li><strong>Job-Journal beachten:</strong> Wenn Dragon Tools beim Start einen unvollständigen Lauf meldet, kannst du die Restqueue wiederherstellen. Bereits erfolgreiche Dateien werden übersprungen, laufende/offene Dateien werden erneut eingereiht. Nach "Später entscheiden" ist der Import auch über <strong>Datei → Offene Restqueue importieren</strong> möglich.</li>
+<li><strong>Erweiterten Systemtest ausführen:</strong> prüft bei Toolproblemen mit Mini-Dateien, ob die wichtigsten externen Programme nicht nur gefunden werden, sondern praktisch arbeiten.</li>
+<li><strong>Laufenden Job diagnostizieren:</strong> während eines langen Encodes prüfen, welche Dateien aktiv sind, welche warten und welches Werkzeug gerade läuft.</li>
+<li><strong>Diagnosepaket erstellen:</strong> bündelt Logs, Tooldiagnose, erweiterten Mini-Systemtest, Einstellungen, Regeln und Profile.</li>
+<li><strong>Regel-/Profil-Simulator nutzen:</strong> Audio-/Untertitel-/Pipeline-/Profilentscheidungen und deren Begründung vor einem neuen Encode kontrollieren und bei Bedarf als Bericht speichern.</li>
+</ol>
+<div class="callout">
+<strong>Tipp:</strong> Bei wiederholbaren Fehlern die betroffene Datei nicht sofort löschen, sondern Log, ErrorReport und Diagnosepaket behalten. So lässt sich später nachvollziehen, ob Tool, Regel, Quelle oder Pipeline der Auslöser war.
+</div>
+</div>
+<a name="troubleshooting"></a><h2 id="troubleshooting"><span style="color:#64748b;font-size:.85em;margin-right:6px;">51.</span>🆘 Troubleshooting</h2>
+<div class="panel">
+<details>
+<summary>ffmpeg nicht gefunden</summary>
+<div class="content">
+<p>Dragon Tools sucht ffmpeg.exe in dieser Reihenfolge:</p>
+<ol>
+<li>Windows PATH</li>
+<li><code>Daten\Programme\</code> (im App-Verzeichnis)</li>
+<li>Konfigurierter Pfad in ⚙️ Einstellungen</li>
+</ol>
+<p>Lösung: ffmpeg.exe in <code>Daten\Programme\</code> legen oder Pfad in Einstellungen setzen.</p>
+</div>
+</details>
+<details>
+<summary>Dolby Vision wird nicht erkannt</summary>
+<div class="content">
+<p>Die Erkennung erfolgt vorrangig über <strong>MediaInfo.exe</strong>. <strong>FFmpeg/ffprobe</strong> dient als Fallback und Ergänzung.</p>
+<ul>
+<li><strong>MediaInfo.exe</strong> sollte korrekt gefunden werden (F9 prüfen)</li>
+<li><strong>dovi_tool.exe</strong> wird für die DV-Verarbeitung benötigt, nicht für die reine Erkennung</li>
+<li><strong>MP4Box.exe</strong> wird für DV-MP4, HDR10+-MP4 und bestimmte MP4-Reparaturpfade benötigt</li>
+<li>Die Quelldatei muss tatsächlich Dolby-Vision-Metadaten enthalten</li>
+</ul>
+<p>Check: <kbd>F9</kbd> → besonders <strong>MediaInfo</strong>, <strong>dovi_tool</strong> und <strong>MP4Box</strong> prüfen.</p>
+</div>
+</details>
+<details>
+<summary>Dolby Vision schlägt fehl (RPU / Crop Fehler)</summary>
+<div class="content">
+<p>Dragon Tools gleicht den FFmpeg-AutoCrop vor dem Encode mit dem RPU-Level-5-Bildbereich ab. Bis 20 Pixel Differenz wird automatisch der weniger aggressive Crop gewählt. Bei einer größeren Abweichung entscheidest du zwischen AutoCrop, RPU-Crop oder „Dolby Vision für diese Datei deaktivieren“.</p>
+<p>Ein technischer RPU-/Injection-Fehler wird nicht still übergangen. Der DV-Pfad bricht fail-closed ab und sichert verwertbare Zwischenstände für die Diagnose. Eine Ausgabe ohne DV entsteht nur über den dafür vorgesehenen Recovery-/Benutzerpfad, nicht als unbemerkter erfolgreicher DV-Job.</p>
+<p>Der Fehlerordner kann enthalten:</p>
+<ul>
+<li>MP4 ohne DV</li>
+<li>RPU-Dateien</li>
+<li>JSON-Dateien für den Editor/Fallback</li>
+<li>HEVC-Zwischenstände</li>
+<li>extrahierte Audiospuren</li>
+</ul>
+<div class="callout warn">
+<strong>Wichtig:</strong> Der Fehlerordner ist für manuelle Nachbearbeitung gedacht. So geht die bisherige Arbeit nicht verloren, auch wenn die DV-RPU nicht automatisch korrigiert werden konnte.
+</div>
+</div>
+</details>
+<details>
+<summary>Burn-In schlägt fehl: "Only text-based subtitles"</summary>
+<div class="content">
+<p>Grafik-Untertitel (PGS/VobSub) benötigen den <code>overlay</code>-Filter statt 
+<code>subtitles</code>. Dragon Tools macht das automatisch.</p>
+<p>Falls der Fehler dennoch auftritt: Rechtsklick → Datei-Einstellungen → 
+Burn-In Modus auf "none" setzen und manuell mit dem Untertitel-Tab lösen.</p>
+</div>
+</details>
+<details>
+<summary>Auto-Crop schneidet zu viel ab</summary>
+<div class="content">
+<p>Bei IMAX-Filmen oder Filmen mit wechselndem Bildformat: IMAX-Modus aktivieren.</p>
+<p>Rechtsklick auf Datei → 🎬 IMAX AN/AUS</p>
+<p>Oder global: Auto-Crop-Checkbox im Optionen-Bereich deaktivieren.</p>
+</div>
+</details>
+<details>
+<summary>Konvertierung bricht ab / Festplatte voll</summary>
+<div class="content">
+<p>Während der Verarbeitung werden temporäre Dateien erzeugt. Ein Abbruch ohne klaren Codec-Fehler liegt oft schlicht an zu wenig freiem Speicherplatz.</p>
+<ul>
+<li><strong>Standard-Encoding:</strong> bis zu 2× Dateigröße</li>
+<li><strong>Dolby Vision:</strong> typischerweise etwa 3,5× bis 4× Dateigröße</li>
+</ul>
+<p>Prüfe vor dem Start den freien Speicher auf dem Arbeitslaufwerk und dem Zielpfad.</p>
+</div>
+</details>
+<details>
+<summary>Serienerkennung schlägt fehl</summary>
+<div class="content">
+<p>Öffne <strong>Regeln → Serien-Erkennung</strong> und gib deinen Dateinamen 
+in das Testfeld ein. Klicke "🔍 Testen".</p>
+<p>Wenn der Name nicht erkannt wird und ein ungewöhnliches Format hat:</p>
+<ol>
+<li>Klicke "❓ Wie schreibe ich ein Muster?"</li>
+<li>Wähle ein passendes Beispiel aus der Tabelle</li>
+<li>Passe es für dein Format an</li>
+<li>Füge es mit "➕ Muster hinzufügen" ein</li>
+<li>Teste erneut</li>
+</ol>
+</div>
+</details>
+</div>
+<!-- SYSTEMVORAUSSETZUNGEN -->
+<a name="versionshinweise"></a><h2 id="versionshinweise"><span style="color:#64748b;font-size:.85em;margin-right:6px;">52.</span>📝 Zusätzliche Versionshinweise</h2>
+<div class="panel">
+<ul>
+<li><strong>V8.0 → V8.1:</strong> hauptsächlich Fehlerverbesserungen</li>
+<li><strong>V8.1 → V8.2:</strong> Überarbeitung GUI und Logging</li>
+<li><strong>V8.2 → V8.3:</strong> Überarbeitung Fehlerlogging</li>
+<li><strong>V8.3 → V8.4:</strong> MKV Remux und Audio Mux hinzugefügt</li>
+<li><strong>V8.4 → V8.5:</strong> ISO-Bearbeitung, Video Merge, MP4 Remux</li>
+<li><strong>V8.5 → V8.6:</strong> Erweiterung Tools + Entfernen von Altlasten</li>
+<li><strong>V8.6 → V8.7:</strong> Refactoring, modulare Struktur, bessere Wartbarkeit</li>
+<li><strong>V8.7 → V8.8:</strong> Bugs in Oberfläche, Logging und Konvertierungsmodulen behoben</li>
+<li><strong>V8.8 → V9.0:</strong> Tool-Erkennung, DV/HDR-Farbraum, Abbruchstabilität, Fehlererkennung, automatische Timestamp-Reparatur und Testabdeckung verbessert</li>
+<li><strong>V9.0 → V9.1:</strong> Timeout-Aktivstatus, ffmpeg-Inaktivitäts-Timeouts, Auto-Crop-/IMAX-Feinsteuerung, Output-Validierung, Log-Bereinigung, Diagnosepaket, Profil-Assistent und Reset-Korrekturen ergänzt</li>
+<li><strong>V9.1 → V9.2:</strong> Online-Metadaten, Preflight-Berichte, Regel-/Profilmigration, Release-Prüfung, Stereo-/Surround-Kopierbereiche, dynamische parallele Bearbeitung, zentraler ToolRunner für Spezialtools, laufende Job-Diagnose, Speicherplatzprüfung, Job-Journal-Wiederaufnahme, erweiterter Systemtest, Queue-Performance, erweiterte Startprofile und erklärender Regel-/Profil-Simulator konsolidiert</li>
+<li><strong>V9.2 → V9.3:</strong> Jellyfin-NFO, Trickplay-Erstellung mit wählbarer Quelle und Konfliktverhalten, Sidecar-Ordner-Verschieben, Film-NFO-Umbenennung zu movie.nfo, erweiterte TMDB-Detaildaten, Film-Umbenennung mit TMDB-Vorschlägen, Quellbildprüfung, dynamischer Parallelstart, Audio-DRC/Lautheitsnormalisierung, separater Qualitätstester, Audio-Video-Matcher, detaillierter Abschluss-/Verschiebebericht, Änderungsprotokoll, stabileres Zwischenverschieben/Shutdown und separater PyInstaller-Boot-Splash ergänzt</li>
+<li><strong>V9.3 → V9.4:</strong> Stabilitätsverbesserung und allgemeine Fehlerbehebung</li>
+<li><strong>V9.4 → V9.5:</strong> Audio-Video-Matcher mit optionaler OpenCV-Bildanalyse, zurücknehmbarem Abbruch nach Datei, gezieltem FFmpeg-Dateiabbruch, Qualitätstester-Assistent, Start-/Override-Logging, ISO/BDMV-/VIDEO_TS-Import, Film-/Serien-Renamer, TMDB/TheTVDB-Providerwahl, deutsche Umlaut-Suchvarianten, NVENC Lookahead-Level 0–3 und Multipass, Blu-ray-/M2TS-Audiomapping, Mediathek-Scan, SxxExx-Ersetzung, Ersetzungs-Erinnerungen sowie stabilere Job-/Move-Journale, transaktionalen Backup-Restore und timeoutfähigen DV-P5-Remux.</li>
+<li><strong>V9.5 → V9.6:</strong> Renamer Überarbeitung und Flexibilisierung, Stabilitätsverbesserung, Datenbankoptimierung, Refaktoring</li>
+<li><strong>V9.6 → V9.7:</strong> zentrale Versionsquelle und reproduzierbarer Build, quellenabhängige DV-/HDR10+-Erhaltungslogik, robuste Config-Typnormalisierung, vollständige Encoder-/Skalierungs-Overrides pro Datei und Mehrfachauswahl, wählbare MKV-/MP4-Zielcontainer, DV-MKV über mkvmerge, DV-Level-5-/AutoCrop-Abgleich, freie Seriensuche im Renamer und Preflight sowie der direkte HDR10+-5-Schritt-Pfad ohne große source.hevc-/encoded.mkv-Zwischenstufen. Refactoring</li>
+<li><strong>V9.7 → V9.8:</strong> Windows-Neustartschutz für laufende Jobs, Benutzerabfrage im Leerlauf, 15-Minuten-Aufschub, Freigabe eigener DragonTools-Shutdowns, Release-Smoke-Erweiterung und finale Refactoring-/Versionsnacharbeit.</li>
+</ul>
+</div>
+<!-- CHANGELOG -->
+<a name="changelog"></a><h2 id="changelog"><span style="color:#64748b;font-size:.85em;margin-right:6px;">53.</span>🕘 Änderungshistorie &amp; Versionen</h2>
+<div class="panel">
+<p>Hier findest du die aktuelle V9.8-Historie und getrennt davon die Legacy-Historien der älteren Entwicklungsstände. Der V9-Dialog verwendet jetzt eine <strong>seitenbasierte Darstellung</strong> statt eines langen Scrolltextes.</p>
+<ul>
+<li><strong>Aktuelle Änderungshistorie:</strong> V9-Log öffnen mit <kbd>F12</kbd> oder über das Hilfe-Menü.</li>
+<li><strong>Bereichsauswahl:</strong> die vollständigen Abschnittsnamen stehen in einer breiten Auswahlliste; die alte Button-Matrix mit abgeschnittenen Überschriften entfällt.</li>
+<li><strong>Seiten:</strong> lange Bereiche werden automatisch in definierte Inhaltsseiten aufgeteilt. Unten stehen getrennte Schaltflächen für Seite zurück/weiter und Bereich zurück/weiter sowie ein Bereichs- und Seitenzähler.</li>
+<li><strong>Dateiformat:</strong> V9 lädt bevorzugt <code>Aenderungshistorie\CHANGELOG.json</code>. <code>CHANGELOG.txt</code> bleibt als kompatibler Fallback lesbar.</li>
+<li><strong>Legacy V8/V7:</strong> bleiben als TXT-Historien verfügbar und werden im selben Seitenmodell dargestellt.</li>
+</ul>
+<div class="callout">
+<strong>Wofür ich die Historie nutze:</strong> Fehlersuche nach Updates, den Vergleich zwischen V9, V8 und älteren Versionen und die schnelle Kontrolle, ob ein Verhalten neu hinzugekommen oder beabsichtigt ist. Der Inhaltsbereich benötigt im Normalfall keine vertikale Scrollleiste.
+</div>
+</div>
+<!-- VALIDIERUNGSPOLITIK -->
+<a name="faq"></a><h2 id="faq"><span style="color:#64748b;font-size:.85em;margin-right:6px;">54.</span>❓ FAQ</h2>
+<div class="panel">
+<details>
+<summary>Kann ich während der Konvertierung weiter Änderungen vornehmen?</summary>
+<div class="content">
+<p>Ja. Noch nicht gestartete Dateien bleiben editierbar. Du kannst die Reihenfolge per Drag &amp; Drop ändern und Datei-Einstellungen für Audio, Video, Untertitel, IMAX oder Encoder/Skalierung anpassen, solange die betreffende Datei noch nicht aktiv verarbeitet wird. Für Encoder/Skalierung ist auch eine Mehrfachauswahl möglich.</p>
+</div>
+</details>
+<details>
+<summary>Wie werden Untertitel bei MP4 gespeichert?</summary>
+<div class="content">
+<p>Das steuert die globale Option <strong>MP4-Sidecars aktivieren</strong>. Aktiviert werden alle vom Regelwerk ausgewählten MP4-Untertitel extern gespeichert. Deaktiviert werden Textuntertitel wie SRT, ASS/SSA oder WebVTT zu <code>mov_text/tx3g</code> konvertiert und intern gemuxt. PGS/SUP sowie VobSub/DVD-Sub bleiben als Sidecars. Bei ASS/SSA gehen beim Konvertieren komplexe Styles, Positionierungen und Effekte verloren.</p>
+</div>
+</details>
+<details>
+<summary>Warum nutzt Dragon Tools nicht meine GPU?</summary>
+<div class="content">
+<p>Prüfe zuerst mit <kbd>F9</kbd>, ob NVENC, QSV oder AMF korrekt erkannt werden. Fehlt ein Encoder, liegt es meist an Treibern, einem ungeeigneten ffmpeg-Build oder daran, dass die Hardware den gewählten Codec nicht unterstützt.</p>
+</div>
+</details>
+<details>
+<summary>Warum ist die Ausgabedatei deutlich kleiner als die Eingabedatei?</summary>
+<div class="content">
+<p>Das ist normal, wenn effizientere Codecs oder geänderte Audio-Regeln verwendet werden. H.265 und AV1 komprimieren deutlich besser als ältere Formate, ohne dass die sichtbare Qualität zwingend stark schlechter werden muss.</p>
+</div>
+</details>
+<details>
+<summary>Warum zeigt die Medieninfo andere Werte als ein anderer Player oder ein anderes Tool?</summary>
+<div class="content">
+<p>Dragon Tools nutzt vorrangig MediaInfo.exe und ergänzt fehlende Werte über FFmpeg/ffprobe. Andere Programme gewichten Metadaten teilweise anders oder zeigen containerabhängige Werte in einer anderen Form an.</p>
+</div>
+</details>
+<details>
+<summary>Was soll ich bei einem Fehler immer zuerst prüfen?</summary>
+<div class="content">
+<p>Prüfe die Tool-Erkennung mit <kbd>F9</kbd>, danach das Log unter <code>Dokumente\DragonTools\Logging\</code> und anschließend die Datei-Einstellungen der betroffenen Datei. Damit lassen sich die meisten Fehler schnell eingrenzen.</p>
+</div>
+</details>
+</div>
+<!-- TOOLS & UPDATES -->
+<a name="system"></a><h2 id="system"><span style="color:#64748b;font-size:.85em;margin-right:6px;">55.</span>💻 Systemvoraussetzungen</h2>
+<div class="panel">
+<div class="grid">
+<div>
+<h3>Minimum</h3>
+<ul>
+<li>Windows 10 64-bit</li>
+<li>4 GB RAM</li>
+<li>Python 3.11+ <em>(nur Entwicklung)</em></li>
+<li>PyQt6 6.4+ <em>(nur Entwicklung; im gebauten EXE-Paket normalerweise enthalten)</em></li>
+<li>ffmpeg / ffprobe <em>(Kernfunktionen für Encoding und Analyse)</em></li>
+<li>OpenCV + NumPy <em>(optional; verbessert die Bildanalyse des Audio-Video-Matchers, ohne OpenCV bleibt der FFmpeg/dHash-Fallback aktiv)</em></li>
+</ul>
+</div>
+<div>
+<h3>Empfohlen</h3>
+<ul>
+<li>Windows 11 64-bit</li>
+<li>16 GB RAM</li>
+<li>NVIDIA RTX (für NVENC)</li>
+<li>SSD für Temp-Dateien</li>
+<li>OpenCV im Release-Build verfügbar, wenn die robustere Matcher-Bildanalyse genutzt werden soll</li>
+<li>aktuelle FFmpeg-Version mit den benötigten Encodern/Filtern; Fähigkeiten mit <kbd>F9</kbd> prüfen</li>
+</ul>
+</div>
+<div>
+<h3>Drittanbieter-Tools im Release / zur Laufzeit</h3>
+<div class="callout">
+<strong>Externe Werkzeuge in meinem aktuellen Stand: 05.09.2026</strong><br/>
+Mit diesen Versionen arbeite ich aktuell in Dragon Tools. Über <kbd>F9</kbd> kannst du jederzeit prüfen, welche Version auf deinem System tatsächlich gefunden wird und ob die benötigten Funktionen vorhanden sind.
+</div>
+<table class="table" style="border-collapse:collapse;">
+<tr><th>Tool</th><th>Version / Stand</th><th>Verwendung</th><th>Einordnung</th></tr>
+<tr><td>FFmpeg / FFprobe</td><td><code>2026-09-02-git-9fc8c785e2</code> · Gyan Full Build</td><td>Encoding, Filter, Stream-/Metadatenanalyse, Remux, Frame-Extraktion</td><td>Kernabhängigkeit</td></tr>
+<tr><td>MediaInfo</td><td><strong>26.05</strong></td><td>Erweiterte Medien-, HDR-/DV- und Streamanalyse</td><td>stark empfohlen; ffprobe ergänzt/fällt zurück</td></tr>
+<tr><td>MKVToolNix</td><td><strong>101.0</strong></td><td>MKV-Muxing, Extraktion und Untertitel-/Containeroperationen</td><td>für entsprechende Workflows erforderlich</td></tr>
+<tr><td>MakeMKV</td><td><strong>1.18.4</strong></td><td>ISO-/Blu-ray-/DVD-Disc-Extraktion</td><td>bevorzugter ISO-Pfad; separate Lizenz/Freischaltung erforderlich</td></tr>
+<tr><td>dovi_tool</td><td><strong>Eigener Build</strong> · quietvoid/dovi_tool Branch-Stand <strong>03.09.2026</strong></td><td>Dolby-Vision-RPU-Verarbeitung</td><td>bewusst eigener Build statt offiziellem Release; nur für DV-Erhalt/-Bearbeitung</td></tr>
+<tr><td>hdr10plus_tool</td><td><strong>1.7.2</strong></td><td>HDR10+-Metadaten verarbeiten</td><td>nur für HDR10+-Erhalt</td></tr>
+<tr><td>MP4Box / GPAC</td><td><strong>26.07</strong></td><td>MP4-Muxing für DV/HDR10+ sowie MP4-Reparaturpfade</td><td>für entsprechende MP4-Spezialpfade erforderlich</td></tr>
+<tr><td>HandBrake / Rename My TV Series</td><td>extern · nicht fest an eine Dragon-Tools-Version gebunden</td><td>können als externe Programme über Dragon Tools geöffnet werden</td><td>keine Kernabhängigkeit der internen Konvertierung</td></tr>
+</table>
+</div>
+</div>
+<h3>Anwendung der Drittanbieter-Tools</h3>
+<table class="table" style="border-collapse:collapse;">
+<tr><th>Tool</th><th>Zweck</th><th>Pflicht?</th><th>Quelle</th></tr>
+<tr><td>ffmpeg / ffprobe</td><td>Kern-Encoder und Analyse</td><td>✅ Ja</td><td>ffmpeg.org</td></tr>
+<tr><td>MKVToolNix</td><td>MKV-Container, Untertitel</td><td>⚠️ Für Untertitel-Tab</td><td>mkvtoolnix.download</td></tr>
+<tr><td>dovi_tool</td><td>Dolby Vision</td><td>⚠️ Nur DV</td><td>github.com/quietvoid/dovi_tool</td></tr>
+<tr><td>hdr10plus_tool</td><td>HDR10+</td><td>⚠️ Nur HDR10+</td><td>github.com/quietvoid/hdr10plus_tool</td></tr>
+<tr><td>MP4Box (GPAC)</td><td>DV-/HDR10+-MP4-Muxing und MP4-Reparatur</td><td>⚠️ Für entsprechende MP4-Pfade</td><td>gpac.io</td></tr>
+<tr><td>MediaInfo</td><td>Medienanalyse (HDR, Dolby Vision, Farbraum, Metadaten)</td><td>✅ Empfohlen</td><td>mediaarea.net</td></tr>
+<tr><td>OpenCV / NumPy</td><td>robustere Bildsignaturen im Audio-Video-Matcher</td><td>⚠️ Optional</td><td>opencv.org / numpy.org</td></tr>
+<tr><td>cryptography</td><td>verschlüsselte Einstellungs-Backups</td><td>⚠️ Für Backup inkl. Keys</td><td>cryptography.io</td></tr>
+</table>
+</div>
+<!-- DATENSCHUTZ -->
+<a name="datenschutz"></a><h2 id="datenschutz"><span style="color:#64748b;font-size:.85em;margin-right:6px;">56.</span>🔒 Daten &amp; Privatsphäre</h2>
+<div class="panel">
+<div class="callout ok">
+<strong>Dragon Tools sammelt keine Daten.</strong>
+</div>
+<ul>
+<li>Keine Telemetrie, keine Cloud; Internet-Zugriff erfolgt nur bei aktivierten Online-Metadaten</li>
+<li>Alle Einstellungen werden lokal in der Windows-Registry gespeichert
+      (<code>HKCU\Software\DragonDeveloper\Dragon Tools</code>)</li>
+<li>TMDB API-Key und Read-Access-Token werden lokal gespeichert und in Diagnosepaketen maskiert</li>
+<li>Profile und Regeln liegen unter <code>Dokumente\DragonTools\</code></li>
+<li>Log-Dateien liegen lokal unter <code>Dokumente\DragonTools\Logging\</code></li>
+<li>Das Programm greift nur auf Dateien zu die du explizit auswählst</li>
+</ul>
+<div class="callout">
+<strong>Vor Veröffentlichung:</strong> Über <strong>Werkzeuge → Release-/Build prüfen</strong> kann Dragon Tools die fertige App-Struktur inklusive Python-Paket-Smoke-Test prüfen. Im Quellprojekt kann der gleiche Prüfer zusätzlich Builder-/Spec-Dateien und offensichtliche private Pfade kontrollieren.
+</div>
+<p>Mit <kbd>Strg+R</kbd> (Standardwerte wiederherstellen) werden alle Registry-Einträge gelöscht.
+Profile und Logs bleiben erhalten.</p>
+<div class="callout"><strong>Mediathek:</strong> Jellyfin-Datenbanken dienen Dragon Tools ausschließlich als Lese-/Importquelle. Schreibende SQL-Aktionen betreffen nur die eigene DragonTools-SQLite-Datei; vor manuellen Änderungen wird sie gesichert.</div></div>
+<!-- LIZENZEN -->
+<a name="lizenzen"></a><h2 id="lizenzen"><span style="color:#64748b;font-size:.85em;margin-right:6px;">57.</span>📄 Lizenzen &amp; Danksagung</h2>
+<div class="panel">
+<h3>Dragon Tools V9.8</h3>
+<p>Entwickelt von Dragon Developer · Entwicklungszeitraum: 2025–2026</p>
+<h3>Verwendete Drittanbieter-Bibliotheken</h3>
+<table class="table" style="border-collapse:collapse;">
+<tr><th>Bibliothek / Tool</th><th>Lizenz</th><th>Zweck</th></tr>
+<tr><td><strong>PyQt6</strong></td><td>GPL v3 / Riverbank Commercial</td><td>GUI-Framework</td></tr>
+<tr><td><strong>ffmpeg</strong></td><td>LGPL 2.1+ / GPL 2+</td><td>Video-Encoding und Analyse</td></tr>
+<tr><td><strong>MKVToolNix</strong></td><td>GPL v2</td><td>MKV-Container-Verarbeitung</td></tr>
+<tr><td><strong>dovi_tool</strong></td><td>MIT</td><td>Dolby Vision RPU-Verarbeitung</td></tr>
+<tr><td><strong>hdr10plus_tool</strong></td><td>MIT</td><td>HDR10+ Metadaten</td></tr>
+<tr><td><strong>GPAC / MP4Box</strong></td><td>LGPL 2.1</td><td>MP4-Container für DV/HDR10+ und Reparaturpfade</td></tr>
+<tr><td><strong>MediaInfo</strong></td><td>BSD 2-Clause</td><td>Medien-Analyse</td></tr>
+<tr><td><strong>OpenCV</strong></td><td>Apache 2.0</td><td>robustere Bildanalyse im Audio-Video-Matcher</td></tr>
+<tr><td><strong>NumPy</strong></td><td>BSD</td><td>numerische Bildauswertung für OpenCV/dHash-Pfade</td></tr>
+<tr><td><strong>cryptography</strong></td><td>Apache 2.0 / BSD</td><td>verschlüsselte Backups mit AES-256-GCM</td></tr>
+</table>
+<h3>Danksagung</h3>
+<p>Besonderer Dank an die Entwickler von ffmpeg, MKVToolNix, quietvoid (dovi_tool / hdr10plus_tool)
+und der gesamten Open-Source-Community im Video-Encoding-Bereich.</p>
+</div>
+<!-- BACKUP & RESTORE -->
+<a name="backuprestore"></a><h2 id="backuprestore"><span style="color:#64748b;font-size:.85em;margin-right:6px;">58.</span>🔐 Backup &amp; Restore</h2>
+<div class="panel">
+<p>Dragon Tools kann seine lokale Konfiguration als ZIP sichern und später wiederherstellen. Sinnvoll ist das vor größeren Regeländerungen, neuen Toolpfaden, Provider-Anpassungen oder einem Wechsel auf einen neuen Programmstand.</p>
+<table class="table" style="border-collapse:collapse;">
+<tr><th>Funktion</th><th>Enthalten / Verhalten</th></tr>
+<tr><td><strong>Backup exportieren</strong></td><td>Sichert die QSettings-Konfiguration einschließlich Toolpfaden und UI-Zustand sowie die DragonTools-Regeldateien und eigenen Encoderprofile. Vor dem Export wird zwischen <strong>Ohne Keys (empfohlen)</strong> und <strong>Verschlüsselt inkl. Keys</strong> gewählt.</td></tr>
+<tr><td><strong>Standardziel</strong></td><td><code>Dokumente\DragonTools\Backups\DragonTools_Backup_YYYY-MM-DD_HH-MM-SS.zip</code>; beim Speichern kann ein anderer Pfad gewählt werden.</td></tr>
+<tr><td><strong>Backup wiederherstellen</strong></td><td>Ersetzt die aktuellen Einstellungen durch den Stand des gewählten Backups und stellt die enthaltenen Regel- und Profildateien wieder her. Verschlüsselte Backups fragen das Export-Passwort ab; bei Backups ohne Keys bleiben bereits lokal vorhandene API-Keys/Tokens/PINs unverändert.</td></tr>
+<tr><td><strong>Legacy-V1-Backups</strong></td><td>Ältere Backups können API-Keys oder Tokens noch im Klartext enthalten. Beim Restore fragt Dragon Tools deshalb ausdrücklich, ob alte Zugangsdaten übernommen oder die lokalen Secrets behalten werden sollen.</td></tr>
+<tr><td><strong>Transaktionaler Restore</strong></td><td>Der Restore wird vorbereitet und geprüft, bevor der aktuelle Zustand ersetzt wird. Tritt währenddessen ein Fehler auf, werden Einstellungen und Dateien auf den vorherigen Stand zurückgerollt.</td></tr>
+<tr><td><strong>Sicherheitsbackup</strong></td><td>Vor jedem Restore wird automatisch ein zusätzlicher Stand mit dem Präfix <code>DragonTools_vor_Restore</code> erzeugt. Dieses automatische Sicherheitsbackup enthält keine API-Keys/Tokens/PINs.</td></tr>
+<tr><td><strong>Schutz beim Import</strong></td><td>Das Archiv muss als DragonTools-Backup gekennzeichnet sein. ZIP-Pfade werden geprüft; wiederhergestellt werden nur die vorgesehenen Bereiche für Regeln und Profile.</td></tr>
+</table>
+<div class="callout ok"><strong>Empfohlener Ablauf:</strong> Vor größeren Änderungen zuerst <strong>Einstellungen → Backup exportieren</strong>. Nach einem Restore ist ein Neustart von Dragon Tools sinnvoll, damit alle bereits geladenen Dialoge und Toolpfade garantiert den wiederhergestellten Stand verwenden.</div>
+<div class="callout ok"><strong>Datenschutz:</strong> Die Standardoption <strong>Ohne Keys</strong> schreibt API-Keys, Tokens und PINs nicht in das ZIP. Die Option <strong>Verschlüsselt inkl. Keys</strong> legt diese Werte separat mit AES-256-GCM ab; der Schlüssel wird per scrypt aus dem eingegebenen Passwort abgeleitet. Das Passwort selbst wird nicht gespeichert.</div>
+</div>
+
+<!-- RELEASE-/BUILD-PRÜFUNG -->
+<a name="releasecheck"></a><h2 id="releasecheck"><span style="color:#64748b;font-size:.85em;margin-right:6px;">59.</span>✅ Release-/Build-Prüfung</h2>
+<div class="panel">
+<p>Für meine Releases nutze ich <strong>Werkzeuge → Release-/Build prüfen</strong>. Damit kontrolliere ich, ob der Quellstand und der gebaute PyInstaller-Ordner vollständig zusammenpassen. Entwicklungsordner und fertige App werden dabei unterschiedlich behandelt, weil Python-Quellen, Runtime-Daten und PyInstaller-Inhalte an verschiedenen Stellen liegen.</p>
+<table class="table" style="border-collapse:collapse;">
+<tr><th>Prüfbereich</th><th>Kontrolle</th></tr>
+<tr><td><strong>Fertige App</strong></td><td>Versionspassende EXE, Datenordner, Help, PDF-Handbuch, Changelogs, Regel-Schemas, Programme/Tools und die mitgelieferte Quellkopie unter <code>Daten\Python\dragontools</code>.</td></tr>
+<tr><td><strong>Regel-Schemas</strong></td><td>Kontrolliert die Default-Dateien für Audio, Untertitel, Move, Renamer und Profile gegen die zentrale Schemaversion. Aktuell: Audio 4, Untertitel 4, Move 1, Renamer 1 und Profile 3. Eine falsche Default-Schemaversion gilt als Release-Fehler.</td></tr>
+<tr><td><strong>Python-Paket-Smoke-Test</strong></td><td>Im Quellprojekt wird <code>dragontools</code> geprüft; im Onedir-Build die tatsächliche Quellkopie unter <code>Daten\Python\dragontools</code>. <code>Daten\dragontools</code> ist dagegen der Runtime-Datenbereich für Konfigurationen.</td></tr>
+<tr><td><strong>Release-Bytecode</strong></td><td><code>__pycache__</code>, <code>*.pyc</code>, <code>*.pyo</code> und typische Test-/Lint-Caches gelten im Release als Fehler. Der Source-Packer filtert sie zusätzlich aus und prüft das ZIP per CRC.</td></tr>
+<tr><td><strong>Quellprojekt</strong></td><td><code>release_manifest.json</code> beschreibt V9.8 als Source-with-Build mit dynamischer PyInstaller-CLI-Strategie. Requirements-Dateien dokumentieren Runtime, optionale Bildanalyse, Tests und Buildumgebung reproduzierbar.</td></tr>
+<tr><td><strong>Optionale Abhängigkeiten</strong></td><td>OpenCV/NumPy verbessern den Audio-Video-Matcher. Fehlen sie, bleibt der FFmpeg/dHash-Fallback nutzbar.</td></tr>
+<tr><td><strong>Testumgebung</strong></td><td><code>pytest.ini</code> setzt PyQt6 und registriert <code>media_integration</code> sowie <code>dv_hdr_integration</code>. Reale DV/HDR-Tests brauchen zusätzlich die externen Tools und passende Fixtures.</td></tr>
+<tr><td><strong>Teststand nach dem Refactoring · 09.09.2026</strong></td><td>Der aktuelle Quellstand umfasst 583 Python-Dateien. Der zuletzt dokumentierte vollständige Windows/Python-3.14.6-Lauf über alle 148 Testdateien endete mit 1.106 bestandenen Tests, 2 gezielten Skips und 0 Fehlern. Zusätzlich liefen 427 Produktivmodule durch den Import-Smoke-Test. Die beiden Skips betreffen nur die nicht konfigurierte reale DV/HDR-Tool-/MP4Box-Integration.</td></tr>
+</table>
+<div class="callout"><strong>Anzeige:</strong> Jede Einzelprüfung wird mit <strong>✅ OK</strong>, <strong>⚠️ Warnung</strong> oder <strong>❌ Fehler</strong> ausgegeben. Am Ende werden Fehler und Warnungen zusammengezählt.</div>
+<div class="callout ok"><strong>So ist der V9.8-Build aufgebaut:</strong> Die App-Version kommt aus <code>dragontools\core\version.py</code>. Mein Builder liest sie zur Laufzeit, prüft den Quellstand vor PyInstaller und kontrolliert danach das fertige Onedir-Bundle. Eine zweite, manuell gepflegte Versionsnummer im Buildskript brauche ich dadurch nicht mehr.</div>
+<div class="callout ok"><strong>Was ich für V9.8 zusätzlich abgesichert habe:</strong> Converter, DV-Remux, MP4-Remux und Audio-Mux verwenden denselben transaktionalen Output-Commit mit Journal, Backup und Rollback. Regel- und Profildateien werden atomar gespeichert; beschädigte Benutzerdateien sichere ich vor dem Fallback als <code>*.corrupt_&lt;Zeitstempel&gt;.json</code>. Beim HDR10+-Pfad sind ToolRunner, MuxService und Bitstream-Metadaten getrennt. Kann ein vorhandener Audio-Donor nicht zuverlässig analysiert werden, bricht der Lauf fail-closed ab, statt unbemerkt eine MP4 ohne Audio zu erzeugen.</div>
+<div class="callout ok"><strong>Letzte technische Korrekturen bis V9.8:</strong> Der Failure-Cleanup löscht nur Sidecars, die zum aktuellen Job gehören; bereits vorhandene gleichnamige Untertitel bleiben unangetastet. Vor jedem DV-Job setze ich den Sidecar-Ergebniszustand zurück, damit nach einem Fehler keine alten Pfade gemeldet werden. Das Move-Journal trennt Video-, Companion- und Cleanup-Phasen und kann nach einem Crash mit bereits verschobenem Video fortsetzen. Die Mediathek wird erst nach erfolgreichem Companion-Commit aktualisiert. <code>mkvpropedit</code> nutzt den konfigurierten Pfad, ordinales <code>track:n</code> und behandelt Returncode 1 als Warnung. Lange FFmpeg-Hilfsprozesse laufen über die zentrale Abort-/Timeout-Logik; die Rules-Preview bleibt dabei Qt-unabhängig.</div>
+<div class="callout ok"><strong>Refactoring-Abnahme vom 09.09.2026:</strong> ToolRunner-Prozesssteuerung, Move-Batch-Ausführung, Pipeline-Capabilities/-Policy, Audioplan-Policy, TMDB-Resolver/-Vorschläge/-Transport, TheTVDB-Kandidaten, Sidecar-Planung, Move-Transaktionen, Mediathek-Pfade, Converter-Fortschritt, Override-Normalisierung, Medienanalyse sowie Medienvertrag und Output-Prüfung sind fachlich getrennt. Ein verlorener Legacy-Hook für <code>move_thread.os.replace</code> wurde wiederhergestellt. Die Release-Smoke-Prüfung umfasst nun 37 beteiligte Refactoring-Module und erkennt fehlende Paketdateien vor der Auslieferung.</div>
+<div class="callout warn"><strong>Build-Hinweis:</strong> Der nächste verwendbare Build muss als <code>dist\DragonToolsV9.8</code> neu erzeugt und anschließend mit der Release-/Build-Prüfung kontrolliert werden. Ältere dist-Ordner gehören nicht zum aktuellen V9.8-Quellstand.</div>
+<div class="callout warn"><strong>Grenze der Release-Prüfung:</strong> Sie kontrolliert die Struktur und die grundlegende Paketkonsistenz, testet aber nicht jede Funktion der externen Programme. FFmpeg, MediaInfo, MKVToolNix, dovi_tool usw. prüfst du zusätzlich mit <kbd>F9</kbd> bzw. dem erweiterten Systemtest.</div>
+</div>
+
+<!-- ÜBER -->
+<a name="über"></a><h2 id="über"><span style="color:#64748b;font-size:.85em;margin-right:6px;">60.</span>ℹ️ Über Dragon Tools V9.8</h2>
+<div class="panel">
+<table class="info-table"><colgroup><col style="width:290px;"/><col/></colgroup>
+<tr><td><strong>Version</strong></td><td>V9.8</td></tr>
+<tr><td><strong>Autor</strong></td><td>Dragon Developer</td></tr>
+<tr><td><strong>Plattform</strong></td><td>Windows 10/11 64-bit</td></tr>
+<tr><td><strong>Architektur</strong></td><td>Eigenständige V9-Architektur – produktive Altpfade entfernt; gezielte Kompatibilitätsfassaden bleiben erhalten</td></tr>
+<tr><td><strong>Codecs</strong></td><td>H.264 · H.265/HEVC · AV1 · Dolby Vision · HDR10+</td></tr>
+<tr><td><strong>Encoder</strong></td><td>CPU (libx265) · NVIDIA NVENC · Intel QSV · AMD AMF</td></tr>
+<tr><td><strong>Python-Dateien</strong></td><td>583 insgesamt: 582 im Paket <code>dragontools</code> + <code>DragonToolsV9.py</code></td></tr>
+<tr><td><strong>Gesamtzeilen</strong></td><td>105.612 Zeilen</td></tr>
+<tr><td><strong>Davon Codezeilen</strong></td><td>89.549 Zeilen</td></tr>
+</table>
+<h3>Aufschlüsselung</h3>
+<table class="info-table"><colgroup><col style="width:290px;"/><col/></colgroup>
+<tr><th style="text-align:left;">Bereich</th><th style="text-align:left;">Anzahl Dateien</th><th style="text-align:left;">Gesamtzeilen</th><th style="text-align:left;">Codezeilen</th></tr>
+<tr><td>Einstiegspunkt</td><td>1</td><td>444</td><td>331</td></tr>
+<tr><td>GUI</td><td>144</td><td>24.879</td><td>21.541</td></tr>
+<tr><td>Core</td><td>132</td><td>25.064</td><td>21.546</td></tr>
+<tr><td>Worker</td><td>122</td><td>22.780</td><td>19.838</td></tr>
+<tr><td>Rules</td><td>26</td><td>4.002</td><td>3.388</td></tr>
+<tr><td>Subtitle</td><td>6</td><td>488</td><td>429</td></tr>
+<tr><td>Tests (inkl. Paketdateien)</td><td>151</td><td>27.948</td><td>22.472</td></tr>
+<tr><td>Sonstige Paketdateien</td><td>1</td><td>7</td><td>4</td></tr>
+</table>
+<div class="callout ok">
+<strong>Was ich mit V9.8 strukturell geändert habe:</strong> Die großen Abläufe sind in kleinere Controller und Services aufgeteilt. Audio-/Video-Matching, Renamer, Release-Prüfung, Audio- und Untertitelregeln, Batch-Preflight, Mediathek-Suche, Logging, Medienanalyse, Move-Journal, Online-Metadaten sowie die Convert-, Preflight- und Regeloberflächen haben eigene Fachmodule. Hinzu kommen getrennte Module für Tool-Prozesssteuerung, Move-Batches, Pipeline-Capabilities und -Policies, Audioplanung, TMDB/TheTVDB, Sidecar-Planung, Dateiübertragung, Medienvertrag und Output-Prüfung. Schlanke Fassaden halten die bisherigen Importpfade stabil.
+</div>
+<div class="callout ok">
+<strong>DV/HDR10+:</strong> Die Erhaltungsoptionen greifen nur, wenn die jeweiligen Metadaten in der Quelle wirklich vorhanden sind. Für DV-MKV nutze ich mkvmerge. Den HDR10+-Pfad habe ich auf fünf direkte Schritte umgebaut, sodass die früheren großen Zwischenstreams entfallen. Prozessausführung, finaler Mux und Bitstream-Metadaten sind in getrennten Services gekapselt; den mkvmerge-Returncode 1 behandle ich als Warnung statt als harten Fehler.
+</div>
+<div class="callout">
+<strong>Direkt im Programm:</strong> Unter <strong>Hilfe → Über</strong> zeige ich dieselbe Versions- und Projektübersicht auch in Dragon Tools selbst. In Entwicklungs- und Onedir-Builds werden Programmzahl, Gesamtzeilen, Codezeilen und Testbestand direkt aus dem vorhandenen Quellstand berechnet. Sind keine Quellen enthalten, verwendet der Dialog die im Release hinterlegten Fallbackwerte.
+</div>
+<div class="callout">
+<strong>Testbestand V9.8:</strong> Zum Testpaket gehören 151 Python-Dateien, davon 148 <code>test_*.py</code>. Statisch sind darin 1.095 Testfunktionen erkennbar; durch Parametrisierungen entstehen noch mehr konkrete Testfälle. Der zuletzt dokumentierte komplette Testlauf über alle 148 Testdateien endete mit <strong>1.106 bestandenen Tests, 2 gezielten Skips und 0 Fehlern</strong>. Zusätzlich wurden 427 Produktivmodule ohne Importfehler geladen. Die beiden Skips betreffen nur die nicht konfigurierte reale DV/HDR-Tool-/MP4Box-Integration; die PyQt6-/pytest-qt-Tests laufen durch.
+</div>
+<div class="callout ok">
+<strong>Was Dragon Tools inzwischen ist:</strong> Aus dem ursprünglichen Konverter ist ein großes, modulares Medienwerkzeug geworden. Ich trenne GUI, Core, Worker, Rules und Subtitle klar voneinander und habe viele Spezialfälle eingebaut, die aus meinen eigenen Medien-Workflows entstanden sind. Der Ursprüngliche Konverter läuft mit 60% des vorher benötigten Codes, durch massive Funktionserweiterungen ist der Codebedarf um 400% gestiegen.
+</div>
+<table class="info-table"><colgroup><col style="width:290px;"/><col/></colgroup>
+<tr><td><strong>Entwicklungszeit</strong></td><td>In Dragon Tools stecken inzwischen rund 6.000 Stunden Entwicklungszeit. Davon entfallen etwa 2.000 Stunden auf den Schritt von V9 auf V9.8, 2.000 Stunden auf den Schritt V8 zu V9 und rund 1.600 Stunden auf den früheren Umbau von V7 zu V8.</td></tr>
+<tr><td><strong>Testzeit</strong></td><td>Für V1–V7 kamen knapp 150 Stunden Praxistests zusammen, für V8 rund 400 Stunden. V9 habe ich bisher etwa 140 Stunden getestet; die Version läuft weiterhin als Beta in meiner Felderprobung.</td></tr>
+<tr><td><strong>Vorherige Version (V8)</strong></td><td>111 Programme · 25.800 Zeilen · davon 21.200 Codezeilen</td></tr>
+<tr><td><strong>Vorherige Version (V7)</strong></td><td>6 Programme · 26.568 Zeilen · davon 19.880 Codezeilen</td></tr>
+</table>
+<div class="callout ok"><strong>Bereinigung älterer Strukturen:</strong> Ich habe nicht mehr erreichbare DV-Altpfade entfernt, gemeinsame Journal-/Metadata-/Subtitle-Helfer zusammengeführt und Qt-unabhängige Worker-Verträge aus <code>base_worker.py</code> herausgelöst. Den produktiven DV5-Sonderpfad habe ich dabei nicht verändert. Kompatibilitätsfassaden bleiben nur dort bestehen, wo vorhandene interne oder externe Aufrufer einen stabilen Importpfad brauchen.</div>
+<div class="callout ok"><strong>Stabilität in V9.8:</strong> Dafür habe ich inzwischen unter anderem WAL-konsistente SQLite-Sicherungen, DB-Exporte und Jellyfin-Imports, eine mehrphasige MoveJournal-Crash-Recovery mit Companion-Resume, fail-closed JobJournal-Start/Archivierung, einen transaktionalen Trickplay-Commit sowie einen gemeinsamen transaktionalen Output-Commit für Converter, DV-Remux, MP4-Remux und Audio-Mux eingebaut. Dazu kommen ownership-basierter Failure-Cleanup, atomare Regel-/Profilpersistenz mit Corrupt-Backup, zentrales Timeout-/Abort-Prozesshandling auch für lange Subtitle-Hilfsprozesse, persistente Mediathek-Pfad-Mappings und Preflight-Warnungen, sichtbare Worker-Crashfehler, gespeicherte UI-Zustände, <code>analysis_failed</code>-Platzhalter, Profil-Schema 3, Untertitel-Schema 4 der zuverlässige Reset mit CPU-H.265 CRF 22 und der Windows-Neustartschutz während laufender Jobs.</div>
+<p>Mit V9.8 habe ich den modularen Aufbau von V9 weiter ausgebaut. Das <code>dragontools/</code>-Paket ist in GUI · Core · Worker · Rules · Subtitle und Tests gegliedert. Durch Lazy Loading werden Registerkarten und Teilfunktionen erst beim Öffnen geladen. Dadurch startet Dragon Tools schneller und Fehler lassen sich leichter einem Bereich zuordnen. Dauerhafte Änderungen an einer ausgelieferten EXE benötigen weiterhin einen neuen Build.</p></div>
+
+<div class="panel" style="text-align:center;margin-top:32px;">
+<span class="muted">© 2026 – Dragon Tools V9.8 · Eigenständiger Neuaufbau · bereinigte V9-Architektur</span>
+</div>
+<!-- /container -->
+</body>
+</html>

@@ -1,0 +1,57 @@
+{
+  "_schema_version": 4,
+  "language_priority": [
+    "de",
+    "en"
+  ],
+  "max_languages": 1,
+  "tracks_per_language": 1,
+  "fallback_if_no_priority_match": "keep_none",
+  "preferred_languages": [
+    "de",
+    "deu",
+    "ger"
+  ],
+  "fallback_languages": [
+    "en",
+    "eng"
+  ],
+  "force_priority": true,
+  "preferred_formats": [
+    "subrip",
+    "srt",
+    "ass",
+    "ssa",
+    "subt",
+    "mov_text",
+    "tx3g",
+    "webvtt",
+    "text",
+    "hdmv_pgs_subtitle",
+    "dvd_subtitle",
+    "vobsub"
+  ],
+  "burn_in_rules": {
+    "auto_burn_forced": true,
+    "burn_language": "de",
+    "burn_fallback": "none",
+    "ask_if_ambiguous": true,
+    "never_burn_if_no_audio_language": false,
+    "never_burn_if_no_german_audio": false,
+    "forced_plausibility": {
+      "enabled": true,
+      "warn_events_per_minute": 3.0,
+      "block_events_per_minute": 5.0
+    }
+  },
+  "keep_rules": {
+    "keep_forced": true,
+    "keep_selected_languages": true,
+    "keep_regular": true,
+    "keep_if_no_burn_only": false,
+    "keep_all_german": true,
+    "keep_german_if_no_burn": false,
+    "keep_english_fallback": false
+  },
+  "mp4_sidecars_enabled": true
+}

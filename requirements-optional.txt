@@ -1,0 +1,4 @@
+# Optionale Bildanalyse fuer den Audio-Video-Matcher.
+# Ohne diese Pakete bleibt der FFmpeg/dHash-Fallback nutzbar.
+numpy>=1.26,<3
+opencv-python-headless>=4.10,<5

@@ -1,0 +1,50 @@
+# Python / tests
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+/.pytest_tmp*/
+
+# Virtual environments
+.venv/
+venv/
+
+# PyInstaller output
+build/
+dist/
+
+# Local working copies, release exports and archives
+/Projekt/
+/git release/
+/Projekt.zip
+/Projekt.7z
+
+# Unused/duplicate local documentation and artwork variants
+/Handbuch.pdf
+/Bilder/banner - Kopie.png
+/Bilder/bannerV1.png
+/Bilder/splash_Intro_alt.png
+/icon/altes Icon.ico
+
+# Local Codex/project metadata and temporary Office files
+/.agents/
+~$*.docx
+
+# Runtime and temporary data
+*.log
+*.tmp
+
+# External tools are installed locally, not versioned in Git
+/third_party/**
+!/third_party/**/
+!/third_party/**/.gitkeep
+!/third_party/README.txt
+!/third_party/HandBrake/*.json
+!/third_party/HandBrake/portable.ini.template
+
+# IDE / OS
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store

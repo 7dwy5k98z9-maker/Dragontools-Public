@@ -1,0 +1,221 @@
+PyQt6-App: Dragon Tools – Multifunktionales Videobearbeitungstool
+Autor: Dragon Developer (GUI-Port)
+Entwicklungszeitraum: 10.06.2025 – 01.03.2026  (400Stunden)
+
+Dragon Tools ist ein modular aufgebautes PyQt6-Tool zur Video-Konvertierung,
+Untertitelverwaltung, Pfadorganisation und automatisierten Verarbeitung. 
+Schwerpunkt der Entwicklung lag auf Performance, Stabilität und einer modernen,
+anpassbaren Benutzeroberfläche.
+
+Version: 7.5.1.8 (Release-Build)
+Plattform: Windows 
+
+=== GUI & Design ===
+   1) Tabs frei verschiebbar – individuelle Anordnung wird gespeichert
+   2) Tabs schließbar (per ❌ oder Mausrad)
+   3) Menüpunkte unter Ansicht → Registerkarten persistent (geladene Checkbox-Widgets schließen sich nicht mehr)
+   4) Infobuttons aktualisiert und Design modernisiert
+   5) Splash-Screen als Ladebildschirm eingefügt
+   6) Auto-Monitor-Format-Erkennung für angepasste Hintergrundbilder (16:9 / 21:9 / 32:9)
+   7) Menüleiste mit Datei, Ansicht, Einstellungen und Änderungshistorie integriert
+   8) Neues Icon-/Bild-Set (Drachen-Design) eingeführt
+   9) Tabs mit Farb- und Schriftanpassung (Arial 14 Fett, Blau) versehen
+ 10) Zeilenabstand in Änderungshistorie vergrößert (1.4× für bessere Lesbarkeit)
+ 11) Änderungshistorie-Dialog komplett überarbeitet:
+      - Tabs nach Themen (z. B. 🎨 GUI & Design, ⚙️ Konverter & Performance usw.) und zweizeilig angeordnet
+      - Einheitliche Arial-Schrift (14 pt fett für Tabs / 12 pt normal für den Text)
+      - Tabs farblich hervorgehoben (kräftiges Blau, hellblauer Aktivzustand)
+      - Navigation über „Zurück“/„Weiter“ mit Seitenzähler
+      - Maximal 15 Zeilen pro Seite – Einträge bleiben in sich geschlossen
+      - Schriftart Arial 12, Einrückungen exakt wie im Editor
+      - Zuletzt geöffnete Registerkarte wird gespeichert
+      - Feste Dialogbreite anhand längster Zeile
+ 12) Fenster für MKVToolNix Pfad eingabe automatisch auf die passende größe skaliert
+ 13) Überführen der Standard Dialogfenster (Yes/No/Save/Cancel) ins Deutsche
+ 14) Einfügen des Punktes Standardparameter wiederherstellen im Menüpunkt Datei
+ 15) Tastenkombination Strg + W zum Schließen des aktuellen Tabs hinzugefügt
+ 16) Neues Hilfemenü integriert:
+       - HTML-Hilfedatei (help.html) im Programmverzeichnis eingebunden
+       - Anzeige über eingebetteten QWebEngineView (Dark-/Lightmode-fähig)
+       - Menüpunkt „Hilfe“ in der Menüleiste hinzugefügt
+       - Direkter Aufruf der Hilfedatei über F1-Taste (systemweit)
+       - Interner Scroll- und Link-Handler für TOC-Navigation (Ankerlinks)
+       - Interaktive Aufklappsektionen (Quickstart, RMTS, Troubleshooting) für bessere Übersicht
+ 17) Neuen Menüpunkt Werkzeuge angelegt dieser beinhaltet:
+       - Die Option eigene Laufwerkpfade für MKVToolNix/FFmpeg/FFprobe/Rename my TV Series 
+         zu definieren oder automatisiert den PC nach den Programm zu durchsuchen
+         (Die Option ist frei an/- und abwählbar)
+ 18) Tastenkürzel-System erweitert:
+       - F1 = Hilfe
+       - F9 = Werkzeuge prüfen
+       - Strg + W = aktuellen Tab schließen
+       - Strg + Q = Programm beenden
+       - (weitere Kürzel vorbereitet für spätere Versionen)
+  19) Zweite Menüreihe entfernt – alle Optionen nun logisch gruppiert in der Hauptmenüleiste
+  20) Nach „Standardparameter wiederherstellen“ wird App automatisch neu gestartet, 
+         um die Default Werte korrekt zu laden
+  21) Pfadverwaltung überarbeitet:
+       - Pfade im Menü können nun direkt per „…“-Button durchsucht werden
+       - Keine reine Texteingabe mehr erforderlich
+       - Direkter Zugriff auf Arbeitsplatz-Dialog (QFileDialog)
+       - Browse-Funktion für H.264 / H.265 / AV1 integriert
+  22) GUI Aufteilung erneuert und zusätzliche Qualitätsoptionen für die verschiedenen Encodings (H265) eingebaut
+  23) Neue Konverter für Dolby Vision Dateien und HDR+ Dateien
+       
+=== Konverter & Performance ===
+   1) Konverter für H.265 (HEVC), H.264 und AV1 hinzugefügt
+   2) Fortschrittsrechner präziser (inkl. Schlaflogik für große Dateien)
+   3) Gesamt-Fortschrittsanzeige auf 1 % genau aktualisiert
+   4) Geschätzte Restdauer auf 5-Sekunden-Schritte gerundet
+   5) Auto-GPU-Wahl eingeführt (automatische Hardware-Priorisierung)
+   6) Abbrechbare Verschiebe-Prozesse mit Fortschrittsbalken
+   7) Fortschrittsbalken für Dateiverschiebung integriert
+   8) AV1-Heuristik (1 MB AV1 ≈ 4,06 MB H.265) implementiert
+   9) AV1-Faktor in Einstellungen → Speichereinstellungen frei anpassbar
+ 10) Speicherkontrolle: Konvertierte Dateien werden standardmäßig nur übernommen, wenn sie kleiner sind.
+        Optional abschaltbar über Einstellungen → „Speicherverluste akzeptieren“.
+ 11) Fortschritt- und Shutdown-Optionen verbessert (automatische Systemabschaltung nach Verarbeitung)
+ 12) Thread-Synchronisierung zwischen Worker und GUI überarbeitet (stabileres Abbruch-Handling)
+ 13) Shortcut für Tab-Wiederherstellung integriert (alle Tabs + letzter geschlossener Tab)
+ 14) Verbesserte Thread-Kommunikation mit UI-Abfragen (weniger Blockierungen)
+ 15) Verbesserte AV1 Software Codierung eingefügt, damit ist die CPU konvertierung 
+        fast genauso schnell wie die GPU konvertierung bei 20% mehr effizienz
+ 16) AV1 Konverter Handbrake hinzugefügt mit Hinterlegten Modi für sehr starke Kompression
+        (70-80% effektiver wie KonverterH265 und 40-50% effektiver wie KonverterAV1)
+	Dadurch reudzierte Qualität aber optisch nicht spürbar:
+       - AV1 Anime MKV - Optimiert für Starke Kompression von Animes (auf ca. 100mb statt 400mb)
+       - AV1 Live Action Filme & Serien MP4 - Optimiert für Starke Kompression von TV Serien und Filmen
+	 (Serien auf ca. 400mb statt 1gb, Filme auf 1gb statt 2gb)
+       - Live Action Filme & Serien AV1 4k - Optimiert für Starke Kompression von 4k TV Serien und Filmen
+	 (Filme ca. 1,8gb anstatt 10gb)
+       - Das Programm ist als externes Programm von der Verschieblogik ausgenommen.
+ 17) H265 Encoder überarbeitet:
+       - Qualitätsmerkmale und Kompressionseinstellungen hinzugefügt
+       - Qualitätsmerkmale und Kompressionseinstellungen automatisiert für CPU/GPU
+       - Die Option Voreinstellungen zu speichern hinzugefügt (für Filme, TV Serien, Anime Serien)
+       - Voreinstellungen werden anhand des hinterlegten Speicherpfades automatisch angewendet
+       - Speicherpfade werden bei Beginn der Konvertierung abgefragt
+       - Speichermanagement angepasst:
+	 - Serien bleiben wie gehabt aber Doppelepisoden werden sauber erkannt
+	 - Filme bekommen eine Abfrage ob sie als Einzelfilm gehandhabt werden sollen oder als Teil einer Filmreihe (Serie)
+	 - Einzelfilm Speichert im Laufwerkpfad Filme im Ordner mit dem Anfangsbuchstaben des Films, dort wird ein Ordner 
+	     der Wie der Film heißt angelegt, und darin wird er gespeichert. Gibt es den Buchstabenordner nicht wird auch 
+	     er angelegt
+       - Fortschrittsberechnung aktuallisert, sie ist jetzt genauer und zeit bei der Datei die Restdauer an
+       - Dateien in der Videoliste können mittels bearbeiten eigene Parameter für audio und untertitel zugewiesen werden
+       - Automatische Bit-Tiefen-Erkennung implementiert (8 / 10 / 12 Bit)
+       - Standardisierung der Ziel-Bit-Tiefe:
+	 - 8 Bit → 10 Bit
+	 - 10 Bit → 10 Bit
+	 - 12 Bit → Benutzerentscheidung (GPU = 10 Bit / CPU = 12 Bit)
+       - Anzeige der Bit-Tiefe im Bearbeiten-Dialog integriert
+       - Encoder-System erweitert:
+	 - Optimierte NVENC-Parameter für Qualität und Kompression
+	 - Vergleichbare Ausgabequalität zu HandBrake erreicht
+	 - Dynamische CPU/GPU-Auswahl je nach Szenario
+       - Profilsystem erweitert:
+	 - Speicherung von Encoderparametern (CPU/GPU)
+	 - Speicherung von Audio-Regeln (z. B. Deutsch + Englisch)
+         - Automatische Anwendung je nach Zielordner (Filme / Anime / TV)
+       - Per-Datei Override-System erweitert:
+	 - Individuelle Anpassung von Audio-, Subtitle- und Zielparametern
+         - Overrides überschreiben aktive Profile gezielt pro Datei
+       - Fortschrittsberechnung vollständig überarbeitet:
+	 - Echtzeit-Restdauer (ETA) pro Datei
+	 - Gewichtete Gesamtfortschrittsberechnung basierend auf Dateigröße
+	 - Synchronisierte Anzeige zwischen Datei- und Gesamtbalken
+ 20) Einbau DV H265 Encoder:
+       - Automatisierte DV Metadaten extraktion
+       - Danach komprimieren nach Vorgabe (Nutzt H265 Konverter)
+	 - Untertitel wird einmal forced eingebrannt sonst werden keine Untertitel übernommen!
+	 - Audio wird nach den Standardregeln auf E-AC3 konvertiert oder einfach übernommen
+       - DV Metadaten werden werden dem Videostream wieder beigefügt 
+       - Videostream wir in mp4 remuxt für kompatibilität
+ 21) Einbau HDR+ Encoder:
+       - Automatisierte HDR+ Metadaten extraktion
+       - Danach komprimieren nach Vorgabe (Nutzt H265 Konverter)
+	 - Untertitel wird einmal forced eingebrannt sonst werden keine Untertitel übernommen!
+	 - Audio wird nach den Standardregeln auf E-AC3 konvertiert oder einfach übernommen
+       - HDR+ Metadaten werden werden dem Videostream wieder beigefügt 
+       - Videostream wir in mkv remuxt 
+
+=== Untertitel-Funktionen ===
+   1) Unterstützung für .mkv / .mp4 / .mov Dateien
+   2) Untertitel-Extraktion erweitert – Sprache wird im Dateinamen ergänzt
+   3) Automatisches Hinzufügen von Untertiteln:  
+       - Ignoriert Suffixe (z. B. „_sub_de“)  
+       - Erkennt mehrere passende Dateien im Ordner und fügt alle hinzu
+   4) Mehrsprachige Unterstützung (Deutsch + weitere Sprachen)
+   5) Fehlerbehandlung bei nicht vorhandenen Untertiteln verbessert
+   6) Bei deutscher Audio werden Deutsche forced untertitel eingebrannt
+   7) Burn-In Logik grundlegend überarbeitet:
+	- Trennung zwischen textbasierten und grafikbasierten Untertiteln
+	- Text (SRT/ASS) → subtitles Filter
+	- Grafik (PGS/VobSub/DVD) → overlay Filter
+	- Fehler "Only text based subtitles" vollständig behoben
+	- Benutzerabfrage bei Mehrdeutigkeit
+  
+=== Pfade & Logging ===
+   1) Laufwerkpfade flexibel gemacht (mit automatischer Ordnererstellung unter Dokumente)
+   2) Alle Pfad-Einstellungen persistiert (QSettings)
+   3) Eigene Log-Ordner pro Konverter realisiert
+   4) Logging deaktivierbar pro Konverter
+   5) Doppelte Log-Einträge entfernt
+   6) Struktur und Lesbarkeit der Logdateien verbessert (optische Trennung und Zusammenfassung)
+   7) Separate Logging-Funktion für H.264, H.265 und AV1 mit Jahr/Monat-Ordnerstruktur
+   8) Neuer Menüpunkt „Standardparameter wiederherstellen“ löscht alle QSettings 
+      und stellt die Standardwerte (Pfade, Fenstergrößen, Tabs) wieder her
+   9) Pfadfelder besitzen nun eigene Browse-Funktion (wie beim Logging)
+	 – komfortables Auswählen von Laufwerkspfaden direkt aus dem Menü
+
+=== System & Bugfixes ===
+   1) Onefile-Fix – Hintergrundpakete wurden nicht richtig geladen
+   2) Externer Programm-/Webzugriff korrigiert
+   3) Speicherüberlauf im „Rename my TV Series“-Tab behoben  
+        (Fenster werden beim Schließen korrekt freigegeben)
+   4) Ladeanzeige für MKVToolNix-Suche integriert
+   5) Auto-Monitor-Format-Bug („Abgeschnittene Bilder“) behoben
+   6) AV1-Progress-Bug behoben (ffmpeg-Metadaten-Workaround)
+   7) Serien-Erkennung und Ordner-Parsing robuster gemacht (RegEx-Überarbeitung)
+   8) Fehlerhafte Worker-Referenz (CheckMKVWorker not defined) behoben,
+      damit funktioniert die automatische MKVToolNix Suche wieder
+   9) Sauberes Beenden implementiert:
+	 - Einheitliches Verhalten bei Strg + Q und Schließen über das X/Alt F4
+	 - Läuft sauber über safe_exit() mit Abfrage aktiver Worker
+	 - Automatische Synchronisierung aller QSettings beim Beenden
+ 10) Staffel Ordner werden jetzt automatisiert ohne erneute Nachfrage erstellt
+ 11) AV1 Bug behoben um Encoding Qualität zu steigern
+ 12) Bug behoben wo beim Schließen des Tabs HandBrake auch Rename my TV Series geschlossen wurde
+ 13) Zusatzfensters nach beenden des Tabs Handbrake wird automatisch geschlossen 
+     (Es wird alle 50ms Versucht zu schließen, insgesamt 20 mal da schnelle Systeme in 5ms fertig sind 
+      aber ältere Systeme und evtl. stark ausgelastete Systeme länger brauchen können)
+ 14) Bug behoben, der da automatische öffnen des HandBrake Tabs verhindert hat
+ 15) Bug behoben, der alle Windowsfenster mit handbrake im namen geschlossen hat
+
+=== Neue Funktionen & Erweiterungen ===
+   1) TMDB-Integration (The Movie Database) zum schnellen Abrufen von Filmtiteln
+   2) Zusatz-Tab „Rename my TV Series“ integriert (inkl. Ressourcen-Freigabe)
+   3) Änderungshistorie (Changelog-Dialog) implementiert
+   4) Kontext-Menüpunkt „Ansicht → Registerkarten“ mit Checkbox-Steuerung
+   5) Verbesserte Pfad-Erkennung und automatische Fallbacks
+   6) Verbesserte Werkzeugprüfung (MKVToolNix / FFmpeg / FFprobe) eingeführt:
+	 - Übersichtlicher Dialog mit HTML-Formatierung (Arial 14 Fett Rot, Arial 12 Schwarz)
+	 - Darstellung von MKVToolNix-, FFmpeg- und FFprobe-Versionen
+	 - Automatische Erkennung aller Pfade und Versionen
+	 - Mehrzeilige Ausgabe im RichText-Dialog mit angepasstem Layout
+	 - automatische Skalierung des Anzeigefensters auf die korrekte Breite
+   7) Neues Hilfesystem (HTML-basiert) integriert:
+	 - Vollständige Kurzanleitung (Quickstart, Pfade, Konverter, Logging, Troubleshooting)
+	 - Automatische Anpassung an Systemfarbschema (Dark/Light)
+	 - Interaktive Inhaltsübersicht (Sprunganker + collapsible Details)
+	 - Lokale Einbindung ohne Internetzugriff
+	 - F1-Schnellzugriff direkt aus der Anwendung
+   8) Änderungshistorie in ein eigenes Dokument gepackt für einfache Anpassungen ohne die App neu zu patchen
+   9) Umgestellt von Onefile auf Onedir:
+	 - Exe ist nur noch 2,5mb groß anstatt 600mb
+	 - Programm lädt schneller
+	 - Bilddateien, helpdatei, Changelog, FFmpeg, FFprobe, MKVToolNix und RMTS 
+          können einfach aktualisiert und ausgetauscht werden
+
+
+

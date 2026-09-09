@@ -1,0 +1,46 @@
+DragonTools V9 - Fix DV / HDR10+ Pipeline-Trennung
+Datum: 2026-09-05
+
+Problem
+-------
+Bei einer DV-only-Quelle konnte die global aktivierte Option "HDR10+ erhalten"
+als effektiver Output-Vertrag weitergereicht werden. Die DV-Pipeline selbst
+verarbeitete die Datei korrekt ohne HDR10+, aber die abschliessende
+Output-Validierung verlangte dennoch HDR10+ und markierte den erfolgreichen
+DV-Output als Fehler.
+
+Korrektur
+---------
+1. Preserve-Flags werden jetzt quellenbezogen wirksam:
+   - DV-only:       DV=True,  HDR10+=False -> DV-Pfad / MP4
+   - HDR10+-only:   DV=False, HDR10+=True  -> HDR10+-Pfad / MKV
+   - DV+HDR10+:     DV=True,  HDR10+=True  -> kombinierter DV+HDR10+-Pfad / MP4
+
+2. Der finale Medienvertrag fordert HDR10+ im DV-Pfad nur noch, wenn die
+   Quelle HDR10+ tatsaechlich besass und dessen Erhalt effektiv aktiv ist.
+
+3. Das Policy-Logging meldet bei nicht vorhandenen Metadaten nicht mehr
+   irrefuehrend "HDR10+ erhalten True", sondern z.B.:
+   Policy: DV erhalten True (globale Einstellung) | HDR10+: nicht in Quelle vorhanden
+
+4. Bei echten Kombiquellen wird im Pipeline-Log explizit "DV+HDR10+" angezeigt.
+
+Regressionstests
+----------------
+- DV-only bei global DV=True/HDR10+=True -> kein HDR10+-Vertrag
+- HDR10+-only -> dedizierter HDR10+-Pfad
+- DV+HDR10+ -> beide Metadatenvertraege aktiv
+- Output-Vertrag bleibt selbst bei inkonsistentem preserve-Flag quellengebunden
+
+Testlauf
+--------
+886 passed, 15 skipped, 2 warnings
+Die 2 Warnungen sind die bereits bekannten nicht registrierten pytest-Marker.
+
+Wichtiger Hinweis zum vorgelegten Log
+-------------------------------------
+Der gepostete Lauf zeigt noch [DV][STEP x/8]. Der aktuelle Quellstand im
+hochgeladenen DragonToolsV9(4).zip verwendet bereits [DV][STEP x/7].
+Der Lauf stammt daher nicht exakt aus diesem aktuellen Quellstand (z.B. alte EXE
+oder alter Arbeitsordner). Nach Einspielen dieses Fixes muss auch wirklich der
+aktuelle Projektstand gestartet bzw. neu gebaut werden.

@@ -1,0 +1,122 @@
+Dragon Tools V9.3 – Build-Hinweise
+================================
+
+Damit der Build erfolgreich funktioniert, muss die komplette Projektstruktur vorhanden sein.
+Die build_v9.bat muss im Root-Ordner des Projekts liegen.
+
+Wichtige Voraussetzung:
+-----------------------
+Es reicht NICHT, nur Python und PyInstaller zu installieren.
+
+Benötigt werden mindestens:
+- Python 
+- PyInstaller
+- PyQt6
+
+Empfohlene Installation:
+------------------------
+1. Python installieren
+   Empfohlen: dieselbe Python-Version verwenden, mit der das Projekt entwickelt/getestet wurde (Python 3.13.9).
+
+2. Beim Python-Setup unbedingt aktivieren:
+   [x] Add Python to PATH
+
+3. Danach in einer Eingabeaufforderung ausführen:
+   pip install pyinstaller PyQt6
+
+Projektstruktur vor dem Build:
+------------------------------
+Die build_v9.bat erwartet diese Struktur im Projektordner (Im Projektordner auch so angelegt!):
+
+Projektordner/
+├── DragonToolsV9.py
+├── build_v9.bat
+├── info.txt
+├── help.html
+├── Handbuch/
+│   └── Handbuch.pdf
+├── dragontools/
+├── Aenderungshistorie/
+│   ├── CHANGELOG.txt
+│   ├── CHANGELOGV8.txt
+│   └── CHANGELOGV7.txt
+├── icon/
+│   └── Feuerdrache.ico
+├── Bilder/
+│   ├── banner.png
+│   ├── fire_dragon_16_9.png
+│   ├── splash_16_9.png
+│   ├── splash_Intro.png
+│   └── splash.png
+└── third_party/
+    ├── FFmpeg/
+    │   ├── ffmpeg.exe
+    │   └── ffprobe.exe
+    ├── GPAC/
+    │   └── MP4Box.exe
+    ├── dovi_tool/
+    │   └── dovi_tool.exe
+    ├── hdr10plus_tool/
+    │   └── hdr10plus_tool.exe
+    ├── Mediainfo/
+    │   └── MediaInfo.exe
+    ├── MKVToolNix/
+    ├── HandBrake/
+    └── rmts/
+
+Wichtig:
+--------
+- Alle Dateien und Ordner müssen exakt an der Stelle liegen, auf die sich build_v9.bat bezieht.
+- Fehlende Dateien führen zu Build-Abbrüchen.
+- Falsche Pfade führen zu "file not found"-Fehlern bei PyInstaller.
+
+Build starten:
+--------------
+Empfohlen: nicht per Doppelklick starten, sondern über die Eingabeaufforderung.
+
+Beispiel:
+1. CMD öffnen
+2. In den Projektordner wechseln
+3. build_v9.bat ausführen
+
+Warum über CMD?
+---------------
+So bleiben Fehlermeldungen sichtbar, falls etwas fehlt oder ein Modul nicht gefunden wird.
+
+Beispiel:
+cd Pfad\zum\Projektordner
+build_v9.bat
+
+Ergebnis:
+---------
+Nach erfolgreichem Build liegt die Anwendung hier:
+
+dist\DragonToolsV9.3\
+
+Typische Fehlerursachen:
+------------------------
+1. 'python' wird nicht erkannt
+   -> Python ist nicht installiert oder nicht im PATH
+
+2. 'pyinstaller' wird nicht erkannt
+   -> PyInstaller nicht installiert
+   -> Lösung: pip install pyinstaller
+
+3. 'No module named PyQt6'
+   -> PyQt6 nicht installiert
+   -> Lösung: pip install PyQt6
+
+4. Datei oder Ordner nicht gefunden
+   -> Projektstruktur stimmt nicht
+   -> Prüfen, ob alle in der BAT referenzierten Dateien wirklich existieren
+
+5. Build startet, aber bricht bei Ressourcen ab
+   -> Eine Datei aus icon/, Bilder/, Aenderungshistorie/ oder third_party/ fehlt
+
+Hinweis:
+--------
+Eine requirements.txt ist für dieses Projekt aktuell nicht zwingend erforderlich,
+weil nach aktuellem Stand nur PyQt6 als zusätzliche Python-Abhängigkeit genutzt wird.
+Für eine frische Umgebung reicht in der Regel:
+
+pip install pyinstaller PyQt6

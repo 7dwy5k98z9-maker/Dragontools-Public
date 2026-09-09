@@ -1,0 +1,533 @@
+PyQt6-App: Dragon Tools – Legacy-Changelog V8
+Autor: Dragon Developer (GUI-Port)
+
+Dragon Tools V8 war der vollständige modulare Neuaufbau von Dragon Tools.
+Diese Datei dokumentiert die Änderungen der V8-Generation und bleibt als
+Legacy-Historie erhalten, während CHANGELOG.txt ab V9 nur noch die aktuelle
+V9-Entwicklung enthält.
+
+Version: V8-Legacy (V8.0 bis V8.8)
+Stand: 2026-08-11
+Plattform: Windows 10/11 (64-bit)
+
+V9 und neuer: CHANGELOG.txt
+V7 und älter: CHANGELOGV7.txt
+
+=== Randvermerk der Entwicklung ===
+* V8.0 → V8.1: hauptsächlich Fehlerverbesserungen
+* V8.1 → V8.2: Überarbeitung GUI und Logging
+* V8.2 → V8.3: Überarbeitung Fehlerlogging
+* V8.3 → V8.4: MKV Remux und Audio Mux hinzugefügt
+* V8.4 → V8.5: ISO-Bearbeitung, Video Merge, MP4 Remux
+* V8.5 → V8.6: Erweiterung Tools + Entfernen von Altlasten
+* V8.6 → V8.7: Refactoring, modulare Struktur, bessere Wartbarkeit
+* V8.7 → V8.8: Refactoring, modulare Struktur, bessere Wartbarkeit, Grafische Einstellungen, Bugfixes
+ 
+=== GUI & Design ===
+01) Komplett neue modulare Architektur – kein Legacy-Code mehr vorhanden
+02) Tabs verschiebbar, schließbar (❌ oder Mausrad), wiederherstellbar (Strg+Shift+T/A)
+03) Lazy Loading: Tabs laden erst beim ersten Öffnen → schnellerer Programmstart
+04) Info-Icons (🛈) bei allen wichtigen Feldern mit Kontext-Erklärungen
+05) Dark Mode über Ansicht-Menü umschaltbar, persistiert über Neustarts
+06) Banner-Bild (Feuerdrachen-Design) als Kopfbereich statt Log-Fenster
+07) Encoder-Panel automatisch passend zum gewählten Encoder (NVENC/QSV/AMF/CPU)
+08) CRF/Preset direkt im Encoder-Panel – kein doppeltes Feld mehr oben
+09) Encoder-Optionen immer sichtbar, kein manuelles Aufklappen nötig
+10) Tabs direkt unter Ansicht ein-/ausblendbar ohne Untermenü-Öffnung
+11) Externe Programme (HandBrake, RMTS, TMDB) direkt unter Ansicht erreichbar
+12) Profilverwaltung als eigener Menüpunkt in der Menüleiste
+13) Profil speichern zeigt nur eigene Profile (keine Standard-Profile) – übersichtlicher
+14) Standard-Profile können nicht überschrieben oder gelöscht werden
+15) Standardwerte wiederherstellen lädt automatisch das passende Film-Standard-Profil
+16) Änderungshistorie mit farbigen Tab-Buttons, Zurück/Weiter-Navigation, Seitenzähler
+17) Legacy-Changelog-Button öffnet CHANGELOGV7.txt in separatem Fenster
+18) Hilfe-Dialog (F1) öffnet help.html via QTextBrowser – crash-sicher im PyInstaller-Build
+19) Hilfe: „Im Browser öffnen“-Button für vollständige Browser-Darstellung
+20) Hilfe: nummerierte Abschnitte, funktionierendes Inhaltsverzeichnis mit Ankernavigation
+21) Einstellungs-Dialog komplett überarbeitet: Tool-Pfade übersichtlich in einer Zeile
+22) „Alle Tools suchen“-Button direkt oben in den Einstellungen (blauer Button)
+23) Werkzeuge prüfen (F9) zeigt jetzt den vollständigen gefundenen Pfad je Tool
+24) DV-Remux-Button direkt neben „Konvertierung starten“ in jedem Konverter-Tab
+25) Automatisches Leeren der UI-Liste nach Abschluss der Aufgaben
+26) Automatisches Leeren der UI-Liste nach einem Abbruch
+27) Gesamtfortschritt wird jetzt live getrackt
+28) Restdauer wird in der Dateiliste vor dem Dateinamen angezeigt
+29) DV: Externer Untertitel-Export erweitert – kompatible Untertitel werden als separate Dateien extrahiert und gespeichert
+30) Drag & Drop in der UI-Liste aktiviert, um die Reihenfolge der Jobs anzupassen
+31) Die Worker-Queue wird jetzt sauber mit der UI-Liste synchronisiert, damit entfernte Elemente nicht mehr intern in der Queue verbleiben
+32) Worker-Queue überarbeitet: Entfernte Dateien werden nicht erneut in die Queue aufgenommen
+33) Medieninfo hinzugefügt (Rechtsklick auf die Datei in der Videoliste)
+     - Anzeige von Auflösung, Codec, PixFmt, HDR, HDR10+, Dolby Vision, Bit-Tiefe, Farbraum, Audio und Untertiteln
+     - Anzeige der verwendeten Analysetools (MediaInfo.exe / FFmpeg/ffprobe)
+34) Speichern der GUI-Einstellungen erweitert, alle Einstellungen werden gespeichert, mit Ausnahme der Shutdown-Option
+35) Die optischen Laufwerkspfade in der GUI entfernt, diese werden nur noch über Einstellungen einsehbar und änderbar
+36) Symbolisches Banner erstellt und eingefügt
+     - Feuerdrache → rohe Videodatei groß und von guter Qualität
+     - Eisdrache → Konverter, der die Größe reduzieren und Qualität erhalten möchte
+     - Zentrum → Kugel, in der Feuer und Eis kämpfen → Qualität und Zeit kämpfen für eine gute Kompression
+37) Ladebalken auf „Feuer“-Optik umgestellt
+38) Shutdown-Verhalten bewusst nicht persistent ausgelegt
+     - automatisches Herunterfahren wird nicht gespeichert
+     - die Option startet nach jedem Neustart deaktiviert
+     - sie muss für jeden Batch bewusst neu gesetzt werden
+39) Status-UI als zusammenhängende Live-Rückmeldung ausgebaut
+     - Gesamtfortschritt, Restdauer und Banner greifen sichtbar ineinander
+     - laufende Batches lassen sich dadurch schneller einschätzen
+40) Remux-Tab entfernt, da dieser zu primitiv aufgebaut war und die Konverter bereits eigene Remux-Funktionalität enthalten. Ein vollständig konfigurierbarer Remuxer ist für zukünftige Versionen geplant
+41) App-Oberfläche erweitert: Drag & Drop funktioniert nun global im gesamten Fenster (nicht nur in der Dateiliste)
+42) Remux erfolgt jetzt extern über MKVToolNix GUI
+     - direkter Zugriff über Ansicht-Menü
+     - vollständige Kontrolle über Streams, Sprachen und Tracks
+     - ersetzt den internen Remux-Tab
+43) Tab „Audio Muxer“ eingeführt
+     - wendet Audio-Regeln auf bestehende Videodateien an (ohne Video-Re-Encoding)
+     - Audio wird ggf. transcodiert (z. B. DTS → EAC3)
+     - Video und Untertitel werden unverändert übernommen
+     - Ausgabe erfolgt immer als MKV (bewusste Container-Vereinheitlichung)
+44) MediaInfo-Dialog um Rules Preview erweitert
+     - zusätzlicher Anzeige-Block im bestehenden Dialog
+     - zeigt Regelentscheidungen ergänzend zur normalen MediaInfo an
+     - nutzt bestehende Analyse- und Regelbausteine statt eigener Ausführungslogik
+45) Rules Preview im MediaInfo-Dialog robuster gemacht
+     - Preview-Fehler werden lokal abgefangen und zerstören den Dialog nicht
+     - normale MediaInfo-Anzeige bleibt auch bei Preview-Fehlern erhalten
+46) Zusätzliche Werkzeug-/Feature-Tabs eingeführt
+     - MP4-Remux
+     - ISO
+     - Merge
+     - alle Tabs in die bestehende Lazy-Loading- und Sichtbarkeitsstruktur integriert
+47) Eigenes nicht-modales Warteschlangenfenster für den Convert-Bereich ergänzt
+     - direkter Zugriff über eigenen Menüpunkt „Warteschlange“
+     - bestehende Queue bleibt im ConvertWidget die einzige maßgebliche Listenwahrheit
+     - Pause, Abbrechen und Drag & Drop-Reihenfolge sind im Warteschlangenfenster verfügbar
+48) Hilfe-Menü um Shortcut-Dialog erweitert
+     - eigener Dialog zeigt die tatsächlich vorhandenen Shortcuts übersichtlich an
+     - keine zweite Shortcut-Definition, Anzeige erfolgt aus den realen Menü-/Shortcut-Einträgen
+49) Menüleiste klarer gegliedert
+     - Datei, Einstellungen, Regeln, Profile, Ansicht, Werkzeuge, Warteschlange und Hilfe als eigene Hauptmenüpunkte
+     - Warteschlange bleibt direkter Einstieg und wird nicht unter Ansicht eingeordnet
+50) Convert-UI lokal verbessert
+     - Videoliste sichtbar vergrößert
+     - Logbereich deutlich vergrößert
+     - „Logordner öffnen“ öffnet jetzt den tatsächlichen Ordner der aktuellen Logdatei statt nur des generischen Codec-Hauptordners
+51) Override-Dialog für Dateieinstellungen grundlegend übersichtlicher gemacht
+     - Audio und Untertitel jeweils mit den Obermodi „auto“ und „benutzerdefiniert“
+     - erkannte Audio- und Untertitelspuren werden im benutzerdefinierten Modus direkt im Dialog angezeigt
+     - Dialog ist bei vielen Spuren intern scrollbar und bleibt dadurch auf normalen Monitoren nutzbar
+52) Neue Checkboxen für das Übernehmen/nicht übernhemen von DV/HDR10+
+53) Menüleiste verfeinert durch strukturiert abgespeckte Menüpunkte mit Grafischer Symbol Markierung 
+54) Button "nur verschieben" eingefügt um Dateien ohne Konvertierung mit der Move Logik zu verschieben
+55) Menüpunkt Zoom eingefügt
+     - Die GUI-Liste kann so größer angezeigt werden um Dateien besser zu verschieben oder den überblick zu bewahren, beinhaltet alle Funktionen außer dem hinzufügen von dateien
+     - Das GUI-Logging kann auch vergrößert dargestellt werden um es einfacher zu durchsuchen
+ 
+=== Konverter & Performance ===
+01) Zentraler ConverterThread für alle Codecs (H.264, H.265, AV1)
+02) Automatische Pipeline-Erkennung: DV → MP4, HDR10+ → MKV, Standard → MKV
+03) DV-Pipeline vollständig überarbeitet
+     - HEVC extrahieren → dovi_tool P8-Konvertierung → RPU extrahieren
+     - H.265 encodieren mit Crop → RPU mit Level 5 active area anpassen
+     - Level 5 fix: Crop-Werte werden korrekt in den DV-RPU geschrieben
+     - TV-Kompatibilität: LG WebOS DV-Decoder zeigt Crop korrekt
+     - dovi_tool inject-rpu → MP4Box Mux zu .mp4
+04) HDR10+-Pipeline: JSON extrahieren → encodieren → JSON injizieren → MKV
+05) DV-Remux-Modus (neuer Button „📦 DV-Remux → MP4“)
+     - Video: kein Re-Encoding, DV-Metadaten bleiben vollständig erhalten
+     - Audio: wird für MP4 konvertiert (TrueHD/DTS → EAC3)
+     - Untertitel: als externe .srt/.ass-Dateien gespeichert (nicht in MP4)
+06) Auto-Crop vollständig überarbeitet
+     - Crop-Werte auf Modulo 2 gerundet (einzige echte Encoder-Anforderung)
+     - NVENC-32px-Alignment entfernt (war Workaround, durch Level 5 gelöst)
+     - DV-Dateien: Crop-Werte werden via dovi_tool editor Level 5 in RPU geschrieben
+     - TV-kompatibel: LG WebOS 6.x+ und Apple TV respektieren Level 5 korrekt
+     - global deaktivierbar über Auto-Crop-Checkbox (für Jellyfin/TV-Kompatibilität)
+07) IMAX Auto-Erkennung: Checkbox aktivierbar – analysiert in regelmäßigen Intervallen (~5 Minuten) Stichproben von Frames des Films
+     - wechselndes Seitenverhältnis >15% Varianz → IMAX automatisch aktiviert
+08) Live-Job-Queue vollständig implementiert
+     - Dateien/Ordner während laufender Konvertierung hinzufügen
+     - Dateien entfernen: laufende Datei geschützt (markiert, nach Abschluss verworfen)
+     - Override nur für noch nicht gestartete Dateien möglich
+     - thread-sicherer run-Loop mit _current_file / _skip_files / _done_files
+09) Encoder-Einstellungen werden beim Schließen gespeichert und beim Start geladen
+10) Alle Encoder-Optionen (NVENC/QSV/AMF/x265) vollständig in der GUI konfigurierbar
+11) NVENC-Standardwerte: Preset p6, B-Ref middle, Temporal AQ an
+12) Abbruch-Handling überarbeitet
+     - UI-Liste wird bei Abbruch vollständig geleert
+     - Worker-/UI-Zustand wird sauber zurückgesetzt
+13) DV-Remux auf MP4Box umgestellt, da FFmpeg die Dolby-Vision-Daten nicht korrekt erhalten konnte
+14) Medienanalyse umgestellt
+     - MediaInfo.exe wird als Hauptquelle verwendet
+     - FFmpeg/ffprobe dient als Fallback und Ergänzung
+15) HDR10+-Workflow produktiv umgesetzt
+     - eigener hdrplus-Spezialpfad im ConverterThread
+     - Ablauf: HEVC Annex B extrahieren → HDR10+-Metadaten extrahieren → produktiv encodieren → HEVC extrahieren → HDR10+-Metadaten injizieren → finales MKV muxen
+16) HDR10+-Pfad fachlich abgesichert
+     - HDR10+ wird nur für HEVC/H.265 verarbeitet
+     - bei nicht-HEVC-Quelle oder Zielcodec ungleich H.265 wird bewusst hart abgebrochen
+17) MP4-Remux als eigenständiger produktiver Arbeitslauf ergänzt
+     - Video wird strikt nur per `-c:v copy` übernommen
+     - keine DV-/RPU-/MP4Box-Logik im MP4-Remux-Worker
+     - Audio wird anhand bestehender Audio-Regeln MP4-kompatibel behandelt
+     - Untertitel werden extern gespeichert oder bewusst ignoriert, nie intern in MP4 gemuxt
+18) MP4-Remux fachlich abgesichert
+     - MP4-Kompatibilitätsprüfung für Video bewusst konservativ (H.264 / HEVC / H.265)
+     - bei nicht kompatiblem Video klarer Abbruch mit Hinweis auf den Standard-Converter
+     - kein stiller Video-Reencode
+19) MediaInfo-Dialog entblockt
+     - Medienanalyse und Rules Preview laufen im Hintergrund statt synchron im GUI-Thread
+     - Öffnen großer/problematischer Dateien blockiert die Oberfläche nicht mehr
+20) Produktive Worker-Schnittstellen minimal vereinheitlicht
+     - kompatible Abort-Benennung (`request_abort(...)` / `cancel()`) über mehrere Worker angeglichen
+     - bestehende Result-/Progress-Modelle bewusst unverändert gelassen
+21) Konvertierungsmethoden zentralisiert und vereinfacht
+22) Entfernen der Temporären Dateien verbessert
+23) HDR10+ wird beim konvertieren von AV1 auf H265 erhalten und beim konvertieren von H265 auf AV1 und natürlich H265 zu h265
+24) Korrekte Verbesserte DV Profilerkennung für korrekte hevc-Konvertierung und Farberhalt
+25) Bei reincode mit DV5 wird eine Warnung geloggt --> Farben können nicht erhalten werden, anschließend wird es nur remuxt
+26) DV5 Remux wieder entfernt, neue Konvertierungsregel mit neuem FFmpeg definiert um es korrekt zu konvertieren
+27) Größenmatrix eingeführt
+     - In den Einstellungen kann aktiviert werden das die Datei eine bestimmte Vergrößerung nicht überschreiten darf
+	- Frei einstellbar zwischen 1% und 100%
+	- Wird die definierte Größensteigerung überschritten wird die Originaldatei nicht überschrieben
+	- Die Konvertierte zu große Datei wird im Ordner Archiv direkt neben der Input Datei gesichtert
+     - In den Einstellungen kann aktiviert werden das die Datei eine bestimmte Größe nicht überschreiten darf
+	- Frei einstelbar zwischen 1% und 100% der Input Datei
+	- Wird die definierte Mindestgröße nicht erreicht wird die Originaldatei nicht überschrieben
+	- Die Konvertierte zu kleine (und dadurch vermutlich defekte) Datei wird im Ordner Archiv direkt neben der Input Datei gesichert
+
+=== Remux / Import / Merge ===
+01) ISO-Import als eigener Worker-/Widget-Pfad über MakeMKV CLI ergänzt
+     - verarbeitet DVD-/Blu-ray-ISOs sowie Disc-Ordnerstrukturen
+     - nutzt MakeMKV CLI als zentrale Extraktionsinstanz
+     - keine eigene VOB-/M2TS-/Playlist-/Segment-Logik
+02) ISO-Titel-Scan und konservativer Haupttitel-Vorschlag ergänzt
+     - Titelliste wird aus MakeMKV-Scan-Daten aufgebaut
+     - Haupttitel wird nur vorgeschlagen, nicht still erzwungen
+03) Generische ISO-Dateien robuster behandelt
+     - neutrale `.iso`-Dateinamen werden nicht mehr vorschnell verworfen
+     - MakeMKV-Scan darf auch bei vorab unklarem ISO-Typ laufen
+04) Merge-Feature als eigenständiger Worker-/Widget-/Tab-Pfad ergänzt
+     - Ziel: konservatives, verlustfreies Zusammenführen von Videodateien
+     - primärer produktiver Pfad: MKV
+     - MP4 bewusst konservativ behandelt
+05) Lossless-Merge-Prüfung produktiv umgesetzt
+     - strenge Freigabe anhand von Container, Videocodec, Auflösung, FPS, Audio-Struktur und Subtitle-Struktur
+     - Ergebnis wird klar als „lossless möglich / nicht möglich“ mit Ursachen zurückgegeben
+06) MKV-lossless produktiv über mkvmerge umgesetzt
+     - keine blinde Mischung von MKV/MP4
+     - Ergebnisprüfung und Worker-Logging vorhanden
+07) MP4-lossless in Version 1 bewusst nicht freigegeben
+     - MP4-Eingaben werden geprüft
+     - bei fehlender sauberer Freigabe erfolgt ein klares Nein statt halbgarer Unterstützung
+08) Kein stiller Reencode-Fallback im Merge-Feature
+     - `fallback_reencode` bleibt ein separater Modus
+     - lossless wechselt nie automatisch in einen Reencode-Pfad
+ 
+=== Profil-System ===
+01) 18 unveränderliche Default-Profile (film/tv/anime × nvenc/qsv/amf/cpu/av1/h264)
+02) Eigene Profile speichern/laden/löschen via Profilverwaltung (Menü: Profile)
+03) Profil laden wendet alle Encoder-Optionen korrekt auf die GUI-Felder an
+04) Standardwerte wiederherstellen lädt GPU-passendes Film-Standard-Profil
+ 
+=== Verschiebe-Logik ===
+01) Serien: automatische Suche nach bestehendem Serienordner, Staffel-Unterordner anlegen
+02) Filme – Einzelfilm: Ablage in Filme/{Buchstabe}/{Filmname}/
+03) Filme – Filmreihe: Explorer öffnet sich zur Zielordner-Auswahl
+     - Unterordner für diesen Film wird automatisch angelegt
+     - weitere Dateien der Reihe aus der Liste auswählbar
+04) Deadlock-Schutz: Benutzerabfragen haben 300s Timeout (5 Minuten)
+05) Filmeordner werden jetzt automatisch mit Jahreszahl im Namen angelegt
+06) Serien-Staffeln werden zusammengefasst, um redundante manuelle Eingaben zu vermeiden
+07) Ist schon eine Filmdatei vorhanden, wird diese gelöscht, bevor die neue Datei an den Platz verschoben wird
+08) Serien werden komplett zusammengefasst, um redundante manuelle Eingaben zu vermeiden
+09) Preflight / Verschiebe-Vorabprüfung ergänzt
+     - Zielordner, Serienzuordnungen und Filmablagen können vor dem eigentlichen Verschieben vorbereitet werden
+     - benötigte Ordner lassen sich schon vor der Verarbeitung anlegen
+     - das Verschieben nach dem Encode läuft kontrollierter und mit weniger Rückfragen
+10) Zielordner-Overwrite datensicher gemacht
+     - vorhandene Zieldateien werden beim Verschieben nicht mehr vorab gelöscht
+     - Cross-Volume-/Copy-Fallback arbeitet über `dst.__partial__` + `os.replace(...)`
+11) Verschiebelogik zentralisiert
+12) Standard Verschiebeordner individuell definierbar gemacht über Einstellungen
+13) Film-Serien Logik verbessert, um die Serienordner korrekt anzulegen
+     - Film-Serie wird jetzt unter den Anfangsbuchstaben der Serie angelegt/eingefügt
+     - Film-Serie kann jetzt nicht nur 1 Ordner Tiefe angeben (T/Thor, sondern auch S/Spider-Man/Triologie 2)
+ 
+=== Tool-Pfad-Verwaltung ===
+01) Alle Tools werden automatisch im Bundle, PATH und konfigurierten Ordnern gesucht
+02) Settings werden beim Öffnen der Einstellungen korrekt ausgelesen
+03) MKVToolNix: konfigurierter Ordner wird für mkvmerge, mkvextract usw. genutzt
+04) HandBrake: HandBrake.exe und HandBrakeCLI.exe werden beide gesucht
+05) RMTS: RenameMyTVSeries.exe korrekt gefunden und gestartet
+06) HandBrake/RMTS öffnen direkt aus konfigurierten Einstellungs-Pfaden
+07) TMDB als Browser-Link (kein Einbetten)
+08) MakeMKV CLI (`makemkvcon`) in die zentrale Tool-Erkennung integriert
+     - eigener Settings-Key
+     - Auto-Erkennung im Einstellungsdialog
+     - Toolcheck in der Hauptoberfläche
+ 
+=== Untertitel-Funktionen ===
+01) Untertitel-Tab: Extrahieren, Einfügen, SRT→ASS, TXT-Export, Flags setzen
+02) Forced-Untertitel automatisch erkannt und eingebrannt (bei deutscher Audio)
+03) Text-Untertitel (SRT/ASS) → subtitles-Filter
+04) Grafik-Untertitel (PGS/VobSub) → overlay-Filter
+05) Datei-spezifische Override: Burn-In-Modus pro Datei einstellbar
+06) Subtitle-Helfer diagnostisch erweitert
+     - extract/inject/tag-Helfer unterstützen jetzt optionales Logger-Callback
+     - Toolfehler liefern kompakte stderr/stdout-Hinweise statt nur stilles False
+07) Untertitel Extraktion verbessert, bei mehreren Spuren werden jetzt trotzdem korrekt die Untertitel extrahiert
+ 
+=== Logging ===
+01) Neues Logging-System: separater Logger pro Codec mit Jahr/Monat-Struktur
+02) Logging deaktivierbar pro Codec in den Einstellungen
+03) Log-Ordner direkt aus der GUI öffnen
+04) Logging-Optik und -Struktur überarbeitet
+05) Verschieben im Logging mit aufgenommen
+06) Konvertierungsfazit mit aufgenommen (Speicherersparnis, Konvertierungsdauer)
+07) Uhrzeit der Konvertierungen mit aufgenommen
+08) Fehler-Logging ergänzt
+     - Programmabbrüche werden nun erkannt und im Log dokumentiert
+     - Tracebacks werden vollständig im Log erfasst
+09) Logging erweitert, sodass auch Warnungen während des Verschiebevorgangs erfasst werden
+10) Logging verbessert, damit der Abschlussbericht (Summe) nur einmal am Ende geloggt wird; dafür wurde der Abschluss und das Logging zentralisiert
+11) Analysewarnungen aus MediaInfo/ffprobe werden jetzt im produktiven Workflow sichtbar geloggt
+12) DV-Remux-Tooldiagnose erweitert
+     - stderr/stdout werden erfasst
+     - relevante Fehlerzeilen werden kompakt im Worker-Log ausgegeben
+13) Cleanup-/Temp-Datei-Fehler werden jetzt als nicht-fatale Warnungen geloggt
+14) DV-Remux-Logdatei ist jetzt auch in der GUI als aktuelles Log verfügbar
+15) Merge- und ISO-Worker im produktiven Logging-Stil ergänzt
+     - GUI-Log und Datei-Log parallel möglich
+     - klare Analyse-/Prüf-/Ausführungslogs
+16) Logordner-Verhalten in der GUI präzisiert
+     - Öffnen des Logordners nutzt bevorzugt den aktuell gesetzten Logdateipfad
+     - fehlende Datei oder fehlender Zielordner werden robust behandelt, ohne den Workflow zu stören
+17) Start-Logging der Encoder-Einstellungen vollständig ausgebaut
+     - bisher wurden im Block „Verwendete Einstellungen" nur Q-Wert, Preset und Codec geloggt
+     - ab jetzt werden alle relevanten Encoder-Parameter mitgeschrieben
+     - NVENC: B-Frames, B-Ref-Mode, Lookahead, AQ-Stärke, Spatial AQ, Temporal AQ
+     - QSV: Lookahead (an/aus) und Lookahead-Tiefe
+     - AMF: Qualitäts-Preset und QP
+     - CPU/x265: B-Frames, Lookahead, Tune, AQ-Mode, AQ-Stärke, Psy-RD, Psy-RDOQ
+     - zusätzlich global: Auto-Crop und IMAX-Auto-Erkennung (an/aus)
+     - `file_start(...)` im DragonLogger bleibt rückwärtskompatibel (`encoder_options` ist optional)
+     - andere Worker (Merge, ISO, MP4-Remux) sind nicht betroffen
+18) Logging für "nur verschieben" eingefügt
+19) Logging erweitert, jetzt wird auch die Ausgangsauflösung der Dateien mitgeloggt
+ 
+=== Bug-Fixes ===
+01) PathRow Label-Bug: Qt-System-Grau greift jetzt korrekt (Container setEnabled)
+02) Globale Pfad-Flags in den Einstellungen wirken jetzt auf den Konverter-Tab
+03) Profil laden crash: _apply_profile_to_ui fehlte, jetzt korrekt implementiert
+04) Einstellungen crash: QFrame fehlte im Import
+05) Hilfe-Dialog weißes Fenster: setSource() durch document().setBaseUrl() ersetzt
+06) stderr-PIPE-Deadlock in Converter- und DV-Remux-Thread behoben (→ DEVNULL)
+07) MKV-Tool-Pfade aus Einstellungen werden jetzt korrekt gelesen
+08) DV-Crop: Crop-Werte nun korrekt via Level 5 RPU an TV-Hardware weitergegeben
+09) Serien-Erkennung: Doppelepisoden (S01E01E02E03) sauber erkannt
+10) Changelog-Überblick zeigt nur Header-Block (nicht den gesamten Inhalt)
+11) Build-Pfade korrigiert: Daten\\-Doppel-Präfix bei --add-binary entfernt
+12) Korrektes Mitloggen der verwendeten Presets
+13) Crash wegen nicht vorhandenem `tgt_c` und `tgt_ch` im Logging behoben
+14) Fehler behoben, bei dem entfernte Dateien aus der UI-Liste nicht aus der internen Job-Queue entfernt wurden
+15) Fehler in der Fortschrittsberechnung behoben
+16) Fehler behoben, bei dem Untertitel nicht übernommen wurden
+17) Multi-Audio-Mapping korrigiert: Mehrere Audiospuren werden nun gemäß Regeln korrekt übernommen
+18) DV-Untertitel-Mapping korrigiert
+     - kompatible Untertitel werden korrekt erkannt und verarbeitet
+     - externe DV-Untertitel erhalten eindeutige Dateinamen
+19) DV-Audio-Mapping korrigiert
+     - finale DV-Datei übernimmt nun alle ausgewählten Audiospuren korrekt
+     - Fehlerpfad ohne DV sichert die extrahierten Audiospuren zusätzlich
+20) DV-RPU-Crop-Fehler behoben
+     - Level-5-JSON für DV-Crop überarbeitet
+     - AutoCrop-Fallback für dovi_tool editor ergänzt
+     - wenn Level 5 und Fallback fehlschlagen:
+       -> MP4 ohne DV wird erzeugt
+       -> RPU-, JSON-, HEVC- und Audio-Artefakte werden im Fehlerordner gesichert
+       -> manuelle Nachbearbeitung bleibt möglich
+21) Burn-In-Subtitle-Erkennung robuster gemacht (Codec-Prüfung und Sprachbehandlung vereinheitlicht)
+22) DV-Audio-Bug behoben
+     - Audio wurde zuvor ohne Sprach- und Titel-Tags gemuxt
+     - für das Audio-Mapping wurde eine Metadatenliste für Sprache und Titel eingeführt
+     - die Metadaten werden nun an den finalen MP4Box-Remux übergeben
+23) Funktionsfehler behoben: Nach einem Update wurde ein veralteter Funktionsname zur Bereinigung der Videolisten verwendet, was zu einem Absturz führte
+24) Bugfix: Entf-Shortcut entfernte Dateien nur aus der UI, nicht aus der internen Worker-Queue (UI/Worker-Desync)
+25) Bugfix: Verschieben der Job-Reihenfolge per Drag and Drop verschiebt jetzt die Dateien anstatt sie aus der UI zu entfernen
+26) Datensicherer Overwrite im Converter korrigiert
+     - im Overwrite-Modus wird die Quelldatei nicht mehr vorab gelöscht
+     - finale Ersetzung erfolgt erst nach Plausibilitätsprüfung der fertigen Ausgabe via `os.replace(...)`
+27) Datensicherer Overwrite im DV-Remux korrigiert
+     - Originaldatei wird nicht mehr vorab gelöscht
+     - finale Ersetzung erfolgt atomar via `os.replace(...)`
+28) DV-Remux-Abschlusslogik für Folge-Runs korrigiert
+     - `_start_dv_remux()` setzt relevante Laufzeit-Resets nun konsistent zurück
+29) DV-Remux-Abschluss behandelt `DVRemuxThread` jetzt getrennt von der Converter-Gesamtsummary
+30) DV-Audio-Sprachtags im Remux korrigiert
+     - Sprache und optionaler Tracktitel werden nun an MP4Box weitergereicht
+31) HDR10+-Metadatenvalidierung erweitert
+     - metadata.json wird zusätzlich auf gültiges und nicht-leeres JSON geprüft
+32) Cleanup-Leck im HDR10+-Pfad behoben
+     - temporäre Burn-In-Untertitel werden nun auch bei frühen Fehlerpfaden sauber aufgeräumt
+33) MP4-Remux robuster gemacht
+     - `.mp4`-Quellen werden bei `overwrite_original=False` nicht mehr still überschrieben
+     - Benutzerabbruch während laufendem ffmpeg wird sauber vom Fehlerpfad getrennt
+     - partielle Temp-Ausgaben werden im Abort-Fall nach Möglichkeit entfernt
+34) MediaInfo-Dialog optimiert
+     - Rules Preview nutzt jetzt dieselbe vorhandene Analyse wie die normale MediaInfo-Anzeige
+     - doppelter `analyze_media(...)`-Aufruf entfällt
+35) Merge-Worker robuster gemacht
+     - Containerbewertung zusätzlich über `ffprobe format_name` plausibilisiert
+     - Abort während der Analysephase sauberer berücksichtigt
+     - partielle `mkvmerge`-Zieldateien werden bei Fehler/Abort nach Möglichkeit entfernt
+36) Merge-Kompatibilitätsprüfung asynchron gemacht
+     - Prüfung blockiert nicht mehr den GUI-Thread
+     - direkter Aufruf privater Worker-Prüfmethoden aus dem Widget entfällt
+37) DV-Untertitel-Anzeige im MediaInfo-Dialog an die produktive Erkennung angeglichen
+     - DV-Präsenz basiert jetzt konsistent auf derselben Grundlage wie Preview und Pipeline-Trigger
+     - vorhandenes DV-Profil wird nur noch als Zusatzinformation angezeigt
+38) Benutzerdefinierte Untertitel-Overrides fachlich geschlossen
+     - Burn-In und Keep schließen sich auf derselben Spur jetzt aus
+     - genau eine Burn-In-Spur bleibt möglich, zusätzliche Keep-Untertitel werden parallel korrekt berücksichtigt
+39) Preview-/Worker-Drift bei benutzerdefinierten Untertiteln beseitigt
+     - Rules Preview und produktiver Subtitle-Pfad verwenden jetzt dieselbe Burn-In/Keep-Semantik
+     - bei Burn-In werden zusätzliche Keep-Spuren nicht mehr pauschal verworfen
+40) Logging Falscher Presets wurde angepasst (Intel Quicksind und AMD hatten Nvenc geloggt)
+41) Untertitel Extraktion mit festen Startwert behoben, weshalb das extrahieren fehlschlug wenn die Datei mehr als 1 Audio enthalten hat
+42) Fehler im Loggingpfad behoben, der Pfad ist nicht mehr hartcodiert sondern wird über die Einstellungen abgerufen
+43) Automatisches Herunterfahren erforderte ein händisches bestätigen, das wurde gefixed mit einem integrierten Timer den man über die Einstellungen anpassen kann
+44) Bug Fix defekte Farben bei DV
+     - DV Erkennung für Profile verbessert
+     - nutzen der korrekten Dovi-Methoden bei Dolby Vision 5
+ 
+=== Refactoring ===
+01) Utility-Helfer aus ConverterThread in `dragontools/worker/converter_utils.py` ausgelagert
+     - `_fs`
+     - `_fd`
+     - `_parse_crop`
+     - `_level5_json`
+     - `_autocrop_fallback_json`
+02) Encoder-/Scale-Helfer aus ConverterThread in `dragontools/worker/encoder_args.py` ausgelagert
+     - `_cpu_args`
+     - `_nvenc_args`
+     - `_qsv_args`
+     - `_amf_args`
+     - `_vid_args`
+     - `_scale`
+03) `convert_file()` im ConverterThread in kleinere interne Schritte geschnitten
+     - `_prepare_run_context(...)`
+     - `_prepare_encode_plan(...)`
+     - `_finalize_output(...)`
+04) DV-Audio-Helfer aus `_convert_dv()` in private Klassenmethoden überführt
+     - `_dv_audio_ext(...)`
+     - `_dv_build_audio_meta(...)`
+     - `_dv_audio_track_name(...)`
+     - `_dv_extract_audio_tracks(...)`
+     - `_dv_mux_plain_mp4_without_dv(...)`
+05) `_finalize_run()` im ConvertWidget intern lesbarer geschnitten
+     - neuer interner Logging-/Summary-Helfer: `_log_run_summary(...)`
+06) Rules Preview als kleiner, separater Preview-Builder ergänzt
+     - `dragontools/core/rules_preview.py`
+     - reine Anzeige-/Preview-Struktur, keine Ausführung
+07) DV-Spezialpfad aus dem ConverterThread in eigenes lokales Fachmodul ausgelagert
+     - `dragontools/worker/dv_conversion.py`
+     - ConverterThread bleibt zentraler Orchestrator, DV-Fachlogik ist klarer abgegrenzt
+08) HDR10+-Spezialpfad aus dem ConverterThread in eigenes lokales Fachmodul ausgelagert
+     - `dragontools/worker/hdrplus_conversion.py`
+     - Tool-Reihenfolge, Cleanup und Mux-Verhalten bleiben unverändert, der Spezialpfad ist aber klarer getrennt
+09) ConvertWidget in lokale Hilfsmodule aufgeteilt
+     - `convert_widget_file_queue.py` für Dateiliste/Queue
+     - `convert_widget_encoder_settings.py` für Encoder-/Settings-/Profil-Logik
+     - `convert_widget_move_dialogs.py` für Move-/Dialog-Orchestrierung
+10) Einzelne Strukturzonen im ConverterThread lokal entkoppelt
+     - Run-Context und Encode-Plan als kleine Zwischenstrukturen statt loser Dict-Übergaben
+     - DV- und HDR10+-Sonderblöcke intern lesbarer abgegrenzt
+11) Override-Dialog intern auf neue, rückwärtskompatible Override-Struktur vorbereitet
+     - ergänzende Felder für benutzerdefinierte Audio- und Untertitelspuren
+     - alte Override-Felder bleiben lesbar und kompatibel
+12) ConvertWidget weiter in lokale Hilfsmodule aufgeteilt
+     - `convert_widget_custom_widgets.py` für BannerLabel, DragonProgressBar (Feuer-Progressbar) und PathRow
+     - `convert_widget_override_dialog.py` für den kompletten Override-Dialog inkl. asynchronem Analyse-Thread
+     - `convert_widget.py` schrumpft von 1779 auf ~910 Zeilen, externe API bleibt unverändert
+13) ConverterThread in mehrere fachliche Helper aufgeteilt
+     - `converter_progress.py` für Prozess- und Fortschritts-Utilities (`probe_ms`, `probe_frames`, `read_prog`, `run`, `run_p`)
+     - `converter_detection.py` für Erkennungs-Funktionen (Auto-Crop, IMAX-Auto, externe Untertitel-Extraktion)
+     - `converter_stream_args.py` für ffmpeg-Stream-Argumente (Audio, Subtitle, Video-Filter inkl. Burn-In)
+     - `converter_strip.py` für den Strip-Only-Modus
+     - `converter_thread.py` schrumpft von 1108 auf ~660 Zeilen
+     - dünne Wrapper bleiben für Abwärtskompatibilität mit DV- und HDR10+-Pfaden erhalten
+14) DV-Spezialpfad lokal weiter bereinigt
+     - ungenutzte lokale Hilfsfunktion `_resolve_dv_audio_mux_inputs()` aus `dv_conversion.py` entfernt
+     - doppelter MP4Box-Audio-Append-Loop in `_dv_mux_plain_mp4_without_dv(...)` durch `_dv_add_mp4box_audio_tracks(...)` ersetzt
+     - temporärer Untertitel-Cleanup im DV-Encoding-Fehlerpfad auf `_dv_cleanup_tmp_sub()` vereinheitlicht
+     - DV-Workflow, Tool-Reihenfolge und Audio-/Subtitle-Semantik bleiben unverändert
+15) Pipeline-Dispatch im ConverterThread lokal entlastet
+     - DV-, HDR10+- und Standard-Dispatch aus `convert_file()` in `_dispatch_encode(...)` ausgelagert
+     - `convert_file()` dadurch lesbarer und klarer strukturiert
+     - Entscheidungslogik, Parameter und Rückgabeverhalten bleiben unverändert
+16) DV & HDR+ für H264 deaktivert da der stream nicht Metadaten geeignet ist
+17) DV & HDR+ für AV1 deaktiviert, hdr+ ist zwar av1 kompatibel aber dv ist auf HVEC spezialisiert
+18) Große Monolithen weiter fachlich aufgeteilt
+     - Dauer-Reparatur getrennt in Modelle, Timing-Analyse und Service-Orchestrierung
+     - MediaAnalyzer entlastet: Video-Metadaten sowie HDR-/Dolby-Vision-Erkennung in eigene Core-Module ausgelagert
+     - DV-Pipeline entlastet: Farbraum-/Filter-Helfer, Timeout-Zugriffe und Command-Formatierung ausgelagert
+     - Queue-Dialog entlastet: Drag-&-Drop-Pfadauflösung inklusive langer Windows-Pfade in eigenes GUI-Modul verschoben
+     - Rules-Dialog entlastet: Regex-Hilfe und Regeldatei-Laden/Speichern in eigene GUI-Module verschoben
+     - öffentliche Funktionsnamen und bestehendes Verhalten bleiben kompatibel
+     - Testsuite: 235 Tests bestanden
+19) GUI-Orchestratoren weiter vereinfacht
+     - MainWindow entlastet: Menü-/Shortcut-Aufbau und lange Menüaktionen in eigene Mixins ausgelagert
+     - ConvertWidget entlastet: Queue-, Drag-&-Drop- und Kontextmenü-Aktionen in eigenes Mixin verschoben
+     - RulesDialog in echte Tab-Module getrennt: Serien, Spracheditor, Audio, Untertitel und Flags
+     - Hauptdateien bleiben als Verdrahtungsschicht erhalten, Fachlogik liegt klarer in Zielmodulen
+     - Syntaxprüfung der neuen GUI-Module erfolgreich
+     - Testsuite: 235 Tests bestanden
+ 
+=== Wartung & Altlasten ===
+01) Unproduktive `pipelines/`-Schicht klar als Alt-/Prototyp-Struktur markiert
+     - reale Workflows laufen über ConverterThread
+     - DV-/HDR10+-Pipelines werden aktuell nicht produktiv verwendet und sind nicht produktionsreif
+02) Nachweislich ungenutzte Queue-Altpfade entfernt
+     - `dragontools/queue/job_manager.py`
+     - `dragontools/queue/job_queue.py`
+03) Legacy-Pipeline-Block als Paket bereinigt
+     - `base_pipeline.py`
+     - `standard_pipeline.py`
+     - `dv_pipeline.py`
+     - `hdrplus_pipeline.py`
+04) Kleine ungenutzte Resthelfer bereinigt
+     - `_probe_encoders()` aus `convert_widget.py` entfernt
+     - `popen_ffmpeg_progress()` aus `process_runner.py` entfernt
+05) Alt-Ordner `pipelines/` und `queue/` endgültig entfernt
+     - beide enthielten nach dem V8-Refactoring nur noch leere `__init__.py`
+     - projektweite Import-Prüfung zeigte keine Verwendung mehr
+06) Toter Code im ConvertWidget entfernt
+     - `_edit_override_sync_legacy()` (~190 Zeilen) wurde nirgends mehr aufgerufen
+     - wurde von der asynchronen Override-Dialog-Variante vollständig ersetzt
+07) Kernmodell lokal dokumentiert und Altstruktur klarer markiert
+     - `ConversionProfile` in `core/models.py` als derzeit nicht zentraler Override-Hauptpfad gekennzeichnet
+     - `ConversionResult` als aktuell nicht zentrales Rückgabeobjekt im Hauptfluss markiert
+     - keine API- oder Verhaltensänderung, nur klarere Einordnung vorhandener Modellreste
+ 
+=== Migration von V7 auf V8 ===
+ ! Projektstruktur vollständig neu – kein Legacy-Code
+ ! Einstellungen nicht kompatibel, müssen neu gesetzt werden
+ ! Externe Tools werden nicht mehr eingebettet
+ ! Worker-System zentralisiert (ein Worker für alle Codecs)
+ ! Neue Regel- und Profilsysteme eingeführt
+ 
+=== Bekannte Limitierungen ===
+ - DV benötigt `dovi_tool` sowie MP4Box korrekt installiert
+ - HDR10+ benötigt `hdr10plus_tool`
+ - IMAX Auto-Erkennung verlängert die Startzeit pro Datei
+ - Verschieben nach Konvertierung: bei Filmreihen manuelle Explorer-Auswahl nötig
+ - Merge: MP4-lossless ist in Version 1 bewusst noch nicht freigegeben
+ - Merge: `fallback_reencode` ist als separater Modus vorhanden, aber noch nicht produktiv umgesetzt
+ - DV wird nicht für Konvertierungen auf und von  H264 oder AV1 unterstützt. 
+	- AV1 ist noch nicht stabil, und Dovi_tool unterstützt es nur experimentell 
+	- H264 ist nicht dafür ausgelegt
+ - HDR10+ wird nicht für die Konvertierung von und auf H264 unterstützt
+ 
+=== Legacy Changelog ===
+Vollständige Änderungshistorie V1–V7: siehe CHANGELOGV7.txt
+Menü: Hilfe → Änderungshistorie Legacy

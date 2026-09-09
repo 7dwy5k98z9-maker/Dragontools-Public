@@ -1,0 +1,3 @@
+# Zwingende Laufzeitabhaengigkeiten fuer den Python-Start.
+PyQt6>=6.7,<7
+cryptography>=42,<51

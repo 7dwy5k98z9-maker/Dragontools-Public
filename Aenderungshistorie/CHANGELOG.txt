@@ -1,0 +1,2008 @@
+[09.09.2026] Refactoring-Blöcke 1-12 geprüft und abgeschlossen
+- ToolRunner-Prozesssteuerung, Move-Batch-Ausführung, Pipeline-Capabilities/-Policy und Audioplan-Policy wurden aus den bisherigen Orchestratoren ausgelagert.
+- TMDB besteht nun aus schlanker Client-Fassade sowie Resolver-, Vorschlags- und Transportmodul; die TheTVDB-Episodenkandidaten liegen in einem eigenen Fachmodul.
+- Subtitle-Sidecar-Planung, Move-Konflikttransaktionen, Journalzugriff, Transferlogik, Mediathek-Pfadpersistenz, Serienpfadauflösung, Converter-Fortschritt und Prozess-Lifecycle sind getrennt.
+- Override-Normalisierung, HDR/DV-Metadatenanalyse, MediaInfo-Aufbau, Soll-Medienvertrag, ffprobe-Istzustand und Soll/Ist-Outputprüfung besitzen eigene Module; die bisherigen öffentlichen Importpfade bleiben kompatibel.
+- Das Abschlussreview stellte den Legacy-Hook move_thread.os.replace für Rollback-/Fehlerinjektionstests wieder her.
+- Die Release-Smoke-Prüfung umfasst nun 37 beteiligte Refactoring-Module. Ein eigener Regressionstest verhindert, dass diese Dateien beim Paketieren erneut fehlen.
+- Vollständige Abnahme: 579 Python-Dateien ohne Syntaxfehler; 147 test_*.py-Dateien; 1.100 Tests bestanden, 2 gezielte reale DV/HDR-Tool-Skips, 0 Fehler. 1.081 test_*-Funktionen sind statisch erkennbar; 427 Produktivmodule wurden ohne Importfehler geladen.
+- Aktueller Projektumfang: 104.598 Gesamtzeilen und 88.701 nichtleere/nicht reine Kommentarzeilen.
+- Der vorhandene dist-Build ist noch veraltet und enthält 26 neue Fachmodule nicht; vor der Auslieferung ist ein vollständiger Neuaufbau mit anschließender Release-Prüfung erforderlich.
+
+[08.09.2026] Refactoring großer Fachmodule
+- Audio-/Video-Matching, Renamer, Release-Prüfung, Audio- und Untertitelregeln wurden in schlanke Fassaden und fokussierte Fachmodule zerlegt.
+- Batch-Preflight, Mediathek-Suche, Logger, Qualitätstester und Convert-Override-Dialog wurden anschließend nach Fachverantwortung aufgeteilt.
+- Medienanalyse, Move-Journal, TheTVDB-Anbindung, Audio-Regel-Tab, Convert-Layout und Datei-Queue erhielten eigene Analyse-, Speicher-, Transport-, UI- und Zustandsmodule.
+- Pfade, gemeinsame Online-Metadaten, Preflight-Widgets, Move-Regeln und Subtitle-GUI wurden ebenfalls modularisiert; bestehende öffentliche Importpfade bleiben über Kompatibilitätsfassaden erhalten.
+- Beim Abschlussreview wurden 18 beim Aufteilen fehlende Laufzeitverbindungen behoben, darunter datetime/Logger im Move-Journal, Pfadhelfer und Qt-Verbindungen in der Convert-Queue, CollapsibleGroupBox im Layout, Audio-Regel-Helfer, QListWidgetItem und Any.
+- Der CrashGuard schreibt Diagnosemeldungen zuerst auf den normalen stderr-Kanal und fällt nur bei dessen Ausfall auf __stderr__ zurück.
+- Der Release-Paket-Smoke-Test enthält jetzt alle neuen Fachmodule und verhindert unvollständige Builds nach weiteren Refactorings.
+- Neue Regressionstests prüfen Journal-Fehlerpfade, Archivierung ohne run_id, GUI-Modulverbindungen und die vollständige Release-Smoke-Liste.
+- Vollständige Abnahme: 550 Python-Dateien ohne Syntaxfehler; 144 test_*.py-Dateien; 1.084 Tests bestanden, 2 gezielte reale DV/HDR-/MP4Box-Skips, 0 Fehler. 1.065 test_*-Funktionen sind statisch erkennbar; 401 Produktivmodule wurden ohne Importfehler geladen.
+- Aktueller Projektumfang: 103.386 Gesamtzeilen und 87.630 nichtleere/nicht reine Kommentarzeilen.
+
+[08.09.2026] Erneute technische Gesamtprüfung
+- TheTVDB erkennt Staffel 0 korrekt; explizite Serienalias-Regeln werden bei der automatischen Vorauswahl priorisiert.
+- Die Output-Validierung behandelt ISO-639 "und" und ein fehlendes Sprach-Tag beide als unbestimmte Sprache, ohne konkrete Sprachvorgaben zu lockern.
+- Seriennamen mit eingeklammertem Jahr direkt vor SxxExx werden ohne offene Restklammer normalisiert.
+- Fehlgeschlagene Standard-Encodes schreiben FFmpeg-Returncode, Werkzeug, Kommando und stderr-Tail in den Fehlerbericht.
+- Release-Prüfung und Cache-Bereinigung überspringen nicht paketierte lokale Bäume wie .venv, build, dist, third_party und Projekt; echte Caches in den Quellpfaden bleiben unzulässig.
+- Vollständige Nachprüfung: 472 Python-Dateien ohne Syntaxfehler; 142 test_*.py-Dateien; 1.070 Tests bestanden, 2 gezielte reale DV/HDR-/MP4Box-Skips, 0 Fehler. 1.051 test_*-Funktionen sind statisch erkennbar.
+- Source-Release-Validator: 0 Fehler, 5 erwartete Autoren-/Datenschutzwarnungen.
+
+[07.09.2026] Skalierung als reines Downscaling gehärtet
+- 480p/720p/1080p/4K sind jetzt technisch reine Downscale-Ziele; FFmpeg darf eine kleinere aktive Bildhöhe nicht mehr auf die gewählte Zielhöhe hochrechnen.
+- Die Prüfung erfolgt direkt im FFmpeg-Filter mit min(Zielhöhe, ih). Da AutoCrop vor scale liegt, zählt automatisch die aktive Bildhöhe nach Crop.
+- Beispiel: 1920x1080 mit AutoCrop auf 1920x900 und Auswahl 1080p bleibt 1920x900 statt auf 2304x1080 hochskaliert zu werden.
+- 4K-Cinemascope bleibt wie gewünscht höhenbasiert: 3840x1600 mit 1080p wird weiterhin auf ca. 2592x1080 heruntergerechnet.
+- Der Medienvertrag erwartet dieselbe Downscale-only-Logik und verhindert damit, dass ein versehentlich hochskaliertes Ergebnis die finale Output-Prüfung passiert.
+- Die zentrale Filterlogik gilt für Standard, HDR10+, DV/DV+HDR10+ sowie den Qualitätstester; ein späterer DV-RPU-Crop bleibt durch die laufzeitabhängige ih-Prüfung ebenfalls abgesichert.
+- Regressionstest nach Patch: 1.032 Tests bestanden, 15 umgebungsbedingt übersprungen, 0 Fehler.
+
+[06.09.2026] Release-Fixes A-F und finale Quellabnahme
+- Abschlussreview-Patches umgesetzt: ownership-basierter Failure-Cleanup, vollständiger DV-Run-State-Reset, mehrphasiges Move-Journal mit Companion-Recovery, korrigierter mkvpropedit-Vertrag, zentrale Abort-/Timeout-Logik für lange FFmpeg-Hilfsprozesse und Qt-freie Rules-Preview.
+- Vorbestehende gleichnamige Benutzer-Sidecars werden bei einem fehlgeschlagenen Job nicht mehr über output_stem.* gelöscht; der Cleanup entfernt nur nachweislich dem aktuellen Lauf gehörende Artefakte.
+- DV-Fehlläufe geben keine Sidecar-Pfade eines vorherigen Jobs mehr zurück.
+- Move-Recovery unterscheidet video_pending, sidecars_pending, cleanup_pending und completed; ein Crash nach Video-Commit kann mit dem Zielvideo als Anchor fortgesetzt werden. Mediathek/DB werden erst nach erfolgreichem Companion-Commit aktualisiert.
+- mkvpropedit nutzt den konfigurierten Toolpfad, ordinales track:n und behandelt Returncode 1 als zulässige Warnung.
+- Finale isolierte Abnahme: 469 Python-Dateien ohne Syntaxfehler; 141 test_*.py-Dateien; 1.024 Tests bestanden, 15 gezielte umgebungsbedingte Skips, 0 Fehler. 1.033 test_*-Funktionen sind statisch erkennbar.
+- Source-Release-Validator: 0 Fehler, 6 bekannte Warnungen. Windows-PyInstaller-Build sowie reale DV/HDR-Integration bleiben als externer Zielsystem-Gate bestehen.
+
+[06.09.2026] AV1 HDR10+ / Dolby Vision Profile 10 (Beta)
+- AV1 erhält zwei eigene dynamische HDR-Pipelines; die stabilen HEVC-DV-/HDR10+-Pfade bleiben technisch getrennt und unverändert.
+- AV1 Dolby Vision wird nativ über aktuelles FFmpeg + libsvtav1 als Dolby Vision Profile 10 geschrieben und nach dem finalen Mux erneut mit MediaInfo/ffprobe verifiziert.
+- AV1 HDR10+ nutzt FFmpeg + libaom-av1 für den standardisierten HDR10+-T.35/OBU-Passthrough und wird nach dem finalen Mux erneut verifiziert.
+- Beide AV1-Metadatenpfade sind zunächst CPU-only und fail-closed: NVENC/QSV/AMF führen nicht zu stillem Metadatenverlust, sondern zu einem klaren Abbruch.
+- AV1-DV Profil 7 sowie AV1-DV mit Crop/Skalierung oder Untertitel-Burn-In sind zunächst gesperrt; Profil 5, 8 und 10 werden nur ohne diese bildverändernden Eingriffe zugelassen.
+- AV1 DV+HDR10+ wird bewusst nicht als Kombipfad verarbeitet: sind beide Erhaltungsoptionen aktiv, hat Dolby Vision Priorität, AV1-DV10/SVT-AV1 wird gewählt und HDR10+ mit einer INFO im Kurzlog bewusst nicht übernommen. Ein expliziter per-Datei-Override auf AV1-HDR10+ bleibt möglich.
+- AV1 HDR10+ bleibt CPU/libaom-av1 und wird als deutlich langsamer Spezialpfad dokumentiert; der normale AV1- und AV1-DV-Pfad nutzt weiterhin SVT-AV1.
+- AV1-Tab, Per-Datei-Policy, Preflight, Queue-Badges, Kurzlog, Tooldiagnose und finaler Medienvertrag kennen die neuen Pipelines.
+
+[06.09.2026] Logging und Audio-Titel
+- Konverter-Logging in Kurzlog und Langlog getrennt: der bisherige vollständige Log bleibt unverändert als *_lang.txt erhalten; GUI und Standardlog zeigen nur kompakte Kerninformationen.
+- Kurzlog enthält Quelle, Audio-/Untertitel-Entscheidungen, Pipeline, Ergebnis, Dauer, Dateigröße/Ersparnis sowie Warnungen und Fehler.
+- Audio-Titel werden beim Konvertieren einheitlich aus Sprache, Codec, Kanalzahl und Bitrate erzeugt (z. B. „Deutsch EAC3 5.1 640kbps“).
+- Ist bei kopierter Audiospur keine Bitrate bekannt, wird bewusst nur der Sprachname als Titel gesetzt.
+
+Renamer / Einstellungen – Korrektur 05.09.2026
+- Offizielle Serientitel mit abschließendem Punkt bleiben im Zielnamen erhalten, wenn danach noch SxxExx folgt (z. B. „Magilumiere Inc. - S02E07 ...“).
+- Einstellungen-Menü besitzt jetzt zusätzlich den direkten Punkt „📦 Ausgabecontainer“; der bestehende Bereich im globalen Einstellungsfenster bleibt unverändert erhalten.
+
+PyQt6-App: Dragon Tools – Multifunktionales Videobearbeitungstool
+Autor: Dragon Developer (GUI-Port)
+
+Dragon Tools ist ein modular aufgebautes PyQt6-Tool zur Video-Konvertierung,
+Untertitelverwaltung, Pfadorganisation und automatisierten Verarbeitung.
+Schwerpunkt der V9-Entwicklung liegt auf Stabilität, Release-Sicherheit,
+HDR/DV-Korrektheit, Fehlerdiagnose und wartbarer Modulstruktur.
+
+Version: 9.7 (Release-Build)
+Stand: 2026-09-07
+Plattform: Windows 10/11 (64-bit)
+
+Diese Datei dokumentiert alle Änderungen der V9-Entwicklung in einer
+technisch gegliederten Struktur. Die Änderungen sind bewusst nicht nach
+V9.0, V9.1, V9.2, V9.3, V9.4, V9.5, V9.6 und V9.7 getrennt, sondern nach Funktionsbereichen
+zusammengeführt.
+
+Versionsbezogene Punkte bleiben erhalten, wenn sie selbst eine technische
+Release-, Build- oder Kompatibilitätsänderung dokumentieren.
+
+Hinweis zur historischen Einordnung:
+Ältere Änderungsblöcke beschreiben den damaligen Entwicklungsstand.
+Aktuelle Gegenprüfungen des V9.7-Quellstands haben Vorrang, wenn ältere
+Build-/Release-Aussagen aufgrund früherer Projektstände heute abweichen.
+
+Dragon Tools V8 ist in CHANGELOGV8.txt dokumentiert.
+Ältere Versionen (V1–V7) sind in CHANGELOGV7.txt dokumentiert.
+Menü: Hilfe → Änderungshistorie Legacy V8 / Legacy V7
+
+=== V9.7 – AKTUELLER STAND 07.09.2026 ===
+
+[07.09.2026] Technisches Review, Release-Hygiene und Dokumentationsabgleich
+- Source-Release-ZIPs schließen nun zusätzlich lokale Entwicklungs-/Buildbäume, externe Toolbestände, `Projekt` sowie `Projekt.zip`/`Projekt.7z` und Office-Sperrdateien aus; Bytecode-/Cachefilter bleiben aktiv.
+- Queue-Status-Badges verwenden bei partiell erzeugten Test-/Plugin-Objekten sicher den H.265-Default statt mit fehlendem `default_codec` abzubrechen.
+- Fehlende `Any`-/`sqlite3`-Typimporte in der Mediathek ergänzt; ungenutzte Einstiegsimports und Variablen entfernt.
+- Nach Refactorings aktualisierte FFmpeg-Abbruch-/Move-Tests verwenden die aktuellen Servicepfade. Journalzugriffe in Remux-/Workflow-Tests sind auf temporäre Testverzeichnisse isoliert.
+- Vollständige Batch-Abnahme: alle 142 Testdateien, 1.064 bestandene konkrete Testfälle, 2 gezielte reale DV/HDR-/MP4Box-Skips, 0 Fehler.
+- Projektumfang neu ermittelt: 472 Python-Dateien, 101.822 Gesamtzeilen, 86.131 Codezeilen; help.html, Über-Dialog, DOCX-Handbuch und PDF synchronisiert.
+
+DV-Remux – Zielcontainer MP4/MKV nach Einstellung
+     - der separate DV-Remux-Button ist nicht mehr fest auf MP4 verdrahtet und nutzt dieselbe Dolby-Vision-Containerwahl wie der DV-/DV+HDR10+-Pfad
+     - MP4 bleibt Standard und wird final mit MP4Box erzeugt; bei MKV wird der unveränderte DV-HEVC-Bitstream mit mkvmerge gemuxt
+     - die zentrale Audioplanung kennt den tatsächlichen Zielcontainer; MP4 erzwingt Kompatibilität, MKV kann geeignete Codecs per Stream-Copy erhalten
+     - die Untertitelablage folgt jetzt der globalen Option „MP4-Sidecars aktivieren“ statt einer DV-spezifischen Sidecar-Regel
+     - aktiviert: alle vom Regelwerk ausgewählten MP4-Untertitel werden wie bisher als externe Sidecars gespeichert
+     - deaktiviert: textbasierte Untertitel (SRT, ASS/SSA, WebVTT usw.) werden zu mov_text/tx3g konvertiert und intern in MP4 gespeichert; PGS/SUP und VobSub/DVD-Sub bleiben externe Sidecars
+     - die Regel gilt einheitlich für Standard-Encoding, Strip-Only, MP4-Remux, HDR10+, AV1, Dolby Vision und DV-Remux; MKV speichert Untertitel weiterhin intern
+     - beim DV-/MP4-Remux wird ein sonst für Burn-In gewählter Untertitel erhalten, weil Remux bewusst kein Video-Re-Encoding durchführt
+     - AAC/E-AC3-Audiospuren bleiben unabhängig davon intern im Zielcontainer
+     - Buttontext, Output-Pfad, Overwrite/Containerwechsel, Sidecar-Transaktion und Logging verwenden den gewählten Container konsistent
+     - neue Regressionstests sichern beide Mux-Pfade, MKV-Ausgabepfade und die containerabhängige Untertitelablage ab
+
+01) Versions- und Buildarchitektur auf V9.7 konsolidiert
+     - einzige literale Python-Versionsquelle ist dragontools/core/version.py
+     - Einstiegspunkt, Settings, GUI, Logs, Backup-Metadaten und Release-Validator beziehen APP_VERSION daraus
+     - der kanonische Builder build_v9.bat liest die Version zur Laufzeit und erzeugt dynamisch DragonToolsV9.7
+     - build_v9_angepasst.bat bleibt als Kompatibilitäts-Wrapper erhalten; harte V9.5/V9.6-Buildpfade wurden entfernt
+
+02) Dolby Vision, HDR10+ und DV+HDR10+ fachlich getrennt
+     - die Haken „DV erhalten“ und „HDR10+ erhalten“ sind reine Erhaltungs-Policies und behaupten nicht mehr, dass die Quelle diese Metadaten besitzt
+     - effektive Erhaltung entsteht nur aus Policy UND tatsächlich erkannter Quellmetadaten
+     - DV-only verlangt im finalen Vertrag kein HDR10+, HDR10+-only verlangt kein DV, kombinierte Quellen verlangen beide Metadaten
+     - defensive Vertragsprüfung verhindert einen falschen HDR10+-Fehler auch bei später fehlerhaft gesetztem Flag
+
+03) Per-Datei-Encoder-Overrides und Konfigurationstypen gehärtet
+     - CPU-, NVENC-, QSV- und AMF-Optionen werden beim Laden nicht mehr in fremde Backend-Panels gespiegelt
+     - Legacy-Werte wie "1.0", "4.0", "19.0" oder "32.0" werden robust als Ganzzahlen normalisiert
+     - String-Booleans wie "false", "0", "off", "true" oder "1" werden fachlich korrekt interpretiert
+     - DV/HDR10+, IMAX, Auto-Crop, Untertitel, Audio-Regeln, Renamer-Regeln, AQ/Lookahead und globale QSettings nutzen dieselbe sichere Typnormalisierung
+
+04) Reproduzierbare Python-, Test- und Buildumgebung ergänzt
+     - requirements-runtime.txt deklariert zwingende Runtime-Abhängigkeiten
+     - requirements-optional.txt dokumentiert NumPy/OpenCV für die optionale Bildanalyse
+     - requirements-test.txt bindet Runtime/Optional plus pytest und pytest-qt ein
+     - requirements-build.txt bindet Runtime/Optional plus PyInstaller und pyinstaller-hooks-contrib ein
+     - pytest.ini setzt qt_api=pyqt6 und registriert media_integration sowie dv_hdr_integration explizit
+
+05) Release-Manifest und Validator an den realen Build angepasst
+     - release_manifest.json beschreibt Source-with-Build, App-Version 9.7 und die tatsächliche PyInstaller-CLI-Strategie ohne .spec-Zwang
+     - der Validator prüft Build-Skript, Build-Umgebung, Runtime/Test/Optional-Requirements, Renamer-Regelschema und Integrationstest-Verträge
+     - große externe Build-Artefakte dürfen im Source-ZIP fehlen; build_v9.bat prüft sie lokal vor PyInstaller fail-fast
+     - Builder führt vor und nach dem Build die zentrale Release-/App-Bundle-Prüfung aus
+
+06) Release-Hygiene und CI abgesichert
+     - Bytecode- und Test-/Lint-Caches werden vor einem Release-Build kontrolliert entfernt
+     - Source-Preflight und finale Release-Validierung laufen mit Python -B, damit die Prüfung nicht durch eigene Imports erneut __pycache__ erzeugt
+     - Source-ZIPs filtern __pycache__, *.pyc, *.pyo, .pytest_cache, .mypy_cache und .ruff_cache weiterhin atomar und CRC-geprüft
+     - .gitignore verhindert typische Cache-/Build-Artefakte im Repository
+     - GitHub-CI-Vertrag für Windows/Linux sowie kontrollierte reale DV/HDR-Integration ergänzt
+     - INTEGRATION_TESTS.md dokumentiert Qt-, FFmpeg- und DV/HDR-Testmodi inklusive strikter Umgebungsvariablen
+
+07) V9.7-Abnahme
+     - vollständige finale Abnahme aller 141 Testdateien des synchronisierten V9.7-Quellstands in isolierten Batches: 1.024 Tests bestanden, 15 gezielte umgebungsbedingte Skips, 0 fehlgeschlagen
+     - die zuvor fragilen 1,0-Sekunden-Inactivity-Tests tolerieren jetzt langsamen Interpreter-Start, prüfen aber weiterhin echtes Inactivity-Timeout-Verhalten; Produktiv-Timeouts wurden nicht verändert
+     - von den 15 Skips betreffen 13 fehlendes PyQt6/pytest-qt in dieser Prüfungsumgebung und 2 die nicht konfigurierte reale dovi_tool/hdr10plus_tool/MP4Box-Integration
+     - aktueller Projektumfang: 469 Python-Dateien, 100.606 Gesamtzeilen, 85.088 nichtleere/nicht reine Kommentarzeilen
+     - Testpaket: 144 Python-Dateien, 141 test_*.py und 1.033 statisch erkannte test_*-Funktionen
+
+08) Dokumentationsstand V9.7
+     - Änderungshistorie, technische DOCX-Dokumentationsquelle, PDF-Handbuch, help.html und Über-Dialog auf den Abschlussreview vom 06.09.2026 synchronisiert
+     - globale MP4-Untertitelpolicy, transaktionaler Output-Commit, atomare Regel-/Profilspeicherung und HDR10+-Serviceaufteilung sind in Hilfe und Handbuch dokumentiert
+     - Projektstatistik und Teststand wurden gegen den realen finalen Quellbaum neu berechnet
+
+09) Dolby-Vision-Crop mit RPU-Level-5 abgeglichen
+     - nach der RPU-Extraktion werden die Level-5-Active-Area-Werte mit dovi_tool exportiert und gegen ffmpeg AutoCrop geprüft
+     - bis einschließlich 20 Pixel Abweichung wird automatisch der weniger aggressive Crop mit der größeren aktiven Bildfläche verwendet
+     - wird der AutoCrop gewählt, folgt die RPU dem tatsächlich codierten Crop; wird der RPU-Wert gewählt, wird der physische ffmpeg-Crop vor dem Encode entsprechend angepasst
+     - bei mehr als 20 Pixel Abweichung erscheint eine Auswahl AutoCrop / RPU / Dolby Vision deaktivieren; bei DV-Deaktivierung wird die Datei ohne DV-Erhalt neu geplant
+     - mehrere wechselnde Level-5-Active-Areas (z. B. IMAX) werden nicht fälschlich auf einen globalen RPU-Crop reduziert
+
+10) Zielcontainer pro Pipeline auswählbar und MP4 streamingoptimiert
+     - Einstellungen unterscheiden Standard/HDR10+ und Dolby Vision/DV+HDR10+; Defaults bleiben Standard=MKV und DV=MP4
+     - beide Bereiche können zwischen MKV und MP4 gewählt werden
+     - FFmpeg-MP4-Ausgaben verwenden +faststart; MP4Box-DV-Ausgaben werden mit 500-ms-Interleaving für progressive Wiedergabe erzeugt
+     - Dolby Vision kann final per mkvmerge als MKV aus dem bereits injizierten HEVC-DV-Bitstream gemuxt und anschließend weiterhin verifiziert werden
+     - bei MP4 werden nicht containerkompatible Untertitel nicht still verworfen oder blind kopiert, sondern über den bestehenden Sidecar-Service exportiert
+
+11) Renamer um freie Seriensuche pro Datei erweitert
+     - für genau eine markierte Serien-/Episodendatei kann jederzeit eine eigene Seriensuche gestartet werden
+     - die manuelle Suche funktioniert sowohl ohne bisherigen Treffer als auch zum Ersetzen eines vermutlich falschen Serien-Treffers
+     - Staffel und Episode der Datei bleiben erhalten; nur der Suchbegriff wird überschrieben und anschließend durch die bestehende Provider-/Kandidatenlogik bewertet
+
+12) Preflight erkennt Release-Namen und bietet Metadaten-Nachsuche
+     - Punkt-/Unterstrich-getrennte Release-Namen, Release-Gruppen und typische Technik-Tags werden vor dem Verschieben sichtbar markiert
+     - die vorhandene Preflight-Metadatensuche läuft weiter automatisch und verwendet dieselbe fachliche Metadatenlogik wie der Renamer
+     - Seriengruppen erhalten zusätzlich eine eigene manuelle Seriensuche direkt im Preflight
+     - physisches Umbenennen bleibt vorerst bewusst im Renamer-Tab; der Preflight ändert keine Quelldateinamen automatisch
+
+13) HDR10+-Spezialpfad auf direkten 5-Schritt-Workflow umgestellt
+     - Matroska/HEVC-Quellen werden im Normalfall von hdr10plus_tool direkt für den Metadata-Extract gelesen; die mehrgigabytegroße source.hevc-Zwischendatei entfällt
+     - schlägt der direkte Matroska-Extract z. B. mit einem HEVC-Parserfehler wie „Invalid PPS index“ fehl, extrahiert FFmpeg automatisch nur für diesen Recovery-Fall einen HEVC-Annex-B-Bitstream und hdr10plus_tool wiederholt den Metadata-Extract darauf
+     - der Annex-B-Weg ist damit wieder als robuster Fallback vorhanden, ohne den schnellen direkten 5-Schritt-Normalpfad zurückzubauen
+     - der produktive Encode schreibt das Video direkt als encoded.hevc; Audio und interne Untertitel werden im selben ffmpeg-Lauf nur noch in einen kleinen streams.mkv-Donor geschrieben
+     - der frühere Umweg encoded.mkv -> encoded.hevc entfällt vollständig
+     - HDR10+-Metadaten werden anschließend direkt in encoded.hevc injiziert
+     - finales MKV wird mit mkvmerge statt ffmpeg aus dem rohen injizierten HEVC-Bitstream gebaut; dadurch entfällt der Fehler „Can't write packet with unknown timestamp“
+     - finales MP4 wird mit MP4Box und -inter 500 streamingoptimiert gemuxt
+     - der fünfte Schritt verifiziert die dynamischen HDR10+-Metadaten semantisch erneut im fertigen Zielcontainer
+     - BT.2020/PQ/Limited sowie die HDR10-VUI-Parameter bleiben beim direkten HEVC-Encode erhalten
+
+
+14) DV-MKV-Muxing und Timeout-Zuordnung nachgezogen
+     - der finale Dolby-Vision-MKV-Pfad verwendet weiterhin ausschließlich mkvmerge und fällt nicht auf FFmpeg zurück
+     - für DV-MKV existiert jetzt ein eigener Timeout dv_mkvmerge; der frühere semantisch falsche MP4Box-Timeout wird nicht mehr wiederverwendet
+     - der nicht mehr benötigte Timeout für eine frühere HEVC-Rückextraktion nach Zwischen-MKV wurde entfernt
+
+15) Windows-Buildskript robuster gemacht
+     - build_v9.bat wechselt beim Start zuverlässig in den eigenen Projektordner
+     - APP_VERSION wird ohne verschachtelten FOR/F-Python-Aufruf gelesen; dadurch funktionieren Projektpfade mit Leerzeichen zuverlässig
+     - Fehler- und Erfolgszustände bleiben beim Doppelklick sichtbar; für automatisierte Builds kann die Pause per DRAGONTOOLS_BUILD_NO_PAUSE unterdrückt werden
+
+16) App-Bundle-Validator an die reale PyInstaller-Struktur angepasst
+     - Runtime-Konfiguration liegt unter Daten\\dragontools\\config
+     - die mitgelieferte lesbare Python-Quellkopie liegt unter Daten\\Python\\dragontools
+     - der Paket-Smoke-Test prüft im fertigen Build deshalb Daten\\Python statt fälschlich Daten\\dragontools
+     - der vorherige Fehlalarm „Ordner fehlt: dragontools/core ...“ nach einem erfolgreichen PyInstaller-Build entfällt
+
+17) Dokumentation, Hilfe und Toolstand final synchronisiert
+     - Help, technische DOCX-Dokumentation, PDF-Handbuch, Über-Dialog und Changelog verwenden denselben V9.7-Abschlussstand
+     - aktueller Toolstand dokumentiert: FFmpeg/ffprobe 2026-09-02-git-9fc8c785e2, MediaInfo 26.05, MKVToolNix 101.0, MakeMKV 1.18.4, hdr10plus_tool 1.7.2 und GPAC/MP4Box 26.07
+     - dovi_tool ist ausdrücklich als eigener Build auf Basis des quietvoid/dovi_tool-Branch-Stands vom 03.09.2026 gekennzeichnet
+     - Modulreferenzen wurden um output_replace, HDRPlusToolRunner, HDRPlusMuxService und DVSubtitleMuxService ergänzt; Projektstatistik und QA-Angaben wurden neu abgeglichen
+
+11) Renamer-Punktsetzung und direkter Containerzugriff nachgezogen
+     - offizielle Serientitel mit abschließendem Punkt bleiben erhalten, wenn danach noch SxxExx folgt; „Magilumiere Inc.“ wird nicht mehr zu „Magilumiere Inc“ gekürzt
+     - Einstellungen-Menü besitzt zusätzlich den direkten Punkt „📦 Ausgabecontainer“; der vorhandene Bereich im globalen Einstellungsfenster bleibt unverändert erhalten
+
+20) Technischer Abschlussreview vor Veröffentlichung
+     - HDR10+-Toolrunner beherrscht accepted_returncodes korrekt; der frühere NameError im produktiven Helper ist behoben
+     - HDR10+-Mux akzeptiert mkvmerge-Warncode 1 ausdrücklich; MP4-HDR10+ bricht fail-closed ab, wenn ein vorhandener Audio-Donor nicht zuverlässig analysiert werden kann, statt still eine Datei ohne Audio zu erzeugen
+     - HDRPlusConversionHelper ist auf Coordinator-Rolle reduziert; HDRPlusToolRunner, HDRPlusMuxService und HDR10PlusBitstreamService trennen Prozess-, Mux- und Metadatenverantwortung
+     - Untertitelregeln sind konsistent auf Schema 4; Release-Validator verwendet die zentrale Schemaversion und behandelt falsche Default-Schemata als Fehler
+     - Converter, DV-Remux, MP4-Remux und Audio-Mux nutzen einen gemeinsamen transaktionalen Output-Commit mit Journal, Backup und Rollback
+     - Regel- und Profildateien werden atomar geschrieben; syntaktisch oder strukturell beschädigte Benutzerdateien werden vor Defaults/Migration als *.corrupt_<Zeitstempel>.json gesichert
+     - globale MP4-Untertitelpolicy vereinheitlicht: Sidecars aktiviert = alle ausgewählten MP4-Untertitel extern; Sidecars deaktiviert = Text intern als mov_text/tx3g, PGS/SUP und VobSub/DVD-Sub extern; MKV speichert intern
+     - statische Abschlussprüfung: 469 Python-Dateien ohne Syntaxfehler; finale Batch-Abnahme aller 141 Testdateien: 1.024 bestanden, 15 gezielte Skips, 0 Fehler
+     - ausstehender externer Release-Gate bleibt der echte Windows-PyInstaller-Build mit PyQt6 sowie reale DV/HDR-Roundtrips mit den konfigurierten Dritttools
+
+=== V9.5 – STAND VOR V9.7 RELEASE-NACHARBEIT ===
+
+01) Renamer-Auswertung für Scene-/Release-Dateinamen grundlegend erweitert
+     - technische Release-Tags werden sauber vom eigentlichen Seriennamen getrennt
+     - ältere und kompakte Tags wie DED, DL, EAC3, DD51, 18p, AZHD, AVC, HEVC, x264/x265 werden erkannt
+     - fehlerhafte Release-Gruppen-Erkennung hinter SxxExx wurde korrigiert
+
+02) Online-Metadaten-Suche für Serien auf mehrere echte Kandidaten je Provider umgestellt
+     - TMDB und TheTVDB bleiben bei aktivem Modus „Beide“ gleichzeitig sichtbar
+     - bis zu sechs Treffer je Provider; mit zwei Providern damit maximal zwölf Vorschläge
+     - Match-Qualität ist primäres Sortierkriterium, Provider-Priorität entscheidet nur bei Gleichstand
+     - Serienjahr und tatsächliche Existenz der erkannten Staffel/Folge werden berücksichtigt
+
+03) Renamer-Regeln, Aliasregeln und Fuzzy-Suche eingeführt
+     - bisher hart codierte Dateizeichen-Ersetzungen sind editierbar
+     - Suchalias-Regeln beeinflussen nur den Online-Suchbegriff, nicht den erkannten Quelltitel
+     - konfigurierbare Anzeige-, Prüf- und Auto-Akzeptanzschwellen
+     - Fuzzy-Treffer werden gegen den ursprünglich erkannten Titel bewertet; SxxExx validiert, erzeugt aber keinen künstlichen 100-%-Score
+     - explizite Aliasregeln werden separat als „Aliasregel“ gekennzeichnet
+
+04) Renamer-Workflow und Bedienung verbessert
+     - Vorschlagssuche startet inkrementell automatisch für neu hinzugefügte Dateien
+     - der manuelle Button bleibt als vollständiger Refresh erhalten
+     - geöffnete Vorschlags-Dropdowns passen ihre Breite an den längsten Eintrag an, ohne die Tabellenspalte dauerhaft zu verbreitern
+     - manuelle Auswahl nutzt dieselben konfigurierbaren Schwellen wie die automatische Bewertung
+
+05) Eigene SQLite-Mediathek um Qualitäts- und Bestandsabfragen erweitert
+     - strukturierte Filter für Audio, Dynamikumfang, Auflösung, Video-Codec und fehlende Metadaten
+     - Auflösungsgruppen berücksichtigen auch Cinemascope-/Crop-Auflösungen sinnvoll
+     - SDR wird nur bei ausreichend bekannten Videoeigenschaften angenommen; unbekannte Analysewerte bleiben separat
+     - neue Abweichungssuche findet Minderheitswerte innerhalb desselben Medien-/Staffelordners
+     - bei Gleichstand wird keine Seite als „richtig“ geraten, sondern die Gruppe als uneinheitlich markiert
+     - ältere Jellyfin-Streamwerte wie Video=1, Untertitel=2 und Audio ohne Streamtyp werden in bestehenden Datenbanken tolerant erkannt
+     - neue Jellyfin-Imports schreiben Streamtypen direkt kanonisch als Video, Audio, Subtitle, Image oder Data
+     - eigener Speicherpfad-Scan kann die DragonTools-Mediathek direkt aus den hinterlegten Film-/Anime-/TV-Pfaden mit MediaInfo aufbauen
+     - HDR10+, Dolby Vision, Auflösung, Videocodec, Audio- und Untertitelstreams werden dabei im gleichen Schema gespeichert wie bei Jellyfin-Import und Move-Fortschreibung
+
+06) Mediathek-Oberfläche und SQLite-Zugriffe nachgezogen
+     - zweistufige Auswahl „Abfrage“ + „Kriterium“ statt eines überfüllten Einzel-Dropdowns
+     - zusätzliche Filter „Bereich“ und „Typ“ grenzen Abfragen z. B. auf Filme, Anime, TV, Episoden oder Ordner ein
+     - Ergebnistabelle zeigt einen eigenen Abweichungsgrund
+     - Suchtreffer und komplette Mediathek-Tabellen können als CSV exportiert werden
+     - der DB-CSV-Export erzeugt zusätzlich eine ausgewertete Medienübersicht mit Codec, Auflösung, Dynamikumfang, Audio und Untertiteln
+     - bestehende Alt-Datenbanken können über „Streamtypen normalisieren“ dauerhaft auf das DragonTools-Schema umgestellt werden
+     - zusätzliche SQLite-Indizes für Ordnerpfad, Videoeigenschaften und Streamabfragen
+     - deutsche Umlaute in sichtbaren Mediathek-Texten korrigiert
+     - Datenbanken werden kompatibel auf Schema 2 migriert; aktive und inaktive Mediathek-Einträge werden getrennt geführt
+     - Suche nach doppelten aktiven SxxExx-Einträgen ergänzt
+     - Bereinigung inaktiver Einträge mit Sicherheitsabfrage ergänzt
+
+07) SxxExx-Ersetzung und persistente Ersetzungs-Erinnerungen eingeführt
+     - beim Verschieben von Serienfolgen wird neben Dateiname und Endung auch die erkannte Serien-/Staffel-/Folgenidentität geprüft
+     - vorhandene Zieldateien mit identischer SxxExx-Kennung werden auch bei abweichendem Titel oder Container sauber ersetzt
+     - Multi-Episoden werden exakt verglichen; S01E03E04 ersetzt nicht fälschlich S01E03
+     - der Move-Log nennt alte Datei, neue Datei, erkannte Folge, Zeitpunkt und Grund der Ersetzung
+     - DragonTools-SQLite setzt ersetzte Pfade auf active=0 und die neue Datei auf active=1
+     - dauerhafte Erinnerungen werden unter Documents\DragonTools\Erinnerungen gespeichert
+     - ohne Shutdown erscheinen Erinnerungen vor dem Abschlussbericht; bei aktivem Shutdown werden sie nicht blockierend erst beim nächsten Start gezeigt
+     - Bestätigen löscht die Erinnerung, Erneut vorlegen oder Schließen erhält sie
+
+08) Hilfe, Handbuch, Changelog und Projektstatistik auf V9.5 synchronisiert
+     - Hilfe deckt die aktuellen Hauptbereiche inklusive Renamer, Provider, Mediathek, Audio-Video-Matcher, NFO/Trickplay, Recovery und Build-Prüfung ab
+     - technischer Handbuch-Anhang ergänzt die neuen V9.5-Module, Datenflüsse, Erinnerungen, aktiven Datenbankzustände und Journal-/Restore-Sicherungen
+     - aktueller Quellstand: 359 Python-Dateien, 80.618 Gesamtzeilen und 68.230 nichtleere/nicht reine Kommentarzeilen
+     - Testbestand: 93 Python-Dateien im Testpaket, 92 test_*.py-Dateien und 668 statisch erkennbare Tests
+     - die Help-Datei wurde sprachlich geglättet, damit sie als Arbeitsdokument und nicht als generierter Änderungsdump gelesen werden kann
+
+09) Stabilitäts-Nacharbeit, Reset-Persistenz und Änderungshistorie überarbeitet
+     - veraltetes QSV-Bool-Feld qsv_la/lookahead aus neuen Settings und Profilen entfernt; QSV-Lookahead wird nur noch über die Tiefe geführt
+     - Profil-Schema auf Version 3 vereinheitlicht und ausgelieferte Standardprofile entsprechend migriert
+     - „Auf Standard zurücksetzen“ persistiert den finalen Encoderzustand jetzt explizit und zuverlässig
+     - neuer CPU-H.265-Standardwert ist CRF 22
+     - Änderungshistorie verwendet für V9 bevorzugt ein strukturiertes JSON-Format, bleibt aber zu TXT abwärtskompatibel
+     - überladene Abschnittsbuttons wurden durch eine vollständige Bereichsauswahl und echte Seiten-Navigation ersetzt
+
+10) Stabilitätsnacharbeit: DB-Pfad, Move-Journal, sichere Episodenersetzung und GPU-Erkennung
+     - Mediathek-DB-Treffer zeigen bei Anime und TV konsistente Statushinweise; erfolgreiche Pfadprüfung/Normalisierung wird als Information statt Warnung dargestellt
+     - persistentes Move-Journal speichert offene Verschiebevorgänge, Zielpfade, Status und temporäre Sicherungen und ermöglicht die Wiederaufnahme nach einem Neustart
+     - SxxExx-Konflikte werden transaktional ersetzt: alte Episode zuerst als Backup umbenannt, neue Datei vollständig eingesetzt und erst danach das Backup entfernt
+     - bei Kopier-, SMB-, I/O- oder Abbruchfehlern wird die vorhandene Episode zurückgerollt; die Quelldatei bleibt erhalten
+     - ConverterThread und ParallelConverterThread greifen auf GpuInfo korrekt über g.name statt über Dictionary-Syntax zu
+
+11) Stabilitäts- und Sicherheitsnacharbeit: Converter-Konfiguration, Backup-Secrets und Audio-Video-Matcher
+     - ConverterThread und ParallelConverterThread erhalten Konvertierungsparameter gebündelt über ConverterConfig statt über lange Einzelparameterlisten
+     - Standard-Backups schließen TMDB-/TheTVDB-Keys, Tokens und PIN aus; vorhandene lokale Secrets bleiben beim Restore eines solchen Backups erhalten
+     - optionales verschlüsseltes Backup inklusive Secrets mit AES-256-GCM und scrypt-basierter Passwortableitung ergänzt
+     - falsches Passwort wird vor Änderungen an QSettings erkannt und bricht den Restore sauber ab
+     - fehlender Import von preferred_german_audio_stream im Audio-Video-Matcher korrigiert
+
+12) Stabilitätsnachtrag: Journal-Concurrency, Move-Recovery, Backup-Restore und DV-P5-Remux
+     - Job- und Move-Journale verwenden eindeutige Dateien pro Lauf statt einer globalen active_*.json-Datei
+     - parallele oder überlappende Läufe überschreiben sich nicht mehr; alte Legacy-active-Dateien bleiben weiterhin lesbar
+     - 'Später entscheiden' erhält offene Move-Journale, bis der Benutzer sie bewusst lädt, archiviert oder durch einen Retry ersetzt
+     - Move-Wiederaufnahme übernimmt Zielpfade, planned_targets, Sidecars, Konfliktmodus und Journal-Kontext vollständig
+     - Crash-Recovery erkennt erfolgreich abgeschlossene Moves, wenn Ziel existiert und Quelle bereits entfernt wurde, und räumt temporäre Backups auf
+     - Journal-Schreibfehler werden geloggt und in der GUI als Recovery-Warnung gemeldet
+     - Legacy-V1-Backups warnen vor möglichen Klartext-Secrets; lokale API-Keys/Tokens können beim Restore bewusst behalten werden
+     - Backup-Restore arbeitet gestaged und rollt Einstellungen sowie Dateien bei Fehlern auf den vorherigen Zustand zurück
+     - DV-P5-Remux-Hilfsschritte laufen nicht mehr über nacktes subprocess.run(), sondern über den zentralen abort- und timeoutfähigen Prozesspfad
+
+13) Dokumentationsabgleich nach Journal-/Restore-Stabilisierung
+     - Über-Dialog, Help-Datei, DOCX-Dokumentation und PDF-Handbuch tragen denselben aktuellen Projektumfang
+     - Backup-/Restore-Dokumentation nennt Legacy-V1-Klartext-Secrets, bewusste Secret-Übernahme und transaktionalen Restore
+     - Job-/Move-Journal-Dokumentation beschreibt eindeutige Laufdateien, bewusst erhaltene offene Journale und vollständige Move-Wiederaufnahme
+     - DV-P5-Remux ist als timeout- und abbrechbarer Prozesspfad dokumentiert
+     - der Support-Workflow verweist klarer auf offene Restqueues, Diagnosepaket und gezielte Recovery-Warnungen
+     - die dokumentierte Build-Konfiguration ist auf V9.5 ausgerichtet; lokale .spec-/Buildskripte sind im Source-only-Archiv nicht enthalten und werden deshalb in diesem Quellstand nicht als erneut geprüft behauptet
+
+14) Review-Blockfix: präzise Pfad-Meldungen, Prozess-Timeout, Testsetup und Release-Profil
+     - Preflight zeigt den tatsächlichen Grund einer Mediathek-Pfadauflösung: aktueller Pfad, aktuelles Jellyfin-/DB-Mapping, gespeichertes Mapping oder Rebase eines alten Speicherpfads
+     - TV, Anime und Filme verwenden dieselbe zentrale Windows-/UNC-Pfadlogik; die bisher pauschale Meldung „normalisiert“ entfällt
+     - Windows-taskkill erhält einen festen 5-Sekunden-Timeout; Timeout und Nicht-Null-Exitcode führen kontrolliert in den vorhandenen Python-Kill-Fallback
+     - requirements-test.txt, pytest.ini und TESTING.md definieren den Windows/PyQt6-Testlauf explizit mit pytest und pytest-qt
+     - release_manifest.json kennzeichnet den aktuellen Projektstand ausdrücklich als Source-only-Archiv; absichtlich nicht mitgelieferte lokale PyInstaller-Spec-/Build-/Splash-Dateien und dist werden nicht mehr als inkonsistenter Fehlbestand gewertet
+     - das V9.5-PDF-Handbuch liegt wieder unter Handbuch\Handbuch.pdf, sodass Hilfe-Menü und Source-Release-Prüfung denselben erwarteten Pfad verwenden
+
+15) Architektur-Refactoring: MoveThread in fachliche Services zerlegt
+     - MoveThread enthält keine direkte destruktive Datei-/Ordner-Transferlogik mehr und dient als QThread-Orchestrator für Fortschritt, Benutzerabfragen, Journal-Lebenszyklus und Shutdown
+     - MoveFileService kapselt Datei-/Directory-Moves, Konfliktsicherung, SxxExx-Ersetzung, Staging, Commit und Rollback Qt-unabhängig
+     - MoveRouter kapselt geplante Ziele sowie TV-/Anime-/Film-Zielermittlung; MoveSidecarService übernimmt Sidecars, NFO-Zielnamen und Trickplay-Transaktionen
+     - Move-Postprocessing für Ersetzungs-Erinnerungen und Mediathek-Fortschreibung ist aus dem Worker ausgelagert
+     - bestehende private MoveThread-Einstiegspunkte bleiben als dünne Kompatibilitätsdelegates erhalten, damit bestehende Tests und Altaufrufer nicht unnötig brechen
+     - Architektur-Regressionstests verhindern, dass os.replace/os.link/shutil.move/copytree/rmtree wieder direkt in MoveThread eingebaut werden
+     - versteckte ToolPaths-Kopplung im Move-Postprocessing korrigiert: get_tool_paths() verwendet den zentral registrierten Provider statt ein QSettings-Objekt als falschen Provider zu übergeben
+
+16) Architektur-Refactoring: Mediathek-God-Module in fachliche Core-Module zerlegt
+     - core/media_library.py ist nur noch eine stabile Kompatibilitäts-Fassade ohne Business-Logik
+     - Schema/SQLite-Zugriff, Export, Jellyfin-Import, Pfad-Mapping, Records/Move-Fortschreibung, Speicher-Scan, Suche und Datentypen liegen in getrennten Modulen
+     - bestehende öffentliche Imports aus dragontools.core.media_library bleiben vollständig kompatibel
+     - GUI und Postprocessing verwenden die fokussierten Module direkt, wo dadurch keine bestehende Test-/Kompatibilitätsschnittstelle gebrochen wird
+     - Release-Smoke-Test verlangt alle neuen Mediathek-Module und erkennt unvollständig gepackte Source-Releases
+     - Architekturtests verhindern eine erneute Rückkehr von Business-Logik in die Fassade
+
+17) Architektur-Refactoring: Online-Metadaten getrennt und Renamer-Fallback für unbekannte Episodentitel korrigiert
+     - online_metadata.py ist nur noch eine stabile Kompatibilitäts-Fassade; Config/Modelle/Parsing, TMDB, TheTVDB, TVDB-Helfer und Composite-/Factory-Logik liegen in getrennten Core-Modulen
+     - TMDB und TheTVDB verwenden einen gemeinsamen Episodentitel-Normalisierer und übernehmen bei leerem Provider-Titel niemals mehr den Quell-/Release-Dateinamen als Episodentitel
+     - fehlt ein echter Episodentitel, lautet der deterministische Zielname „Folge XX“; generische Providerwerte wie „Episode 10“, „Folge 10“ oder „S22E10“ werden ebenfalls auf dieses Schema normalisiert
+     - ist die Episode beim Provider noch gar nicht angelegt, aber die Serie eindeutig gefunden, wird der korrekte Provider-Serienname mit „Folge XX“ verwendet
+     - offene/generische Episodentitel werden im Renamer als „Episodentitel offen“ bzw. „Episode noch nicht in Metadaten“ markiert und dürfen keinen 100-%-Confidence-Wert erzeugen
+     - No-Match-Vorschläge verwenden ebenfalls „Folge XX“ statt einen technischen Release-Rest als Episodentitel
+     - Architektur-Regressionstests sichern die Fassade, Modulgrößen und das Verbot des alten Path(path).stem-Fallbacks in beiden Providern ab
+
+18) GUI-Architektur: SettingsDialog in eigenständige Einstellungsbereiche zerlegt
+     - settings_dialog.py ist nur noch Dialog-Orchestrator für Aufbau, Laden, Speichern, Sichtbarkeit und Audit-Logging
+     - Storage/Logging, Tools/Runtime, Mediathek/NFO/Trickplay, Auto-Crop/IMAX sowie Safety/Timeout/Move-Konflikte besitzen getrennte Sections mit build/load/save-Verantwortung
+     - Verhaltensvergleich gegen den vorherigen Stand bestätigt identische Persistenz aller 87 QSettings-Werte
+     - Architekturtests verhindern die Rückkehr direkter QGroupBox-/Settings-Key-Fachlogik in den Hauptdialog
+     - Release-Smoke-Test verlangt die ausgelagerten Settings-Module
+
+19) GUI-Architektur: ConversionController in fokussierte Services zerlegt
+     - conversion_controller.py ist von rund 929 auf unter 300 Zeilen reduziert und dient nur noch als stabile Orchestrierungs-Fassade
+     - ConversionStartCoordinator kapselt Convert-, Move-Only- und DV-Remux-Startabläufe einschließlich Preflight und Speicherplatzprüfung
+     - ConversionConfigBuilder/ConversionWorkerFactory kapseln ConverterConfig, Subtitle-Regeln sowie Single-/Parallel-/DV-Worker-Erzeugung
+     - ConversionWorkerLifecycle übernimmt Pause, Abort, aktiven FFmpeg-Abbruch, Signalverdrahtung und Job-Journal-Start
+     - ConversionProgressPresenter übernimmt Einzel-/Parallelfortschritt, Fokusauswahl, ETA und Journal-Dateistarts; ConversionDiagnosticsService formatiert Worker-Diagnosen Qt-unabhängig
+     - ConvertWidget nutzt für Fortschritt nur noch die öffentliche Controller-Schnittstelle; private Legacy-Einstiege bleiben als dünne Delegates ohne Fachlogik erhalten
+     - Architekturtests begrenzen Modulgrößen und verhindern direkte Worker-, Prozess- oder Dateioperationslogik im Controller
+
+20) Architektur-Refactoring: DVProcessingPipeline in explizite DV-Stufen zerlegt
+     - DVProcessingPipeline.run von rund 610 auf rund 95 Zeilen reduziert; Request-/Temp-Zustand, Tool-Ausführung, Encode-Befehl und DV-Stufen liegen in getrennten Worker-Modulen
+     - DV Profil 5 bleibt bewusst ein eigener Sonderpfad: Originalcontainer als Encode-Quelle, libplacebo für ICtCp → BT.2020/PQ und dovi_tool Mode 3; kein automatischer P5-Remux-Fallback
+     - DV Profil 7 wird weiterhin auf Profil 8.1 normalisiert; DV Profil 8 mit HDR10/PQ-Basis verwendet den bereits kompatiblen source.hevc direkt und überspringt den unnötigen dovi_tool-Mode-2-Rewrite; nicht eindeutig HDR10/PQ-kompatibles Profil 8 wird weiterhin normalisiert
+     - DV+HDR10+-Reihenfolge bleibt Extraktion → Encode → HDR10+-Injektion → DV-RPU-Injektion → finale HDR10+-Verifikation
+     - historischer P5-Remux auf aktuelle Audio-, MP4Box- und Level-5-APIs korrigiert; nicht-H.265-Zielcodecs brechen jetzt fail-fast ab
+     - Release-Smoke-Test verlangt nun auch die beim DV-Refactoring ausgelagerten Kernmodule
+
+21) GUI-Architektur: MediaLibraryDialog in View, Services und Controller zerlegt
+     - media_library_dialog.py von rund 1.011 auf rund 337 Dateizeilen reduziert und auf Dialog-Orchestrierung beschränkt
+     - View-Aufbau, Wartung/Import/Export, Pfad-Mapping, Suche/CSV/SQL, Scan-Lifecycle und Ergebnisdarstellung besitzen getrennte Owner
+     - der Dialog importiert keine DB-, Such-, Jellyfin-, Scan- oder Exportimplementierungen mehr direkt
+     - bestehende private Methoden und Widgetattribute bleiben als dünne Kompatibilitätsdelegates erhalten
+
+22) GUI-Architektur: PreFlightDialog und MovePreflightController aufgeteilt
+     - PreFlightDialog ist auf rund 158 Klassenzeilen reduziert; Zielwidgets, View-Aufbau und Hintergrund-Metadatensuche liegen in getrennten Modulen
+     - MovePreflightController ist auf rund 113 Klassenzeilen reduziert und delegiert an Preflight-Workflow, Move-Lifecycle und Benutzerentscheidungs-Dialoge
+     - regulärer und inkrementeller Move-Lifecycle liegen nicht mehr gemeinsam mit Dialogaufbau und Zielauswahl in einer God-Class
+     - bestehende öffentliche/private Einstiegspunkte bleiben als Kompatibilitätsdelegates erhalten
+     - Architekturtests begrenzen Modulgrößen und verhindern direkte Provider-/DB- oder Dialog-Fachlogik in den Orchestratoren
+
+23) GUI-Architektur: MainWindowActionsMixin in fokussierte Aktionsbereiche zerlegt
+     - main_window_actions.py ist nur noch eine stabile Kompatibilitäts-Fassade ohne eigene Aktionslogik
+     - Convert/Queue/Log, Backup/Restore, Einstellungen/Regeln, Online-Metadaten, Hilfe/Changelog, Systemdiagnose/externe Tools sowie Profile/Ansicht besitzen getrennte Mixins
+     - alle 58 bisherigen Aktionsmethoden bleiben über MainWindowActionsMixin erreichbar; ein AST-Verhaltensvergleich bestätigt unveränderte Methodenkörper gegenüber dem vorherigen Stand
+     - kein fokussiertes Aktionsmodul überschreitet 260 Zeilen; Architekturtests verhindern doppelte Methoden und ein erneutes Anwachsen der Fassade
+     - Release-Smoke-Test verlangt alle neuen MainWindow-Aktionsmodule
+
+24) GUI-Architektur: MovieRenamerWidget in View, Tabellensteuerung, Resolver und Aktionen zerlegt
+     - movie_renamer_widget.py von rund 778 Dateizeilen bzw. 635 Klassenzeilen auf einen dünnen Qt-Orchestrator reduziert
+     - MovieRenamerView besitzt ausschließlich Widgetaufbau, Drag&Drop-Tabelle und Busy-Darstellung; Metadaten- oder Dateioperationen liegen dort nicht mehr
+     - MovieRenamerTableController kapselt Zeilen-/Proposal-Zustand, Kandidaten-Dropdowns, Zielnamendarstellung und Rename-Konfliktprüfung
+     - MovieRenamerResolveCoordinator und MovieRenameResolveThread kapseln inkrementelle/manuelle Online-Metadatensuche und den QThread-Lebenszyklus
+     - MovieRenamerActionController übernimmt Dateiauswahl, Accept/Reject, Listenaktionen und den bestätigten Rename-Commit; bestehende Widgetmethoden bleiben als dünne Kompatibilitätsdelegates erhalten
+     - Architekturtests begrenzen die neuen Module, sichern die bisherige Methodenoberfläche und verhindern, dass Metadaten-/Filesystem-Fachlogik wieder in das Widget zurückwandert
+
+25) GUI-Architektur: ConvertWidgetQueueActionsMixin in fokussierte Queue-Aktionsbereiche zerlegt
+     - convert_widget_queue_actions.py von rund 654 Zeilen auf eine reine Kompatibilitäts-Fassade ohne eigene Aktionsmethoden reduziert
+     - Drag&Drop, Queue-Grundaktionen, separates Queue-Fenster, Kontext/Diagnose, Datei-Overrides/Profile, Badges und manuelle Quellbildprüfung besitzen getrennte Mixins
+     - alle 39 bisherigen Methoden bleiben über ConvertWidgetQueueActionsMixin unverändert erreichbar; ein AST-Vergleich bestätigt identische Methodenkörper gegenüber Blockfix 14
+     - kein neues Queue-Aktionsmodul überschreitet 190 Zeilen; Release-Smoke-Test verlangt alle ausgelagerten Module
+     - Architekturtests verhindern doppelte Methoden und ein erneutes Anwachsen der Kompatibilitäts-Fassade
+
+26) GUI-Architektur: ConvertWidget auf Composition-Root und fokussierte Services reduziert
+     - convert_widget.py von rund 628 Dateizeilen bzw. 569 Klassenzeilen auf rund 275 Dateizeilen bzw. 243 Klassenzeilen reduziert; __init__ umfasst nur noch rund 17 Zeilen
+     - Dependency-Aufbau und Signalverdrahtung liegen in ConvertWidgetComposition; codec-spezifische Zielpfade in ConvertWidgetTargetPathService
+     - Queue-/Progress-Sperrzustand liegt in ConvertWidgetRuntimeUI; Job-/Move-Wiederaufnahme und Batch-Preflight liegen in ConvertWidgetRecoveryService
+     - Log-, Desktop- und Shutdown-Aktionen liegen in ConvertWidgetHostActions; ConvertWidget importiert weder subprocess/QMessageBox noch Batch-Preflight- oder Worker-/Result-Service-Implementierungen direkt
+     - die vollständige bisherige 55-Methoden-Oberfläche bleibt als dünne Kompatibilitäts-/Orchestrierungsoberfläche erhalten; Queue-Aktions-Mixins aus Blockfix 15 bleiben unverändert
+
+27) GUI-Architektur: EncoderSettingsController in fokussierte Verantwortungen aufgeteilt
+     - encoder_settings_controller.py von rund 573 auf rund 41 Zeilen reduziert und als stabile Composition-Fassade belassen
+     - Panelaufbau/-sichtbarkeit und Signalverdrahtung liegen in encoder_settings_panels.py; Encoderoptionen und AutoCrop/IMAX-Settings in encoder_settings_options.py
+     - QSettings-Laden/-Speichern und State-Synchronisierung liegen in encoder_settings_persistence.py; Profile, Assistent und Werkseinstellungen in encoder_settings_profiles.py
+     - bestehende öffentliche Methodenoberfläche bleibt über Vererbung vollständig erreichbar; fachliche Methodenkörper wurden gegenüber Blockfix 17 unverändert verschoben
+     - Shutdown bleibt weiterhin bewusst reiner Sitzungszustand und wird weder gespeichert noch beim Laden zurückgesetzt
+
+28) Legacy- und Duplikatbereinigung nach den Architektur-Refactorings
+     - Qt-unabhängige Worker-Verträge liegen in worker_contracts.py; Core-/Service-Module ziehen für Queue-Status und Pfadnormalisierung nicht mehr unnötig base_worker.py/PyQt6 ein
+     - atomare JSON-Schreiblogik für Job- und Move-Journal, Online-Metadata-Cache, Subtitle-Tool-Logging, Video-Dateiauswahl/Drag&Drop und Journal-Recovery-Grundlogik wurden zentralisiert
+     - tote DV-Kompatibilitätspfade dv_conversion.py, dv_p5_legacy_remux.py und dv_subtitle_exporter.py sowie weitere ungenutzte Wrapper/Dataclasses/Helfer wurden entfernt
+     - der produktive Dolby-Vision-P5-Sonderpfad bleibt unverändert: Originalcontainer + libplacebo + Encode + RPU-Reinjektion; entfernt wurde ausschließlich nicht mehr erreichbarer Legacy-Code
+     - Windows-Shutdown-Pfadbildung ist hostunabhängig und damit auch in plattformneutralen Regressionstests korrekt; Tool-Verfügbarkeitsprüfung und Trickplay-Konfliktmodus besitzen jeweils nur noch eine kanonische Implementierung
+     - Architekturtests sichern entfernte Legacy-Module, Qt-unabhängige Worker-Verträge sowie die gemeinsamen Journal-/Metadata-Helfer gegen erneute Duplizierung ab
+
+29) Systemreview, Über-Dialog und Dokumentation auf aktuellen Projektumfang abgeglichen
+     - Über-Dialog im Menü Hilfe → Über verwendet weiterhin die zentrale Projektstatistik aus dragontools/core/project_info.py
+     - Release-Fallbackwerte auf den geprüften Stand 03.09.2026 korrigiert: 359 Python-Dateien, 81.528 Gesamtzeilen und 68.935 Codezeilen
+     - help.html Abschnitt „Über Dragon Tools V9.5“ nennt denselben aktuellen Umfang und erklärt Live-Zählung vs. Frozen-Build-Fallback
+     - DOCX-Handbuch um einen Review-Anhang zum aktuellen Über-/Projektumfang, Testbestand und verbleibenden Refactoring-Schwerpunkten ergänzt
+     - systematisches Review markiert verbleibende große Module als nächste Refactoring-Kandidaten, ohne die bereits stabilisierten Fassaden unnötig umzubauen
+     - MoveThread-Kompatibilitätsdelegates greifen bei nicht initialisierten PyQt-Testinstanzen nun robust auf Defaults zurück; Volltest: 681 bestanden
+
+30) P0-Block A: SQLite-WAL-Backups und MoveJournal-Crash-Recovery abgesichert
+     - DragonTools-Mediathek-Backups verwenden die SQLite Online Backup API statt einer rohen Dateikopie; commitete WAL-Daten sind damit Bestandteil des Snapshots
+     - auch der binäre Mediathek-Datenbankexport nutzt denselben WAL-konsistenten Snapshotpfad
+     - fehlgeschlagene Snapshot-Erzeugung entfernt Teilziele und bricht nachfolgende schreibende/destruktive DB-Aktionen fail-closed ab
+     - MoveJournal verwirft Altbestand-Backups nur noch bei eindeutig belegtem Commit: Ziel existiert und Quelle existiert nicht mehr
+     - existieren Quelle und Ziel gleichzeitig, bleibt das Backup erhalten; der Journalzustand wird als mehrdeutig markiert und in der Wiederaufnahme sichtbar gemacht
+     - Failure-Injection deckt WAL-Snapshot, Backupfehler, Restorefehler und Journalwrite-Fehler während der Recovery ab
+
+31) P1-Block B: JobJournal und Trickplay-Commit/Prozesshandling fail-closed abgesichert
+     - JobJournal.start() propagiert atomare Schreibfehler jetzt als JobJournalWriteError; ein Konvertierungslauf startet nicht mehr, wenn das initiale Journal nicht dauerhaft angelegt werden konnte
+     - Disk-full, PermissionError und atomarer os.replace-Fehler werden nicht mehr still verschluckt; der letzte durable Journalstand bleibt erhalten
+     - der Abschluss schreibt zuerst das Archiv und entfernt die aktive Journaldatei erst nach nachweislich erfolgreicher Archivierung; bei Archivfehler bleibt das aktive Journal für Recovery lesbar
+     - Trickplay-Overwrite/Backup verwendet für den finalen Root-Swap PathSwapTransaction statt den Altbestand vor dem Rename zu löschen
+     - schlägt der Trickplay-Commit fehl, wird der vorherige Bestand automatisch wiederhergestellt; bei Rollback-Fehler bleibt das Altbestand-Backup sichtbar erhalten
+     - Trickplay-FFmpeg läuft über den zentralen ToolRunner mit laufendem stdout/stderr-Drain, 6-Stunden-Runtime-Timeout, Pause/Abort-Unterstützung, No-Window-Verhalten und kontrollierter Prozessbaum-Beendigung
+     - Failure-Injection deckt Commit-/Rollback-/Backup-Cleanup-Fehler sowie große stderr-Ausgabe, Timeout und Abbruch während Trickplay ab
+
+32) P1-Block C: Jellyfin-Snapshot, Cross-Volume-Staging und Backupnamen abgesichert
+     - aktive Jellyfin-SQLite-Datenbanken werden über die SQLite Online Backup API als konsistenter Read-only-Snapshot eingelesen; commitete WAL-Seiten gehen beim Import nicht mehr verloren
+     - die originale Jellyfin-Datenbank bleibt reine Importquelle und wird durch DragonTools nicht beschrieben
+     - das komplette Jellyfin-Import-Staging wird direkt unter dem Zielverzeichnis angelegt; finaler os.replace bleibt dadurch auch bei getrennten Windows-Laufwerken oder UNC-Zielen auf demselben Volume/Share
+     - die intern neu aufgebaute DragonTools-DB wird vor dem finalen Replace nochmals als SQLite-Snapshot materialisiert, damit auch deren temporärer WAL-Inhalt vollständig im Ziel landet
+     - Datenbank-Backupnamen enthalten Mikrosekunden und einen UUID-Anteil; mehrere Backups in derselben Sekunde können nicht mehr kollidieren
+     - Failure-Tests prüfen offenen Jellyfin-WAL, unveränderte Quelldatei, zielnahes Staging, Snapshotfehler mit erhaltenem Altbestand und unmittelbar aufeinanderfolgende Backups
+
+33) P1-Block D: Qt-Testinfrastruktur und bytecodefreie Release-Pakete abgesichert
+     - PyQt-Teststubs enthalten nur tatsächlich importierte Typen; echte GUI-/QThread-Tests werden ohne PyQt6/pytest-qt sauber übersprungen statt als Produktfehler zu erscheinen
+     - vollständiger Linux/headless-Testlauf sammelt ohne Collection-Abbruch; Source-Release-Packer filtert __pycache__, *.pyc und *.pyo und prüft das Archiv vor dem atomaren Replace
+     - Release-Validation behandelt Bytecode-Artefakte als Fehler; Source-only-Manifest und Testabhängigkeiten sind reproduzierbar dokumentiert
+
+34) Architektur-Refactoring Block E: ConverterThread als schlanke QThread-Fassade
+     - aktuelle Neumessung bestätigte den God-Object-Befund mit 875 Klassenzeilen, 38 Methoden und einer 248-zeiligen run()-Methode
+     - Runtime-Serviceaufbau, Queue-/Session-Schleife, Run-Fehler/Cleanup, Per-Datei-Workflow/Quellbildprüfung und Pause-/Abort-/Prozesskontrolle wurden in fünf fokussierte Worker-Services ausgelagert
+     - ConverterThread behält öffentliche Signale, Queue-/Override-Fassade, Prozess-Property, DV/HDR-Kompatibilitätswrapper und dieselbe öffentliche Methodenoberfläche
+     - ConverterThread wurde auf 351 Klassenzeilen reduziert; run() umfasst nur noch 10 Zeilen, die neuen Services besitzen jeweils klar begrenzte Verantwortungen
+     - Dolby-Vision-P5/P7/P8-, HDR10+-, Audio-, Subtitle-, Retry-, Journal- und Postprocess-Fachlogik wurde nicht verändert; bestehende direkte DV-Pipeline-/HDR+-Verdrahtung bleibt erhalten
+     - vollständiger Headless-Regressionslauf nach Block E: 693 Tests bestanden, 10 bewusst übersprungen, 0 Fehler; 137 relevante Converter-/DV-/Audio-/Subtitle-/Journal-/Abort-/Postprocess-Tests bestanden
+     - aktueller Projektumfang: 368 Python-Dateien, 82.277 Gesamtzeilen, 69.518 Codezeilen, 96 Testpaket-Dateien, 94 test_*.py und 705 statisch erkannte Tests
+
+35) Architektur-Refactoring Block F: verbleibende Kandidaten neu vermessen und zwei God-Methoden aufgelöst
+     - aktuelle AST-Neumessung klassifiziert audio_video_matcher.py, subtitle_rules.py, movie_renamer.py, batch_preflight.py, ISOThread und ParallelConverterThread als groß, aber fachlich kohärent; ConverterThread bleibt nach Block E ausreichend refaktoriert
+     - media_library_search.search_library() wurde als echter God-Method-Fall bestätigt und von 316 auf 52 Zeilen reduziert; Medienart-, Bereichs-, Preset-, Text- und SQL-SELECT-Aufbau liegen jetzt in getrennten Hilfsfunktionen bei unverändertem Suchverhalten
+     - die 228-zeilige Medieninfo-Textaufbereitung wurde aus media_info_dialog.py in media_info_text_builder.py ausgelagert; die neue build_media_info_text()-Orchestrierung umfasst 36 Zeilen und bleibt ohne Qt importier-/testbar
+     - inkrementeller Move-Abschluss korrigiert: move_preflight_controller.py importierte versehentlich das nicht vorhandene dragontools.gui.file_list_utils; der Status-Text nutzt wieder den vorhandenen gemeinsamen ui_helpers-Helper
+     - statische Prüfung aller relativen internen Python-Imports findet nach dem Fix 0 fehlende Module
+     - relevanter Block-F-Regressionslauf: 148 Tests bestanden; vollständiger Linux-/Headless-Lauf: 699 bestanden, 10 bewusst übersprungen, 0 Fehler
+     - aktueller Projektumfang: 371 Python-Dateien, 82.541 Gesamtzeilen, 69.738 Codezeilen, 98 Testpaket-Dateien, 96 test_*.py und 711 statisch erkannte Tests
+
+36) Abschluss-Block G: Exceptions, Transaktionsduplikate und Legacy-Reste bereinigt
+     - 405 breite Exception-Grenzen wurden neu inventarisiert und nach Boundary/API, GUI, Recovery, Dateisystem, Journal, ToolRunner und Parser klassifiziert; keine mechanische Massenersetzung durchgeführt
+     - kritische Journal-/Prozess-/Recovery-Pfade wurden gezielt geschärft: JobJournal-JSON-/Unlink-Fehler fangen konkrete I/O-/Decode-Fehler, run_analysis_tool() maskiert keine unerwarteten Programmierfehler mehr, ToolRunner terminiert mit spezifischen Timeout-/OSError-Grenzen und protokolliert fehlgeschlagene Kill-Fallbacks
+     - GUI-Recovery bleibt bewusst fehlertolerant, schreibt Fehler aber auch im quiet-Modus ins Log; Preflight-Badge-Fehler werden ebenfalls sichtbar protokolliert statt still übersprungen
+     - ReplaceService verwendet für Same-Path-Overwrite jetzt die zentrale PathSwapTransaction statt einer zweiten eigenen Backup-/Rollback-Implementierung; bei Commitfehler bleiben sowohl Original als auch bereits erzeugter Encode erhalten
+     - PathSwapTransaction unterstützt dafür caller-eigenes Staging, das beim Rollback gezielt erhalten werden kann; Rollbackfehler liefern weiterhin PathTransactionRollbackError mit erhaltenem Backup-Pfad
+     - identische ISO-Größenformatierung wurde in core/formatting.py zentralisiert; die öffentlichen DV-Remux-Formatfunktionen bleiben als dünne Kompatibilitätsdelegates erhalten
+     - ähnliche Helfer mit abweichender Rundung, Fehlersemantik oder bewusst stabiler Fassade wurden nicht künstlich vereinheitlicht; bestehende Legacy-Datenmigrationen und Kompatibilitätsimports bleiben erhalten
+     - relevanter Block-G-Lauf: 91 Tests bestanden; vollständiger Linux-/Headless-Lauf: 711 bestanden, 10 bewusst übersprungen, 0 Fehler
+     - aktueller Projektumfang: 375 Python-Dateien, 82.816 Gesamtzeilen, 69.940 Codezeilen, 101 Testpaket-Dateien, 99 test_*.py und 723 statisch erkannte Tests
+
+37) Review-Patchset: Prozessgrenzen, Fail-Safe-Pfade und GUI-Refactoring abgeschlossen
+     - ToolRunner und ConverterProgress schließen stdout/stderr-Pipes deterministisch; ResourceWarning-Regressionstests sichern lange Tool-Sessions ab
+     - Qualitätstester nutzt den zentralen ToolRunner mit konfigurierbarem Hard-Timeout (Standard 3600 s), Prozessbaum-Abbruch und einheitlicher Timeout-/Abort-Klassifizierung
+     - Suspend/Resume liefert echten Erfolgsstatus, protokolliert OS-Fehler und verhindert einen falschen Pausenzustand; Windows-Prozesshandles werden mit expliziten 64-bit-sicheren ctypes-Signaturen geöffnet
+     - CrashGuard-Aktivitätsmarker melden Dateisystemfehler über stderr-Fallback und Status; Postprocess-Enablement ist bei Prüffehlern fail-closed
+     - Move-Preflight/-Lifecycle/-Request-Fassaden verwenden öffentliche interne Delegate-APIs; private Wrapper bleiben nur als Kompatibilitätsschicht erhalten
+     - Produktions-asserts und bestätigte ungenutzte Imports entfernt; ConverterRuntimeBuilder ermittelt den Debug-Quellpfad ohne Importkopplung an ConverterThread
+     - RulesAudioTab._init_ui und ConvertWidgetOverrideDialogHelper.edit_override wurden in semantische Builder/Persistenzhelfer zerlegt, ohne große kohärente Workerklassen kosmetisch zu teilen
+     - neue Stabilitätsregressionen ergänzt; vollständiger Linux-/Headless-Lauf: 720 bestanden, 10 echte Qt-Tests mangels PyQt6/pytest-qt übersprungen, 0 Fehler
+     - Source-Release enthält release_manifest.json, pytest.ini und requirements-test.txt und wird bytecode-/cachefrei über release_packaging erzeugt
+     - aktueller Projektumfang: 376 Python-Dateien, 83.286 Gesamtzeilen, 70.339 Codezeilen, 102 Testpaket-Dateien, 100 test_*.py und 732 statisch erkannte Tests
+
+
+38) DV-/HDR10+-Produktionsfix: Pipeline-Diagnose, Profil-8-Passthrough und Metadatenintegrität
+     - DV-Fehler werden nicht mehr zu einem generischen bool-Fehler reduziert: Fehlerstufe, Tool, Kommando, Returncode/Exception und stderr/stdout-Tail bleiben bis Workflow-Log und ErrorReport erhalten
+     - fehlende DV-Pipeline-Verdrahtung (_build_stages, Dateivalidierung, libplacebo-Fähigkeitsprüfung) wurde vollständig wiederhergestellt und durch Regressionstests abgesichert
+     - für DV Profil 8 mit HDR10/PQ-Basis wird der unnötige dovi_tool-Mode-2-Rewrite übersprungen; source.hevc dient direkt als kompatibler 8.1-Arbeitsstream
+     - Profil 7 sowie HLG-basiertes oder anderweitig nicht eindeutig HDR10/PQ-kompatibles Profil 8 werden weiterhin normalisiert; Dolby Vision wird nicht still verworfen
+     - bekannte CM-v4-Parserfehler wie „Unknown metadata block … Level 253“ führen nicht mehr durch einen unnötigen P8-No-op; RPU-Extraktion und RPU-Injektion bleiben harte Prüfschritte
+     - HDR10+-Erkennung akzeptiert konsistent has_hdrplus und has_hdr10plus, damit unterschiedliche Analyse-/Cachemodelle nicht aus dem Kombipfad fallen
+     - HDR10+-Extract/Inject löscht alte Zielartefakte vor jedem Toollauf; ein fehlgeschlagener Retry kann keine stale JSON-/HEVC-Datei als Erfolg weiterverwenden
+     - die finale HDR10+-Nachprüfung vergleicht die dynamischen Metadaten semantisch mit der Quelle; ausschließlich werkzeugabhängiges ToolInfo wird ignoriert
+     - bei geplanten DV-Audiospuren wird ein unvollständiger MP4-Audioplan fail-closed abgebrochen, statt eine scheinbar erfolgreiche Ausgabe mit still verlorenem Audio zu erzeugen
+     - finaler v5-Regressionsstand: 734 Tests bestanden, 10 echte Qt-Tests mangels PyQt6/pytest-qt übersprungen, 0 Fehler
+     - aktueller Quellumfang: 376 Python-Dateien, 84.133 Gesamtzeilen, 71.073 nichtleere/nicht reine Kommentarzeilen, 102 Testpaket-Dateien, 100 test_*.py und 746 statisch erkannte Tests
+
+39) DV+HDR10+ Finalverifikation auf MediaInfo-Primärcheck umgestellt
+     - nach dem MP4Box-Mux wird die fertige MP4 zuerst direkt mit MediaInfo geprüft; Dolby Vision und HDR10+ werden damit am tatsächlichen Endcontainer bewertet
+     - erkennt MediaInfo alle laut Medienvertrag benötigten dynamischen HDR-Merkmale, gilt die Finalverifikation unmittelbar als erfolgreich und es erfolgt keine erneute HEVC-/RPU-/HDR10+-Extraktion
+     - fehlt oder bleibt ausschließlich ein Merkmal unklar, startet nur für dieses Merkmal die bestehende strenge Bitstream-Fallbackprüfung aus dem finalen MP4
+     - für DV extrahiert der Fallback die finale RPU und vergleicht sie per SHA-256 mit der injizierten RPU; für HDR10+ werden die finalen Metadaten semantisch mit der Quelle verglichen
+     - MediaInfo wird in diesem Primärcheck bewusst ohne ffprobe-Fallback verwendet, damit die Beweisquelle eindeutig bleibt; nicht verfügbares/unklares MediaInfo führt sicher in den Bitstream-Fallback
+     - DVPipelineExecutorAdapter propagiert verified_hdr10plus und verified_dolby_vision weiterhin korrekt an WorkflowServices/OutputVerifier
+     - die Prüfung bleibt fail-closed: erst wenn MediaInfo oder der gezielt gestartete Fallback das benötigte Merkmal bestätigt, darf die Ausgabe committed werden
+     - MediaInfo-Primärprüfung und Bitstream-Fallback bleiben als getrennte, kleine Methoden implementiert; der bestehende Architekturtest begrenzt weiterhin jede DV-Pipeline-Stufe auf maximal 80 Zeilen
+     - drei zusätzliche Regressionstests sichern MediaInfo-Primärpfad, selektiven HDR10+-Fallback und reine MediaInfo-DV/HDR10+-Erkennung; vollständiger Headless-Lauf: 877 bestanden, 15 umgebungsbedingt übersprungen, 0 Fehler
+
+40) Queue-/Logging-Aufräumung und manuelle per-Datei-Encodersteuerung
+     - bestätigte SxxExx-Ersetzungs-Erinnerungen protokollieren beim Löschen jetzt die konkrete Erinnerungs-ID im normalen Log; „Erneut vorlegen“ und Schließen behalten den Eintrag weiterhin persistent
+     - DV-Pipeline-Nummerierung auf die sieben tatsächlich vorhandenen Arbeitsschritte bereinigt: HEVC, DV-Profil, RPU-Extraktion, Encoding, RPU-Crop/Level-5, dynamische Metadaten und MP4Box-Mux
+     - der historische, entfernte zusätzliche HEVC-/Audio-Zwischenschritt erzeugt keine künstliche Lücke bzw. 1/8–8/8-Nummerierung mehr
+     - normale DV-/HDR10+-Logs zeigen die fachlichen Hauptschritte und Abschlussentscheidung; technische Extraktions-, Injection- und RPU-Detailmeldungen werden in den VerboseLog verschoben, Warnungen/Fehler bleiben im Hauptlog sichtbar
+     - Datei-Einstellungen erhalten einen manuellen Encoder-/Skalierungs-Override mit CPU, NVENC, QSV oder AMF, Qualitätswert, Preset, Skalierung und backend-spezifischen erweiterten Optionen
+     - Mehrfachauswahl in der Queue kann denselben Encoder-/Skalierungs-Override auf mehrere markierte wartende Dateien anwenden; Audio-, Untertitel-, IMAX-, DV/HDR- und Remux-Overrides bleiben dabei unverändert
+     - Priorität der wirksamen Encoderwerte ist jetzt global < Encoder-Profil < manueller Datei-Override; der Override wird vor der Pipeline-/Encode-Planung aufgelöst und gilt damit auch für DV/HDR10+-Dateien
+     - Queue-Badges, Preflight und Lauf-Logging zeigen den manuellen Encoder-/Skalierungs-Override explizit an
+     - neuer GUI-Helper ist über Callback-Injektion entkoppelt; Architekturtest für private Cross-Object-Aufrufe bleibt unverändert streng
+     - vollständiger Headless-Lauf: 882 bestanden, 15 umgebungsbedingt übersprungen, 0 Fehler; aktueller Quellumfang: 414 Python-Dateien, 91.888 Gesamtzeilen, 77.653 Codezeilen und 889 statisch erkannte Tests
+
+=== 01 Release, Build & Packaging ===
+
+V9.5-01) Release- und Dokumentationsstand auf Dragon Tools V9.5 synchronisiert
+     - zentrale App-Version im analysierten Quellstand ist 9.5
+     - Help-Datei, Handbuch, Änderungshistorie und Über-Dialog werden auf V9.5 nachgezogen
+     - aktueller Projektumfang nach der V9.5-Stabilitätsnacharbeit: 359 Python-Dateien, 81.528 Gesamtzeilen und 68.935 nichtleere/nicht reine Kommentarzeilen
+     - davon 93 Python-Dateien im Testpaket, 92 test_*.py-Dateien und 692 statisch erkennbare test_*-Funktionen
+     - Journal-, Backup-, DV-P5- und Changelog-Pfade sind mit gezielten Regressionstests geprüft
+     - Aussagen zu nicht im Quellarchiv enthaltenen .spec-/Buildskripten bleiben ausdrücklich unverifiziert
+
+01) Release-Stand auf Dragon Tools V9.4 angehoben und erneut gegen den Quellstand geprüft
+     - zentrale App-Version und Startdatei verwenden V9.4; GUI-Dialoge beziehen die Version aus den zentralen Einstellungen
+     - About-Dialog, Help-Datei, Dokumentation und Änderungshistorie tragen denselben Versionsstand
+     - aktueller Projektumfang: 239 Python-Dateien insgesamt, 64.272 Zeilen und 54.280 nichtleere/nicht reine Kommentarzeilen
+     - davon 238 Python-Dateien im Paket dragontools plus DragonToolsV9.py als Einstiegspunkt
+     - Hinweis: im bereitgestellten Quellarchiv sind keine versionierten PyInstaller-.spec- sowie keine Build-.bat/.ps1-Dateien enthalten; deren Inhalt wird daher in dieser Gegenprüfung nicht als verifiziert behauptet
+
+02) Release-Stand auf Dragon Tools V9.3 angehoben
+     - zentrale App-Version, Startdatei, Build-Skript und PyInstaller-Spec auf V9.3 umgestellt
+     - Release-/Build-Prüfung kontrolliert die neuen NFO-/Trickplay-Module im Paket-Smoke-Test
+     - About-Dialog und Hilfe werden auf den neuen Funktionsstand aktualisiert
+
+03) Versionsangaben auf Dragon Tools V9.2 umgestellt
+     - zentrale App-Version auf 9.2 gesetzt
+     - Splash-Screen, App-Version, Hauptfenster, Dialogtitel, Hilfe, Build-Hinweise und Log-Header werden über die neue Version ausgewiesen
+     - aktiver PyInstaller-Build erzeugt DragonToolsV9.2
+     - versionierte PyInstaller-Spec auf DragonToolsV9.2 umgestellt
+     - Projektzahlen in Help-Datei und "Über Dragon Tools" auf 160 Python-Dateien, ca. 42.100 Gesamtzeilen und ca. 35.500 Codezeilen aktualisiert
+
+04) V9.1-Funktionspaket als V9.2-Update konsolidiert
+     - Timeout-Aktivstatus, ffmpeg-Inaktivitäts-Timeouts, Auto-Crop-/IMAX-Feinsteuerung und Output-Reparatur sind gemeinsam als stabiler Update-Stand gebündelt
+     - Preflight-Berichte, Job-Journal, Zwischenverschieben, Log-Bereinigung und Diagnosepaket sind in den Support-Workflow eingepflegt
+     - Online-Metadaten/TMDB, Regel-/Profilmigration, Release-Prüfung und Stereo-Kopierbereich sind als reguläre V9.2-Funktionen dokumentiert
+
+05) Release-/Build-Prüfung für EXE-Betrieb bereinigt
+     - in der gebauten App wird die Startdatei jetzt als DragonToolsV9.2.exe geprüft
+     - PyInstaller-Spec, Build-Skript, Build-Ordner und Datenschutzprüfung werden nur noch in der Quell-/Vorabprüfung berücksichtigt
+     - die EXE-Prüfung konzentriert sich auf Laufzeitdateien wie Datenordner, Help-Datei, Handbuch, Changelogs, Python-Paket, Programme und Regel-Schemas
+     - zusätzlicher Python-Paket-Smoke-Test prüft Paketordner und Kernmodule auf Vollständigkeit und Syntaxfehler
+
+06) Versionsangaben auf Dragon Tools V9.1 umgestellt
+     - zentrale App-Version auf 9.1 gesetzt
+     - Splash-Screen, App-Version, Hauptfenster, Dialogtitel, Hilfe, Build-Hinweise und Log-Header werden über die neue Version ausgewiesen
+     - aktiver PyInstaller-Build erzeugt DragonToolsV9.1
+
+07) Release-/Build-Prüfung ergänzt
+     - neuer Menüpunkt "Release-/Build prüfen" unter Werkzeuge
+     - kontrolliert Startdatei, Help, Handbuch, Changelogs, Default-Schemata und PyInstaller-Buildstruktur
+     - prüft den fertigen dist-Ordner auf EXE, Datenordner, Python-Paket, Help, Handbuch, Changelog und Programme-Ordner
+     - Datenschutz-/Release-Check warnt vor offensichtlichen lokalen Pfaden, Codex-Temp-Pfaden, Medienserverpfaden und möglichen API-Schlüsseln in Release-Textdateien
+
+08) Versionsangaben auf Dragon Tools V9.0 umgestellt
+     - zentrale App-Version auf 9.0 gesetzt
+     - Splash-Screen, App-Version, Hauptfenster, Dialogtitel, Hilfe, Build-Hinweise und Log-Header angeglichen
+     - alte Versionsnummern in Historienabschnitten bewusst erhalten
+
+09) V9-Changelog von Legacy-Historien getrennt
+     - CHANGELOG.txt enthält nur noch die V9-Entwicklung
+     - CHANGELOGV8.txt enthält den alten V8-Verlauf
+     - CHANGELOGV7.txt bleibt für V7 und ältere Versionen erhalten
+
+10) Aktive Build- und Startdateien auf V9 vereinheitlicht
+     - Einstiegspunkt heißt jetzt DragonToolsV9.py
+     - Build-Skript heißt jetzt build_v9.bat
+     - V9-Spec verweist auf DragonToolsV9.py und Handbuch\Handbuch.pdf
+     - veraltete V8-/Beta-Spec-Dateien wurden entfernt, damit nur noch der V9-Build aktiv ist
+
+=== 02 Dokumentation & Hilfe ===
+
+V9.5-01) Help-Datei an Renamer-Regeln und Mediathek-Datenbank angepasst
+     - vier neue Hauptkapitel: Renamer-Regeln/Release-Normalisierung, Kandidaten/Provider/Fuzzy-Bewertung, Mediathek-Datenbank/Jellyfin-Import sowie Mediathek-Suche/Abweichungen
+     - Hauptüberschriften von 54 auf 60 erweitert; Inhaltsverzeichnis entsprechend neu aufgebaut
+     - Hilfe erklärt die Trennung zwischen erkanntem Titel, Suchbegriff, Online-Treffer und angezeigter Match-Sicherheit
+     - SQLite-Suchfilter, SDR-vs.-unbekannt-Logik und Mehrheits-/Gleichstandsverhalten der Abweichungssuche dokumentiert
+
+V9.5-02) Technisches Handbuch erweitert
+     - Titelstand, Projektstatistik und aktuelle Qualitätsaussagen auf V9.5 aktualisiert
+     - neuer V9.5-Fachanlagenteil dokumentiert Renamer-Regeln, Alias-/Fuzzy-Suche, Providerkandidaten, automatische inkrementelle Vorschlagssuche und die Mediathek-Datenbank
+     - neue Modulreferenzen für media_library.py, media_library_dialog.py, rules_renamer_tab.py, renamer_rules.py und test_media_library.py ergänzt
+     - Datenbanktabellen, Indizes, Jellyfin-Leseimport, Pfad-Mapping, Suchkategorien und Abweichungsalgorithmus technisch beschrieben
+
+01) Hilfe um neue Funktionskapitel erweitert
+     - Audio-Dynamik und Lautheitsnormalisierung erklärt
+     - Videoverarbeitung und Quellbildprüfung dokumentiert
+     - Film-/Serien-Umbenennung mit Online-Metadaten-Vorschlägen beschrieben
+     - TMDB-Preflight-Erweiterung für Film- und Serienjahr ergänzt
+     - Forced-Subtitle-Plausibilitätsprüfung mit Events-pro-Minute-Schwellen aufgenommen
+     - Audio-Video-Matcher inklusive Fall A/B/C, Zielvideolänge und OpenCV-Analyse erläutert
+
+02) Dokumentation und Handbuch aktualisiert
+     - Handbuchstruktur auf V9.4 angepasst
+     - neue Funktionsbereiche in den Workflow-Kapiteln ergänzt
+     - Modulreferenzen für Audio-Video-Matcher, Film-/Serien-Umbenennung, Quellbildprüfung, Qualitätstester, NFO und Trickplay erweitert
+     - Abhängigkeiten, Datenflüsse und Fehlergrenzen der neuen Spezialworker genauer beschrieben
+
+03) Help-Datei und Projektstatistik gegen aktuellen Quellstand nachgezogen
+     - Registerkartenübersicht umfasst jetzt alle 11 im Tab-Manager definierten Haupt-Tabs einschließlich ISO, Merge und MP4-Remux
+     - NVENC Lookahead-Level ist mit gültigem Bereich 0–3 und Abgrenzung zu rc-lookahead dokumentiert
+     - Provider-Priorität, gemeinsame Zugangsdatenanzeige und gezielter FFmpeg-Dateiabbruch sind in Bedienung und Troubleshooting erklärt
+     - externe Tool-Versionen werden nicht mehr als „neueste“ fest behauptet, wenn sie im Quellarchiv nicht enthalten und damit nicht prüfbar sind; F9 bleibt die Laufzeitprüfung
+     - Projektstatistik aktualisiert: 239 Python-Dateien, 64.272 Gesamtzeilen, 54.280 nichtleere/nicht reine Kommentarzeilen
+     - Testinventar: 65 Python-Dateien im tests-Paket insgesamt, davon 64 test_*.py mit 470 statisch erkennbaren Testfunktionen
+
+04) Help-Datei erweitert und Projektzahlen aktualisiert
+     - Help-Datei um sechs zusätzliche V9.1-Kapitel erweitert: Validierungs-/Reparaturpolitik, Auto-Crop-/IMAX-Feinsteuerung, Log-Bereinigung, Diagnosepaket, Standardwerte-Reset und Support-Workflow
+     - Inhaltsverzeichnis auf 48 Punkte erweitert, weiterhin sauber in Dreierreihen
+     - Kapitel thematisch neu sortiert: Bedienung, Regeln, Verarbeitung, Analyse, Diagnose, Support und Abschlusskapitel
+     - ISO-Handling dokumentiert jetzt klar, dass MakeMKV separat lizenziert oder per zeitlich begrenzter Test-/Beta-Lizenz freigeschaltet werden muss
+     - DragonToolsV9_Dokumentation.docx und das daraus erzeugte Handbuch.pdf um denselben MakeMKV-Lizenzhinweis ergänzt
+     - "Über Dragon Tools" auf den aktuellen Quellstand aktualisiert
+     - Projektumfang aktualisiert: 148 Python-Dateien, ca. 36.200 Gesamtzeilen und ca. 30.300 Codezeilen
+     - "Über"-Dialog im Programm auf dieselben Werte angepasst
+
+05) Release-Dokumentation und Build-Hinweise für V9 nachgezogen
+     - V9-Build nimmt aktuelle und Legacy-Changelogs mit
+     - Hilfedatei verweist klar auf V9, Legacy V8 und Legacy V7
+     - V9-Handbuch aufgebaut und Release-Öffnung auf Handbuch\Handbuch.pdf umgestellt
+     - Handbuch erklärt Bedienung, Pipelines, Regeln, Reparaturpfade, Fehlerberichte, Zusatzwerkzeuge und Modulreferenz
+     - Inhaltsverzeichnis um echte Word-Seitenbereiche für Kapitel und Unterkapitel erweitert
+     - abschließende Programm-/Modulreferenz um direkte Projektverbindungen pro Datei ergänzt
+     - Modulreferenz als ausführliches Nachschlagekapitel erweitert: Zweck, Ablauf, Aufrufstellen, Abhängigkeiten, Rückgabe/Wirkung und Diagnosehinweise pro Python-Datei
+     - Hilfe-Menü um "PDF-Handbuch öffnen" ergänzt; Shortcut F2 öffnet Handbuch.pdf aus dem Ordner Handbuch
+     - Build-Struktur von Dokumentation auf Handbuch umgestellt; PyInstaller nimmt Handbuch\Handbuch.pdf nach Daten\Handbuch mit
+     - Shortcut-Übersichten im Programm und in help.html um F2/Handbuch ergänzt
+
+V9.5-03) Help-Datei sprachlich geglättet und Handbuch-Nachtrag ergänzt
+     - stark technische Änderungslisten wurden in der Help-Datei an mehreren Stellen in ruhigere Anwendertexte überführt
+     - Mediathek-, Log-, Backup-, Release- und Über-Kapitel erklären den aktuellen Stand ohne unnötige Wiederholungen
+     - DOCX und PDF enthalten einen zusätzlichen Stabilitätsnachtrag zu Job-/Move-Journalen, Move-Recovery, Backup-Restore und DV-P5-Remux
+     - Programmstatistik und Testinventar wurden in Hilfe, Handbuch und Über-Dialog aktualisiert
+
+=== 03 Externe Tools, Systemprüfung & Prozessinfrastruktur ===
+
+01) Erweiterter Systemtest mit Mini-Dateien ergänzt
+     - neuer Menüpunkt "Erweiterter Systemtest mit Mini-Dateien" unter Werkzeuge
+     - ffmpeg erzeugt temporär eine 1-Sekunden-Testdatei
+     - ffprobe prüft diese Datei praktisch auf lesbare Dauer
+     - MediaInfo liest die Mini-Datei als JSON-Analyse
+     - mkvmerge remuxt die Mini-Datei verlustfrei nach MKV
+     - MP4Box versucht einen einfachen Mini-MP4-Mux
+     - dovi_tool und hdr10plus_tool werden ohne künstliche Testmetadaten per CLI-Reaktion geprüft
+     - alle Testdateien liegen nur temporär und werden nach dem Test entfernt
+     - Diagnosepakete enthalten den erweiterten Systemtest jetzt zusätzlich als eigene Textdatei
+
+02) Systemtest-Ausgaben optisch verbessert
+     - normaler Werkzeugtest und erweiterter Mini-Systemtest nutzen jetzt klare Statussymbole
+     - gefundene/erfolgreiche Tools werden mit grünem Haken dargestellt
+     - fehlende/fehlgeschlagene Tools werden mit rotem X dargestellt
+     - übersprungene Mini-Tests werden als Warnung markiert
+
+03) Zentraler ToolRunner für Spezialtools eingeführt
+     - HDR10+-Extraktion, HDR10+-Injection, finales HDR10+-Muxing, MKVToolNix-Dauerremux und FFmpeg-Timestamp-Reparatur laufen über eine gemeinsame Prozessschicht
+     - Spezialtools registrieren den aktuellen Prozess beim Worker und reagieren dadurch sauberer auf Sofort-Abbruch
+     - Pausen zählen nicht in den Timeout hinein
+     - neue Timeout-Kategorien "HDR10+-Toolschritte" und "MKV-Dauerreparatur" ergänzt
+     - ToolRunner besitzt eigene Regressionstests für Ausgabe-Erfassung und Timeout-Verhalten
+
+04) ffmpeg-Encode-Timeouts auf Inaktivität umgestellt
+     - Allgemeiner Encoder-Timeout und ffmpeg-Encode (DV-Pipeline) gelten jetzt als Rückmeldungs-Timeout
+     - ein Encode darf unbegrenzt weiterlaufen, solange ffmpeg Fortschritt oder stderr-Ausgaben liefert
+     - abgebrochen wird nur noch, wenn ffmpeg für die eingestellte Zeit gar keine Rückmeldung mehr sendet
+     - Standard für diese beiden ffmpeg-Encode-Timeouts ist 5 Minuten
+     - lange CPU-/4K-Encodes werden dadurch nicht mehr kurz vor Ende wegen reiner Gesamtlaufzeit abgebrochen
+
+05) F9-Werkzeugprüfung als Systemprüfung benannt
+     - Menü und Dialog heißen jetzt "System prüfen / Werkzeuge"
+     - bestehender Shortcut F9 bleibt erhalten
+     - die Prüfung zeigt weiterhin gefundene Tools, Versionen und erkannte Fähigkeiten wie NVENC, QSV, AMF, x265, SVT-AV1, libplacebo und zscale
+
+06) Tool-Erkennung für PyInstaller-Builds verbessert
+     - gebündelte Tools werden auch im neuen onedir-Aufbau mit contents-directory "Daten" gefunden
+     - Suchpfade für Daten\Programme, Programme und third_party vereinheitlicht
+     - Tool-Varianten wie mkvmerge, makemkvcon, HandBrakeCLI, MediaInfo, dovi_tool, hdr10plus_tool und MP4Box robuster erkannt
+     - Autosuche zeigt den tatsächlich gefundenen Pfad an
+
+07) Zentrale Toolpfad-Verwaltung stabilisiert
+     - GUI, Worker und Kernmodule greifen auf dieselbe Toolpfad-Logik zu
+     - gespeicherte manuelle Toolpfade bleiben weiterhin nutzbar
+     - Fallback-Suche funktioniert auch ohne manuelle Einträge
+
+08) Tool-Versionen und Fähigkeiten in der Werkzeugprüfung ergänzt
+     - F9 zeigt jetzt neben dem Pfad auch Versionen und erkannte Features der Tools an
+     - FFmpeg wird auf libplacebo, zscale, Untertitel/Burn-In und Encoder wie NVENC/QSV/AMF/x265/SVT-AV1 geprüft
+     - DV-, HDR10+-, MP4Box-, MediaInfo-, MKVToolNix-, MakeMKV-, HandBrake- und RMTS-Fähigkeiten werden im Bericht ausgewiesen
+
+V9.5-Blockfix 19) Prozess- und Worker-Helfer entkoppelt
+     - subprocess_no_window_kwargs liegt ausschließlich in core/process_runner.py; Qt-unabhängige Services importieren hierfür keinen QThread-/base_worker-Code mehr
+     - RemoveFileStatus und Worker-Pfadnormalisierung liegen in worker_contracts.py; base_worker.py bleibt ausschließlich Qt-Worker-Basis plus Kompatibilitäts-Reexport
+     - Tool-Verfügbarkeitsprüfung für DurationRepair/TimingAnalyzer ist zentralisiert
+     - Windows-Shutdown verwendet ntpath für Windows-Pfade und bleibt damit auch bei plattformneutralen Tests hostunabhängig
+
+=== 04 Konverter, Encoder & Profile ===
+
+01) NVENC-Einstellungen erweitert
+     - Lookahead-Level für FFmpeg-Parameter -lookahead_level ergänzt; zulässige manuelle Werte in Dragon Tools sind 0 bis 3 plus Auto
+     - lookahead_level ist nicht dasselbe wie rc-lookahead: rc-lookahead steuert die Anzahl vorausanalysierter Frames, lookahead_level die zusätzliche NVENC-Entscheidungs-/Qualitätsstufe
+     - manueller lookahead_level wird nur im aktiven B-Frame-/Lookahead-Pfad gesetzt; Auto übergibt keinen expliziten -lookahead_level-Parameter
+     - Multipass ergänzt: Auto/Default, disabled, qres und fullres; Auto übergibt keinen expliziten -multipass-Parameter
+     - Einstellungen werden gespeichert, geladen, in Profilen migriert und auch im Qualitätstester angeboten
+     - Systemprüfung erkennt und zeigt NVENC, lookahead_level und multipass anhand der FFmpeg-Encoderhilfe
+
+02) Encoder-Erklärungen und Job-Wiederaufnahme nachgeschärft
+     - CPU/x265-Optionen besitzen jetzt Erklärungssymbole für AQ-Mode, AQ-Stärke, psy-rd, psy-rdoq, B-Frames und Lookahead
+     - NVENC-Infozeichen für Spatial AQ und Temporal AQ sitzen wieder in den festen Info-Spalten untereinander
+     - Intel-QSV-Lookahead ist nicht mehr als Checkbox ausgeführt, sondern immer aktiv; einstellbar bleibt nur die Lookahead-Tiefe
+     - alte QSV-Profile mit lookahead=false werden beim Encoder-Aufruf nicht mehr als Abschalten interpretiert
+     - offene Restqueues können nach "Später entscheiden" über Datei -> Offene Restqueue importieren auch im laufenden Programm wieder geöffnet werden
+
+03) Per-Datei-Strip-Only ergänzt
+     - in den Rechtsklick-Datei-Einstellungen gibt es jetzt den Bereich "Verarbeitung"
+     - einzelne Dateien können dort auf "Nur remuxen (Strip-Only)" gesetzt werden
+     - der normale Converter nutzt für diese Datei den bestehenden Strip-Only-Pfad statt eines Encodes
+     - Audio- und Untertitel-Auswahl bleiben dabei wie im bestehenden Strip-Only-Modus regel- und overridefähig
+     - Queue-Label, Regel-/Profil-Simulator und Preflight-Bericht zeigen den Strip-Only-Override an
+     - im Parallelbetrieb können Overrides jetzt auch für noch wartende Dateien gesetzt werden
+
+04) Strip-Only-Bedienung und Preflight-Sichtbarkeit erweitert
+     - Kontextmenü besitzt jetzt eine direkte Schnellaktion "Nur diese Datei Strip-Only AN/AUS"
+     - der Preflight warnt bei Strip-Only mit Dolby Vision, HDR10+, MP4-Untertiteln und geplantem Burn-In
+     - Queue-Labels trennen jetzt Verarbeitung und Nacharbeit: z. B. "Encode: Standard", "Encode: DV + HDR10+" und "Postprocessing: NFO + Trickplay"
+     - Preflight-Ergebnisse werden pro Datei gecacht, damit DV-/HDR10+-Badges ohne erneute Medienanalyse sichtbar bleiben
+
+05) Profilnamen wieder pro Encoder-Kontext erlaubt
+     - eigene Profile speichern den sichtbaren Namen getrennt vom internen Profilschlüssel
+     - derselbe Name kann wieder mehrfach genutzt werden, z. B. "Allgemein" für CPU, NVENC und QSV
+     - Profil laden, Profilverwaltung und Datei-Override zeigen zur Unterscheidung Codec und Encoder neben dem Namen an
+     - erneutes Speichern desselben Namens im selben Codec-/Encoder-Kontext überschreibt das passende bestehende Profil statt ein Duplikat zu erzeugen
+
+06) B-Frames-/Lookahead-Abhängigkeit abgesichert
+     - NVENC setzt rc-lookahead nur noch, wenn B-Frames aktiv sind
+     - B-Ref-Mode wird nur noch gesetzt, wenn B-Frames aktiv sind
+     - x265 übernimmt rc-lookahead nur noch bei aktiven B-Frames
+     - Tests sichern ab, dass widersprüchliche Encoderparameter nicht mehr erzeugt werden
+
+07) Startprofile deutlich erweitert
+     - H.265-Profil-Assistent enthält neue Profile für Anime-Serien, TV-Serien, Anime-Filme, TV-Filme, 4K-Anime und 4K-TV
+     - jede Kategorie besitzt CPU-/Qualitätsprofile und schnelle NVENC-Profile
+     - kleine und mittlere Zielgrößen sind getrennt auswählbar
+     - Anime-Profile nutzen Tune Animation, mehr B-Frames und höheren Lookahead
+     - die erweiterten H.265-Startprofile stehen auch als eingebaute Profil-Defaults zur Verfügung
+
+08) CPU-Encoder-Optionen wieder sichtbar
+     - CPU-Optionspanel wird bei CPU-Auswahl für alle Codecs angezeigt
+     - der erweiterte Encoder-Bereich klappt bei CPU-Auswahl automatisch auf
+     - H.265-spezifische x265-Zusatzparameter werden weiterhin nur bei H.265 in die ffmpeg-Parameter übernommen
+
+09) Standardwerte-Reset für CPU-Encoder korrigiert
+     - beim Zurücksetzen werden jetzt alle Encoder-Unterbereiche auf Werkseinstellungen gesetzt
+     - CPU/x265-Werte wie CRF, Preset, B-Frames und Lookahead werden nicht mehr im Hintergrund behalten
+     - je Konverter-Tab wird anschließend das passende Filmprofil geladen: H.265, H.264 oder AV1
+
+10) Codec-Profil-Assistent ergänzt
+     - neuer Button "Profil-Assistent" im erweiterten Encoder-/Profilbereich
+     - stellt empfohlene Startprofile pro Codec bereit, z.B. Anime klein, Film ausgewogen, Archiv-Qualität und NVENC schnell/Qualität
+     - Assistentenprofile setzen dieselben Expertenfelder wie gespeicherte Profile und bleiben danach vollständig manuell editierbar
+     - AV1-CPU-Presets werden in der Oberfläche als numerische SVT-AV1-Presets geführt
+     - Seriennamen-Bereinigung korrigiert: "Stargate Atlantis - S01E15 - 10.000 Jahre" wird als "Stargate Atlantis" erkannt, interne Bindestriche wie bei "Spider-Man" bleiben erhalten
+
+11) Encoding-Plan und Pipeline-Übergabe abgesichert
+     - HDR-Farbargumente werden zentral vorbereitet und an die Standard-Pipeline weitergegeben
+     - Video-Filter und Encoder-Argumente werden konsistenter zusammengesetzt
+
+12) H.265-10-bit-Encoding für alle Encoder vereinheitlicht
+     - H.265/NVENC, QSV und AMF erzwingen jetzt p010le als echtes 10-bit-Pixelformat
+     - H.265/CPU libx265 erzwingt yuv420p10le und Main10
+     - AMF setzt zusätzlich die Encoder-Bittiefe explizit auf 10-bit
+     - HDR10-Farbtags überschreiben das encoderabhängige Pixelformat nicht mehr
+     - SDR-H.265-Ausgaben werden dadurch tatsächlich 10-bit encodiert statt nur als Main-10-Profil mit 8-bit-Bilddaten signalisiert
+     - H.264 bleibt bei allen Encodern unverändert ohne 10-bit-Zwang
+
+13) Veraltete Videostream-Statistik-Tags nach Reencode bereinigt
+     - Standard-Encoding entfernt alte BPS-/DURATION-/NUMBER_OF_BYTES-/NUMBER_OF_FRAMES-Tags vom neu encodierten Videostream
+     - MediaInfo zeigt dadurch künftig keine aus der Quelle übernommenen, unplausiblen Videostream-Größen mehr an
+     - globale Metadaten sowie Audio-/Untertitel-Metadaten bleiben unverändert erhalten
+
+=== 05 HDR, Dolby Vision, HDR10+ & Farbraum ===
+
+V9.5-06) Dolby-Vision-Pipeline in explizite Verarbeitungsstufen zerlegt
+     - DVProcessingPipeline.run wurde von einer mehrere hundert Zeilen langen Ablaufmethode auf eine schlanke Orchestrierung reduziert
+     - neue getrennte Bausteine kapseln Request-/Temp-Zustand, Tool-Ausführung, Encode-Befehl und die acht DV-Verarbeitungsstufen
+     - DV Profil 5 bleibt ein eigener Sonderpfad: Encoding direkt aus dem Originalcontainer mit libplacebo für ICtCp -> BT.2020nc/PQ; kein automatischer Remux-Fallback
+     - DV Profil 7 encodiert aus dem zuvor auf Profil 8.1 normalisierten HEVC-Stream; DV Profil 8 mit HDR10/PQ-Basis nutzt source.hevc direkt als bereits kompatiblen Arbeitsstream
+     - dovi_tool-Modus bleibt P5=3 und für P7 bzw. nicht eindeutig HDR10/PQ-kompatibles P8=2; bei P8+HDR10/PQ entfällt der Mode-2-No-op vollständig; String-Profile aus älteren Cache-/Override-Daten werden sicher normalisiert
+     - der bisherige private P5-Legacy-Remux wurde ausgelagert und auf die aktuellen Audio-, MP4Box- und Level-5-APIs angepasst
+     - nicht-H.265-Zielcodecs werden in der DV-Pipeline jetzt tatsächlich fail-fast abgebrochen statt nur einen Fehler zu protokollieren
+
+01) CPU-Encoding im Dolby-Vision-Pfad korrigiert
+     - DV-Erhalt mit CPU/libx265 übernimmt jetzt den gewählten x265-Preset korrekt bis in den DV-Encode-Schritt
+     - bei CPU/libx265 wird im DV-Pfad nur noch ein Pixelformat gesetzt: yuv420p10le
+     - die pauschale p010le-Überschreibung wurde entfernt; NVENC/QSV/AMF behalten weiterhin ihr passendes p010le-Format
+     - Regressionstest für CPU-DV mit Preset placebo ergänzt
+
+02) CPU-H.265-Farbtagging für DV5/HDR10-Standardausgaben korrigiert
+     - Standard-H.265-Ausgaben mit HDR10-/DV5-Farbraum setzen bei libx265 jetzt zusätzlich HEVC-VUI-Parameter
+     - x265 erhält colorprim=bt2020, transfer=smpte2084, colormatrix=bt2020nc, range=limited und hdr10=1
+     - Farbtags werden nun auch direkt im HEVC-Bitstream signalisiert
+     - behebt Fälle, in denen MediaInfo/Player trotz korrekter Filterkette ein falsches oder unvollständiges Farbprofil angezeigt haben
+
+03) DV-Profil-5-Standardkonvertierung auf libplacebo umgestellt
+     - Standardpipeline mit deaktiviertem DV-Erhalt nutzt für DV Profil 5 jetzt libplacebo statt zscale/ictcp
+     - libplacebo wendet das Dolby-Vision-P5-Reshaping an und gibt BT.2020/PQ aus
+     - behebt sichtbare Farbverschiebungen wie Rot→Lila bei DV5-Quellen ohne DV-Erhalt
+     - FFmpeg-Praxistest mit der gebündelten FFmpeg-Version prüft libplacebo + HDR10-Tags + x265-VUI-Parameter
+
+04) DV/HDR-Farbraum im Standard-Encoding korrigiert
+     - beim Entfernen von Dolby Vision bleibt der HDR10-Farbraum bei passenden Quellen erhalten
+     - DV Profil 7 wird im Standardpfad mit HDR10-Tags für BT.2020/PQ verarbeitet
+     - DV Profil 5 erhält eine eigene Farbkonvertierung über zscale, damit Farben nicht falsch interpretiert werden
+     - HDR/DV-Pfade erzwingen weiterhin 10-bit p010le, wo es fachlich notwendig ist
+
+05) DV+HDR10+-Kombipfad ergänzt
+     - HEVC-Dateien mit Dolby Vision und HDR10+ laufen weiterhin durch die DV-Pipeline nach MP4
+     - HDR10+-Metadaten werden zusätzlich aus dem Quell-HEVC extrahiert und vor der finalen DV-RPU-Injektion in den Encode geschrieben
+     - nach der DV-RPU-Injektion wird HDR10+ erneut aus dem finalen HEVC-Bitstream geprüft, damit Metadatenverlust nicht still passiert
+     - MediaInfo/Analysemodell kann DV und HDR10+ jetzt gleichzeitig pro Videostream abbilden
+
+
+06) DV-/HDR10+-Kombipfad nach Produktionslogs gehärtet
+     - Pipelinefehler transportieren Stufe, Tool, Kommando und konkrete Toolausgabe bis in den separaten Fehlerbericht
+     - DV Profil 8 mit HDR10/PQ-Basis überspringt STEP 2/8 als No-op und wird ohne dovi_tool-Rewrite direkt weiterverarbeitet
+     - Profil 7 und nicht eindeutig kompatible P8-Quellen behalten die explizite Profilnormalisierung; P5 bleibt der eigene libplacebo-Sonderweg
+     - HDR10+-Metadaten werden nach der finalen DV-RPU-Injektion nicht nur auf Existenz, sondern auf semantische Identität zur Quelle geprüft
+     - alte HDR10+-Zwischenartefakte werden vor Extract/Inject/Verify entfernt; Aliasfelder has_hdrplus und has_hdr10plus werden gleichwertig berücksichtigt
+     - RPU- und HDR10+-Prüfschritte bleiben fail-closed, damit unbekannte Metadatenformate niemals durch stilles Weglassen „repariert“ werden
+
+V9.5-Blockfix 19) Tote Dolby-Vision-Legacypfade entfernt
+     - nicht mehr verwendete Module dv_conversion.py, dv_p5_legacy_remux.py und dv_subtitle_exporter.py wurden aus dem Quellbaum entfernt
+     - DVProcessingPipeline und die aktuellen DV-Services bleiben die einzige produktive Implementierung
+     - DV5 behält ausdrücklich den abgesicherten Sonderweg Originalcontainer → libplacebo → Encode → RPU-Reinjektion; P7/P8- und FEL/MEL-Verhalten wurden durch die Bereinigung nicht verändert
+
+=== 06 Audioverarbeitung & Stream-Mapping ===
+
+01) Blu-ray-/M2TS-Audiostream-Zuordnung korrigiert
+     - MediaInfo-Analyse wird bei erfolgreichem MediaInfo zusätzlich mit ffprobe-Streamdaten abgeglichen
+     - Audio- und Untertitelregeln verwenden dadurch den globalen FFmpeg-Streamindex statt nur die Reihenfolge innerhalb der Audioliste
+     - japanische Blu-ray-Quellen mit Untertitelspuren vor Audio werden dadurch korrekt gemappt
+     - GUI-Auswahl, Regelentscheidung und FFmpeg -map verwenden dieselbe Stream-Identität
+
+02) Audio-Dynamik und Lautheitsnormalisierung ergänzt
+     - Audio-Regeln besitzen jetzt den neuen Bereich "Audio-Dynamik / Lautheit"
+     - AC3/E-AC3-DRC / Nachtmodus kann separat aktiviert und in 0,1-Schritten von 0,0 bis 4,0 eingestellt werden
+     - DRC greift nur bei AC3/E-AC3-Quellen; bei passenden Quellen verhindert Dragon Tools automatisch Stream-Copy, damit der Wert angewendet wird
+     - codecübergreifende Lautheitsnormalisierung über FFmpeg loudnorm ergänzt
+     - Loudnorm besitzt einen einstellbaren Zielwert in LUFS, Standard -18 LUFS
+     - DRC und Loudnorm können zusätzlich pro Datei im Rechtsklick-Dialog auf "Regeln übernehmen", "Aktivieren" oder "Deaktivieren" gesetzt werden
+     - Standard-Konverter, Strip-Only, MP4-Remux, Audio-Muxer, DV-/HDR10+-Pfade und DV-Remux nutzen dieselbe zentrale Audio-Planlogik
+     - Audio-Regel-Schema auf Version 4 migriert; alte Regeln erhalten sichere Standardwerte
+
+03) Audio-Kopierbereiche für 5.1 und 7.1 ergänzt
+     - 5.1 besitzt jetzt wie Stereo einen einstellbaren Kopierbereich, Standard 428-640 kbps
+     - 7.1 besitzt einen eigenen Kopierbereich, Standard 768-1536 kbps
+     - Audio-Regel-Dialog speichert die neuen Min-/Max-Felder
+     - Passthrough darf vorhandenes E-AC3 7.1 kopieren, wenn kein Downmix erzwungen wird und die Bitrate im Bereich liegt
+     - ältere Audio-Regeln werden automatisch um die neuen Bereiche ergänzt
+
+04) Stereo-Audioregel mit Kopierbereich ergänzt
+     - Stereo-Regeln besitzen jetzt getrennte Werte für Ziel-Bitrate und Kopierbereich
+     - Standard: AAC/AC3/E-AC3 Stereo von 192 bis 256 kbps wird direkt kopiert
+     - Stereo unterhalb oder oberhalb dieses Bereichs wird auf Ziel-Codec und Ziel-Bitrate transkodiert
+     - Standard-Ziel für Stereo-Neukodierung ist AAC 192 kbps
+     - alte gespeicherte Stereo-Defaults mit 256 kbps werden automatisch auf das neue 192-256-Schema migriert
+
+05) Audio-Downmix-Defaults nachgezogen
+     - fehlende Mono-Regeln fallen jetzt auf AAC/128k zurück, statt alte Stereo-Regeln zu übernehmen
+     - Zusatz-Stereo-Downmix hat eine eigene Codec-Auswahl mit AAC als Default
+     - ffmpeg-Argumente, Vorschau und Log nutzen den gewählten Zusatz-Stereo-Codec
+     - 3-6-Kanal-Spuren können in den Audio-Regeln jetzt direkt auf Stereo heruntergerechnet werden, z. B. E-AC3 5.1 256k -> AAC 2.0 256k
+     - direkte Stereo-Downmixes erzwingen eine Transkodierung auch dann, wenn der Quellcodec normalerweise per Passthrough kopierbar wäre
+     - 5.1-Downmix ist jetzt regelbasiert wählbar: nie downmixen, immer downmixen oder nur bis zu einer einstellbaren Quellbitrate
+     - wenn bei aktivem Downmix als 5.1-Zielcodec "copy" gewählt ist, nutzt DragonTools den konfigurierten Stereo-Zielcodec statt eines hart gesetzten AAC-Fallbacks
+     - 7.1-/8-Kanal-Quellen haben jetzt wie 5.1 eine Downmix-Regel: nie, immer oder nur bis Quellbitrate; Ziel wahlweise 5.1 oder Stereo
+     - E-AC3/AC3-Encoding wird zusätzlich automatisch auf maximal 5.1 begrenzt, damit FFmpeg nicht mit ungültigem eac3 8ch abbricht
+     - der Info-Text erklärt nun explizit den Unterschied zwischen kopierbaren E-AC3-7.1-Quellen und nicht unterstütztem E-AC3/AC3-7.1-Neu-Encoding in FFmpeg
+
+=== 07 Untertitel & Burn-In ===
+
+01) Forced-Untertitel-Plausibilitätsprüfung ergänzt
+     - automatische Forced-Burn-In-Auswahl prüft jetzt Events pro Minute, sofern MediaInfo/ffprobe eine Eventanzahl liefert
+     - bis 3 Events/Minute gilt die Forced-Spur als plausibel
+     - über 3 bis 5 Events/Minute bleibt Burn-In aktiv, es wird aber eine Warnung protokolliert
+     - über 5 Events/Minute wird Auto-Burn-In blockiert, weil die Spur sehr wahrscheinlich ein falsch markierter Full Sub ist
+     - blockierte Forced-Spuren werden nicht verworfen, sondern zusätzlich behalten bzw. im DV-/MP4-Pfad als Sidecar exportiert
+     - Untertitel-Regel-Schema auf Version 3 migriert; alte Regeln erhalten die Plausibilitätsprüfung mit sicheren Standardwerten
+
+02) Forced-Burn-In-Auswahl präzisiert
+     - mehrere Forced-Untertitel werden jetzt anhand der bevorzugten Untertitelformate automatisch aufgelöst
+     - SRT/SubRip gewinnt dadurch vor ASS/SSA und Bilduntertiteln wie PGS/SUP, sofern die Sprache passt
+     - die Mehrdeutigkeitswarnung erscheint nur noch, wenn mehrere Kandidaten mit gleicher bester Priorität vorhanden sind
+
+03) Eigenständiges Untertitel-Werkzeug stabilisiert
+     - Untertitel-Extraktion nutzt die zentrale Codec-Tabelle für SRT, ASS, PGS/SUP, VobSub/MKS und WebVTT
+     - MKV-Injektion verwendet den erkannten mkvmerge-Pfad statt einer PATH-Annahme
+     - MP4/MOV-Injektion nutzt ffmpeg mit mov_text für Text-Untertitel und blockt inkompatible SUP/PGS-Fälle
+     - SRT->ASS nimmt nur noch SRT-Dateien; TXT-Export unterstützt SRT, ASS/SSA und TXT ohne leere Scheinausgaben
+     - zeitgestempelte TXT-Dateien können jetzt wieder als SRT oder ASS rekonstruiert werden
+
+04) Untertitel-TXT-Export korrigiert
+     - SRT nach TXT entfernt wieder nur die laufenden SRT-Blocknummern
+     - Zeitstempel werden im TXT wie früher erhalten, damit die Textdatei weiter als Nachschlage-/Korrekturdatei nutzbar bleibt
+     - CRLF- und LF-formatierte SRT-Dateien werden beim Blocklesen sauber erkannt
+     - ASS nach TXT erhält jetzt ebenfalls die Zeitstempel und wandelt ASS-Zeitcodes passend in SRT-Zeitcodeformat um
+     - Untertitel-Tab um TXT -> SRT und TXT -> ASS erweitert; SRT-Blocknummern werden automatisch neu aufgebaut
+
+=== 08 Medienanalyse, Quellprüfung, Auto-Crop & IMAX ===
+
+01) Quellbildprüfung vor der Konvertierung ergänzt
+     - neuer Einstellungsbereich "Quellbildprüfung"
+     - prüft mehrere kurze Bildausschnitte über prozentuale Laufzeitpositionen
+     - Standardwerte: 10%-Intervalle, 2 Sekunden je Prüfpunkt, 2 fps, Blockierung ab 80% auffälligen Prüfpunkten
+     - erkennt klar unplausible Quellen wie leere Frames, auffällige einfarbige Flächen oder starkes Pixelrauschen
+     - auffällige Dateien werden übersprungen statt fehlerhaft konvertiert
+     - per Rechtsklick kann die Prüfung manuell ausgeführt oder für eine wartende Datei bewusst übergangen werden
+
+02) Medieninfo-Dialog ausführlicher gestaltet
+     - Rechtsklick-Medieninfo zeigt jetzt einen eigenen Überblick mit Container, Dateigröße, Dauer, Gesamtbitrate, Videobitrate und Spuranzahl
+     - Video, Audio und Untertitel werden in getrennten Tabellen mit Codec, Auflösung, Framerate, Bit-Tiefe, HDR/Farbraum, Bitraten, Sprache, Titel und Flags angezeigt
+     - MediaInfo-Rohdaten bleiben in einem eigenen Tab sichtbar, damit Fehlerfälle weiterhin vollständig nachvollziehbar sind
+     - die bisherige DragonTools-Regelvorschau bleibt erhalten und ist als eigener Tab erreichbar
+
+03) IMAX-Auto-Erkennung universeller gemacht
+     - die IMAX-Erkennung prüft jetzt die aktive Bildfläche per Cropdetect statt nur die technische Stream-Auflösung
+     - dadurch werden IMAX-Wechsel in konstanten 1080p-/2160p-Containern mit wechselnden schwarzen Balken zuverlässiger erkannt
+     - das Prüfintervall ist in den Einstellungen unter "IMAX Auto-Erkennung" einstellbar; Standard sind 90 Sekunden
+     - die Konverteroberfläche bleibt kompakt; die IMAX-Checkbox aktiviert nur die Erkennung, das Raster kommt aus den Einstellungen
+     - das Einstellungen-Menü besitzt jetzt einen direkten Eintrag für "IMAX Auto-Erkennung"
+     - das globale Einstellungsfenster enthält zusätzlich einen Timeouts-Bereich mit Zugriff auf die vollständigen Timeout-Einstellungen
+
+04) Auto-Crop konfigurierbar gemacht
+     - Auto-Crop besitzt im globalen Einstellungsfenster einen eigenen Bereich
+     - bisheriges Verhalten bleibt Standard: ein Prüfpunkt bei 30 Sekunden, 45 Sekunden Analyse
+     - optionaler Mehrpunkt-Modus ergänzt, um problematische Intros, Logos oder atypische Szenen besser abzufangen
+     - Startpunkt, Prüfdauer und Mehrpunkt-Intervall werden zentral gespeichert
+
+05) IMAX-Feinsteuerung erweitert
+     - neben dem Prüfintervall sind jetzt Prüfdauer je Punkt, Mindestabweichung und Mindestanzahl verwertbarer Prüfpunkte einstellbar
+     - Standardwerte bleiben schnell und kompatibel: 90 Sekunden Intervall, 3 Sekunden Prüfdauer, 15 Prozent Mindestabweichung, 2 Prüfpunkte
+     - die Worker erhalten die Werte automatisch aus den globalen Einstellungen
+
+06) Medieninfo-Dialog um Frame- und Framerate-Daten erweitert
+     - Rechtsklick-Medieninfo zeigt jetzt Videodauer, Frameanzahl, rationale Framerate und Framerate-Modus an
+     - MediaAnalyzer speichert FrameCount, FrameRate und FrameRate_Mode direkt im VideoStream-Modell
+     - typische Dezimalwerte wie 23.976 werden als rationale Werte wie 24000/1001 dargestellt
+
+=== 09 Queue, Parallelverarbeitung, Jobsteuerung & Shutdown ===
+
+01) Abbruch nach Datei zurücknehmbar gemacht
+     - vorgemerkter "Abbruch nach Datei" kann während des laufenden Jobs über denselben Button wieder aufgehoben werden
+     - Hauptfenster und Warteschlangenfenster zeigen den Rücknahmezustand einheitlich an
+     - Parallel-Worker geben den zurückgenommenen Abbruch an aktive Child-Worker weiter und starten danach wieder wartende Dateien
+
+02) Gezielter FFmpeg-Abbruch für nur eine laufende Datei ergänzt
+     - Kontextmenü einer aktiven Queue-Datei bietet „FFmpeg für diese laufende Datei beenden“
+     - Aktion ist nur sichtbar, wenn genau dieser Queue-Eintrag aktuell verarbeitet wird
+     - Worker prüft zusätzlich, ob der aktuelle Teilprozess tatsächlich ffmpeg ist, bevor der Prozessbaum beendet wird
+     - es wird bewusst kein globales Abort-Flag gesetzt; die betroffene Datei läuft in Fehler/Cleanup und die restliche Queue läuft weiter
+     - Parallelbetrieb sucht gezielt den Child-Worker der ausgewählten Datei
+     - Regressionstests stellen sicher, dass kein FFmpeg-Prozess einer anderen Datei beendet wird
+
+03) Parallelstart für nachträglich erweiterte Queues verbessert
+     - bei Parallelwert größer 1 wird auch mit nur einer Startdatei der Parallel-Koordinator verwendet
+     - später hinzugefügte Dateien können dadurch direkt als zusätzlicher Worker starten
+     - Regressionstest ergänzt, damit dieser Startmodus erhalten bleibt
+
+04) Stabilität für Shutdown, Zwischenverschieben und Build-Splash verbessert
+     - Zwischenverschieben hält den laufenden Encoder-Thread jetzt strikt getrennt vom MoveThread
+     - fertig gelaufene MoveThreads bleiben kurz referenziert, damit PyQt keine späten Signale gegen zerstörte Worker verarbeitet
+     - späte Ergebnis-Signale werden auch ohne aktiven Worker-Zeiger sicher verarbeitet
+     - Windows-Herunterfahren nutzt bevorzugt die echte shutdown.exe aus System32 und loggt Fehlerdetails genauer
+     - PyInstaller nutzt eine separate kleine Datei Bilder\splash_pyinstaller.png als frühen Boot-Splash
+     - Release-/Build-Prüfung warnt im Quellprojekt, wenn diese Boot-Splash-Datei fehlt
+
+05) Job-Wiederaufnahme nach Absturz ergänzt
+     - aktive Job-Journale können beim nächsten Start als Restqueue wiederhergestellt werden
+     - laufende/abgebrochene Datei wird standardmäßig erneut eingereiht
+     - bereits erfolgreiche und übersprungene Dateien bleiben übersprungen
+     - Dateien mit Fehler/Warnung können optional ebenfalls wieder eingereiht werden
+     - nach erfolgreichem Laden wird das alte active_run.json als restored_to_queue archiviert
+     - die Konvertierung startet bewusst nicht automatisch, sondern erst nach manueller Prüfung der Queue
+
+06) Parallele Bearbeitung für Konvertierungen ergänzt
+     - neuer Einstellungsbereich "Parallele Bearbeitung" mit getrennten Limits für CPU-Encoder und GPU-Encoder
+     - aktuelle Standardwerte: CPU 1 Datei parallel, GPU/NVENC/QSV/AMF 2 Dateien parallel
+     - bei Limit 1 arbeitet Dragon Tools exakt wie bisher nacheinander
+     - normale Konvertierungen können mehrere bestehende Converter-Worker parallel starten, ohne die eigentliche Audio-/Untertitel-/DV-/HDR-Pipeline umzubauen
+     - Logausgabe behält im Parallelbetrieb die globale Batch-Zählung bei (z. B. Datei 12/70 statt Worker 1/3)
+     - gemeinsames Logging wurde für parallele Schreibzugriffe abgesichert
+
+07) Stabilitätspaket für parallele Konvertierung ergänzt
+     - Parallel-Worker-Koordinator mit eigenen Regressionstests für Start, Fortschritt, Pause, Fortsetzen, Abbruch, Queue-Erweiterung und Entfernen abgesichert
+     - Job-Journal speichert bei parallelen Läufen mehrere aktive Dateien über current_files, bleibt aber mit current_file rückwärtskompatibel
+     - vor dem Start prüft Dragon Tools den freien Speicherplatz auf den betroffenen Ziel-/Temp-Laufwerken und warnt bzw. blockiert bei zu wenig Platz
+     - Ausgabepfade werden beim Auflösen reserviert, damit parallele Jobs nicht denselben noch nicht existierenden Temp- oder Zieldateinamen wählen
+     - Tests für Speicherplatzschätzung, parallele Journal-Wiederaufnahme und Temp-/Output-Isolation ergänzt
+
+08) Startabsturz nach Queue-Refresh-Korrektur behoben
+     - start_convert() nutzt beim Initial-Refresh jetzt fest 0 Prozent statt einer nicht vorhandenen pct-Variable
+     - Worker-Start wurde wieder aus der Queue-Refresh-Funktion herausgelöst
+     - Regressionstest sichert ab, dass der Worker beim Start genau einmal gestartet wird
+
+09) Dynamische Parallel-Queue ergänzt
+     - parallele Konvertierung verteilt Dateien nicht mehr statisch in feste Worker-Listen
+     - freie Worker-Slots ziehen sofort die nächste wartende Datei aus der gemeinsamen Queue nach
+     - dadurch wartet eine kurze Datei nicht mehr unnötig, bis eine lange Datei in einem anderen Worker fertig ist
+     - Queue-Erweiterung, Entfernen und Umsortieren wartender Dateien funktionieren weiter während des laufenden Parallelbetriebs
+     - Paralleltests auf das neue Nachziehverhalten angepasst
+
+10) Zwischenverschieben blockiert die Queue nicht mehr
+     - "Fertige verschieben" läuft weiterhin parallel zum laufenden Encode, sperrt aber nicht mehr pauschal Dateien hinzufügen, Entfernen, Leeren oder Umsortieren
+     - finales Verschieben nach Abschluss und Move-Only blockieren die Queue weiterhin, damit Ziel- und Konfliktentscheidungen stabil bleiben
+     - separates Queue-Fenster unterscheidet jetzt ebenfalls zwischen finalem Verschieben und Zwischenverschieben
+     - Regressionstest ergänzt, damit das Zwischenverschieben die Queue-Bedienung nicht wieder sperrt
+
+11) Parallel-Cleanup für temporäre Overwrite-Ordner korrigiert
+     - pro Datei wird nur noch die eigene temporäre Ausgabedatei bereinigt
+     - der gemeinsame Ordner __temp_overwrite__ wird erst am Ende des Einzel- oder Parallel-Laufs entfernt
+     - nicht leere Temp-Ordner werden im Parallelbetrieb nicht rekursiv gelöscht und erzeugen keine unnötige Warnung
+     - Help-Formulierung zu Lazy Loading korrigiert: eine gebaute EXE benötigt für dauerhafte Codeänderungen weiterhin einen neuen PyInstaller-Build
+
+12) Parallel-Defaults konservativer gesetzt
+     - CPU-Parallelität ist jetzt standardmäßig 1 Datei, weil libx265 auf 8-Kern-CPUs meist bereits effizient auslastet
+     - GPU-Parallelität ist jetzt standardmäßig 2 Dateien statt 4 Dateien
+     - alte gespeicherte Standardwerte CPU 2 / GPU 4 werden einmalig auf CPU 1 / GPU 2 migriert
+     - Hilfetexte erklären, dass CPU-Parallelbetrieb eher ab etwa 12-16 echten Kernen sinnvoll ist und GPU-Werte je nach Grafikkarte getestet werden sollten
+
+13) Live-Queue-Reihenfolge wieder während der Konvertierung änderbar
+     - interne Drag-&-Drop-Sortierung von externem Hinzufügen/Löschen getrennt
+     - wartende Dateien können während laufender Konvertierung neu sortiert werden
+     - während des reinen Verschiebens bleibt die Queue weiterhin bewusst gesperrt
+     - Hauptliste und separates Warteschlangenfenster verhalten sich konsistent
+
+14) Fehlerdateien erneut startbar gemacht
+     - fehlgeschlagene Eingabedateien können direkt aus dem Abschlussdialog wieder in die Queue gelegt werden
+     - erneutes Einreihen passiert nach dem automatischen Leeren, sodass nur die Problemdateien übrig bleiben
+     - Shutdown wird übersprungen, wenn der Nutzer Fehlerdateien direkt erneut einreiht
+
+15) Verschieben nach abgebrochener Konvertierung abfragbar
+     - bei Sofort-Abbruch und Abbruch nach Datei fragt DragonTools, ob bereits erfolgreiche Ausgaben noch verschoben werden sollen
+     - wird zugestimmt, startet der normale MoveThread mit den bereits geplanten Zielordnern und Sidecars
+     - wird abgelehnt, wird der Lauf sauber finalisiert, ohne einen Shutdown nach Abbruch auszulösen
+
+16) Start- und Abschlussdialoge für unbeaufsichtigte Läufe angepasst
+     - der automatische Batch-Preflight-Tabellendialog wurde aus dem normalen Konvertierungsstart entfernt
+     - der bestehende Zielordner-Preflight für Anime/TV/Film bleibt unverändert erhalten
+     - bei aktiviertem Herunterfahren öffnet der Batch-Abschlussdialog nicht mehr und blockiert den Shutdown-Ablauf nicht
+     - der Herunterfahren-Haken wird beim Laden/Übernehmen von Encoder-Einstellungen nicht mehr automatisch deaktiviert
+     - Herunterfahren nutzt jetzt einen zentralen Shutdown-Helfer mit kurzem Windows-Puffer statt sofortigem "/t 0"
+     - ein fehlgeschlagener Shutdown-Befehl wird nicht mehr als erledigtes Herunterfahren gewertet
+
+17) Worker-Abbruch und Schnittstellen vereinheitlicht
+     - request_abort(...) und cancel() kompatibel gemacht
+     - Audio-Mux- und DV-Remux-Worker gegen fehlende Abbruchmethoden abgesichert
+     - Risiko von Abbrüchen durch unterschiedliche Worker-Schnittstellen reduziert
+
+V9.5-Blockfix 21) JobJournal-Start und Abschluss fail-closed gemacht
+     - initiale Journal-Persistierung ist Voraussetzung für den Workerstart; schlägt sie fehl, wird die UI sauber zurückgesetzt und der Konvertierungsworker nicht gestartet
+     - Journal-Schreibfehler werden bis zur GUI-Grenze propagiert und sichtbar geloggt
+     - beim Run-Abschluss wird zuerst das abgeschlossene Archiv durable geschrieben; die aktive Datei wird erst danach entfernt
+     - scheitert die Archivierung, bleibt die letzte aktive Journalversion unverändert auf Disk und kann beim nächsten Start wieder eingelesen werden
+
+=== 10 Preflight, Output-Validierung, Reparatur & Verschieben ===
+
+01) Online-Metadaten im Preflight sichtbarer und robuster entkoppelt
+     - TMDB-Vorschläge laufen weiterhin im Hintergrund, der Preflight-Dialog öffnet ohne synchrones Warten
+     - Ladehinweise zeigen jetzt klar, dass Metadaten im Hintergrund geladen werden
+     - kein Treffer wird sichtbar gemeldet, statt den Hinweis still verschwinden zu lassen
+     - unerwartete Resolver-Fehler bleiben pro Datei/Serie sichtbar und blockieren den Dialog nicht
+
+02) Preflight-Dialog weiter entkoppelt
+     - vorhandene Serienordner werden nicht mehr beim Aufbau der Preflight-Vorschau synchron auf dem GUI-Thread gesucht
+     - die Vorschau zeigt sofort einen plausiblen Zielpfad aus Basisordner und Serienname
+     - bestehende Serienordner werden im Hintergrund nachgereicht und nur übernommen, wenn Typ und Serienname noch passen
+     - TMDB-Jahresvorschläge starten erst nach dem ersten Dialog-Rendern
+     - Metadaten-Treffer werden häppchenweise verarbeitet, damit der Dialog bei großen Queues bedienbar bleibt
+
+03) Zwischenverschieben fertiger Dateien ergänzt
+     - neuer Button "Fertige verschieben" in der Konverter-Steuerung
+     - verschiebt nur bereits erfolgreich konvertierte Dateien und ignoriert laufende, fehlerhafte oder übersprungene Dateien
+     - nutzt denselben MoveThread, dieselben Preflight-Ziele und dieselben Konfliktregeln wie das normale Verschieben nach Abschluss
+     - erfolgreich zwischenverschobene Dateien werden aus der Abschluss-Verschiebung entfernt und sichtbar als verschoben markiert
+     - Zwischenverschiebungen werden im Abschlussbericht kumuliert, damit der Verschiebebericht am Ende vollständig bleibt
+
+04) Output-Validierung und Laufzeit-Reparatur zentralisiert
+     - technische Ausgabekontrolle besitzt ein eigenes Einstellungsfenster für Mindestgröße und Laufzeittoleranzen
+     - harte Grundprüfung auf vorhandenes Video, erwartetes Audio, lesbaren Container und plausible Dauer bleibt aktiv
+     - normaler MKVToolNix-Remux und verlustfreie Timestamp-Reparatur können getrennt aktiviert oder deaktiviert werden
+     - bestehendes Standardverhalten bleibt aktiv: beide Reparaturstufen sind eingeschaltet
+
+05) Standard-Speicherpfade ergänzt
+     - Dragon Tools legt beim Start automatisch Standard-Ausgabeordner unter Dokumente\DragonTools\Ausgabe an
+     - H.264, H.265 und AV1 erhalten jeweils eigene TV-, Anime- und Filme-Ordner
+     - leere Zielpfade in den Einstellungen fallen auf diese Standards zurück und werden beim Speichern angelegt
+     - Converter, Preflight und Verschieben nutzen dieselben Standardpfade auch bei alten oder leeren Einstellungen
+
+06) TMDB-Preflight entkoppelt
+     - Film- und Serienvorschläge aus TMDB laufen im Preflight jetzt im Hintergrund
+     - der Zielordner-Dialog öffnet sofort und bleibt bedienbar, auch wenn TMDB langsam antwortet
+     - Vorschläge werden nur übernommen, solange Name/Serienfeld nicht manuell geändert wurden
+     - lokale Serienordner behalten weiterhin Vorrang vor Online-Vorschlägen
+
+07) Speicherbarer Preflight-Bericht ergänzt
+     - Zielordner-Preflight besitzt jetzt eine Checkbox "Preflight-Bericht speichern"
+     - Bericht landet lokal unter Dokumente\DragonTools\PreflightReports
+     - enthalten sind Eingabedateien, erkannter Datei-Typ, Zielpfade, Regel-/Systemvorschau, Pipeline, Audio-/Untertitelentscheidungen und Warnungen
+     - funktioniert sowohl beim normalen Start mit Verschieben als auch im Move-Only-Modus
+     - falls die Regelvorschau für eine Datei scheitert, wird der Bericht trotzdem gespeichert und der Fehler nur als Warnung geloggt
+
+08) Output-Validierung nach dem Encoding verschärft
+     - ffprobe prüft nach jeder Datei Video-Streams, Audio-Streams, Containerdaten und plausible Laufzeit
+     - wenn die Quelle Audio hatte, muss die Ausgabe ebenfalls mindestens eine Audiospur enthalten
+     - fehlgeschlagene Prüfungen schreiben konkrete Gründe ins Log und markieren die Datei als Fehler
+
+09) Automatische Laufzeitreparatur per MKVToolNix ergänzt
+     - reine Laufzeitfehler bei erzeugten MKV-Dateien starten genau einen mkvmerge-Remux ohne Re-Encoding
+     - nach erfolgreichem Remux gilt die Datei als erfolgreich; Quelle, FFmpeg-Dauer und Remux-Dauer werden geloggt
+     - bleibt die Laufzeit fehlerhaft, wird die Datei eindeutig benannt in den Archiv-Ordner des Ausgabeordners verschoben
+
+10) Intelligente Timestamp-Reparatur für MKV-Laufzeitfehler ergänzt
+     - nach einem erfolglosen normalen Remux analysiert DragonTools Container-, Video-, Audio-, Untertitel- und Kapitelzeiten per ffprobe/MediaInfo
+     - CFR-Dateien mit extremem PTS/DTS-Ausreißer werden ohne Re-Encoding per FFmpeg setts-Bitstreamfilter neu getaktet
+     - Framerate wird rational aus der Datei übernommen, z. B. 24000/1001 oder 25/1; VFR-Dateien werden nicht blind rekonstruiert
+     - MediaInfo-VFR-Meldungen durch defekte PTS-Ausreißer werden nur dann überstimmt, wenn Frameanzahl und Quelldauer sicher eine bekannte CFR-Framerate ergeben
+     - Timinganalyse nutzt MediaInfo-FrameCount zuerst und startet das langsame ffprobe-Framezählen nur noch als Fallback
+     - reparierte Dateien werden vor dem Ersetzen auf Streams, Größe, Dauer und Start-Synchronität validiert; unsichere Ergebnisse bleiben im Archiv erhalten
+     - Fehlerberichte enthalten Timing-Prüfung, Methode und den erzeugten FFmpeg-Befehl
+
+11) Batch-Preflight vor dem Konvertierungsstart ergänzt
+     - vor dem normalen Start erscheint eine Tabellenübersicht für alle Dateien der Queue
+     - pro Datei werden Video, HDR/DV-Status, Audio-Auswahl, Untertitel-Auswahl, Pipeline und Zielcontainer angezeigt
+     - Warnungen für Analyseprobleme, fehlende Spuren, ignorierte DV/HDR10+-Metadaten und alte Containerformate werden gesammelt
+     - Problemdateien können vor dem Start übersprungen werden; die sichtbare Queue wird dabei bereinigt
+     - geplante Verschiebeziele werden bei Abbruch oder deaktiviertem Verschieben nicht mehr als Altzustand weitergetragen
+
+12) Start-Preflight für Zielpfade und Speicherplatz erweitert
+     - Ausgabeziel, Temp-Ziel bei Original-Ersetzen und geplante Verschiebeziele werden vor dem Start geprüft
+     - fehlende Quellen, blockierte Zielordner, bestehende Konfliktdateien und nicht beschreibbare Ziele werden als Fehler markiert
+     - lange Zielpfade, alte Temp-Dateien und knapper Speicher werden als Warnung in der Batch-Tabelle angezeigt
+     - Speicherwarnungen berücksichtigen jetzt auch die Batch-Summe pro Ziel-Laufwerk
+
+13) Batch-Abschlussbericht erweitert
+     - nach dem Lauf erscheint ein Abschlussdialog mit OK/Fehler/Übersprungen, Größenbilanz, Move-Ergebnis und Archivzähler
+     - pro Datei werden Eingabe, Ausgabe, Status und erzeugte Sidecars angezeigt
+     - die bestehende Log-Zusammenfassung bleibt unverändert erhalten
+
+14) Abschlussstatus bei Größenregel-Archivierung korrigiert
+     - wenn eine Ausgabedatei wegen der Größenregel nicht übernommen wird, steht im Log nicht mehr fälschlich "Original ersetzt"
+     - der Batch-Abschluss markiert die Datei nicht mehr als OK, sondern zeigt den Hinweis zur zu großen bzw. zu kleinen Ausgabe
+     - archivierte, nicht übernommene Ausgaben werden nicht mehr als fertig verschiebbare Konvertierungen behandelt
+
+15) Verschiebe-Konflikte über Video-Endungen hinweg erkannt
+     - beim Verschieben zählt gleicher Videoname vor der Endung jetzt als Zielkonflikt
+     - Film.mkv kollidiert dadurch korrekt mit Film.mp4, Film.avi, Film.m4v usw.
+     - die bestehenden Modi Überspringen, zuerst löschen, direkt ersetzen und umbenennen berücksichtigen diese gleichnamigen Video-Altversionen
+     - der Batch-Preflight warnt ebenfalls vor gleichnamigen Video-Zielkonflikten mit anderer Endung
+     - der Verschiebebericht zählt gelöschte oder ersetzte Altversionen auch dann sauber, wenn mehrere gleichnamige Video-Dateien vorhanden waren
+
+16) Fehlerbehandlung bei Ausgabeschutz und Untertiteln verbessert
+     - doppelte Warnungen beim Dateigrößen-Schutz werden zusammengeführt
+     - Sidecar-Pfade für Untertitel bleiben bei speziellen Pfadformen korrekt
+
+17) Cleanup- und Rollback-Logik robuster gemacht
+     - fehlgeschlagene Encodes bereinigen jetzt auch erzeugte Sidecars und passende Begleitdateien zum Output-Stem
+     - temporäre Overwrite-Ausgaben werden weiterhin sicher auf Basis erlaubter Unterpfade gelöscht
+     - beim Ersetzen einer Datei mit gleichem Container wird das Original per Rename gesichert und bei Replace-Fehlern zurückgerollt
+
+V9.5-Blockfix 20) MoveJournal-Recovery konservativ fail-closed gemacht
+     - ein vorhandenes Ziel allein gilt nicht mehr als Commit-Nachweis
+     - Altbestand-Backups werden nur bereinigt, wenn das Ziel existiert und die Quelle bereits entfernt ist
+     - Quelle + Ziel gleichzeitig wird als mehrdeutiger Recovery-Zustand markiert; Backup und offenes Journal bleiben erhalten
+     - fehlt das Ziel, kann ein vorhandenes Konfliktbackup weiterhin auf den Originalpfad zurückgerollt werden
+     - Restore- und Journalwrite-Fehler werden gezielt getestet und führen nicht zu stiller Recovery-Bereinigung
+
+=== 11 Online-Metadaten, Renamer & Benennung ===
+
+--- V9.5 Renamer-/Metadaten-Ausbau ---
+
+V9.5-01) Seriennamen aus Release-Dateinamen sauber normalisiert
+     - technische Segmente werden vor der Online-Suche aus dem Seriennamen entfernt
+     - Beispiel „tvs-watson-eac3-51-ded-dl-18p-azhd-avc-s01e01“ wird als Serie „Watson“, Staffel 1, Episode 1 erkannt
+     - die Release-Gruppen-Erkennung akzeptiert einen Gruppenrest nur noch an einer plausiblen Position hinter dem SxxExx-Marker; technische Ketten wie „51-ded-dl-18p-azhd-avc“ werden nicht mehr als Gruppe missverstanden
+
+V9.5-02) Technische Release-Tags erweitert
+     - DED/deutscher Dub, DL/Dual Language, DD51/Dolby Digital 5.1, EAC3/E-AC3, 18p als ältere 1080p-Kurzform, AZHD/AmazonHD, AVC/x264/H.264 und HEVC/x265/H.265 werden bereinigt
+     - weitere bestehende Erkennung umfasst u. a. Web-DL, BluRay, HDR, HDR10+, DoVi/Dolby Vision, AV1 sowie verbreitete Audio-/Source-Tags
+
+V9.5-03) Vorschlags-Dropdown lesbarer gemacht
+     - die Tabellenzelle selbst bleibt kompakt
+     - beim Öffnen wird das Popup anhand des längsten Kandidatentextes verbreitert
+     - die maximale Popup-Breite wird an die verfügbare Bildschirmgeometrie begrenzt
+
+V9.5-04) TMDB und TheTVDB gleichzeitig nutzbar
+     - bei „Beide aktiv + TheTVDB bevorzugt“ bleiben TMDB-Kandidaten sichtbar; TheTVDB dient nur als Priorität bei Gleichstand
+     - analog bleibt TheTVDB bei „Beide aktiv + TMDB bevorzugt“ als zweite Quelle erhalten
+
+V9.5-05) Vorschlagslimit auf „pro Provider“ geändert
+     - nur TMDB: bis zu 6 Kandidaten
+     - nur TheTVDB: bis zu 6 Kandidaten
+     - TMDB + TheTVDB: bis zu 6 Kandidaten je Provider, somit maximal 12
+     - die Provider-Präferenz beeinflusst nicht mehr das globale Trefferbudget
+
+V9.5-06) Mehrere echte Serienkandidaten je Provider verarbeitet
+     - der Resolver prüft nicht mehr nur den jeweils vermeintlich besten Serientreffer
+     - mehrere Serienresultate werden gegen die erkannte Staffel/Episode validiert
+     - nur Kandidaten, bei denen SxxExx tatsächlich existiert, gelangen in die Vorschlagsliste
+
+V9.5-07) Treffer nach Qualität statt primär nach Provider sortiert
+     - primäres Kriterium ist der berechnete Match-Score
+     - erst bei gleichem Score entscheidet die konfigurierte Provider-Reihenfolge
+     - ein sehr guter Treffer des zweiten Providers kann damit vor einem schwächeren Treffer des bevorzugten Providers stehen
+
+V9.5-08) Serienjahr in Kandidatenbewertung und Vorschlagsdaten integriert
+     - Online-Kandidaten führen ihr tatsächliches Serienjahr mit
+     - bei titelbasierten Metadatenbewertungen kann ein passendes Jahr einen gleichnamigen Kandidaten gegenüber einer zeitlich unplausiblen Serie bevorzugen
+     - das Jahr bleibt im Kandidatenobjekt für Anzeige und weitere Entscheidungen verfügbar
+
+V9.5-09) Vorschlagssuche startet inkrementell bei neuen Dateien
+     - neu hinzugefügte Dateien/Ordner stoßen automatisch eine Metadatenauflösung für noch unbearbeitete Zeilen an
+     - bestehende Vorschläge sowie bereits festgestellte „kein Treffer“-Ergebnisse werden bei diesem inkrementellen Lauf nicht erneut angefragt
+     - „Vorschläge suchen“ bleibt als expliziter vollständiger Refresh bestehen
+
+V9.5-10) Preflight- und Namensnormalisierung robuster gemacht
+     - verschiedene Bindestriche, Schrägstriche und Apostrophvarianten werden für Vergleiche vereinheitlicht
+     - störende Endzeichen werden aus Such-/Vergleichstexten entfernt, z. B. „Watson -“ → „Watson“
+     - Windows-ungeeignete /- und \\-Zeichen werden bei Zielnamen weiterhin regelbasiert ersetzt und nicht als echte Dateinamenszeichen geschrieben
+
+V9.5-11) Neuer Menüpunkt „Renamer-Regeln“
+     - eigener Eintrag unter „Regeln“
+     - derselbe Editor ist zusätzlich als Tab im globalen Regelfenster eingebunden
+
+V9.5-12) Bisher hart codierte Dateinamenregeln editierbar
+     - Standardersetzungen umfassen u. a. *→X, "→', '→`, /→-, \\→-, #/?/</>/:→leer und |→.
+     - Einträge können geändert, entfernt oder ergänzt werden
+     - Regeln werden über die zentrale Regeldatei „renamer_rules“ geladen und migriert
+
+V9.5-13) Eigene Suchausnahmen/Aliasregeln ergänzt
+     - eine erkannte Quelle kann einen separaten Online-Suchnamen erhalten, z. B. „Daemons of the Shadow Realm“ → „Das Band der Unterwelt“
+     - der erkannte Quelltitel bleibt unverändert; nur die Suchabfrage wird ersetzt/ergänzt
+     - dadurch bleibt die spätere Bewertung nachvollziehbar und Quelle/Suchbegriff werden nicht vermischt
+
+V9.5-14) Kontrollierte Fuzzy-Suche ergänzt
+     - bei schwierigen Seriennamen können zusätzliche Prefix-/Fallback-Suchvarianten erzeugt werden
+     - optional wird ohne Jahr erneut gesucht
+     - Fuzzy-Fallback kann per Renamer-Regeln aktiviert/deaktiviert werden; Mindestanzahl der Wörter für Prefix-Varianten ist konfigurierbar
+
+V9.5-15) Konfigurierbare Treffergrenzen eingeführt
+     - Mindestscore für sichtbare Kandidaten standardmäßig 60 %
+     - manuelle Prüfung unter standardmäßig 72 %
+     - sichere automatische Annahme ab standardmäßig 78 %
+     - alle drei Werte werden zentral aus den Renamer-Regeln bezogen
+
+V9.5-16) Fuzzy-Treffer gegen den ursprünglichen Titel bewertet
+     - erkannter Titel, tatsächlich verwendeter Suchbegriff und Online-Treffer bleiben getrennte Daten
+     - ein Fuzzy-Suchbegriff darf den Kandidaten nicht dadurch künstlich auf 100 % setzen, dass er selbst bereits dem Online-Titel entspricht
+     - die angezeigte Sicherheit wird aus der Ähnlichkeit zum ursprünglichen erkannten Serientitel berechnet
+
+V9.5-17) SxxExx validiert den Kandidaten, erhöht aber nicht künstlich auf 100 %
+     - Staffel und Episode werden vor Aufnahme in die Vorschlagsliste als Existenzprüfung verwendet
+     - korrekte SxxExx-Daten geben keinen positiven Score-Bonus mehr
+     - Abweichungen bei Staffel/Episode bleiben bei externen/custom Resolvern als Sicherheitsabzug erhalten
+
+V9.5-18) Aliasregeln separat gekennzeichnet
+     - eine explizite Benutzerzuordnung kann als „100 % · Aliasregel“ erscheinen
+     - damit ist sichtbar, dass die Sicherheit aus einer definierten Regel und nicht aus normaler Textähnlichkeit stammt
+
+V9.5-19) Manuelle Dropdown-Auswahl auf dieselben Schwellen umgestellt
+     - Status/Prüfhinweise nach einer manuellen Kandidatenwahl verwenden die konfigurierbare Grenze „manual_review_below“
+     - dadurch existiert kein separater, hart codierter manueller Grenzwert mehr
+
+Technischer Gesamtfluss V9.5:
+     Dateiname → Release-Tags entfernen → Originaltitel erkennen → Preflight-Normalisierung →
+     ggf. Alias-/Fuzzy-Suchvarianten → TMDB + TheTVDB → mehrere Serienkandidaten →
+     SxxExx-Existenzprüfung → Score gegen ORIGINALTITEL → max. 6 je Provider →
+     score-first Sortierung → Dropdown → manuell/sicher akzeptieren → Umbenennen.
+
+01) Online-Metadatenmanager um TheTVDB und getrennte Provider erweitert
+     - Filme und Serien können getrennte Metadatenquellen verwenden
+     - Filme und Serien können wahlweise TMDB, TheTVDB oder beide Quellen nutzen
+     - TheTVDB API-Key, PIN und Bearer-Token werden über Einstellungen verwaltet und als sensible Daten behandelt
+     - Fehlerfälle wie fehlende Zugangsdaten, ungültige Tokens, Timeouts und leere Trefferlisten werden abgefangen
+
+02) Renamer für Filme und Serien ausgebaut
+     - Renamer verarbeitet jetzt neben Filmen auch Serienfolgen
+     - Serienname, Staffel, Episode und Episodentitel werden erkannt und mit Online-Metadaten ergänzt
+     - Serienzielnamen folgen einheitlich "Serienname - SXXEXX - Episodenname.ext"; Zahlenpunkte wie "10.000 Jahre" bleiben auch im Offline-Fallback erhalten
+     - Serienvorschläge bleiben manuell prüfbar und überschreiben keine Dateien ohne Freigabe
+     - technische Release-Tags, Editionen und Release-Gruppen bleiben als Hinweise erhalten
+
+03) Online-Metadaten und Renamer neutralisiert
+     - Menüeinträge, Dialoge und Tab-Labels verwenden jetzt neutrale Metadaten-/Renamer-Begriffe statt TMDB- oder Film-Sondernamen
+     - Quellenwahl erlaubt für Filme und Serien jeweils TMDB, TheTVDB oder beide Provider
+     - TheTVDB kann auch für Filmvorschläge verwendet werden, soweit Treffer über die v4-Suche vorhanden sind
+     - Renamer-Tabelle zeigt Typ, Serienrubrik und auswählbare Treffer per Dropdown
+     - Zielname, Sicherheit und Hinweise aktualisieren sich beim Wechsel des Vorschlags direkt in der Tabelle
+
+04) Provider-Priorität für TMDB und TheTVDB ergänzt
+     - Filme und Serien besitzen jeweils eine eigene Einstellung „Bevorzugt“, wenn als Quelle „Beide“ gewählt ist
+     - Standard ist für beide Medientypen TMDB; bei Einzelprovider-Auswahl ist die Prioritätsauswahl deaktiviert
+     - Composite-Metadatenclient fragt zuerst den bevorzugten Provider und danach den zweiten Dienst als Fallback ab
+     - Fehler oder leere Treffer des ersten Providers verhindern den Fallback nicht
+     - Renamer-Treffer werden bei „Beide“ zuerst nach Provider-Priorität und innerhalb derselben Provider-Stufe nach Match-Sicherheit sortiert
+     - separate Einstellungen werden gespeichert und durch die Metadatenkonfiguration an Preflight, NFO und Renamer weitergereicht
+
+05) Anzeige sensibler Online-Zugangsdaten vereinheitlicht
+     - separater Bereich „Zugangsdaten“ im Online-Metadaten-Dialog ergänzt
+     - gemeinsame Checkbox „Zugangsdaten anzeigen (TMDB + TheTVDB)“ steuert alle geheimen Felder beider Provider
+     - betroffen sind TMDB Read-Access-Token/API-Key sowie TheTVDB API-Key/PIN/Bearer-Token
+     - dadurch ist eindeutig erkennbar, dass die Sichtbarkeitsoption nicht nur zu TMDB gehört
+
+06) Deutsche Umlaut-Suchvarianten für Metadaten und Renamer ergänzt
+     - Release-Schreibweisen wie „Kinderfluesterer“ werden zuerst unverändert gesucht
+     - bei Bedarf werden vorsichtige Varianten mit ä/ö/ü zusätzlich als Fallback abgefragt
+     - Vergleichsfunktionen normalisieren echte Umlaute und ae/oe/ue/ss für robustere Trefferbewertung
+     - Originalschreibweise bleibt immer erste Anfrage; Varianten ersetzen den Benutzertitel nicht blind
+
+07) Film-Umbenennung mit TMDB-Vorschlägen ergänzt
+     - neuer eigener Tab "Film-Umbenennung" ergänzt
+     - Release-Dateinamen werden in Suchname, Jahr, Edition-Hinweise, technische Tags und Release-Gruppe zerlegt
+     - technische Tags wie German, DL, 2160p, DV, HDR10Plus, HEVC, Remux und Release-Gruppen werden nicht in den Zielnamen übernommen
+     - Editionen wie Director's Cut werden als Hinweis angezeigt, aber nicht automatisch in den finalen Jellyfin-Dateinamen geschrieben
+     - TMDB-Treffer werden als Vorschläge geladen und mit einer Sicherheit bewertet
+     - Umbenennen passiert erst nach manueller Annahme einzelner Zeilen oder nach "Sichere akzeptieren"
+     - Serienmuster wie S01E15 oder 1x15 werden erkannt und nicht über die Film-Umbenennung verarbeitet
+     - Zielkonflikte werden vor dem Umbenennen erkannt und blockiert
+     - Film-Umbenennung ist über den neuen Tab, den Tab-Manager und das Menü Online-Metadaten erreichbar
+     - Build-Prüfung kontrolliert das neue Core- und GUI-Modul im Python-Paket-Smoke-Test
+
+08) Preflight-Serienordner bei TMDB-Titeln robuster normalisiert
+     - TMDB-Serientitel mit Windows-ungültigen Doppelpunkten werden für Zielordner bereinigt
+     - Markenschreibweisen wie "Re:ZERO" werden zu "ReZERO" statt zu einem Unterstrich-Ordner
+     - vorhandene lokale Serienordner mit Jahreszusatz werden trotz TMDB-Doppelpunkt wieder korrekt erkannt
+     - Dateinamen wie "ReZero -Starting Life in Another World- - S04E14" werden sauber zu "ReZero - Starting Life in Another World" normalisiert
+
+09) Online-Metadaten und TMDB-Filmreihen-Erkennung ergänzt
+     - neuer Hauptmenüpunkt "Online-Metadaten" zwischen Regeln und Profile
+     - eigener Dialog für TMDB-Zugriff mit API-Key und API Read Access Token
+     - Sprache, Fallback-Sprache und Cache-Dauer zentral speicherbar
+     - TMDB-Verbindungstest, manuelle Titelsuche und Cache-Bereinigung ergänzt
+     - Film-Preflight nutzt TMDB-Collections als Vorschlag für Filmreihen
+     - TMDB-Collection-Suffixe wie "Filmreihe", "Collection" oder "Sammlung" werden für Zielordner entfernt
+     - Serien-Preflight fragt TMDB nach dem Serienjahr, wenn kein passender lokaler Serienordner vorhanden ist
+     - TMDB-Jahresvorschläge bleiben im Preflight manuell editierbar
+     - TMDB-Schlüssel werden in Diagnosepaketen maskiert, bleiben in normalen Backups aber wiederherstellbar
+
+=== 12 Jellyfin NFO, Trickplay & Sidecars ===
+
+01) Jellyfin-NFO-Erstellung ergänzt
+     - neuer Einstellungsbereich "Jellyfin NFO / Trickplay"
+     - Filme und Serienfolgen können nach erfolgreicher Konvertierung automatisch eine NFO erhalten
+     - TMDB-Daten werden um Plot, Titel, Originaltitel, Jahr, IDs, Genres, Studios, Credits, Darsteller, Laufzeit und Collection-Daten erweitert
+     - technische Dateiinfos können optional per ffprobe in die NFO geschrieben werden
+     - keine Jellyfin-Nutzerdaten wie gesehen/resume/lastplayed und keine lokalen Serverpfade werden geschrieben
+
+02) Film-NFO für Jellyfin-Zielordner angepasst
+     - in der Arbeitsablage bleibt die NFO eindeutig nach Videoname benannt
+     - beim Verschieben in Filmordner wird die NFO automatisch zu movie.nfo umbenannt
+     - Serienfolgen behalten ihren Folgen-Dateinamen als NFO
+     - vorhandene NFOs können behalten, ersetzt oder vorher gesichert werden
+
+03) Jellyfin-Trickplay-Erstellung ergänzt
+     - Trickplaybilder werden optional nach erfolgreicher Konvertierung erzeugt
+     - Ausgabeformat entspricht der Jellyfin-Struktur: Filmname.trickplay / 320 - 10x10 / 0.jpg ...
+     - Standardwerte: 320 px Breite, 10x10 Kacheln, 10 Sekunden Intervall, qscale 4, JPEG-Qualität 90
+     - CUDA-Hardwarepfad mit automatischem CPU-Fallback
+     - vorhandene Trickplaydaten können behalten, ersetzt oder vorher als Backup-Ordner gesichert werden
+     - neue Quellwahl: Trickplay kann aus der fertigen Ausgabedatei oder aus dem Ausgangsmaterial erzeugt werden
+     - auch bei Ausgangsmaterial als Quelle wird der Trickplay-Ordner passend zur fertigen Ausgabedatei benannt
+
+04) Workflow- und Verschiebeintegration erweitert
+     - NFO und Trickplay werden als Sidecars an die fertige Videodatei gekoppelt
+     - beim normalen Verschieben wandern NFO, externe Untertitel und Trickplayordner gemeinsam mit
+     - Trickplay-Konfliktverhalten gilt auch beim späteren Verschieben in den Zielordner
+     - Sidecar-Verschieben unterstützt jetzt auch Ordner, nicht nur Dateien
+     - Post-Processing läuft nur nach erfolgreicher Output-Validierung und nicht bei blockierten/zu großen Ausgaben
+
+05) NFO-/Trickplay-Nacharbeit asynchronisiert
+     - NFO und Trickplay laufen nach erfolgreicher Konvertierung im Hintergrund weiter
+     - die nächste Queue-Datei kann bereits starten, während die Nacharbeit der vorherigen Datei läuft
+     - neuer Zwischenstatus "🧩" zeigt an, dass die Videodatei ersetzt ist, aber Post-Processing noch aktiv ist
+     - erst nach Abschluss der Nacharbeit wird der finale OK-Status "✅" gemeldet
+     - am Batch-Ende wartet Dragon Tools auf offene Post-Processing-Aufträge, damit Abschlussbericht und Verschieben alle Sidecars vollständig erfassen
+
+V9.5-Blockfix 22) Trickplay-Erzeugung transaktional und timeoutfähig gemacht
+     - finaler Trickplay-Root wird mit PathSwapTransaction committed; vorhandener Altbestand wird vor Overwrite/Backup nur umbenannt und erst nach erfolgreichem Commit verworfen bzw. als Backup behalten
+     - Commitfehler rollen auf den bisherigen Trickplay-Bestand zurück; bei unvollständigem Rollback bleibt der Backup-Pfad erhalten und wird im Log genannt
+     - FFmpeg-Prozesshandling verwendet den zentralen ToolRunner statt eines separaten stderr=PIPE/Polling-Pfads
+     - stdout/stderr werden parallel konsumiert; Runtime-Timeout, Pause, Abbruch, Windows-No-Window und Prozessbaum-Beendigung folgen der gemeinsamen Worker-Infrastruktur
+
+=== 13 Audio-Video-Matcher ===
+
+01) Audio-Video-Matcher mit optionaler OpenCV-Bildanalyse erweitert
+     - OpenCV und NumPy werden optional für robustere Bildsignaturen verwendet
+     - fallbackfähige FFmpeg/dHash-Bildanalyse bleibt erhalten, falls OpenCV nicht verfügbar ist
+     - Bildvergleich nutzt mit OpenCV zusätzliche Kanten-/Strukturmerkmale, um gemeinsame Inhaltsbereiche zuverlässiger zu finden
+     - Worker-Log zeigt an, ob OpenCV oder der interne Fallback verwendet wird
+     - Release-Prüfung kontrolliert zur Laufzeit, ob OpenCV verfügbar ist; fehlendes OpenCV ist eine Warnung und blockiert den Matcher nicht
+
+02) Audio-Video-Matcher als eigener Worker-Tab ergänzt
+     - neuer Tab "Audio-Video-Matcher" über Tab-Manager und Werkzeuge-Menü erreichbar
+     - zwei Videoversionen können per visueller Landmarken verglichen werden, ohne KI oder Sprachmodell
+     - Fall A erkennt reinen Offset und behandelt zusätzliches Material nur vor/nach dem gemeinsamen Inhalt nicht als Schnittfehler
+     - Fall B erkennt lineare Drift bzw. Geschwindigkeitsunterschiede und erzeugt einen passenden Audio-Stretch-Plan
+     - Fall C erkennt wechselnde Offsets innerhalb des gemeinsamen Inhalts und erlaubt anschließend ungefähre Schnittbereiche mit automatischer Feinanalyse
+     - Zielvideo definiert die finale Länge; zusätzliche deutsche Audioanteile am Ende werden getrimmt
+     - Zielbereiche ohne deutsche Audioentsprechung werden gewarnt bzw. blockiert, statt still mit erfundener Stille als Erfolg zu gelten
+     - Ausgabe wird als MKV mit Zielvideo per Stream-Copy und synchronisierter deutscher Audiospur erstellt
+     - Matching-Kern, FFmpeg-Worker und GUI sind getrennt aufgebaut und mit Kernlogik-Tests abgesichert
+     - OpenCV-Bildanalyse ergänzt: wenn opencv-python-headless verfügbar ist, nutzt der Matcher Zuschnitt, Kantenstruktur und robustere Hashberechnung; ohne OpenCV bleibt der FFmpeg/dHash-Fallback aktiv
+     - Build-Skript, PyInstaller-Spec und Release-Prüfung prüfen bzw. sammeln OpenCV für den EXE-Build
+     - Projektzahlen in Help-Datei und "Über Dragon Tools" auf 173 Python-Dateien, ca. 50.100 Gesamtzeilen und ca. 42.700 Codezeilen aktualisiert
+
+=== 14 Qualitätstester ===
+
+03) Qualitätstester um direkten Datei-A/B-Vergleich erweitert
+     - neuer Dialog vergleicht zwei bereits vorhandene Videodateien ohne erneutes Encoding; Datei A ist die Referenz, Datei B der Kandidat
+     - automatische oder manuelle Segmente nutzen SSIM und – falls im FFmpeg-Build vorhanden – VMAF direkt zwischen beiden Dateien
+     - optionaler Zeitversatz für Datei B erlaubt den Vergleich bei leicht versetztem Start; A/B können mit einem Klick getauscht werden
+     - Laufzeit-, Framerate-, Auflösungs-, Seitenverhältnis- und HDR-Abweichungen werden protokolliert, damit unzuverlässige Metriken nicht als sichere Aussage erscheinen
+     - Zusammenfassung zeigt technische Eckdaten, mittlere Metriken und den Größenunterschied; ohne echte Originalquelle wird bewusst kein absoluter Qualitätsgewinner behauptet
+     - Release-Smoke-Test verlangt die neuen Vergleichsmodule quality_file_compare_dialog.py und quality_compare_thread.py
+
+01) Qualitätstester um Testlauf-Assistent erweitert
+     - neuer Testlauf öffnet jetzt einen Dialog mit Codec-Auswahl H.264, H.265 oder AV1
+     - danach werden Encoder und passende Detailoptionen für CPU, NVENC, QSV oder AMF gewählt
+     - freie zusätzliche FFmpeg-Parameter bleiben erhalten; vorhandene Testläufe können per Doppelklick bearbeitet werden
+     - Testläufe nutzen intern die zentralen Encoderargumente der Hauptkonvertierung
+
+02) Qualitätstester als eigener Arbeitsbereich ergänzt
+     - neuer Tab "Qualitätstester" über Tab-Manager und Werkzeuge-Menü erreichbar
+     - kurze Testsegmente können automatisch über die Laufzeit verteilt oder manuell als Zeit-/Prozentbereiche definiert werden
+     - 2 bis 20 aktive Testläufe können mit eigenem Namen, Codec, Encoder, Qualitätswert, Preset, Bitformat, Skalierung und Extra-Argumenten verglichen werden
+     - Ergebnisdateien werden in einem eigenen QualityTests-Ausgabeordner abgelegt
+     - Analyse zeigt Größe, Bitrate, Codec, Profil, Pixelformat sowie SSIM und VMAF sofern der vorhandene FFmpeg-Build die Filter unterstützt
+     - Release-/Build-Prüfung kontrolliert die neuen Qualitätstester-Module im Python-Paket-Smoke-Test
+
+=== 15 ISO, Disc-Import & Remux-Werkzeuge ===
+
+01) ISO-/Disc-Import für entpackte Blu-ray- und DVD-Strukturen erweitert
+     - ISO-Tab erkennt jetzt ISO, IMG, Disc-Root, direktes BDMV-Verzeichnis und direktes VIDEO_TS-Verzeichnis
+     - bei direkt gewähltem BDMV/VIDEO_TS wird für MakeMKV automatisch der übergeordnete Disc-Root verwendet
+     - erwartete Blu-ray-Struktur mit index.bdmv, PLAYLIST, STREAM, CLIPINF und optional CERTIFICATE wird im ISO-Tab erklärt
+     - MakeMKV bleibt bevorzugter Weg; FFmpeg-Fallback bleibt nur für unverschlüsselte, direkt lesbare Strukturen vorgesehen
+
+02) ISO-/Disc-Worker für MakeMKV korrigiert
+     - MakeMKV-Quellen werden jetzt im erwarteten Format iso:<Datei> bzw. file:<Ordner> übergeben
+     - mehrere ausgewählte Titel werden einzeln extrahiert statt als nicht unterstützte Komma-Auswahl
+     - Blu-ray-/DVD-Ordner werden nicht mehr fälschlich als disc:<Pfad> behandelt
+
+03) MP4-Remux gegen falsche DV/HDR10+-Nutzung abgesichert
+     - normaler MP4-Remux lehnt Dolby-Vision-Quellen bewusst ab
+     - HDR10+-Quellen werden nicht mehr über den einfachen Copy-Remux verarbeitet
+     - Logmeldung verweist auf DV-Remux bzw. Standard-Converter mit Metadaten-Erhalt
+
+=== 16 Regeln, Einstellungen, Migration & Backup ===
+
+V9.5-04) QSV-Altlast und Encoder-Reset bereinigt
+     - das veraltete QSV-Bool-Feld qsv_la wird beim Speichern aktiv entfernt und nicht mehr in neuen Profilen geführt
+     - Profilmigration entfernt alte encoder_options.lookahead-Felder, die echte Lookahead-Tiefe bleibt als lookahead_depth erhalten
+     - Profil-Schema ist jetzt Version 3; default_profiles.json wird bereits im aktuellen Schema ausgeliefert
+     - Standardwerte-Reset speichert nach dem UI-Reset und nach dem anschließenden Standardprofil den finalen Encoderzustand explizit
+     - H.265-CPU verwendet beim Werkreset und im Film-CPU-Standardprofil CRF 22
+
+V9.5-01) Renamer-Regelschema ergänzt
+     - neue Regelgruppe kapselt Zeichenersetzungen, Titel-/Suchaliasregeln und Matching-Grenzen
+     - Migration akzeptiert sowohl Listen- als auch ältere Dictionary-artige Ersetzungstabellen und normalisiert die Daten auf Schema-Version 1
+     - Fuzzy-Fallback, Retry ohne Jahr und minimale Prefix-Wortzahl sind konfigurierbar
+     - Regelcache kann nach Änderungen gezielt neu geladen werden
+
+01) Regeltest näher an echte Ausführung gebracht
+     - Batch-Preflight-Zeilen enthalten jetzt zusätzliche Entscheidungsgründe
+     - Detailansicht zeigt Pipeline-Grund, Audio-Auswahl, Untertitel/Burn-In, Overrides und geplantes Ziel
+     - Regeltest-Dialog kann die komplette Auswertung inklusive Entscheidungsgründen und Hinweisen als TXT-Bericht speichern
+     - Tests sichern ab, dass Regeltest-Begründungen erzeugt werden
+
+02) Regeltest zum Regel-/Profil-Simulator erweitert
+     - Werkzeug-Menü und Kontextmenü benennen die Funktion jetzt als Regel-/Profil-Simulator
+     - Batch-Tabelle zeigt zusätzlich Pipeline und wirksames Profil
+     - Detailansicht und gespeicherter Bericht enthalten Profilentscheidung, Pipeline, Audio, Untertitel/Burn-In, Overrides, Zielpfad und Hinweise
+     - Bericht wird unter dem neuen Namen RegelProfilSimulator gespeichert
+
+03) Timeout-System aktivierbar gemacht
+     - jeder Timeout im Timeout-Dialog besitzt jetzt eine speicherbare Aktiv-Checkbox
+     - deaktivierte Timeouts behalten ihren Minutenwert, werden aber nicht angewendet
+     - ausgegraute Minutenfelder zeigen sichtbar, dass ein Timeout inaktiv ist
+     - Zurücksetzen stellt Wert und Aktivstatus wieder auf den Standard
+
+04) Timeout-Dialog optisch bereinigt
+     - einzelne Zurücksetzen-Buttons sind jetzt kompakt nur mit "🔄" beschriftet
+     - leere graue Vierecke durch nicht gerenderte Symbolzeichen werden vermieden
+     - Tooltip erklärt, dass der jeweilige Timeout auf Standard gesetzt und wieder aktiviert wird
+
+05) Queue-Regeltest ergänzt
+     - neues Werkzeug-Menü "Regeltest aktuelle Queue"
+     - prüft alle Dateien der aktiven Warteschlange gegen Analyse, Pipeline, Audio, Untertitel, Zielpfade und Speicher-/Konfliktwarnungen
+     - nutzt dieselbe Batch-Preflight-Tabelle wie der Einzeldatei-Regeltest, aber ohne Encoding und ohne Startzwang
+
+06) Regel- und Profilmigration zentralisiert
+     - Audio-, Untertitel-, Move-Regeln und Encoder-Profile besitzen jetzt Schema-Versionen
+     - alte Regeldateien werden beim Laden automatisch ergänzt und bei Nutzerdateien aktualisiert gespeichert
+     - alte Profile bekommen fehlende Encoder-Optionen, Skalierung und Labels automatisch nachgetragen
+     - Migrationshinweise werden unter Dokumente\DragonTools\Logging\MIGRATION\config_migration.log protokolliert
+
+07) Audio-/Untertitel-Sprachregeln vereinfacht
+     - Audio- und Untertitelregeln bleiben getrennt, nutzen aber jeweils eine klickbare Sprach-Prioritätsliste
+     - maximale Anzahl der übernommenen Sprachen und Spuren je Sprache ist getrennt einstellbar
+     - Audio übernimmt bei keinem Treffer optional alle Audiospuren; Untertitel bleiben standardmäßig zurückhaltend
+     - Forced-Burn-In bekommt eine eigene feste Sprache, unabhängig von der Untertitel-Keep-Auswahl
+     - alte Regeldateien mit preferred_languages/fallback_languages und deutschen Keep-Regeln bleiben kompatibel
+     - DV-Sidecar-Export beachtet jetzt ebenfalls maximale Untertitel-Sprachen und Spuren je Sprache
+     - bei mehreren passenden DV-Sidecars werden SRT/SubRip vor ASS/SSA und erst danach Bildformate wie PGS/SUP bevorzugt
+     - nach einem automatischen Forced-Burn-In werden im MP4/DV-Sidecar-Pfad keine weiteren Forced-Untertitel daneben exportiert
+     - alte Untertitel-Regeldateien mit keep_all_german respektieren jetzt ebenfalls die neue Begrenzung "max. Untertitel je Sprache"
+
+08) Regeltest ohne Encoding ergänzt
+     - über das Kontextmenü einer Datei kann die aktuelle Regel-/Preflight-Auswertung angezeigt werden
+     - der Regeltest nutzt dieselbe Analyse wie der Batch-Preflight, startet aber keine Konvertierung
+     - Hinweise zu Audio, Untertiteln, HDR/DV, Zielpfad, Speicher und Pipeline sind vorab sichtbar
+
+09) Encoder-Profil pro Datei ergänzt
+     - einzelne Queuedateien können ein eigenes passendes Encoder-Profil erhalten
+     - Profilwahl wird in der Queue angezeigt und im Regeltest sichtbar
+     - Qualität, Preset, Scale-Modus und Encoder-Optionen werden pro Datei an Standard-, DV- und HDR10+-Pfade weitergegeben
+     - Profile mit falschem Zielcodec werden für die Datei-Auswahl bewusst ausgefiltert
+
+10) Backup und Restore für Einstellungen, Regeln und Profile ergänzt
+     - Einstellungen, Toolpfade, UI-Zustand, Regeln und eigene Encoderprofile können als ZIP exportiert werden
+     - Restore ersetzt die aktuellen Werte und legt vorher automatisch ein Sicherheitsbackup an
+     - Backup-ZIP-Pfade werden beim Restore geprüft, damit keine fremden Zielpfade geschrieben werden
+
+=== 17 Logging, Diagnose, Job-Journal & Berichte ===
+
+01) Start- und Override-Logging erweitert
+     - Logkopf zeigt globale Parameter wie Skalierung, Überschreiben, Strip-Only, Encoderdetails und DV/HDR10+-Erhalt
+     - vorhandene Datei-Overrides werden zu Beginn gezählt
+     - abweichende Datei-Einstellungen werden direkt beim jeweiligen Dateieintrag kompakt protokolliert
+
+02) Abschluss-, Verschiebe- und Änderungsberichte erweitert
+     - der Batch-Abschluss zeigt Zusatzdaten jetzt getrennt nach Untertiteln, NFO und Trickplay an
+     - Post-Processing protokolliert für NFO und Trickplay, ob Daten erstellt, beibehalten, ergänzt, ersetzt, gesichert oder fehlerhaft waren
+     - der Verschiebebericht zählt Sidecar-Konflikte getrennt nach Untertiteln, NFO und Trickplay inklusive gelöscht/ersetzt/gesichert/beibehalten
+     - NFO-Konfliktmodus "vorhandene NFO behalten" schreibt vorhandene NFOs nicht mehr versehentlich neu
+     - globale Einstellungen, gespeicherte/geladene/gelöschte Profile, Regeländerungen und Migrationen schreiben ein kurzes Änderungsprotokoll unter Logging\SettingsChanges
+     - sensible Werte wie TMDB-API-Key und Lesetoken werden im Änderungsprotokoll maskiert
+
+03) Live-Diagnose für laufende Jobs ergänzt
+     - neuer Werkzeug-Menüpunkt "Laufenden Job diagnostizieren"
+     - zeigt aktive Datei(en), wartende Queue, Parallel-Worker, Gesamtfortschritt, Prozess-ID und das aktuell laufende Werkzeugkommando
+     - Einzel-Worker und Parallel-Worker liefern dafür eigene Diagnose-Snapshots
+     - hilft bei langen Encodes, hängenden Spezialtools und Parallelbetrieb ohne direkt in VerboseLogs suchen zu müssen
+
+04) Logstruktur und Log-Bereinigung verbessert
+     - neue Log-Monatsordner werden numerisch und lesbar angelegt, z.B. 08-August
+     - normales Logging, ErrorReports und CrashReports folgen dadurch automatisch der sortierbaren Monatsstruktur
+     - globale Einstellungen enthalten eine Log-Bereinigung für alle Logs oder Logs bis zu einem frei wählbaren Datum
+     - der aktive Crash-Marker crash_state.json wird bei der Bereinigung bewusst nicht gelöscht
+
+05) Log-Bereinigung nach Logart auswählbar gemacht
+     - normale Logs, ErrorReports, CrashReports und VerboseLogs besitzen eigene Checkboxen
+     - standardmäßig sind alle Logarten aktiv
+     - dadurch kann gezielt nur eine einzelne Logart bereinigt werden, z.B. nur VerboseLogs oder nur ErrorReports
+     - CrashReports werden bereinigt, der aktive crash_state.json-Marker bleibt weiterhin geschützt
+
+06) Diagnosepaket integriert
+     - neues Werkzeug-Menü "Diagnosepaket erstellen"
+     - erzeugt eine lokale ZIP-Datei unter Dokumente\DragonTools\Diagnostics
+     - enthält Manifest, System-/Versionsinfo, Werkzeugdiagnose, Einstellungen, Regeln/Profile sowie aktuelle Normal-, Error-, Crash- und VerboseLogs
+     - Hinweis im Dialog macht sichtbar, dass lokale Pfade und Dateinamen zur Fehleranalyse enthalten sind
+
+07) Job-Journal für Laufstatus ergänzt
+     - jeder Convert-/DV-Remux-Lauf schreibt ein aktives Job-Journal unter Dokumente\DragonTools\JobJournal
+     - pro Datei werden gestartet, Ergebnisstatus, Ausgabepfad und Hinweistext festgehalten
+     - sauber abgeschlossene Läufe werden archiviert; offene Journale werden beim nächsten Start gemeldet
+     - Diagnosepakete nehmen aktuelle und letzte archivierte Job-Journale mit auf
+
+08) Lange FFmpeg-Läufe besser erkennbar
+     - FFmpeg-Fortschritt bleibt in der GUI sichtbar, ohne den normalen Konvertierungslog mit Start-/Statusmeldungen zu füllen
+     - technische FFmpeg-Kommandos bleiben für Diagnosefälle im VerboseLog bzw. Crashbericht verfügbar
+     - Crash-Guard ergänzt: Bei einem nicht sauber beendeten Lauf schreibt der nächste Start einen Crashbericht mit letzter Datei, letztem Schritt und letztem FFmpeg-Kommando
+     - unbehandelte Hauptthread-/Nebenthread-Ausnahmen und native Python-Fatalfehler werden zusätzlich in CrashReports protokolliert
+
+09) Detaillierte Fehlerberichte für fehlgeschlagene Konvertierungen ergänzt
+     - pro fehlgeschlagener Datei wird ein Textbericht im Log-Monatsordner unter ErrorReports erstellt
+     - Bericht enthält Datei, Pipeline, Encoderprofil, Overrides, Analyse-/HDR-Infos, Ausgabeprüfung, Tool-Ausgabe und Traceback
+     - Abschlussdialog zeigt Fehlergrund und Bericht an; markierte Fehlerberichte können direkt geöffnet werden
+
+10) Normalen Konvertierungslog verschlankt und Verschiebebericht gruppiert
+     - Sonderzeichen, Statussymbole und deutsche Umlaute bleiben im Hauptlog erhalten
+     - Quelle, HDR/DV-Status und Policy werden kompakter geloggt; irrelevante DV/HDR10+-Policy-Zeilen entfallen bei SDR-Dateien
+     - DV-TRACE-Ausgaben wurden aus dem normalen Log entfernt; Detailinfos bleiben im Fehlerbericht/Verbose-Log
+     - Verschiebebericht wird am Ende nach Zielordnern gruppiert und zeigt Zielkonflikte sowie gelöschte/ersetzte Dateien
+     - leere Fatal-Runtime-Dateien im CrashReports-Ordner werden bei sauberem Programmende bzw. nach Unclean-Report automatisch entfernt
+     - Verbose-Logs werden bei vollständig erfolgreichen Konverterläufen automatisch verworfen; bei Fehlern, Abbruch oder Absturz bleiben sie erhalten
+     - Verbose-Logs schreiben jetzt zusätzlich den zugehörigen normalen Logpfad und die Start-Encoderoptionen, damit alte Fehlerläufe nicht mit späteren sauberen Läufen verwechselt werden
+
+V9.5-Blockfix 23) JobJournal-Schreib- und Archivfehler sichtbar gemacht
+     - neue JobJournalWriteError-Grenze verhindert scheinbar erfolgreiche Journaloperationen nach I/O-, Permission- oder Replace-Fehlern
+     - Callback-Logging bleibt erhalten, die ursprüngliche Fehlerursache wird zusätzlich an Lifecycle/GUI weitergereicht
+     - ein fehlgeschlagenes Abschlussarchiv führt nicht mehr zum Verlust oder Unsichtbarwerden des letzten aktiven Recovery-Stands
+
+=== 18 GUI, Bedienung & Performance ===
+
+V9.5-Blockfix 18) EncoderSettingsController als letzte große Encoder-GUI-Steuerklasse modularisiert
+     - EncoderSettingsController enthält nur noch Abhängigkeiten/Composition und keine eigene Panel-, Persistenz-, Options- oder Profil-Fachlogik
+     - EncoderSettingsPanelMixin kapselt Panelbau, aktive Encoderwahl, Sichtbarkeit und Settings-Signale
+     - EncoderSettingsOptionsMixin kapselt NVENC/QSV/AMF/CPU-Optionsaufbau sowie AutoCrop-/IMAX-Grenzwerte
+     - EncoderSettingsPersistenceMixin kapselt QSettings-Roundtrip und EncoderSettingsState-Synchronisierung
+     - EncoderSettingsProfilesMixin kapselt Profil anwenden/laden/speichern, Profil-Assistent und Werkseinstellungen
+     - bestehende Encoder-Sonderfälle bleiben erhalten: NVENC lookahead_level/multipass, QSV lookahead_depth ohne Legacy-qsv_la, CPU/x265-Werte sowie DV/HDR10+-Schalter nur bei H.265
+
+V9.5-Blockfix 16) MainWindow als GUI-God-Class aufgelöst
+     - main_window.py von rund 629 Dateizeilen bzw. 589 Klassenzeilen auf rund 95 Dateizeilen bzw. 63 Klassenzeilen reduziert
+     - Tab-Lifecycle, Lazy Loading, Tab-Sichtbarkeit und ISO-zu-Converter-Handoff liegen in main_window_tabs.py
+     - Job-/Move-Journal-Recovery, Resume-Pläne und Replacement-Reminder liegen in main_window_recovery.py
+     - MainWindow bleibt als Composition-Root mit Initialisierung, Icon, Fensterzustand und Close-Lifecycle bestehen
+     - alle 33 bisherigen MainWindow-Methoden bleiben über Vererbung erreichbar; ein AST-Vergleich bestätigt unveränderte Methodenkörper gegenüber Blockfix 15
+
+V9.5-Blockfix 12) PreFlightDialog und MovePreflightController als GUI-God-Classes aufgelöst
+     - preflight_dialog.py von 1.019 auf rund 213 Dateizeilen reduziert; PreFlightDialog selbst umfasst nur noch rund 158 Klassenzeilen
+     - Serien-/Film-Zielwidgets, reiner View-Aufbau und lokale/Online-Metadatensuche sind in preflight_widgets.py, preflight_view.py und preflight_metadata.py getrennt
+     - move_preflight_controller.py von 771 auf rund 131 Dateizeilen reduziert; Controller selbst umfasst nur noch rund 113 Klassenzeilen
+     - PreflightWorkflow, MoveLifecycleCoordinator und MoveRequestDialogHandler besitzen getrennte Verantwortungen für Zielbestätigung/Bericht, MoveThread-Lifecycle und Benutzerentscheidungen
+     - bestehende Methoden bleiben als dünne Delegates kompatibel; Architekturtests verhindern erneute God-Class-Kopplung
+
+V9.5-Blockfix 10) ConversionController als GUI-God-Class aufgelöst
+     - conversion_controller.py von rund 929 auf rund 283 Zeilen reduziert
+     - Start-Workflow, Config/Worker-Factory, Worker-Lifecycle, Fortschrittsdarstellung und Diagnose liegen in fokussierten Services
+     - ConverterConfig und Start-/Pause-/Abort-/Journal-Verhalten bleiben über die bisherige Controller-Schnittstelle kompatibel
+
+V9.5-Blockfix 11) MediaLibraryDialog als GUI-God-Class aufgelöst
+     - media_library_dialog.py von 1.011 auf rund 337 Dateizeilen bzw. rund 303 Klassenzeilen reduziert
+     - Widget-Aufbau in MediaLibraryDialogView ausgelagert; der Dialog enthält keine QGroupBox-/Tab-Aufbaulogik mehr
+     - Import/Export/Wartung in MediaLibraryMaintenanceController getrennt
+     - Suche/CSV/SQL in MediaLibrarySearchController getrennt
+     - Pfad-Mapping in MediaLibraryMappingController getrennt
+     - Speicherpfad-Scan besitzt mit MediaLibraryScanCoordinator einen eigenen QThread-Lifecycle
+     - MediaLibraryDialog bleibt als stabile Orchestrierungs- und Kompatibilitäts-Fassade erhalten
+
+V9.5-Blockfix 9) SettingsDialog-God-Class zerlegt
+     - settings_dialog.py von 1.521 auf rund 150 Zeilen reduziert und auf Orchestrierung beschränkt
+     - fünf fachliche Settings-Bereiche übernehmen UI-Aufbau sowie Laden/Speichern: Storage/Logging, Tools/Runtime, Media/Postprocess, Videoanalyse und Safety/Validation
+     - bisherige private GUI-Einstiegsmethoden bleiben als dünne Kompatibilitätsdelegates erhalten
+     - alter und neuer Dialog speichern im automatisierten Qt-Stub-Vergleich exakt dieselben 87 QSettings-Schlüssel und Werte
+     - Architekturtests verhindern, dass sichtbare Settings-Bereiche doppelte Owner bekommen oder die Hauptklasse wieder zum God Object anwächst
+
+V9.5-03) Änderungshistorie auf feste Seiten und klare Bereichsauswahl umgestellt
+     - die bisherige mehrzeilige Button-Matrix mit abgeschnittenen Überschriften entfällt
+     - vollständige Bereichsnamen werden in einer breiten Auswahlliste angezeigt
+     - jeder Funktionsbereich wird in definierte Inhaltsseiten aufgeteilt; lange Bereiche besitzen mehrere blätterbare Seiten statt eines langen Scrolltextes
+     - Navigation unterscheidet klar zwischen vorheriger/nächster Seite und vorherigem/nächstem Bereich
+     - V9 lädt bevorzugt CHANGELOG.json; CHANGELOG.txt sowie Legacy V8/V7 bleiben als Fallback vollständig lesbar
+     - der Inhaltsbereich hat keine vertikale Scrollleiste und zeigt Bereichs- sowie Seitenzähler getrennt an
+
+01) GUI-Performance bei großen Queues verbessert
+     - Dateiliste besitzt einen internen Pfadindex für schnelle Textaktualisierungen
+     - Fortschritts-Refreshs der Warteschlange werden bei großen Queues gedrosselt
+     - Dateiabschluss und kleine Queues aktualisieren weiterhin direkt
+     - Queue-Fenster und Hauptliste werden dadurch bei sehr vielen Dateien spürbar weniger belastet
+
+02) Fortschrittsanzeige für parallele Konvertierung beruhigt
+     - mehrere aktive Dateien werden standardmäßig als kombinierter Fortschritt "Aktive gesamt" angezeigt
+     - der aktuelle Datei-Balken springt dadurch nicht mehr zwischen parallel laufenden Worker-Dateien hin und her
+     - über eine kompakte Auswahl im Fortschrittsbereich kann bei Bedarf eine einzelne aktive Datei fokussiert werden
+     - abgeschlossene Dateien werden sofort aus der aktiven Fortschrittsanzeige entfernt
+     - Regressionstest sichert kombinierten Fortschritt, Datei-Fokus und Cleanup nach Dateiabschluss ab
+
+03) Startanzeige und Dateilisten-Banner nachgeschärft
+     - der Qt-Splash erscheint früher, weil DragonTools-Module und Crash-Diagnose erst nach dem sichtbaren Splash initialisiert werden
+     - PyInstaller nutzt wieder einen sehr frühen Boot-Splash, damit auch die Bootloader-/Python-/Qt-Ladephase sichtbar abgedeckt ist
+     - der PyInstaller-Boot-Splash wird nach Anzeige des Qt-Splash sauber geschlossen
+     - die zusätzliche Vollflächen-Banner-Schicht in der Dateiliste wurde entfernt, damit das Bild nicht mehr per KeepAspectRatioByExpanding hineingezoomt wird
+     - das leere Dateilisten-Banner wird jetzt vollständig und proportional in die verfügbare Listenfläche eingepasst
+
+04) Zoom-Warteschlange gegen UI-Hänger optimiert
+     - Fortschrittsaktualisierungen des separaten Warteschlangenfensters werden gebündelt statt bei jedem Signal sofort komplett ausgeführt
+     - bei gleicher Reihenfolge werden nur noch Texte und Tooltips der bestehenden Zeilen aktualisiert
+     - vollständiger Neuaufbau passiert nur noch bei echten Strukturänderungen wie Hinzufügen, Entfernen oder Umsortieren
+     - während interner Spiegelungen sind Listen-Updates und Signale blockiert, damit Drag-&-Drop und Auswahl stabil bleiben
+
+05) Umlaute in Programmtexten und Änderungshistorie korrigiert
+     - sichtbare Dialogtexte, Logmeldungen, Hilfe und Historie verwenden echte deutsche Umlaute
+     - Statussymbole und Sonderzeichen wie ✅ und ℹ️ bleiben unverändert erhalten
+
+06) MainWindow-Aktionen fachlich aufgeteilt
+     - die frühere rund 858 Zeilen große Sammeldatei main_window_actions.py enthält keine Fachlogik mehr
+     - Benutzeraktionen für Convert/Queue, Backup/Restore, Settings/Regeln, Metadaten, Hilfe, Systemdiagnose/externe Programme sowie Profile/Ansicht sind getrennt
+     - die bisherigen Menü- und Shortcut-Einstiegspunkte bleiben vollständig kompatibel; MainWindow erbt weiterhin nur die stabile MainWindowActionsMixin-Fassade
+     - Architekturtests sichern die vollständige 58-Methoden-Kompatibilitätsoberfläche, eindeutige Methodenzuordnung und Größenlimits der neuen Module ab
+
+V9.5-Blockfix 14) MovieRenamerWidget-God-Class aufgelöst
+     - movie_renamer_widget.py ist auf einen dünnen Orchestrator reduziert; sichtbarer Aufbau, Tabellenzustand, Metadaten-Lifecycle und Rename-Aktionen besitzen getrennte Owner
+     - der Rename-Commit liegt ausschließlich im MovieRenamerActionController; der Hauptwidget enthält keine direkten rename_movie_file-, Provider- oder Parser-Aufrufe mehr
+     - die bisherige private Methoden- und Widgetoberfläche bleibt für Altaufrufer kompatibel
+     - neue Architekturtests sichern Modulgrößen, Methodenoberfläche und Verantwortungsgrenzen
+
+V9.5-Blockfix 15) ConvertWidgetQueueActionsMixin als GUI-God-Mixin aufgelöst
+     - die frühere rund 654 Zeilen große Sammeldatei enthält keine eigene Queue-/Override-/Diagnoselogik mehr
+     - Drag&Drop, Queue-Verwaltung, Queue-Fenster, Kontextaktionen, Datei-Overrides/Profile, Badge-Darstellung und Quellbildprüfung sind in sieben fokussierte Mixins getrennt
+     - alle 39 bisherigen Methoden bleiben über die stabile ConvertWidgetQueueActionsMixin-Fassade verfügbar; die Methodenkörper wurden gegenüber Blockfix 14 AST-identisch verschoben
+     - die bestehende ConvertWidget-Schnittstelle und Signalverdrahtung bleiben unverändert; keine zusätzliche Owner-/Service-Kopplung wurde eingeführt
+     - Release-Smoke-Test und Architekturtests sichern Modulvollständigkeit, eindeutige Methodenzuordnung und Größenlimits ab
+
+V9.5-Blockfix 17) ConvertWidget-God-Class weiter aufgelöst
+     - ConvertWidget bleibt Qt-Fassade für den Converter-Tab, besitzt aber keine eigene Target-Path-, Preflight-, Desktop-/Log- oder Queue-Lock-Fachlogik mehr
+     - ConvertWidgetComposition baut Encoder-Helfer, UI, Controller, Result-Service, Move-Preflight und Signalgraph zentral auf
+     - ConvertWidgetTargetPathService kapselt codec-spezifische TV-/Anime-/Film-Pfadschlüssel und Default-Fallbacks
+     - ConvertWidgetRecoveryService kapselt Journal-Wiederaufnahme und Batch-Preflight; ConvertWidgetRuntimeUI kapselt Queue-Sperre und Progress-Reset; ConvertWidgetHostActions kapselt Log-/Desktop-/Shutdown-Aktionen
+     - bestehende Methoden und Properties wie restore_job_files(), tv_path/anime_path/filme_path sowie Start/Pause/Abort-Delegates bleiben kompatibel
+
+=== 19 Tests & Qualitätssicherung ===
+
+V9.5-Blockfix 18) Architektur-Regression für EncoderSettingsController ergänzt
+     - Architekturtest erzwingt eine kleine Controller-Fassade mit ausschließlich __init__ als eigener Methode
+     - jede bisherige Encoder-Settings-Methode besitzt exakt einen Implementierungs-Owner; Größenlimits verhindern neue God-Module
+     - bestehende Shutdown-, CPU-, Profil-Assistent-, AV1- und QSV-Regressionstests bleiben unverändert grün
+     - Release-Smoke-Test verlangt Controller sowie Panels-, Options-, Persistence- und Profiles-Module
+
+V9.5-Blockfix 16) Architektur-Regression für MainWindow ergänzt
+     - Architekturtests begrenzen MainWindow auf eine kleine Composition-Root und trennen Tab- sowie Recovery-Owner eindeutig
+     - die vollständige bisherige 33-Methoden-Oberfläche wird statisch abgesichert
+     - Release-Smoke-Test verlangt main_window_tabs.py und main_window_recovery.py, damit unvollständige Pakete früh erkannt werden
+
+V9.5-Blockfix 11) Architektur- und Verhaltensschutz für den Mediathek-Dialog ergänzt
+     - neue Tests erzwingen eine schlanke Dialogklasse ohne direkte DB-/Search-/Export-Implementierungsimporte
+     - Service bleibt Qt-unabhängig und ist separat testbar
+     - Presenter-Tests sichern Statistik- und Suchzeilenformatierung inklusive DV/HDR-Priorität
+     - QSettings-Verhaltensvergleich gegen Blockfix 10 bestätigt identische sechs gespeicherte Mediathek-Einstellungen
+     - breiter Linux-Vergleich: 575 Tests bestanden; bekannte 27 PyQt6-/Plattformfehler und 1 qtbot-Error unverändert
+
+V9.5-02) DV-Profil-Regressionstests erweitert
+     - Profile 5, 7 und 8 werden separat auf dovi_tool-Konvertierungsmodus und Videoquelle geprüft
+     - P5-Tests erzwingen Originalcontainer + libplacebo und verhindern einen stillen Rückfall auf den Legacy-Remux
+     - Filter-Complex/Burn-In-Pfade werden für P5 und P7 auf korrektes Input-Mapping geprüft
+     - Architekturtest begrenzt die Größe der DV-Orchestrierung und der einzelnen Stufen
+     - Legacy-P5-Remux wird gegen die aktuellen Audio-/MP4Box-Schnittstellen getestet
+
+V9.5-01) Regressionstests für Renamer-/Online-Metadaten und Mediathek erweitert
+     - aktueller Testbestand: 66 Python-Dateien im tests-Paket, davon 65 test_*.py-Dateien mit 489 statisch erkennbaren test_*-Funktionen
+     - gezielte Gegenprüfung von test_media_library.py, test_movie_renamer.py und test_online_metadata.py: 39 Tests bestanden
+     - Mediathek-Tests decken Auflösungs-/Codecfilter, SDR-vs.-unbekannt sowie Minderheits- und Gleichstandslogik der Abweichungssuche ab
+     - compileall über Einstiegspunkt und komplettes dragontools-Paket läuft im geprüften V9.5-Arbeitsstand ohne Syntaxfehler
+     - vollständige pytest-Sammlung ist in der aktuellen Prüfungsumgebung nicht möglich, weil PyQt6 fehlt; drei PyQt-abhängige Testmodule brechen bereits beim Import ab. Das ist eine Umgebungsgrenze und wird nicht als Programmfehler gewertet
+
+01) Stabilitäts- und Kompatibilitätstests erweitert
+     - Tests für ISO/BDMV-Erkennung, TheTVDB-Auflösung, Film-/Serien-Umbenennung, NFO-TVDB-IDs, NVENC-Argumente und Audiomapping vorhanden
+     - Encoder-Settings-Controller toleriert alte UI-/Profilstände ohne neue NVENC-Felder und fällt auf Auto zurück
+     - aktueller Quellbestand enthält 64 test_*.py-Dateien mit 470 statisch erkennbaren test_*-Funktionen; parametrisiertes pytest kann davon abweichende Testfallzahlen erzeugen
+     - ein früher dokumentierter Lauf mit 475 Tests wird nicht als Verifikation des inzwischen nachträglich erweiterten Quellstands verwendet
+
+02) Qualitätssicherung für V9.2 erweitert
+     - GUI-nahe Regressionstests für Profil-Assistent, Preflight-Bericht und Timeout-Speicherung ergänzt
+     - Seriennamen-Bereinigung für Dateinamen wie "Stargate Atlantis - S01E15 - 10.000 Jahre" abgesichert
+     - Release-/Build-Prüfung erwartet nun den aktuellen DragonToolsV9.2-Build und meldet alte Build-Ordner nicht mehr als passenden Release
+     - TMDB-User-Agent verwendet die zentrale App-Version statt einer fest eingebrannten Versionsnummer
+     - pytest-Konfiguration bereinigt, sodass der Testlauf ohne unbekannte Qt-Option-Warnung startet
+
+03) GUI-nahe Regressionstests erweitert
+     - Profil-Assistent wird jetzt gegen CPU-/AV1-Werte und automatische Speicherung getestet
+     - Preflight-Berichts-Checkbox wird separat geprüft, damit die Berichtserstellung nicht unbemerkt ausfällt
+     - Timeout-Dialog wird auf Minutenumrechnung und gespeicherten Aktivstatus getestet
+     - Assistenten-Dialogauswahl wird ohne echtes Fenster geprüft, damit Auswahltexte und Rückgabewerte stabil bleiben
+
+04) Tests erweitert und stabilisiert
+     - neue Tests für Toolpfade, Worker-Schnittstellen, DV/HDR-Farbraum und Sidecar-Pfade ergänzt
+     - vollständiger Testlauf erfolgreich: 273 Tests bestanden
+
+V9.5-Blockfix 15) Architektur-Regression für Queue-Aktionen ergänzt
+     - neue Tests erzwingen eine methodenlose ConvertWidgetQueueActionsMixin-Fassade und genau einen Owner je bisheriger Aktionsmethode
+     - SourceVisualCheckService, Encoder-Profil-Konvertierung und MediaInfoDialog dürfen nur in ihren fachlich zuständigen Aktionsmodulen liegen
+     - breiter Linux-Vergleich gegen Blockfix 14: 591 statt 587 bestandene Tests; die 27 bekannten Fehler plus 1 Error bleiben identisch
+     - vollständige pytest-Sammlung stoppt weiterhin an denselben vier PyQt6-abhängigen Collection-Modulen wie im Ausgangsstand
+
+V9.5-Blockfix 17) Architektur- und Service-Regression für ConvertWidget ergänzt
+     - Architekturtests begrenzen ConvertWidget und __init__, verbieten direkte Desktop-/Preflight-/Controller-Fachabhängigkeiten und sichern Größenlimits der neuen Collaborators
+     - Pfadservice-Tests sichern codec-spezifische Zielpfadschlüssel; Recovery-Tests sichern Move-Kontext, Sidecars sowie Missing-/Invalid-Dateien
+     - Release-Smoke-Test verlangt ConvertWidget sowie Composition-, Path-, Runtime-, Recovery- und Host-Actions-Module
+
+V9.5-Blockfix 19) Legacy-/Duplikat-Architekturtests und Headless-Abdeckung erweitert
+     - neue Tests verhindern die Rückkehr entfernter DV-Legacymodule und Helper-Imports aus base_worker.py
+     - Journal-JSON-Writer und Metadata-Cache werden auf gemeinsame Implementierungen geprüft
+     - Qt-unabhängige Worker-Verträge werden explizit auf PyQt6-Freiheit geprüft
+     - der Linux/headless-Gesamtlauf verbessert sich durch die Entkopplung deutlich; verbleibende Fehler sind überwiegend echte PyQt6/pytest-qt-Umgebungsgrenzen
+
+V9.5-Blockfix 20) P0-Datenintegrität mit Failure-Injection abgesichert
+     - WAL-Test hält eine Writer-Verbindung offen und verifiziert commitete Daten im separat geöffneten Backup/Export
+     - Backupfehler hinterlassen kein partielles Snapshotziel und blockieren schreibende SQL-Aktionen vor der Mutation
+     - Move-Recovery-Tests decken Quelle+Ziel+Backup, fehlendes Ziel, erfolgreichen Commit mit Restbackup, Restorefehler und Journalwrite-Fehler ab
+     - gezielter Block-A-Regressionslauf: 68 bestanden, 2 übersprungen; erweiterter Kernlauf wird separat gegen die Umgebungsgrenzen geprüft
+
+V9.5-Blockfix 24) P1-Block B mit Failure-Injection abgesichert
+     - JobJournal-Tests decken disk full, permission denied, atomaren Replace-Fehler, Archivfehler und Erhalt des letzten durable Journalstands ab
+     - Trickplay-Tests decken normalen Commit, vorhandenes Ziel, Backup/Overwrite, Commitfehler, Rollbackfehler und nicht löschbares Altbestand-Backup ab
+     - Prozesshandling wird mit großer stderr-Ausgabe, Runtime-Timeout und Abbruchanforderung während eines laufenden Teilprozesses geprüft
+     - Block-B-relevanter Regressionslauf nach Implementierung: 55 Tests bestanden; der breite Linux/headless-Lauf stoppt unverändert an fehlendem PyQt6 bei der Collection
+
+V9.5-Blockfix 25) P1-Block C mit WAL-/Cross-Volume-Regressionen abgesichert
+     - Jellyfin-Importtest hält eine aktive WAL-Writer-Verbindung offen und verifiziert, dass ein erst im WAL commiteter Medieneintrag im DragonTools-Ziel ankommt
+     - die Jellyfin-Hauptdatei wird vor/nach dem Import byteweise und über mtime geprüft und bleibt durch den Read-only-Snapshot unverändert
+     - Temp-Verzeichnis und finaler Replacement-Snapshot werden direkt unter target.parent erzeugt; damit entsteht kein System-Temp-zu-Ziellaufwerk-Replace
+     - Snapshotfehler ersetzen eine bestehende DragonTools-Zieldatenbank nicht; zwei unmittelbar erzeugte Sicherheitsbackups erhalten unterschiedliche Namen
+     - gezielter Block-C-Regressionslauf nach Implementierung: 77 Tests bestanden
+
+V9.5-Blockfix 26) P1-Block D Testinfrastruktur und Release-Pakete abgesichert
+     - GUI-Dialog-Teststub um die real importierten QSettings- und QListWidget-Abhängigkeiten ergänzt; kein unnötiger Voll-Qt-Stub
+     - echte Qt-/QThread-/qtbot-Tests werden ohne PyQt6/pytest-qt explizit übersprungen, während Qt-unabhängige Tests im selben Paket weiterlaufen
+     - der vollständige Linux/headless-Lauf ist damit sauber: 685 Tests bestanden, 10 bewusst übersprungen, keine Collection-/Produktfehler
+     - neuer Release-Packer filtert __pycache__, *.pyc und *.pyo, schreibt zunächst ein Partial-ZIP, prüft CRC/Einträge und ersetzt ein vorhandenes Ziel erst danach atomar
+     - Release-Validation meldet verbotene Bytecode-Artefakte als Fehler; der ursprüngliche Upload mit 854 entsprechenden Artefakten wird zuverlässig erkannt
+     - release_manifest.json, requirements-test.txt, pytest.ini und TESTING.md machen Source-only-Profil und vollständige Windows-Qt-Testumgebung reproduzierbar
+     - bestehende MoveThread.__new__(MoveThread)-Kompatibilität bleibt unangetastet und wird weiterhin durch die vorhandenen Qt-Worker-Regressionstests geschützt
+
+V9.5-Blockfix 27) Block E: ConverterThread-God-Object aufgelöst
+     - Vorher/Nachher-AST-Messung: 875 -> 351 Klassenzeilen, 38 -> 31 Methoden; run() 248 -> 10 Zeilen
+     - converter_runtime_builder.py übernimmt Tool-/Service-Bootstrap und Workflow-Verdrahtung erst im Worker-Thread
+     - converter_run_loop.py kapselt Sessionheader, Live-Queue, Anzeigeindex und Fortschrittssteuerung
+     - converter_lifecycle.py kapselt Run-Fehlergrenze, offene-Dateien-Recovery, Postprocess-Wait und Cleanup; converter_file_executor.py kapselt Per-Datei-Fehlergrenze und Quellbild-Preflight
+     - converter_control.py kapselt Diagnose, Pause/Resume, sofortigen bzw. nach-Datei-Abbruch und gezieltes FFmpeg-Prozessende
+     - neue Architekturtests sichern Größenlimits, unveränderte DV-/HDR+-Verdrahtung, Abort-nach-Datei, sofortigen Prozessabbruch, Pause/Resume und Recovery offener Queue-Dateien
+     - öffentliche ConverterThread-Methodenliste ist gegenüber Block D identisch; vollständiger Headless-Lauf: 693 bestanden, 10 übersprungen, 0 Fehler
+
+V9.5-Blockfix 28) Block F: Architekturgrenzen und Move-Status-Regressionsfix abgesichert
+     - Architekturtests begrenzen search_library() auf höchstens 80 Zeilen und build_media_info_text() auf höchstens 60 Zeilen, damit die aufgelösten God-Methoden nicht unbemerkt zurückwachsen
+     - Medieninfo-Tests prüfen Video-, Audio-, Untertitel-, DV/HDR10+- und Rules-Preview-Ausgabe sowie den Fehlerfall einer nicht erzeugbaren Rules Preview
+     - der inkrementelle Move-Regressionstest ruft die reale Status-Text-Delegate-Kette auf und verhindert eine Rückkehr zum nicht existierenden file_list_utils-Modul
+     - Release-Validation führt media_info_dialog.py und media_info_text_builder.py als erforderliche Kernmodule
+     - vollständiger Linux-/Headless-Lauf nach Block F: 699 bestanden, 10 bewusst übersprungen, 0 Fehler
+
+=== 20 Mediathek-Datenbank, SQLite & Bestandssuche ===
+
+V9.5-Blockfix 11) Mediathek-GUI auf die bereits modularisierte Core-Schicht ausgerichtet
+     - Dialog ruft DB-, Jellyfin-, Export- und Suchfunktionen nur noch über MediaLibraryDialogService auf
+     - Mapping-, Scan-, Suche- und Wartungszuständigkeiten besitzen getrennte GUI-Controller
+     - bestehende öffentliche/private Dialogeinstiege und Widgetattribute bleiben als Kompatibilitätsdelegates erhalten
+     - fachliches Verhalten von Jellyfin-Import, Speicherpfad-Scan, Mapping, SQL-Backup und CSV-Export bleibt unverändert
+
+01) Eigene SQLite-Mediathek als vom Jellyfin-Schema entkoppelte Arbeitsdatenbank
+     - Jellyfin-Datenbanken werden ausschließlich gelesen und in DragonTools-eigene Tabellen importiert
+     - DragonTools schreibt keine Änderungen zurück in die Jellyfin-Datenbank
+     - zentrale Tabellen: meta, path_mappings, media_items und media_streams
+     - SQLite läuft mit Foreign Keys und WAL; Schema-Version bleibt für die Sucherweiterung kompatibel
+
+02) Pfad-Mapping und Bestandsfortschreibung
+     - Jellyfin-/NAS-Pfade können in lokale Windows-/Arbeits-Pfade übersetzt werden
+     - Mapping arbeitet präfixbasiert und normalisiert Slash-Schreibweisen
+     - importierte Medien und nach DragonTools-Moves aktualisierte Dateien können in derselben Mediathek fortgeschrieben werden
+
+03) Strukturierte Suchmodi eingeführt
+     - Audio: Deutsch vorhanden/fehlend, mehrere Spuren, Stereo, 5.1, 7.1 sowie AAC/AC3/EAC3/TrueHD/DTS/FLAC/Unbekannt
+     - Dynamikumfang: SDR, HDR, HDR10+, Dolby Vision und unbekannt
+     - Auflösung: kleiner als HD, HD/720p, Full HD/1080p, QHD/1440p, 4K/UHD und unbekannt
+     - Video-Codec: H.264/AVC, H.265/HEVC, AV1 und unbekannt
+     - Metadaten: unvollständige/fehlende Daten sowie unbekannte Videoeigenschaften
+
+04) Auflösungsgruppen für reale Filmformate ausgelegt
+     - Klassifizierung nutzt Breite und Höhe statt nur einer festen Höhenzahl
+     - Cinemascope-/Crop-Dateien wie 1920×800 bleiben dadurch fachlich in der Full-HD-Klasse
+     - unbekannte Breite/Höhe wird bewusst als eigener Zustand behandelt
+
+05) SDR-Erkennung gegen falsche Negativwerte abgesichert
+     - fehlende HDR-Flags allein reichen nicht, um eine Datei als SDR zu deklarieren
+     - SDR erfordert zusätzlich bekannte/analysierte Videoeigenschaften bzw. eine explizite SDR-Einordnung
+     - unanalysierte Dateien bleiben in „HDR/SDR unbekannt“ und werden nicht als vermeintliches SDR ausgegeben
+
+06) Abweichungssuche pro Medien-/Staffelordner ergänzt
+     - Kriterien: deutsche Audiospur, Auflösung, Video-Codec, HDR/SDR, Audio-Codec, Audiokanäle und Anzahl Audiospuren
+     - Gruppierung erfolgt über parent_path; Gruppen mit weniger als zwei Dateien oder vollständig identischen Werten werden übersprungen
+     - bei einer strikten Mehrheit > 50 % werden nur die von der Mehrheit abweichenden Dateien ausgegeben
+     - der Ergebnisgrund enthält Ist-Wert, Mehrheitswert und Verhältnis, z. B. „kein Deutsch – Mehrheit im Ordner: Deutsch (10/12)“
+
+07) Gleichstände werden nicht als Fehlerseite geraten
+     - existiert keine strikte Mehrheit, werden die betroffenen Gruppen als „Uneinheitlich – keine klare Mehrheit“ ausgewiesen
+     - dadurch wird bei 6:6 nicht willkürlich eine Variante als korrekt und die andere als Abweichung markiert
+
+08) Suchoberfläche auf zweistufiges Modell umgebaut
+     - erstes Feld wählt die Abfragegruppe, zweites Feld das konkrete Kriterium
+     - Bereichsfilter grenzt die Suche über das Pfad-Mapping auf Filme, Anime, TV, Serienbestand oder Sonstige ein
+     - Typfilter grenzt zusätzlich auf Videodateien, Filme, Serien, Staffeln, Episoden oder Ordner ein
+     - optionaler Freitext filtert weiterhin nach Titel, Serie, Dateiname oder Pfad
+     - Ergebnistabelle besitzt eine eigene Spalte „Abweichung“ und zeigt die Trefferzahl
+
+09) SQLite-Indizes für größere Bibliotheken erweitert
+     - zusätzlicher Index auf parent_path unterstützt ordnerbezogene Auswertungen
+     - kombinierter Index auf video_codec/width/height unterstützt Qualitätsfilter
+     - Stream-Indizes für media_id, media_type, Typ+Sprache und Typ+Codec beschleunigen Audio-/Untertitel-/Codecabfragen
+
+10) Manuelle SQL-Bearbeitung bleibt abgesichert
+     - SELECT-/PRAGMA-Abfragen sind lesend nutzbar
+     - vor schreibenden manuellen SQL-Kommandos wird die DragonTools-Mediathek gesichert
+     - diese Sicherungslogik betrifft ausschließlich die eigene SQLite-Datei, nicht Jellyfin
+
+11) Mediathek-Dialog sprachlich bereinigt
+     - sichtbare Texte verwenden echte deutsche Umlaute wie „für“, „verändert“, „auflösen“, „übersetzt“, „Einträge“ und „Änderungen“
+     - die Korrektur betrifft die Darstellung; Datenbankschema und gespeicherte Inhalte müssen dafür nicht migriert werden
+
+12) Jellyfin-Streamtypen und CSV-Export nachgezogen
+     - bestehende DragonTools-Datenbanken mit Jellyfin-Rohwerten bleiben direkt suchbar: Video=1, Subtitle=2 und Audio über Kanäle/Codec
+     - neue Imports und alle zentralen DragonTools-DB-Schreibwege normalisieren Streamtypen vor dem Speichern
+     - Wartungsbutton „Streamtypen normalisieren“ bereinigt bestehende eigene Mediathek-Datenbanken nach Sicherung
+     - Video-Codec, Auflösung und HDR/SDR werden bei älteren Imports aus media_streams rekonstruiert, wenn media_items noch leer ist
+     - SDR erkennt neben explizitem SDR auch bt709/Rec.709 als belastbare SDR-Einordnung
+     - Suchtreffer können als Excel-freundliche CSV exportiert werden
+     - die komplette Mediathek kann tabellenweise als CSV exportiert werden: medien_uebersicht, media_items, media_streams, path_mappings und meta
+     - medien_uebersicht führt die technischen Daten aus media_items und media_streams zu lesbaren Spalten wie Bild, Dynamikumfang, Audio und Untertitel zusammen
+     - neue Jellyfin-Imports überspringen bei aktivem Pfad-Mapping nicht gemappte Metadatenpfade wie People/Studio/Metadata
+
+13) Mediathek-Core modularisiert
+     - die frühere media_library.py mit rund 2.700 Zeilen wurde in fokussierte Module für DB/Schema, Export, Jellyfin, Pfade, Repository, Scan, Suche, Typen und gemeinsame Hilfsfunktionen aufgeteilt
+     - media_library.py bleibt als explizite öffentliche Fassade erhalten; bestehende GUI-/Test-/Altimporte müssen deshalb nicht auf einen Schlag migriert werden
+     - keine Fachfunktion wird mehr in der Fassade implementiert
+     - neue Architekturtests sichern die öffentliche API und die Modulgrenzen ab
+     - Release-Validierung prüft die ausgelagerten Module auf Vollständigkeit
+
+14) SQLite-Sicherungs- und Exportpfade WAL-konsistent gemacht
+     - backup_database() erzeugt Snapshots über Connection.backup() statt shutil.copy2()
+     - commitete Seiten, die noch im -wal liegen, fehlen dadurch nicht mehr in Sicherheitskopien
+     - der binäre Datenbankexport verwendet dieselbe Snapshot-Primitive; CSV-Exporte bleiben query-basiert
+     - bei SQLite-/I/O-Fehlern werden Teilziele entfernt und der Fehler weitergereicht, damit nachfolgende DB-Mutationen nicht auf einem unvollständigen Backup beruhen
+
+15) Jellyfin-Import WAL-sicher und zielvolume-lokal gemacht
+     - media_library_jellyfin importiert die Quell-DB über einen Read-only-Online-Snapshot statt über shutil.copy2()
+     - das Import-TemporaryDirectory liegt unter target.parent und nutzt damit dieselbe physische Zielbasis wie der bestehende Storage-Scan
+     - die neu aufgebaute DragonTools-Staging-DB wird vor dem finalen os.replace nochmals per Online Backup API konsolidiert
+     - bei Snapshot-/I/O-Fehlern bleibt ein vorhandenes Ziel unverändert; die originale Jellyfin-Datenbank wird nicht beschrieben
+     - backup_database() verwendet kollisionssichere Namen mit Mikrosekunden und UUID-Anteil

@@ -1,0 +1,75 @@
+{
+  "_schema_version": 4,
+  "language_priority": ["de", "en"],
+  "max_languages": 1,
+  "tracks_per_language": 1,
+  "fallback_if_no_priority_match": "keep_all",
+  "ignore_commentary_tracks": true,
+  "ignore_descriptive_audio": true,
+  "preferred_languages": ["de", "deu", "ger"],
+  "fallback_languages": ["en", "eng"],
+  "max_tracks": 1,
+  "passthrough_codecs": ["aac", "ac3", "eac3"],
+  "extra_stereo": false,
+  "extra_stereo_codec": "aac",
+  "extra_stereo_bitrate_k": 256,
+  "audio_processing": {
+    "drc_enabled": false,
+    "drc_scale": 1.0,
+    "loudnorm_enabled": false,
+    "loudnorm_i": -18.0,
+    "loudnorm_lra": 11.0,
+    "loudnorm_tp": -1.5
+  },
+
+  "channel_rules": {
+    "mono": {
+      "max_channels": 1,
+      "target_codec": "aac",
+      "max_bitrate_k": 128,
+      "comment": "Mono (1 Kanal): bis 128 kbps AAC behalten, sonst AAC 128k"
+    },
+    "stereo": {
+      "max_channels": 2,
+      "target_codec": "aac",
+      "max_bitrate_k": 192,
+      "copy_min_bitrate_k": 192,
+      "copy_max_bitrate_k": 256,
+      "comment": "Stereo (2 Kanaele): 192-256 kbps mit akzeptiertem Codec kopieren, sonst AAC 192k"
+    },
+    "surround_51": {
+      "max_channels": 6,
+      "target_channels": 6,
+      "target_codec": "eac3",
+      "max_bitrate_k": 640,
+      "copy_min_bitrate_k": 428,
+      "copy_max_bitrate_k": 640,
+      "downmix_mode": "never",
+      "downmix_bitrate_k": 256,
+      "comment": "5.1 (3-6 Kanaele): 428-640 kbps mit akzeptiertem Codec kopieren, sonst Ziel-Codec; optional nie/immer/bis Bitrate auf Stereo downmixen"
+    },
+    "surround_71": {
+      "max_channels": 8,
+      "target_channels": 6,
+      "target_codec": "eac3",
+      "max_bitrate_k": 640,
+      "copy_min_bitrate_k": 768,
+      "copy_max_bitrate_k": 1536,
+      "downmix_mode": "always",
+      "downmix_target": "surround_51",
+      "downmix_bitrate_k": 640,
+      "comment": "7.1 (7-8 Kanaele): 768-1536 kbps mit akzeptiertem Codec kopieren, wenn kein Downmix erzwungen ist; Ziel 5.1 oder Stereo. E-AC3/AC3 werden als Sicherheit nie als 8ch neu encodiert."
+    }
+  },
+
+  "transcode_rules": {
+    "truehd":    {"target_codec": "eac3", "comment": "TrueHD immer transkodieren"},
+    "dts":       {"target_codec": "eac3", "comment": "DTS immer transkodieren"},
+    "dts-hd ma": {"target_codec": "eac3", "comment": "DTS-HD MA immer transkodieren"},
+    "dts-hd hra":{"target_codec": "eac3", "comment": "DTS-HD HRA immer transkodieren"},
+    "flac":      {"target_codec": "eac3", "comment": "FLAC immer transkodieren"},
+    "pcm":       {"target_codec": "eac3", "comment": "PCM immer transkodieren"},
+    "mp2":       {"target_codec": "aac",  "comment": "MP2 -> AAC"},
+    "mp3":       {"target_codec": "aac",  "comment": "MP3 -> AAC"}
+  }
+}

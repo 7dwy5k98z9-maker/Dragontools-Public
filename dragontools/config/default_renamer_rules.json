@@ -1,0 +1,58 @@
+{
+  "_schema_version": 1,
+  "character_replacements": [
+    {
+      "character": "*",
+      "replacement": "X"
+    },
+    {
+      "character": "\"",
+      "replacement": "'"
+    },
+    {
+      "character": "'",
+      "replacement": "`"
+    },
+    {
+      "character": "/",
+      "replacement": "-"
+    },
+    {
+      "character": "\\",
+      "replacement": "-"
+    },
+    {
+      "character": "#",
+      "replacement": ""
+    },
+    {
+      "character": "?",
+      "replacement": ""
+    },
+    {
+      "character": "<",
+      "replacement": ""
+    },
+    {
+      "character": ">",
+      "replacement": ""
+    },
+    {
+      "character": ":",
+      "replacement": ""
+    },
+    {
+      "character": "|",
+      "replacement": "."
+    }
+  ],
+  "title_exceptions": [],
+  "matching": {
+    "minimum_candidate_score": 0.6,
+    "manual_review_below": 0.72,
+    "auto_accept_from": 0.78,
+    "fuzzy_fallback": true,
+    "retry_without_year": true,
+    "fuzzy_prefix_min_words": 3
+  }
+}

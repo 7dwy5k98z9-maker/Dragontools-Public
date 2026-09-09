@@ -1,0 +1,15 @@
+DragonTools V9.7 – HDR10+ Annex-B Recovery-Fallback
+Stand: 06.09.2026
+
+Änderung
+- MKV/WebM + HEVC: hdr10plus_tool versucht den Metadata-Extract weiterhin zuerst direkt aus dem Container.
+- Schlägt der direkte Extract fehl (z. B. "Invalid PPS index"), extrahiert FFmpeg automatisch 0:v:0 als HEVC Annex-B.
+- hdr10plus_tool wiederholt den Metadata-Extract anschließend auf source_metadata.hevc.
+- Nur wenn auch dieser zweite Weg scheitert, wird Schritt 1/5 endgültig abgebrochen.
+- Nicht-Matroska-Quellen verwenden wie bisher direkt den Annex-B-Weg.
+
+Sicherheit
+- Kein stiller Verlust von HDR10+-Metadaten.
+- Keine Änderung am Encode-/Inject-/Mux-/Final-Verify-Vertrag.
+- Der direkte schnelle Normalpfad bleibt unverändert.
+- Regressionstest erweitert, ohne die dokumentierte Testanzahl zu verändern.

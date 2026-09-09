@@ -1,0 +1,99 @@
+DragonTools V9.5 – Config-/Type-Normalization-Patch
+Datum: 05.09.2026
+Basis: DragonToolsV9_4_DV_HDR10plus_EncoderOverride_Fixed_20260905.zip
+
+Ziel
+====
+Robuste Behandlung persistierter Legacy-/QSettings-/JSON-Werte. Der Patch beseitigt
+Fehlerklassen, bei denen Strings wie "false", "0", "19.0", "32.0" oder "1,0"
+entweder falsch interpretiert wurden, einen ValueError ausgelöst haben oder still auf
+Defaults zurückfielen.
+
+Behobene Fehler
+===============
+1. Python-Bool-Falle
+   - bool("false") und bool("0") waren True.
+   - Betroffen waren u.a. DV/HDR10+-Overrides, IMAX/Strip-only, Untertitel Keep/Burn,
+     NVENC Spatial/Temporal AQ sowie Audio-/Renamer-/Subtitle-Regeln.
+   - Neue zentrale _safe_bool()-Normalisierung.
+
+2. Legacy-Integer als Dezimalstring
+   - "19.0", "32.0", "4.0" etc. werden jetzt korrekt als Integer gelesen.
+   - Unterstützt zusätzlich Dezimalkomma, z.B. "4,0".
+   - Kein stiller Qualitätsverlust mehr bei Profil-/Datei-Overrides.
+
+3. Encoder-Argumente
+   - NVENC CQ/B-Frames/Lookahead, QSV Q/Lookahead und AMF QP werden an der
+     FFmpeg-Grenze robust normalisiert.
+   - "spatial_aq": "false" und "temporal_aq": "0" aktivieren AQ nicht mehr fälschlich.
+
+4. Encoder-Profilmigration
+   - Unbekannte Backends werden bei der Migration auf cpu zurückgeführt und protokolliert.
+   - Backend-spezifische Zahlen/Booleans werden kanonisiert.
+
+5. Globale Encoder-QSettings
+   - Encoder-Settings-Loader akzeptiert floatartige Integerstrings.
+   - Encoder-Optionen für IMAX/Auto-Crop und Parallel-Jobs wurden ebenfalls gehärtet.
+
+6. Per-Datei-Override-Dialog
+   - Track-Indizes wie "1.0" werden geladen statt verworfen.
+   - Legacy strip_only/Audio-Dynamikwerte werden robust interpretiert.
+
+7. Pipeline-Policy
+   - "preserve_dv": "false" oder "preserve_hdrplus": "0" erzwingen keinen HDR-Pfad mehr.
+   - Auto-Crop/IMAX-Flags werden im Worker defensiv normalisiert.
+
+8. Regelmigration
+   - Audio: ignore_commentary_tracks, ignore_descriptive_audio, extra_stereo,
+     DRC und Loudnorm.
+   - Renamer: fuzzy_fallback, retry_without_year, floatartige Integerwerte.
+   - Untertitel: force_priority, DV-External-Subs, Burn-In-Regeln,
+     Forced-Plausibility und Keep-Regeln.
+
+Zentrale geänderte Produktivdateien
+====================================
+dragontools/core/type_utils.py
+dragontools/core/settings.py
+dragontools/core/models.py
+dragontools/core/config_migration.py
+dragontools/core/encoder_profile_override.py
+dragontools/core/parallel_settings.py
+dragontools/core/rules_preview.py
+dragontools/gui/convert_widget_encoder_override.py
+dragontools/gui/convert_widget_override_dialog.py
+dragontools/gui/encoder_settings_options.py
+dragontools/gui/encoder_settings_persistence.py
+dragontools/gui/encoder_settings_profiles.py
+dragontools/gui/quality_tester_widget.py
+dragontools/rules/audio_rules.py
+dragontools/rules/renamer_rules.py
+dragontools/rules/subtitle_rules.py
+dragontools/worker/encode_plan_service.py
+dragontools/worker/encoder_args.py
+dragontools/worker/pipeline_decision_service.py
+
+Tests
+=====
+Vollständiger Testlauf:
+  899 passed
+  15 skipped
+  0 failed
+  2 bestehende PytestUnknownMarkWarning (media_integration, dv_hdr_integration)
+
+Neue Regressionen prüfen insbesondere:
+- "false" / "0" -> False
+- "19.0" / "32.0" / "4.0" -> korrekte Integer
+- NVENC AQ-Flags als Strings
+- QSV/AMF Legacy-Zahlen
+- ungültiges Encoder-Backend
+- String-Booleans in Audio-/Renamer-/Subtitle-Regeln
+- preserve_dv="false" erzwingt keinen DV-Pfad
+- Auto-Crop/IMAX String-Flags
+- Parallel-Jobs als "2.0"
+
+Installation
+============
+Overlay-ZIP über den vorhandenen Projektordner kopieren und Dateien ersetzen.
+Alternativ das vollständige Projekt-ZIP verwenden.
+
+Der Patch baut auf den zuvor integrierten DV/HDR10+- und Encoder-Override-Fixes auf.

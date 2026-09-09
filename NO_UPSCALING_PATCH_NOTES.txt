@@ -1,0 +1,40 @@
+DragonTools V9.7 - Downscale-only Patch
+========================================
+
+Ziel:
+Die normalen Skalierungsstufen 480p/720p/1080p/4K dürfen niemals ein kleineres Bild hochskalieren.
+
+Kernänderung:
+scale=-2:1080 wird zu scale=-2:min(1080\,ih). Entsprechend 720/480/2160.
+ih ist die aktuelle Höhe am scale-Filter und damit nach AutoCrop.
+
+Beispiele:
+- 3840x1600 + 1080p -> ca. 2592x1080 (Downscale bleibt)
+- 1920x900 + 1080p -> 1920x900 (kein Upscale mehr)
+- 1280x720 + 1080p -> 1280x720 (kein Upscale mehr)
+- 1920x1080 + 4K -> 1920x1080 (kein Upscale mehr)
+
+DV-Sonderfall:
+Der RPU-Level-5-Abgleich kann den AutoCrop vor dem Encode noch ändern. Die neue FFmpeg-
+Expression bewertet ih erst zur Laufzeit nach dem finalen Crop. Zusätzlich wird der finale
+DV-Crop zurück an den Medienvertrag gemeldet, damit die Output-Validierung dieselbe reale
+Zielhöhe erwartet.
+
+Betroffene Kernmodule:
+- dragontools/worker/encoder_args.py
+- dragontools/worker/media_contract.py
+- dragontools/worker/quality_test_thread.py
+- dragontools/worker/dv_crop_reconcile.py
+- dragontools/worker/dv_processing_pipeline.py
+- dragontools/worker/dv_workflow_pipeline_adapter.py
+- dragontools/worker/workflow_models.py
+- dragontools/worker/workflow_planning_service.py
+- dragontools/worker/workflow_services.py
+- dragontools/tests/test_downscale_only_policy.py
+
+Abnahme:
+- Reale FFmpeg-Probe: 1920x900 + 1080p bleibt 1920x900.
+- Reale FFmpeg-Probe: 3840x1600 + 1080p wird 2592x1080.
+- Reale FFmpeg-Probe: 1280x720 + 1080p bleibt 1280x720.
+- Gesamttests: 1.032 bestanden, 15 umgebungsbedingt übersprungen, 0 Fehler.
+- Source-Release-Validator: 0 Fehler, 6 bekannte Warnungen.

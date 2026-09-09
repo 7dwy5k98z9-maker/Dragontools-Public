@@ -1,0 +1,54 @@
+{
+  "film_h265": {
+    "label": "Film H.265",
+    "codec": "h265",
+    "crf": 22,
+    "preset": "medium",
+    "scale": "original",
+    "encoder_options": {
+      "encoder": "cpu",
+      "tune": "none",
+      "aq_mode": "2",
+      "aq_strength": "1.0",
+      "psy_rd": "2.0",
+      "psy_rdoq": "1.0",
+      "bf": 8,
+      "rc_lookahead": 40
+    }
+  },
+  "tv_h265": {
+    "label": "TV H.265",
+    "codec": "h265",
+    "crf": 22,
+    "preset": "medium",
+    "scale": "original",
+    "encoder_options": {
+      "encoder": "cpu",
+      "tune": "none",
+      "aq_mode": "2",
+      "aq_strength": "1.0",
+      "psy_rd": "2.0",
+      "psy_rdoq": "1.0",
+      "bf": 8,
+      "rc_lookahead": 40
+    }
+  },
+  "anime_h265": {
+    "label": "Anime H.265",
+    "codec": "h265",
+    "crf": 20,
+    "preset": "slow",
+    "scale": "original",
+    "encoder_options": {
+      "encoder": "cpu",
+      "tune": "none",
+      "aq_mode": "2",
+      "aq_strength": "1.0",
+      "psy_rd": "2.0",
+      "psy_rdoq": "1.0",
+      "bf": 8,
+      "rc_lookahead": 40
+    }
+  },
+  "_schema_version": 3
+}

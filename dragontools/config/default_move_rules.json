@@ -1,0 +1,21 @@
+{
+  "_schema_version": 1,
+  "series_patterns": [
+    "(?i)s\\s*(?P<season>\\d{1,4})[.\\-_\\s]*e\\s*(?P<episode>\\d{1,4})",
+    "(?i)s\\s*(?P<season>\\d{1,4})\\s*e\\s*(?P<episode>\\d{1,4})(?:[e\\-]e?\\d{1,4})*",
+    "(?i)(?P<season>\\d{1,4})x(?P<episode>\\d{1,4})"
+  ],
+  "series_test_examples": [
+    "Show.S01E01.mkv",
+    "Show.S01E01E02.mkv",
+    "Show.S01E01-E02.mkv",
+    "Show.1x01.mkv"
+  ],
+  "anime_keywords": ["BD", "BluRay", "BDRip", "WEBRip", "[SubGroup]"],
+  "collection_rules": [],
+  "folder_structure": {
+    "series": "{tv_root}/{series_name}/Staffel {season:02d}/",
+    "movie":  "{film_root}/{title} ({year})/",
+    "anime":  "{anime_root}/{series_name}/Staffel {season:02d}/"
+  }
+}

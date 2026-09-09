@@ -1,0 +1,57 @@
+name: DragonTools tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      QT_QPA_PLATFORM: offscreen
+      DRAGONTOOLS_REQUIRE_QT_TESTS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Check public privacy markers
+        run: python scripts/check_public_privacy.py
+      - name: Install test dependencies
+        run: python -m pip install -r requirements-test.txt
+      - name: Run unit, GUI and media-fixture tests
+        run: python -m pytest -m "not dv_hdr_integration"
+
+  dv-hdr-contract:
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    runs-on: windows-latest
+    env:
+      QT_QPA_PLATFORM: offscreen
+      DRAGONTOOLS_REQUIRE_QT_TESTS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install test dependencies
+        run: python -m pip install -r requirements-test.txt
+      - name: Explain external DV/HDR tool requirement
+        shell: pwsh
+        run: |
+          Write-Host "DV/HDR integration requires DRAGONTOOLS_DOVI_TOOL, DRAGONTOOLS_HDR10PLUS_TOOL and DRAGONTOOLS_MP4BOX."
+          Write-Host "The job remains controlled/manual because these binaries are not downloaded by the repository."
+      - name: Run DV/HDR integration when tool paths are supplied by the runner
+        shell: pwsh
+        run: |
+          if ($env:DRAGONTOOLS_DOVI_TOOL -and $env:DRAGONTOOLS_HDR10PLUS_TOOL -and $env:DRAGONTOOLS_MP4BOX) {
+            $env:DRAGONTOOLS_REQUIRE_DV_HDR_INTEGRATION = "1"
+            python -m pytest -m "dv_hdr_integration"
+          } else {
+            Write-Host "External DV/HDR tools not configured on this runner; controlled integration job skipped."
+          }
