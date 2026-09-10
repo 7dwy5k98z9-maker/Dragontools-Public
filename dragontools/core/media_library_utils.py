@@ -91,11 +91,13 @@ def _normalize_stream_type(
     width: Any = None,
     height: Any = None,
 ) -> str:
-    text = str(raw_type or "").strip().casefold()
+    # Jellyfin serialisiert MediaStreamType als Integer. Dabei bedeutet 0
+    # ausdrücklich Audio; ``raw_type or ""`` würde diesen Wert verlieren.
+    text = str(raw_type if raw_type is not None else "").strip().casefold()
     codec_key = str(codec or "").strip().casefold()
     if text in {"video", "1"}:
         return "Video"
-    if text in {"audio"}:
+    if text in {"audio", "0"}:
         return "Audio"
     if text in {"subtitle", "subtitles", "2"}:
         return "Subtitle"

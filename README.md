@@ -103,6 +103,12 @@ python -m pytest -m "not dv_hdr_integration"
 
 Die echten Dolby-Vision-/HDR10+-Integrationstests benötigen zusätzlich `dovi_tool`, `hdr10plus_tool` und MP4Box sowie geeignete Testmedien.
 
+## Jellyfin-Mediathek importieren
+
+DragonTools liest aktuelle Jellyfin-Datenbanken mit `BaseItems` und `MediaStreamInfos` ausschließlich als Quelle und erzeugt daraus eine eigene funktionale SQLite-Mediathek. Übernommen werden Filme, Serien, Staffeln, vorhandene Episoden und sonstige Videodateien einschließlich Pfad, Laufzeit, Container, Auflösung, Video- und Gesamtbitrate, Video-Codec, HDR/SDR, HDR10+, Dolby Vision sowie Audio- und Untertitelsprachen, Codecs und Bitraten. Personen, Studios, Genres, Playlists, Sammlungen und reine Metadatenpfade werden nicht importiert.
+
+Vor dem Import wird ein konsistenter Read-only-Snapshot einschließlich vorhandener WAL-Daten erzeugt und mit SQLite geprüft. Eine beschädigte oder unvollständig kopierte Jellyfin-Datenbank ersetzt die vorhandene DragonTools-Mediathek nicht. Gleichwertige Windows-/UNC-Pfade werden beim Neuaufbau nur einmal übernommen.
+
 ## Windows-Anwendung bauen
 
 Installiere zunächst die Build-Abhängigkeiten:

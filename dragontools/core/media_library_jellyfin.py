@@ -23,7 +23,24 @@ from .media_library_utils import (
     _bool, _float_or_none, _infer_item_type, _int_or_none, _normalize_stream_type,
     _normalize_title, _safe_parent,
 )
-from .paths import VIDEO_EXTENSIONS
+from .paths import VIDEO_EXTENSIONS, path_compare_key
+
+
+_IMPORTABLE_JELLYFIN_ITEM_TYPES = {"movie", "series", "season", "episode", "video"}
+_HDR_MARKERS = (
+    "hdr",
+    "bt2020",
+    "pq",
+    "hlg",
+    "dolby",
+    "dovi",
+    "dvhe",
+    "smpte2084",
+    "st2084",
+    "arib-std-b67",
+    "2094-40",
+    "st2094",
+)
 
 def _column_map(cursor: sqlite3.Cursor) -> dict[str, str]:
     return {desc[0].casefold(): desc[0] for desc in cursor.description or []}
@@ -53,7 +70,7 @@ def _pick_jellyfin_item_table(conn: sqlite3.Connection) -> str | None:
 
 def _pick_jellyfin_stream_table(conn: sqlite3.Connection) -> str | None:
     tables = _table_names(conn)
-    for candidate in ("MediaStreams", "mediastreams"):
+    for candidate in ("MediaStreamInfos", "MediaStreams", "mediastreams"):
         if candidate in tables:
             return candidate
     for table in tables:
@@ -109,6 +126,30 @@ def _infer_jellyfin_item_type(type_text: str, path: str) -> str:
     return _infer_item_type("", path)
 
 
+def _is_importable_jellyfin_item(item_type: str, path: str) -> bool:
+    """Begrenzt den Bestand auf funktionale Medien- und Hierarchieeintraege.
+
+    Moderne Jellyfin-Datenbanken enthalten auch Personen, Studios, Genres,
+    Sammlungen und Playlists mit Metadatenpfaden. Diese Objekte gehoeren nicht
+    in die DragonTools-Mediathek. Generische Videoobjekte werden nur uebernommen,
+    wenn ihr Pfad auf eine von DragonTools unterstuetzte Videodatei zeigt.
+    """
+    if item_type not in _IMPORTABLE_JELLYFIN_ITEM_TYPES:
+        return False
+    if item_type == "video":
+        return Path(path).suffix.casefold() in VIDEO_EXTENSIONS
+    return True
+
+
+def _validate_jellyfin_snapshot(conn: sqlite3.Connection) -> None:
+    """Verhindert einen Import aus einer unvollstaendigen DB-/WAL-Kopie."""
+    row = conn.execute("PRAGMA quick_check(1)").fetchone()
+    result = str(row[0] if row else "").strip()
+    if result.casefold() != "ok":
+        detail = result or "unbekannter SQLite-Konsistenzfehler"
+        raise RuntimeError(f"Jellyfin-Datenbank ist nicht konsistent: {detail}")
+
+
 def _is_stream_dict_type(stream: dict[str, Any], expected: str) -> bool:
     return (
         _normalize_stream_type(
@@ -125,9 +166,17 @@ def _is_stream_dict_type(stream: dict[str, Any], expected: str) -> bool:
 def _video_flags_from_streams(streams: list[dict[str, Any]]) -> tuple[int, int, int, str | None, int | None, int | None, str | None, int | None]:
     video = next((stream for stream in streams if _is_stream_dict_type(stream, "video")), {})
     text = " ".join(str(video.get(key) or "") for key in ("hdr_format", "codec", "pix_fmt", "title", "dv_profile")).casefold()
-    is_hdr = 1 if any(marker in text for marker in ("hdr", "bt2020", "pq", "hlg", "dolby", "smpte2084", "st2084")) else 0
-    has_hdr10plus = 1 if any(marker in text for marker in ("hdr10+", "hdr10plus", "dynamic metadata", "2094-40", "st2094")) else 0
-    has_dv = 1 if any(marker in text for marker in ("dolby vision", "dovi", "dvhe", "dolbyvision")) else 0
+    dv_profile = _int_or_none(video.get("dv_profile"))
+    has_hdr10plus = 1 if (
+        _bool(video.get("hdr10plus_present"))
+        or any(marker in text for marker in ("hdr10+", "hdr10plus", "dynamic metadata", "2094-40", "st2094"))
+    ) else 0
+    has_dv = 1 if (
+        _bool(video.get("rpu_present"))
+        or (dv_profile is not None and dv_profile > 0)
+        or any(marker in text for marker in ("dolby vision", "dovi", "dvhe", "dolbyvision"))
+    ) else 0
+    is_hdr = 1 if has_hdr10plus or has_dv or any(marker in text for marker in _HDR_MARKERS) else 0
     return (
         is_hdr,
         has_hdr10plus,
@@ -145,6 +194,8 @@ def _jellyfin_hdr_format(row: sqlite3.Row, columns: dict[str, str]) -> str:
     for name in (
         "VideoRange",
         "VideoRangeType",
+        "ColorPrimaries",
+        "ColorSpace",
         "ColorTransfer",
         "TransferCharacteristics",
         "HDR_Format",
@@ -167,6 +218,11 @@ def _jellyfin_hdr_format(row: sqlite3.Row, columns: dict[str, str]) -> str:
         if _bool(value) or any(marker in text for marker in ("hdr10+", "hdr10plus", "2094-40", "true", "yes", "ja")):
             parts.append("hdr10plus")
 
+    rpu_present = _bool(_row_value(row, columns, "RpuPresentFlag", default=0))
+    dv_profile = _int_or_none(_row_value(row, columns, "DvProfile", "DolbyVisionProfile", default=None))
+    if rpu_present or (dv_profile is not None and dv_profile > 0):
+        parts.append("Dolby Vision")
+
     return " | ".join(dict.fromkeys(parts))
 
 
@@ -176,18 +232,21 @@ def _stream_from_jellyfin_row(row: sqlite3.Row, columns: dict[str, str]) -> dict
     channels = _int_or_none(_row_value(row, columns, "Channels", default=None))
     width = _int_or_none(_row_value(row, columns, "Width", default=None))
     height = _int_or_none(_row_value(row, columns, "Height", default=None))
+    stream_type = _normalize_stream_type(
+        raw_stream_type,
+        codec=codec,
+        channels=channels,
+        width=width,
+        height=height,
+    )
     video_range = _jellyfin_hdr_format(row, columns)
+    if stream_type.casefold() == "video" and not any(marker in video_range.casefold() for marker in _HDR_MARKERS):
+        video_range = " | ".join(part for part in (video_range, "SDR") if part)
     dv_profile = _row_value(row, columns, "DvProfile", "DolbyVisionProfile", "Profile", default=None)
     pix_fmt = _row_value(row, columns, "PixelFormat", "PixFmt", default=None)
     bit_depth = _row_value(row, columns, "BitDepth", default=None)
     return {
-        "stream_type": _normalize_stream_type(
-            raw_stream_type,
-            codec=codec,
-            channels=channels,
-            width=width,
-            height=height,
-        ),
+        "stream_type": stream_type,
         "stream_index": _int_or_none(_row_value(row, columns, "Index", "StreamIndex", default=None)),
         "codec": codec,
         "language": _row_value(row, columns, "Language", default=None),
@@ -202,6 +261,8 @@ def _stream_from_jellyfin_row(row: sqlite3.Row, columns: dict[str, str]) -> dict
         "pix_fmt": pix_fmt,
         "bit_depth": _int_or_none(bit_depth),
         "title": _row_value(row, columns, "Title", "DisplayTitle", default=None),
+        "rpu_present": _bool(_row_value(row, columns, "RpuPresentFlag", default=0)),
+        "hdr10plus_present": _bool(_row_value(row, columns, "Hdr10PlusPresentFlag", default=0)),
     }
 
 
@@ -272,6 +333,7 @@ def import_jellyfin_database(
         source_conn = sqlite3.connect(str(source_copy))
         source_conn.row_factory = sqlite3.Row
         try:
+            _validate_jellyfin_snapshot(source_conn)
             item_table = _pick_jellyfin_item_table(source_conn)
             if not item_table:
                 raise RuntimeError("Keine passende Jellyfin-Medientabelle gefunden.")
@@ -283,12 +345,20 @@ def import_jellyfin_database(
             item_cur = source_conn.execute(f"SELECT * FROM {item_table}")
             item_columns = _column_map(item_cur)
             rows = item_cur.fetchall()
+            item_names_by_id = {
+                _jellyfin_item_id(row, item_columns): str(
+                    _row_value(row, item_columns, "Name", "OriginalTitle", "SortName", default="") or ""
+                )
+                for row in rows
+                if _jellyfin_item_id(row, item_columns)
+            }
         finally:
             source_conn.close()
 
         with closing(_connect(tmp_db)) as target_conn:
             with target_conn:
                 _create_schema(target_conn)
+                seen_paths: set[str] = set()
                 for row in rows:
                     raw_path = str(_row_value(row, item_columns, "Path", default="") or "")
                     name = str(_row_value(row, item_columns, "Name", "OriginalTitle", "SortName", default="") or "")
@@ -305,19 +375,41 @@ def import_jellyfin_database(
                     source_id = _jellyfin_item_id(row, item_columns)
                     raw_type = str(_row_value(row, item_columns, "Type", "type", default="") or "")
                     item_type = _infer_jellyfin_item_type(raw_type, mapped_path)
+                    if not _is_importable_jellyfin_item(item_type, mapped_path):
+                        skipped_items += 1
+                        continue
+                    path_key = path_compare_key(mapped_path)
+                    if path_key in seen_paths:
+                        skipped_items += 1
+                        continue
+                    seen_paths.add(path_key)
                     streams = streams_by_item.get(source_id, [])
                     is_hdr, has_hdr10plus, has_dv, dv_profile, width, height, video_codec, video_bitrate = (
                         _video_flags_from_streams(streams)
                     )
                     path_obj = Path(mapped_path)
+                    series_title = str(_row_value(row, item_columns, "SeriesName", default="") or "").strip()
+                    if item_type == "series":
+                        series_title = name or series_title
+                    elif not series_title:
+                        series_id = str(_row_value(row, item_columns, "SeriesId", default="") or "").casefold()
+                        series_title = item_names_by_id.get(series_id, "")
+                    if item_type == "season":
+                        season_number = _int_or_none(
+                            _row_value(row, item_columns, "IndexNumber", "SeasonNumber", default=None)
+                        )
+                    else:
+                        season_number = _int_or_none(
+                            _row_value(row, item_columns, "ParentIndexNumber", "SeasonNumber", default=None)
+                        )
                     item = {
                         "item_type": item_type,
                         "title": name or path_obj.stem,
-                        "series_title": _row_value(row, item_columns, "SeriesName", default=None),
-                        "season": _int_or_none(
-                            _row_value(row, item_columns, "ParentIndexNumber", "SeasonNumber", default=None)
-                        ),
-                        "episode": _int_or_none(_row_value(row, item_columns, "IndexNumber", "EpisodeNumber", default=None)),
+                        "series_title": series_title or None,
+                        "season": season_number,
+                        "episode": _int_or_none(
+                            _row_value(row, item_columns, "IndexNumber", "EpisodeNumber", default=None)
+                        ) if item_type == "episode" else None,
                         "year": _int_or_none(
                             _row_value(row, item_columns, "ProductionYear", "PremiereDate", "Year", default=None)
                         ),
@@ -339,7 +431,9 @@ def import_jellyfin_database(
                         "height": height,
                         "video_codec": video_codec,
                         "video_bitrate": video_bitrate,
-                        "overall_bitrate": None,
+                        "overall_bitrate": _int_or_none(
+                            _row_value(row, item_columns, "TotalBitrate", "OverallBitrate", default=None)
+                        ),
                         "is_hdr": is_hdr,
                         "has_hdr10plus": has_hdr10plus,
                         "has_dolby_vision": has_dv,

@@ -318,7 +318,7 @@ def test_jellyfin_import_normalizes_stream_types_to_dragon_schema(tmp_path: Path
             "INSERT INTO MediaStreams VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             [
                 ("episode-1", "1", "hevc", None, None, 2_500_000, 1920, 1080, 0, "bt709", None),
-                ("episode-1", "", "eac3", "deu", 6, 640_000, None, None, 0, None, None),
+                ("episode-1", 0, "eac3", "deu", 6, 640_000, None, None, 0, None, None),
                 ("episode-1", "2", "subrip", "deu", None, None, None, None, 1, None, None),
             ],
         )
@@ -385,6 +385,197 @@ def test_jellyfin_import_preserves_explicit_hdr10plus_flags(tmp_path: Path) -> N
     rows = search_library(target_db, "hdr10plus", scope="movies", media_type="videos")
     assert [row["title"] for row in rows] == ["HDR Plus Film"]
     assert rows[0]["has_hdr10plus"] == 1
+
+
+def test_jellyfin_import_supports_current_baseitems_media_stream_infos_schema(tmp_path: Path) -> None:
+    jellyfin_db = tmp_path / "jellyfin.db"
+    target_db = tmp_path / "dragontools.sqlite3"
+    with _db_connection(jellyfin_db) as conn:
+        conn.execute(
+            """
+            CREATE TABLE BaseItems (
+                Id TEXT PRIMARY KEY,
+                Type TEXT NOT NULL,
+                Name TEXT,
+                Path TEXT,
+                SeriesName TEXT,
+                SeriesId TEXT,
+                ParentIndexNumber INTEGER,
+                IndexNumber INTEGER,
+                ProductionYear INTEGER,
+                RunTimeTicks INTEGER,
+                Size INTEGER,
+                TotalBitrate INTEGER
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE MediaStreamInfos (
+                ItemId TEXT,
+                StreamIndex INTEGER,
+                StreamType INTEGER,
+                Codec TEXT,
+                Language TEXT,
+                Channels INTEGER,
+                ChannelLayout TEXT,
+                BitRate INTEGER,
+                Width INTEGER,
+                Height INTEGER,
+                IsForced INTEGER,
+                ColorPrimaries TEXT,
+                ColorTransfer TEXT,
+                DvProfile INTEGER,
+                RpuPresentFlag INTEGER,
+                Hdr10PlusPresentFlag INTEGER,
+                PixelFormat TEXT,
+                BitDepth INTEGER,
+                Title TEXT
+            )
+            """
+        )
+        conn.executemany(
+            "INSERT INTO BaseItems VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [
+                (
+                    "series-1", "MediaBrowser.Controller.Entities.TV.Series", "Testserie",
+                    "/Anime/Testserie (2026)", None, None, None, None, 2026, None, None, None,
+                ),
+                (
+                    "season-1", "MediaBrowser.Controller.Entities.TV.Season", "Staffel 2",
+                    "/Anime/Testserie (2026)/Staffel 02", None, "series-1", None, 2, 2026,
+                    None, None, None,
+                ),
+                (
+                    "episode-1", "MediaBrowser.Controller.Entities.TV.Episode", "Dolby-Folge",
+                    "/Anime/Testserie (2026)/Staffel 02/Testserie - S02E03.mkv", None, "series-1",
+                    2, 3, 2026, 18_000_000_000, 1_234_567_890, 18_500_000,
+                ),
+                (
+                    "movie-1", "MediaBrowser.Controller.Entities.Movies.Movie", "SDR-Film",
+                    "/Filme/S/SDR-Film (2025)/SDR-Film (2025).mp4", None, None, None, None,
+                    2025, 54_000_000_000, 2_345_678_901, 9_500_000,
+                ),
+                (
+                    "person-1", "MediaBrowser.Controller.Entities.Person", "Nicht importieren",
+                    "%MetadataPath%/People/N/Nicht importieren/folder.jpg", None, None, None,
+                    None, None, None, None, None,
+                ),
+            ],
+        )
+        conn.executemany(
+            "INSERT INTO MediaStreamInfos VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [
+                ("episode-1", 0, 1, "hevc", None, None, None, 17_000_000, 3840, 1608, 0,
+                 "bt2020", "smpte2084", 8, 1, 0, "yuv420p10le", 10, None),
+                ("episode-1", 1, 0, "eac3", "jpn", 6, "5.1", 640_000, None, None, 0,
+                 None, None, None, 0, 0, None, None, "Japanisch"),
+                ("episode-1", 2, 2, "ass", "deu", None, None, None, None, None, 1,
+                 None, None, None, 0, 0, None, None, "Deutsch Forced"),
+                ("movie-1", 0, 1, "h264", None, None, None, 9_000_000, 1920, 1080, 0,
+                 "bt709", "bt709", None, 0, 0, "yuv420p", 8, None),
+                ("movie-1", 1, 0, "aac", "eng", 2, "stereo", 192_000, None, None, 0,
+                 None, None, None, 0, 0, None, None, "English"),
+            ],
+        )
+
+    result = import_jellyfin_database(
+        jellyfin_db,
+        target_db,
+        [
+            PathMapping("Anime", "/Anime", str(tmp_path / "video" / "Anime")),
+            PathMapping("Filme", "/Filme", str(tmp_path / "video" / "Filme")),
+        ],
+    )
+
+    assert result.imported_items == 4
+    assert result.imported_streams == 5
+    assert result.skipped_items == 1
+    with _db_connection(target_db) as conn:
+        conn.row_factory = sqlite3.Row
+        episode = conn.execute("SELECT * FROM media_items WHERE source_id='episode-1'").fetchone()
+        season = conn.execute("SELECT * FROM media_items WHERE source_id='season-1'").fetchone()
+        movie = conn.execute("SELECT * FROM media_items WHERE source_id='movie-1'").fetchone()
+        episode_streams = conn.execute(
+            "SELECT stream_type, codec, language, forced, bitrate, hdr_format, dv_profile "
+            "FROM media_streams WHERE media_id=? ORDER BY stream_index",
+            (episode["id"],),
+        ).fetchall()
+        movie_video = conn.execute(
+            "SELECT hdr_format FROM media_streams WHERE media_id=? AND stream_type='Video'",
+            (movie["id"],),
+        ).fetchone()
+
+    assert episode["series_title"] == "Testserie"
+    assert episode["season"] == 2
+    assert episode["episode"] == 3
+    assert episode["container"] == "mkv"
+    assert episode["duration_s"] == 1800.0
+    assert episode["overall_bitrate"] == 18_500_000
+    assert episode["width"] == 3840
+    assert episode["height"] == 1608
+    assert episode["video_codec"] == "hevc"
+    assert episode["video_bitrate"] == 17_000_000
+    assert episode["is_hdr"] == 1
+    assert episode["has_dolby_vision"] == 1
+    assert episode["has_hdr10plus"] == 0
+    assert season["series_title"] == "Testserie"
+    assert season["season"] == 2
+    assert movie["container"] == "mp4"
+    assert movie["overall_bitrate"] == 9_500_000
+    assert movie["is_hdr"] == 0
+    assert [tuple(row[:5]) for row in episode_streams] == [
+        ("Video", "hevc", None, 0, 17_000_000),
+        ("Audio", "eac3", "jpn", 0, 640_000),
+        ("Subtitle", "ass", "deu", 1, None),
+    ]
+    assert "Dolby Vision" in episode_streams[0]["hdr_format"]
+    assert episode_streams[0]["dv_profile"] == "8"
+    assert "SDR" in movie_video["hdr_format"]
+
+
+def test_jellyfin_import_deduplicates_equivalent_windows_paths(tmp_path: Path) -> None:
+    jellyfin_db = tmp_path / "jellyfin.db"
+    target_db = tmp_path / "dragontools.sqlite3"
+    with _db_connection(jellyfin_db) as conn:
+        conn.execute(
+            """
+            CREATE TABLE BaseItems (
+                Id TEXT, Type TEXT, Name TEXT, Path TEXT, ProductionYear INTEGER
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE MediaStreamInfos (
+                ItemId TEXT, StreamIndex INTEGER, StreamType INTEGER, Codec TEXT,
+                Width INTEGER, Height INTEGER, ColorTransfer TEXT
+            )
+            """
+        )
+        conn.executemany(
+            "INSERT INTO BaseItems VALUES (?, ?, ?, ?, ?)",
+            [
+                (
+                    "movie-1", "MediaBrowser.Controller.Entities.Movies.Movie", "Testfilm",
+                    "/Filme/Testfilm/Testfilm.mkv", 2026,
+                ),
+                (
+                    "movie-2", "MediaBrowser.Controller.Entities.Movies.Movie", "TESTFILM",
+                    "/Filme/TESTFILM/TESTFILM.MKV", 2026,
+                ),
+            ],
+        )
+
+    result = import_jellyfin_database(
+        jellyfin_db,
+        target_db,
+        [PathMapping("Filme", "/Filme", r"X:\Video\Filme")],
+    )
+
+    assert result.imported_items == 1
+    assert result.skipped_items == 1
+    assert get_stats(target_db).media_count == 1
 
 
 def test_storage_scan_builds_library_from_real_folder_structure(tmp_path: Path) -> None:
@@ -609,14 +800,15 @@ def test_jellyfin_import_keeps_generic_video_and_movies_namespace_out_of_movie_e
     result = import_jellyfin_database(jellyfin_db, target_db)
     stats = get_stats(target_db)
 
-    assert result.imported_items == 4
+    assert result.imported_items == 3
+    assert result.skipped_items == 1
     assert stats.movie_count == 1
     assert stats.episode_count == 1
 
     with _db_connection(target_db) as conn:
         types = dict(conn.execute("SELECT source_id, item_type FROM media_items"))
     assert types["generic-video"] == "video"
-    assert types["boxset-1"] == "folder"
+    assert "boxset-1" not in types
 
 
 def test_search_and_series_root_use_imported_library(tmp_path: Path) -> None:

@@ -1,10 +1,16 @@
-[10.09.2026] V9.8.2 - Dolby-Vision-Double-Crop behoben
+[10.09.2026] V9.8.2 - Dolby-Vision-Crop und Jellyfin-Import korrigiert
 - Nach einem physischen FFmpeg-Pixelcrop wird die Dolby-Vision-RPU mit active_area.crop=true auf das bereits verkleinerte Zielbild normalisiert.
 - Bereits entfernte Raender werden dadurch nicht nochmals als Level-5-Active-Area angewendet.
 - Die bearbeitete RPU wird vor der Injection fail-closed exportiert und auf ausschliesslich nullgesetzte Level-5-Raender geprueft.
 - Bei gecroppten DV-Ausgaben wird die RPU nach dem finalen MKV- oder MP4-Mux erneut extrahiert und bytegenau mit der injizierten RPU verglichen.
 - Nicht pruefbare oder abweichende RPUs fuehren zum sicheren Abbruch statt zu einer moeglicherweise falsch gecroppten DV-Ausgabe.
 - Neue Regressionstests decken horizontalen und vertikalen Crop, die Nullpruefung, Fehlerfaelle sowie MKV- und MP4-Rueckpruefung ab.
+- Aktuelle Jellyfin-Datenbanken mit BaseItems und MediaStreamInfos werden direkt erkannt und vor dem Import per SQLite-Konsistenzpruefung abgesichert.
+- Importiert werden nur Filme, Serien, Staffeln, vorhandene Episoden und echte Videodateien; Personen, Studios, Genres, Playlists, Sammlungen und Metadatenpfade bleiben draussen.
+- Serien-/Staffelhierarchie, Pfad, Laufzeit, Container, Aufloesung, Video- und Gesamtbitrate sowie Video-Codec werden uebernommen.
+- Audio- und Untertitelsprachen, Codecs, Kanaele, Forced-Kennzeichnung und verfuegbare Bitraten werden aus MediaStreamInfos uebernommen.
+- Dolby Vision wird ueber RpuPresentFlag und DV-Profil erkannt; HDR10+, HDR und SDR werden aus den aktuellen Jellyfin-Feldern belastbar eingeordnet.
+- Gleichwertige Windows-/UNC-Pfade werden beim Neuaufbau dedupliziert. Eine fehlerhafte Jellyfin-Kopie ersetzt die vorhandene DragonTools-Mediathek nicht.
 
 [09.09.2026] V9.8.1 - GitHub-Updatepruefung und oeffentliche Bereitstellung
 - DragonTools prueft nach dem Programmstart verzoegert und ohne Blockierung der Oberflaeche das neueste stabile Release im oeffentlichen GitHub-Release-Repository.
