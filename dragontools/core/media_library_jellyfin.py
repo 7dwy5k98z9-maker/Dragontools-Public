@@ -245,6 +245,16 @@ def _stream_from_jellyfin_row(row: sqlite3.Row, columns: dict[str, str]) -> dict
     dv_profile = _row_value(row, columns, "DvProfile", "DolbyVisionProfile", "Profile", default=None)
     pix_fmt = _row_value(row, columns, "PixelFormat", "PixFmt", default=None)
     bit_depth = _row_value(row, columns, "BitDepth", default=None)
+    average_frame_rate = _float_or_none(
+        _row_value(row, columns, "AverageFrameRate", "AvgFrameRate", default=None)
+    )
+    real_frame_rate = _float_or_none(
+        _row_value(row, columns, "RealFrameRate", "FrameRate", default=None)
+    )
+    frame_rate = average_frame_rate or real_frame_rate
+    frame_rate_mode = None
+    if average_frame_rate and real_frame_rate:
+        frame_rate_mode = "CFR" if abs(average_frame_rate - real_frame_rate) <= 0.001 else "VFR"
     return {
         "stream_type": stream_type,
         "stream_index": _int_or_none(_row_value(row, columns, "Index", "StreamIndex", default=None)),
@@ -260,10 +270,29 @@ def _stream_from_jellyfin_row(row: sqlite3.Row, columns: dict[str, str]) -> dict
         "dv_profile": dv_profile,
         "pix_fmt": pix_fmt,
         "bit_depth": _int_or_none(bit_depth),
+        "profile": _row_value(row, columns, "Profile", default=None),
+        "duration_s": None,
+        "frame_count": None,
+        "frame_rate": str(frame_rate) if frame_rate is not None else None,
+        "frame_rate_mode": frame_rate_mode,
+        "color_space": _row_value(row, columns, "ColorSpace", default=None),
+        "color_transfer": _row_value(
+            row, columns, "ColorTransfer", "TransferCharacteristics", default=None
+        ),
+        "color_primaries": _row_value(row, columns, "ColorPrimaries", default=None),
         "title": _row_value(row, columns, "Title", "DisplayTitle", default=None),
         "rpu_present": _bool(_row_value(row, columns, "RpuPresentFlag", default=0)),
         "hdr10plus_present": _bool(_row_value(row, columns, "Hdr10PlusPresentFlag", default=0)),
     }
+
+
+def _jellyfin_duration_seconds(row: sqlite3.Row, columns: dict[str, str]) -> float | None:
+    """Konvertiert Jellyfin-Ticks eindeutig, ohne lange Sekundenwerte zu verfälschen."""
+    ticks_column = columns.get("runtimeticks")
+    if ticks_column:
+        ticks = _float_or_none(row[ticks_column])
+        return ticks / 10_000_000.0 if ticks is not None else None
+    return _float_or_none(_row_value(row, columns, "DurationSeconds", default=None))
 
 
 def _group_streams_by_item(conn: sqlite3.Connection, table: str) -> dict[str, list[dict[str, Any]]]:
@@ -402,6 +431,16 @@ def import_jellyfin_database(
                         season_number = _int_or_none(
                             _row_value(row, item_columns, "ParentIndexNumber", "SeasonNumber", default=None)
                         )
+                    jellyfin_size_bytes = _int_or_none(
+                        _row_value(row, item_columns, "Size", "FileSize", default=None)
+                    )
+                    if not jellyfin_size_bytes or jellyfin_size_bytes <= 0:
+                        try:
+                            if path_obj.is_file():
+                                jellyfin_size_bytes = int(path_obj.stat().st_size)
+                        except OSError:
+                            pass
+
                     item = {
                         "item_type": item_type,
                         "title": name or path_obj.stem,
@@ -423,10 +462,8 @@ def import_jellyfin_database(
                             str(_row_value(row, item_columns, "SeriesName", default="") or name or path_obj.stem)
                         ),
                         "container": path_obj.suffix.lstrip(".").lower(),
-                        "duration_s": _float_or_none(
-                            _row_value(row, item_columns, "RunTimeTicks", "DurationSeconds", default=None)
-                        ),
-                        "size_bytes": _int_or_none(_row_value(row, item_columns, "Size", "FileSize", default=None)),
+                        "duration_s": _jellyfin_duration_seconds(row, item_columns),
+                        "size_bytes": jellyfin_size_bytes,
                         "width": width,
                         "height": height,
                         "video_codec": video_codec,
@@ -444,9 +481,6 @@ def import_jellyfin_database(
                         "exists_flag": 1,
                         "active": 1,
                     }
-                    if item["duration_s"] and item["duration_s"] > 100000:
-                        item["duration_s"] = float(item["duration_s"]) / 10_000_000.0
-
                     if analyze_existing_files and path_obj.suffix.casefold() in VIDEO_EXTENSIONS and path_obj.exists():
                         try:
                             from .media_analyzer import analyze_media

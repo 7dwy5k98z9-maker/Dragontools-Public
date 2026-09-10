@@ -89,6 +89,7 @@ class VideoStream:
     frame_count: int | None = None
     frame_rate: str | None = None
     frame_rate_mode: str | None = None
+    bitrate: int | None = None
 
 @dataclass(slots=True)
 class MediaInfo:

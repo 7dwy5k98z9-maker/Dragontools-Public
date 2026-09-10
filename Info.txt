@@ -1,122 +1,61 @@
-Dragon Tools V9.3 – Build-Hinweise
-================================
+Dragon Tools V9.8.2 - Build-Hinweise
+=====================================
 
-Damit der Build erfolgreich funktioniert, muss die komplette Projektstruktur vorhanden sein.
-Die build_v9.bat muss im Root-Ordner des Projekts liegen.
+Diese Hinweise gelten für den anonymisierten öffentlichen DragonTools-Quellstand unter Windows 10/11.
 
-Wichtige Voraussetzung:
------------------------
-Es reicht NICHT, nur Python und PyInstaller zu installieren.
-
-Benötigt werden mindestens:
-- Python 
-- PyInstaller
-- PyQt6
-
-Empfohlene Installation:
-------------------------
-1. Python installieren
-   Empfohlen: dieselbe Python-Version verwenden, mit der das Projekt entwickelt/getestet wurde (Python 3.13.9).
-
-2. Beim Python-Setup unbedingt aktivieren:
-   [x] Add Python to PATH
-
-3. Danach in einer Eingabeaufforderung ausführen:
-   pip install pyinstaller PyQt6
-
-Projektstruktur vor dem Build:
-------------------------------
-Die build_v9.bat erwartet diese Struktur im Projektordner (Im Projektordner auch so angelegt!):
-
-Projektordner/
-├── DragonToolsV9.py
-├── build_v9.bat
-├── info.txt
-├── help.html
-├── Handbuch/
-│   └── Handbuch.pdf
-├── dragontools/
-├── Aenderungshistorie/
-│   ├── CHANGELOG.txt
-│   ├── CHANGELOGV8.txt
-│   └── CHANGELOGV7.txt
-├── icon/
-│   └── Feuerdrache.ico
-├── Bilder/
-│   ├── banner.png
-│   ├── fire_dragon_16_9.png
-│   ├── splash_16_9.png
-│   ├── splash_Intro.png
-│   └── splash.png
-└── third_party/
-    ├── FFmpeg/
-    │   ├── ffmpeg.exe
-    │   └── ffprobe.exe
-    ├── GPAC/
-    │   └── MP4Box.exe
-    ├── dovi_tool/
-    │   └── dovi_tool.exe
-    ├── hdr10plus_tool/
-    │   └── hdr10plus_tool.exe
-    ├── Mediainfo/
-    │   └── MediaInfo.exe
-    ├── MKVToolNix/
-    ├── HandBrake/
-    └── rmts/
-
-Wichtig:
---------
-- Alle Dateien und Ordner müssen exakt an der Stelle liegen, auf die sich build_v9.bat bezieht.
-- Fehlende Dateien führen zu Build-Abbrüchen.
-- Falsche Pfade führen zu "file not found"-Fehlern bei PyInstaller.
-
-Build starten:
---------------
-Empfohlen: nicht per Doppelklick starten, sondern über die Eingabeaufforderung.
-
-Beispiel:
-1. CMD öffnen
-2. In den Projektordner wechseln
-3. build_v9.bat ausführen
-
-Warum über CMD?
+Voraussetzungen
 ---------------
-So bleiben Fehlermeldungen sichtbar, falls etwas fehlt oder ein Modul nicht gefunden wird.
+- Python 3.12 oder 3.13
+- Git für Klonen und Aktualisieren
+- Python-Abhängigkeiten aus den mitgelieferten Requirements-Dateien
 
-Beispiel:
-cd Pfad\zum\Projektordner
-build_v9.bat
+Installation für einen vollständigen Build
+-------------------------------------------
+1. Eine virtuelle Python-Umgebung anlegen und aktivieren.
+2. Python und pip aktualisieren.
+3. Folgenden Befehl ausführen:
 
-Ergebnis:
----------
-Nach erfolgreichem Build liegt die Anwendung hier:
+   python -m pip install -r requirements-build.txt
 
-dist\DragonToolsV9.3\
+Die Abhängigkeiten sind getrennt dokumentiert:
+- requirements-runtime.txt: Programmstart
+- requirements-optional.txt: optionale Bildanalyse
+- requirements-test.txt: Tests
+- requirements-build.txt: Windows-Build
 
-Typische Fehlerursachen:
-------------------------
-1. 'python' wird nicht erkannt
-   -> Python ist nicht installiert oder nicht im PATH
+Externe Medienprogramme
+-----------------------
+DragonTools bündelt Drittanbieterprogramme nicht im Git-Repository. Je nach verwendetem Arbeitsablauf werden FFmpeg/FFprobe, MKVToolNix, MediaInfo CLI, GPAC/MP4Box, dovi_tool, hdr10plus_tool, HandBrake, MakeMKV oder Rename My TV Series benötigt. Offizielle Downloadquellen und Zielpfade stehen in README.md und TOOLS_INSTALLIEREN.txt.
 
-2. 'pyinstaller' wird nicht erkannt
-   -> PyInstaller nicht installiert
-   -> Lösung: pip install pyinstaller
+Beim Start aus dem Quellcode können die Programme über die DragonTools-Einstellungen ausgewählt, über den Windows-PATH gefunden oder in der vorgesehenen third_party-Struktur abgelegt werden.
 
-3. 'No module named PyQt6'
-   -> PyQt6 nicht installiert
-   -> Lösung: pip install PyQt6
+Build starten
+-------------
+Den Build aus einer Eingabeaufforderung im Projektordner starten:
 
-4. Datei oder Ordner nicht gefunden
-   -> Projektstruktur stimmt nicht
-   -> Prüfen, ob alle in der BAT referenzierten Dateien wirklich existieren
+   build_v9.bat
 
-5. Build startet, aber bricht bei Ressourcen ab
-   -> Eine Datei aus icon/, Bilder/, Aenderungshistorie/ oder third_party/ fehlt
+Das fertige Programm liegt anschließend unter:
 
-Hinweis:
---------
-Eine requirements.txt ist für dieses Projekt aktuell nicht zwingend erforderlich,
-weil nach aktuellem Stand nur PyQt6 als zusätzliche Python-Abhängigkeit genutzt wird.
-Für eine frische Umgebung reicht in der Regel:
+   dist\DragonToolsV9.8.2\
 
-pip install pyinstaller PyQt6
+Prüfung vor einer Veröffentlichung
+----------------------------------
+1. Datenschutzprüfung ausführen:
+
+   python scripts/check_public_privacy.py
+
+2. Gesamte Testsuite ausführen:
+
+   python -m pytest -m "not dv_hdr_integration"
+
+3. Einen frischen Build erstellen und starten.
+4. Den vollständigen Anwendungsordner als ZIP verpacken.
+5. Eine SHA-256-Prüfsumme erzeugen.
+
+Wichtige Sicherheitshinweise
+----------------------------
+- API-Schlüssel, lokale Einstellungen, Logs, Datenbanken und Medien gehören nicht in Git.
+- build, dist, Caches und externe Programme bleiben außerhalb der Git-Historie.
+- Diese Fassung verwendet ausschließlich Dragon Developer als Entwicklername.
+- Bei einer fehlgeschlagenen Timestamp- oder Streamprüfung ersetzt oder verschiebt DragonTools die Quelldatei nicht.

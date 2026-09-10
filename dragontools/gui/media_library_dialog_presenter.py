@@ -7,6 +7,39 @@ from typing import Any
 
 class MediaLibraryDialogPresenter:
     @staticmethod
+    def format_duration(duration_s: Any) -> str:
+        try:
+            seconds = float(duration_s)
+        except (TypeError, ValueError):
+            return ""
+        if seconds <= 0:
+            return ""
+        rounded = int(round(seconds))
+        hours, remainder = divmod(rounded, 3600)
+        minutes, secs = divmod(remainder, 60)
+        return f"{hours}:{minutes:02d}:{secs:02d}"
+
+    @staticmethod
+    def format_size(size_bytes: Any) -> str:
+        try:
+            value = int(size_bytes)
+        except (TypeError, ValueError):
+            return ""
+        if value <= 0:
+            return ""
+        units = ("B", "KiB", "MiB", "GiB", "TiB")
+        size = float(value)
+        unit = units[0]
+        for candidate in units:
+            unit = candidate
+            if size < 1024.0 or candidate == units[-1]:
+                break
+            size /= 1024.0
+        if unit in {"B", "KiB"}:
+            return f"{size:.0f} {unit}"
+        return f"{size:.2f} {unit}"
+
+    @staticmethod
     def format_stats(stats: Any) -> str:
         return (
             "Status: "
@@ -48,6 +81,8 @@ class MediaLibraryDialogPresenter:
             image,
             row.get("audio_summary"),
             row.get("subtitle_summary"),
+            MediaLibraryDialogPresenter.format_duration(row.get("duration_s")),
+            MediaLibraryDialogPresenter.format_size(row.get("size_bytes")),
             row.get("deviation_reason"),
             row.get("path"),
         ]

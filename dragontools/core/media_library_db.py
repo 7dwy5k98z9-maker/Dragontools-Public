@@ -163,6 +163,14 @@ def _create_schema(conn: sqlite3.Connection) -> None:
             dv_profile TEXT,
             pix_fmt TEXT,
             bit_depth INTEGER,
+            profile TEXT,
+            duration_s REAL,
+            frame_count INTEGER,
+            frame_rate TEXT,
+            frame_rate_mode TEXT,
+            color_space TEXT,
+            color_transfer TEXT,
+            color_primaries TEXT,
             title TEXT
         );
 
@@ -173,6 +181,7 @@ def _create_schema(conn: sqlite3.Connection) -> None:
         """
     )
     _ensure_media_items_schema(conn)
+    _ensure_media_streams_schema(conn)
     conn.execute(
         "INSERT OR REPLACE INTO meta(key, value) VALUES('schema_version', ?)",
         (str(SCHEMA_VERSION),),
@@ -184,11 +193,31 @@ def _ensure_media_items_schema(conn: sqlite3.Connection) -> None:
     columns = _table_columns(conn, "media_items") if "media_items" in _table_names(conn) else {}
     if "active" not in columns:
         conn.execute("ALTER TABLE media_items ADD COLUMN active INTEGER NOT NULL DEFAULT 1")
+    if "size_bytes" not in columns:
+        conn.execute("ALTER TABLE media_items ADD COLUMN size_bytes INTEGER")
     conn.execute("UPDATE media_items SET active=0 WHERE exists_flag=0")
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_media_items_active_episode "
         "ON media_items(active, item_type, parent_path, season, episode)"
     )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_media_items_size ON media_items(size_bytes)")
+
+
+def _ensure_media_streams_schema(conn: sqlite3.Connection) -> None:
+    columns = _table_columns(conn, "media_streams") if "media_streams" in _table_names(conn) else {}
+    additions = {
+        "profile": "TEXT",
+        "duration_s": "REAL",
+        "frame_count": "INTEGER",
+        "frame_rate": "TEXT",
+        "frame_rate_mode": "TEXT",
+        "color_space": "TEXT",
+        "color_transfer": "TEXT",
+        "color_primaries": "TEXT",
+    }
+    for name, sql_type in additions.items():
+        if name not in columns:
+            conn.execute(f"ALTER TABLE media_streams ADD COLUMN {name} {sql_type}")
 
 
 def backup_database(db_path: str | Path, reason: str = "backup") -> Path | None:

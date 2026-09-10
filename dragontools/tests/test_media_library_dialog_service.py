@@ -142,9 +142,13 @@ def test_presenter_search_row_keeps_dv_hdr_priority():
         "has_dolby_vision": 1,
         "has_hdr10plus": 1,
         "is_hdr": 1,
+        "size_bytes": 2 * 1024 * 1024 * 1024,
+        "duration_s": 3661,
         "path": r"D:\TV\American Dad.mkv",
     }
     values = MediaLibraryDialogPresenter.search_row_values(row, "all")
     assert values[6] == "hevc (DV, HDR10+)"
     assert values[7] == "1920x1080"
+    assert values[10] == "1:01:01"
+    assert values[11] == "2.00 GiB"
     assert values[3:6] == [22, 10, 2026]

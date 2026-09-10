@@ -75,6 +75,17 @@ def _insert_item(conn: sqlite3.Connection, item: dict[str, Any], streams: list[d
     conn.execute("DELETE FROM media_streams WHERE media_id=?", (media_id,))
     for stream in streams:
         stream_row = dict(stream)
+        for key, value in {
+            "profile": None,
+            "duration_s": None,
+            "frame_count": None,
+            "frame_rate": None,
+            "frame_rate_mode": None,
+            "color_space": None,
+            "color_transfer": None,
+            "color_primaries": None,
+        }.items():
+            stream_row.setdefault(key, value)
         stream_row["stream_type"] = _normalize_stream_type(
             stream_row.get("stream_type"),
             codec=stream_row.get("codec"),
@@ -87,11 +98,13 @@ def _insert_item(conn: sqlite3.Connection, item: dict[str, Any], streams: list[d
             INSERT INTO media_streams(
                 media_id, stream_type, stream_index, codec, language, forced, channels,
                 channel_layout, bitrate, width, height, hdr_format, dv_profile, pix_fmt,
-                bit_depth, title
+                bit_depth, profile, duration_s, frame_count, frame_rate, frame_rate_mode,
+                color_space, color_transfer, color_primaries, title
             )
             VALUES(:media_id, :stream_type, :stream_index, :codec, :language, :forced, :channels,
                 :channel_layout, :bitrate, :width, :height, :hdr_format, :dv_profile,
-                :pix_fmt, :bit_depth, :title)
+                :pix_fmt, :bit_depth, :profile, :duration_s, :frame_count, :frame_rate,
+                :frame_rate_mode, :color_space, :color_transfer, :color_primaries, :title)
             """,
             {"media_id": media_id, **stream_row},
         )
@@ -110,13 +123,21 @@ def _streams_from_media_info(info: MediaInfo) -> list[dict[str, Any]]:
                 "forced": 0,
                 "channels": None,
                 "channel_layout": None,
-                "bitrate": getattr(stream, "bitrate", None),
+                "bitrate": stream.bitrate,
                 "width": stream.width,
                 "height": stream.height,
                 "hdr_format": stream.hdr_format,
                 "dv_profile": info.dolby_vision_profile,
                 "pix_fmt": stream.pix_fmt,
                 "bit_depth": stream.bit_depth,
+                "profile": stream.profile,
+                "duration_s": stream.duration_s,
+                "frame_count": stream.frame_count,
+                "frame_rate": stream.frame_rate,
+                "frame_rate_mode": stream.frame_rate_mode,
+                "color_space": stream.color_space,
+                "color_transfer": stream.color_transfer,
+                "color_primaries": stream.color_primaries,
                 "title": None,
             }
         )
@@ -137,6 +158,14 @@ def _streams_from_media_info(info: MediaInfo) -> list[dict[str, Any]]:
                 "dv_profile": None,
                 "pix_fmt": None,
                 "bit_depth": None,
+                "profile": None,
+                "duration_s": None,
+                "frame_count": None,
+                "frame_rate": None,
+                "frame_rate_mode": None,
+                "color_space": None,
+                "color_transfer": None,
+                "color_primaries": None,
                 "title": stream.title,
             }
         )
@@ -157,6 +186,14 @@ def _streams_from_media_info(info: MediaInfo) -> list[dict[str, Any]]:
                 "dv_profile": None,
                 "pix_fmt": None,
                 "bit_depth": None,
+                "profile": None,
+                "duration_s": stream.duration_s,
+                "frame_count": None,
+                "frame_rate": None,
+                "frame_rate_mode": None,
+                "color_space": None,
+                "color_transfer": None,
+                "color_primaries": None,
                 "title": stream.title,
             }
         )
@@ -186,6 +223,10 @@ def _item_from_media_info(path: str | Path, info: MediaInfo, source: str = "drag
             exc_info=True,
         )
     video = info.video_streams[0] if info.video_streams else None
+    try:
+        size_bytes = int(file_path.stat().st_size)
+    except OSError:
+        size_bytes = _int_or_none(getattr(info, "size_bytes", None))
     return {
         "item_type": item_type,
         "title": title,
@@ -202,12 +243,12 @@ def _item_from_media_info(path: str | Path, info: MediaInfo, source: str = "drag
         "normalized_title": _normalize_title(series_title or title),
         "container": file_path.suffix.lstrip(".").lower(),
         "duration_s": info.duration_s,
-        "size_bytes": info.size_bytes,
+        "size_bytes": size_bytes,
         "width": video.width if video else None,
         "height": video.height if video else None,
         "video_codec": video.codec if video else None,
-        "video_bitrate": getattr(video, "bitrate", None) if video else None,
-        "overall_bitrate": None,
+        "video_bitrate": video.bitrate if video else None,
+        "overall_bitrate": _average_bitrate(size_bytes, info.duration_s),
         "is_hdr": 1 if info.is_hdr else 0,
         "has_hdr10plus": 1 if info.has_hdr10plus else 0,
         "has_dolby_vision": 1 if info.dolby_vision else 0,
@@ -218,6 +259,17 @@ def _item_from_media_info(path: str | Path, info: MediaInfo, source: str = "drag
         "exists_flag": 1,
         "active": 1,
     }
+
+
+def _average_bitrate(size_bytes: int | None, duration_s: float | None) -> int | None:
+    try:
+        size = int(size_bytes or 0)
+        duration = float(duration_s or 0.0)
+    except (TypeError, ValueError):
+        return None
+    if size <= 0 or duration <= 0:
+        return None
+    return int(round((size * 8.0) / duration))
 
 
 def _fallback_item_from_path(path: str | Path, source: str = "storage_scan") -> dict[str, Any]:

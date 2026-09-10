@@ -11,6 +11,15 @@
 - Audio- und Untertitelsprachen, Codecs, Kanaele, Forced-Kennzeichnung und verfuegbare Bitraten werden aus MediaStreamInfos uebernommen.
 - Dolby Vision wird ueber RpuPresentFlag und DV-Profil erkannt; HDR10+, HDR und SDR werden aus den aktuellen Jellyfin-Feldern belastbar eingeordnet.
 - Gleichwertige Windows-/UNC-Pfade werden beim Neuaufbau dedupliziert. Eine fehlerhafte Jellyfin-Kopie ersetzt die vorhandene DragonTools-Mediathek nicht.
+- Die DragonTools-Mediathek verwendet jetzt Schema 4 und speichert zusätzlich Dateigröße, Video-Profil, Streamdauer, Frameanzahl, Bildrate/-modus, Pixelformat, Bittiefe sowie Farbraum, Transferfunktion und Farbprimärwerte.
+- Lokaler Scan und Move-Fortschreibung tragen die Dateigröße ein; der Jellyfin-Import nutzt dessen Größenwert und greift nur bei fehlender Angabe auf die Datei zurück.
+- Eine offensichtlich defekte eingebettete Video-Bitrate wird aus Videostreamgröße und Laufzeit belastbar neu berechnet.
+- Die Mediathek-Suche kann unbekannte Laufzeiten, Videos unter einer Minute und Videos über fünf Stunden filtern; Übersicht und CSV enthalten die erweiterten technischen Felder.
+- Die Timestamp-Reparatur arbeitet jetzt durchgehend fail-closed: Eine fehlgeschlagene Laufzeit-, Vertrags- oder Streamprüfung verhindert Ersetzen, Postprocessing und Verschieben.
+- FFprobe und MediaInfo vergleichen Video-, Audio- und Untertitelanzahl unabhängig; widersprüchliche Angaben oder mögliche Streamverluste verwerfen den Kandidaten.
+- Der FFmpeg-EINVAL-Rückgabecode -22 beziehungsweise 4294967274 wird ausschließlich beim +genpts-Fallback toleriert und nur nach einem vollständigen Lesetest bis zum Dateiende.
+- Ist der setts-Bitstreamfilter nicht verfügbar oder scheitert dessen Kandidat, kann DragonTools direkt den verlustfreien +genpts-Fallback verwenden; temporäre Fehldateien werden zuverlässig entfernt.
+- Gezielte Abnahme der Timestamp- und Datenbanklogik: 73 Tests bestanden. Gesamtlauf: 1.138 bestanden, 3 gezielt übersprungen; zwei bereits vorhandene, themenfremde Prüfprobleme bleiben separat dokumentiert.
 
 [09.09.2026] V9.8.1 - GitHub-Updatepruefung und oeffentliche Bereitstellung
 - DragonTools prueft nach dem Programmstart verzoegert und ohne Blockierung der Oberflaeche das neueste stabile Release im oeffentlichen GitHub-Release-Repository.

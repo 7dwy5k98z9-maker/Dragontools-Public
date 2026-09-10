@@ -232,6 +232,15 @@ def _fake_media_info(path: str, _tools=None, **_kwargs) -> MediaInfo:
                 has_hdr10plus=is_hdrplus,
                 bit_depth=10,
                 pix_fmt="yuv420p10le",
+                profile="Main 10",
+                duration_s=1420.0,
+                frame_count=34046,
+                frame_rate="24000/1001",
+                frame_rate_mode="CFR",
+                color_space="bt2020nc",
+                color_transfer="smpte2084",
+                color_primaries="bt2020",
+                bitrate=2_500_000,
             )
         ],
         duration_s=1420.0,
@@ -240,6 +249,29 @@ def _fake_media_info(path: str, _tools=None, **_kwargs) -> MediaInfo:
         has_hdr10plus=is_hdrplus,
         analysis_source="Test",
     )
+
+
+def test_video_bitrate_uses_stream_size_when_embedded_bps_tag_is_broken() -> None:
+    from dragontools.core.media_analyzer_streams import _build_video_streams
+
+    streams = _build_video_streams(
+        [
+            {
+                "Format": "HEVC",
+                "Width": "1920",
+                "Height": "1080",
+                "Duration": "1441.023",
+                "BitRate": "651",
+                "StreamSize": "350099251",
+            }
+        ],
+        [{}],
+        {},
+        [],
+    )
+
+    assert len(streams) == 1
+    assert streams[0].bitrate == round((350_099_251 * 8) / 1441.023)
 
 
 def test_path_mapping_translates_jellyfin_prefix(tmp_path: Path) -> None:
@@ -1586,3 +1618,197 @@ def test_jellyfin_snapshot_failure_keeps_existing_target_unchanged(tmp_path: Pat
     with _db_connection(target_db) as conn:
         row = conn.execute("SELECT value FROM preserved_marker").fetchone()
     assert row == ("keep-me",)
+
+
+def test_database_schema_migrates_legacy_media_items_with_size_bytes(tmp_path: Path) -> None:
+    db_path = initialize_database(tmp_path / "legacy.sqlite3")
+    with _db_connection(db_path) as conn:
+        conn.execute("DROP INDEX IF EXISTS idx_media_items_size")
+        conn.execute("ALTER TABLE media_items DROP COLUMN size_bytes")
+        for column in (
+            "profile", "duration_s", "frame_count", "frame_rate", "frame_rate_mode",
+            "color_space", "color_transfer", "color_primaries",
+        ):
+            conn.execute(f"ALTER TABLE media_streams DROP COLUMN {column}")
+        conn.execute("UPDATE meta SET value='2' WHERE key='schema_version'")
+
+    initialize_database(db_path)
+
+    with _db_connection(db_path) as conn:
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(media_items)")}
+        stream_columns = {row[1] for row in conn.execute("PRAGMA table_info(media_streams)")}
+        schema = conn.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()[0]
+        index_names = {row[1] for row in conn.execute("PRAGMA index_list(media_items)")}
+    assert "size_bytes" in columns
+    assert "idx_media_items_size" in index_names
+    assert {
+        "profile", "duration_s", "frame_count", "frame_rate", "frame_rate_mode",
+        "color_space", "color_transfer", "color_primaries",
+    } <= stream_columns
+    assert schema == "4"
+
+
+def test_storage_scan_records_real_file_size_and_size_filter(tmp_path: Path) -> None:
+    db_path = tmp_path / "dragontools.sqlite3"
+    root = tmp_path / "Filme"
+    small = root / "Klein (2026).mkv"
+    large = root / "Gross (2026).mkv"
+    root.mkdir(parents=True)
+    small.write_bytes(b"x" * 1234)
+    # Sparse Datei: schnell, aber echte stat()-Groesse > 1 GiB.
+    with large.open("wb") as fh:
+        fh.seek((1024 ** 3) + 4095)
+        fh.write(b"x")
+
+    scan_storage_paths_to_database(
+        db_path,
+        [PathMapping("Filme", "/Filme", str(root))],
+        analyzer=_fake_media_info,
+    )
+
+    rows = search_library(db_path, "all", media_type="videos")
+    sizes = {row["filename"]: row["size_bytes"] for row in rows}
+    assert sizes[small.name] == small.stat().st_size
+    assert sizes[large.name] == large.stat().st_size
+
+    with _db_connection(db_path) as conn:
+        video = conn.execute(
+            """
+            SELECT bitrate, profile, duration_s, frame_count, frame_rate, frame_rate_mode,
+                   color_space, color_transfer, color_primaries
+            FROM media_streams
+            WHERE stream_type='Video'
+            ORDER BY id
+            LIMIT 1
+            """
+        ).fetchone()
+        item = conn.execute(
+            "SELECT overall_bitrate FROM media_items WHERE filename=?", (small.name,)
+        ).fetchone()
+    assert video == (
+        2_500_000, "Main 10", 1420.0, 34046, "24000/1001", "CFR",
+        "bt2020nc", "smpte2084", "bt2020",
+    )
+    assert item[0] == round((small.stat().st_size * 8) / 1420.0)
+
+    one_to_two = search_library(db_path, "size_1_2gb", media_type="videos")
+    assert [row["filename"] for row in one_to_two] == [large.name]
+
+
+def test_jellyfin_import_exposes_file_size_from_jellyfin_database(tmp_path: Path) -> None:
+    jellyfin_db = tmp_path / "jellyfin.db"
+    target_db = tmp_path / "dragontools.sqlite3"
+    with _db_connection(jellyfin_db) as conn:
+        conn.execute(
+            """
+            CREATE TABLE BaseItems (
+                Id TEXT PRIMARY KEY, Type TEXT, Name TEXT, Path TEXT,
+                ProductionYear INTEGER, Size INTEGER
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO BaseItems VALUES (
+                'movie-size',
+                'MediaBrowser.Controller.Entities.Movies.Movie',
+                'Size Film',
+                '/Filme/Size Film (2026)/Size Film (2026).mkv',
+                2026,
+                2345678901
+            )
+            """
+        )
+
+    import_jellyfin_database(
+        jellyfin_db,
+        target_db,
+        [PathMapping("Filme", "/Filme", str(tmp_path / "video" / "Filme"))],
+    )
+    rows = search_library(target_db, "all", media_type="movies")
+    assert len(rows) == 1
+    assert rows[0]["size_bytes"] == 2_345_678_901
+
+
+def test_jellyfin_duration_seconds_is_not_mistaken_for_ticks(tmp_path: Path) -> None:
+    jellyfin_db = tmp_path / "jellyfin-seconds.db"
+    target_db = tmp_path / "dragontools.sqlite3"
+    with _db_connection(jellyfin_db) as conn:
+        conn.execute(
+            """
+            CREATE TABLE BaseItems (
+                Id TEXT PRIMARY KEY, Type TEXT, Name TEXT, Path TEXT,
+                DurationSeconds REAL
+            )
+            """
+        )
+        conn.execute(
+            "INSERT INTO BaseItems VALUES (?, ?, ?, ?, ?)",
+            (
+                "long-movie",
+                "MediaBrowser.Controller.Entities.Movies.Movie",
+                "Long Movie",
+                "/Filme/Long Movie.mkv",
+                20_001.5,
+            ),
+        )
+
+    import_jellyfin_database(jellyfin_db, target_db)
+    rows = search_library(target_db, "duration_over_5h", media_type="movies")
+    assert len(rows) == 1
+    assert rows[0]["duration_s"] == 20_001.5
+
+
+def test_jellyfin_import_keeps_direct_video_stream_properties(tmp_path: Path) -> None:
+    jellyfin_db = tmp_path / "jellyfin-stream-details.db"
+    target_db = tmp_path / "dragontools.sqlite3"
+    with _db_connection(jellyfin_db) as conn:
+        conn.execute(
+            """
+            CREATE TABLE BaseItems (
+                Id TEXT PRIMARY KEY, Type TEXT, Name TEXT, Path TEXT, RunTimeTicks INTEGER
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE MediaStreamInfos (
+                ItemId TEXT, StreamIndex INTEGER, StreamType INTEGER, Codec TEXT,
+                AverageFrameRate REAL, RealFrameRate REAL, Profile TEXT,
+                PixelFormat TEXT, BitDepth INTEGER, ColorSpace TEXT,
+                ColorTransfer TEXT, ColorPrimaries TEXT, Width INTEGER, Height INTEGER,
+                BitRate INTEGER
+            )
+            """
+        )
+        conn.execute(
+            "INSERT INTO BaseItems VALUES (?, ?, ?, ?, ?)",
+            (
+                "movie-details",
+                "MediaBrowser.Controller.Entities.Movies.Movie",
+                "Details",
+                "/Filme/Details.mkv",
+                14_410_230_000,
+            ),
+        )
+        conn.execute(
+            "INSERT INTO MediaStreamInfos VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                "movie-details", 0, 1, "hevc", 23.976, 23.976, "Main 10",
+                "yuv420p10le", 10, "bt2020nc", "smpte2084", "bt2020",
+                3840, 2160, 8_000_000,
+            ),
+        )
+
+    import_jellyfin_database(jellyfin_db, target_db)
+    rows = search_library(target_db, "all", media_type="movies")
+    assert len(rows) == 1
+    assert rows[0]["duration_s"] == pytest.approx(1441.023)
+    assert rows[0]["video_profile"] == "Main 10"
+    assert rows[0]["frame_rate"] == "23.976"
+    assert rows[0]["frame_rate_mode"] == "CFR"
+    assert rows[0]["pix_fmt"] == "yuv420p10le"
+    assert rows[0]["bit_depth"] == 10
+    assert rows[0]["color_space"] == "bt2020nc"
+    assert rows[0]["color_transfer"] == "smpte2084"
+    assert rows[0]["color_primaries"] == "bt2020"

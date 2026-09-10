@@ -17,17 +17,19 @@ def validate_timestamp_repair(
     verify_result: WorkflowVerifyResult,
     expected_duration_ms: int | None,
     source_has_audio: bool,
+    stream_count_overrides: set[str] | None = None,
 ) -> tuple[bool, list[str]]:
     """Validate that a timestamp rebuild preserved streams and sane timing."""
     messages: list[str] = []
+    overrides = set(stream_count_overrides or ())
     if not verify_result.ok:
         messages.extend(list(verify_result.messages or ["Output-Validierung fehlgeschlagen."]))
 
-    if repaired.video_stream_count != before.video_stream_count:
+    if "video" not in overrides and repaired.video_stream_count != before.video_stream_count:
         messages.append("Videostream-Anzahl hat sich geändert.")
-    if repaired.audio_stream_count != before.audio_stream_count:
+    if "audio" not in overrides and repaired.audio_stream_count != before.audio_stream_count:
         messages.append("Audiospur-Anzahl hat sich geändert.")
-    if repaired.subtitle_stream_count != before.subtitle_stream_count:
+    if "subtitle" not in overrides and repaired.subtitle_stream_count != before.subtitle_stream_count:
         messages.append("Untertitelspur-Anzahl hat sich geändert.")
     if repaired.attachment_stream_count < before.attachment_stream_count:
         messages.append("Attachments oder Metadaten-Streams gingen verloren.")

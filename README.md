@@ -103,11 +103,19 @@ python -m pytest -m "not dv_hdr_integration"
 
 Die echten Dolby-Vision-/HDR10+-Integrationstests benötigen zusätzlich `dovi_tool`, `hdr10plus_tool` und MP4Box sowie geeignete Testmedien.
 
+## Sichere Timestamp-Reparatur
+
+Bei einer unplausiblen Ausgabelaufzeit versucht DragonTools zuerst einen verlustfreien Container-Remux. Für eindeutig erkannte MKV-Timestampfehler folgt eine Reparatur mit dem FFmpeg-`setts`-Bitstreamfilter; steht dieser Filter nicht zur Verfügung oder scheitert der Versuch, kann DragonTools auf einen ebenfalls verlustfreien `+genpts`-Remux ausweichen.
+
+Jeder Reparaturkandidat wird vor dem Ersetzen erneut auf Laufzeit, Lesbarkeit, Video-, Audio- und Untertitelspuren sowie Attachments geprüft. FFprobe und MediaInfo dienen dabei als voneinander unabhängige Gegenprüfung. Ein Werkzeugfehler, ein Streamverlust oder widersprüchliche Ergebnisse verwerfen den Kandidaten. Die Quelldatei wird in diesem Fall weder ersetzt noch anschließend verschoben.
+
 ## Jellyfin-Mediathek importieren
 
-DragonTools liest aktuelle Jellyfin-Datenbanken mit `BaseItems` und `MediaStreamInfos` ausschließlich als Quelle und erzeugt daraus eine eigene funktionale SQLite-Mediathek. Übernommen werden Filme, Serien, Staffeln, vorhandene Episoden und sonstige Videodateien einschließlich Pfad, Laufzeit, Container, Auflösung, Video- und Gesamtbitrate, Video-Codec, HDR/SDR, HDR10+, Dolby Vision sowie Audio- und Untertitelsprachen, Codecs und Bitraten. Personen, Studios, Genres, Playlists, Sammlungen und reine Metadatenpfade werden nicht importiert.
+DragonTools liest aktuelle Jellyfin-Datenbanken mit `BaseItems` und `MediaStreamInfos` ausschließlich als Quelle und erzeugt daraus eine eigene funktionale SQLite-Mediathek. Übernommen werden Filme, Serien, Staffeln, vorhandene Episoden und sonstige Videodateien einschließlich Pfad, Dateigröße, Laufzeit, Container, Auflösung, Video- und Gesamtbitrate, Video-Codec, Profil, Pixelformat, Bittiefe, Bildrate, Bildratenmodus, Frameanzahl, Farbraum, Transferfunktion, Farbprimärwerte, HDR/SDR, HDR10+ und Dolby Vision. Für Audio und Untertitel werden unter anderem Sprache, Codec, Kanäle, Kanalbelegung, Bitrate, Forced-Status, Streamdauer und vorhandene Eventanzahlen gespeichert. Personen, Studios, Genres, Playlists, Sammlungen und reine Metadatenpfade werden nicht importiert.
 
 Vor dem Import wird ein konsistenter Read-only-Snapshot einschließlich vorhandener WAL-Daten erzeugt und mit SQLite geprüft. Eine beschädigte oder unvollständig kopierte Jellyfin-Datenbank ersetzt die vorhandene DragonTools-Mediathek nicht. Gleichwertige Windows-/UNC-Pfade werden beim Neuaufbau nur einmal übernommen.
+
+Neue und bestehende DragonTools-Mediatheken werden kompatibel auf Schema 4 gebracht. Die Mediathek-Suche kann unter anderem Dateien ohne Laufzeit sowie auffällig kurze oder über fünf Stunden lange Videos anzeigen. CSV-Exporte enthalten dieselben erweiterten technischen Videofelder.
 
 ## Windows-Anwendung bauen
 
@@ -137,7 +145,7 @@ DragonTools prüft nach dem Programmstart verzögert und ohne Blockierung der Ob
 
 Bei einer neueren Version zeigt DragonTools die Versionsnummer und die Release-Hinweise an. Erst nach Zustimmung wird die GitHub-Downloadseite im Browser geöffnet. Es werden weder Dateien automatisch ersetzt noch Updates ohne Nachfrage installiert.
 
-Solange noch keine öffentliche Releasequelle vorhanden ist, bleibt die automatische Prüfung still. Die private Quellcode-Historie und persönliche Zugangsdaten werden für die Updateprüfung nicht benötigt und nicht übertragen.
+Ist GitHub nicht erreichbar oder liefert die Releasequelle keine gültige Version, bleibt die automatische Prüfung still. Die private Quellcode-Historie und persönliche Zugangsdaten werden dafür weder benötigt noch übertragen. Ein ausgetauschtes Paket mit derselben Versionsnummer wird nicht als neueres Update erkannt; dafür ist eine höhere Versionsnummer erforderlich.
 
 Die fertigen Programmpakete werden künftig ausschließlich als [GitHub Releases](https://github.com/7dwy5k98z9-maker/Dragontools-Releases/releases) bereitgestellt. Der Quellcode und die Downloads bleiben dadurch sauber voneinander getrennt.
 

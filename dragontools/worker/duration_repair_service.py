@@ -254,7 +254,8 @@ class DurationRepairService:
         archived = self._archive_output(out, base_dir)
         if archived:
             messages.append(f"Fehlerhafte Ausgabedatei wurde archiviert: {archived}")
-        final_result.messages = messages
+
+        self._mark_failed_result(final_result, messages)
         return DurationRepairOutcome(
             attempted=True,
             repaired=False,
@@ -271,6 +272,18 @@ class DurationRepairService:
             keep_failed_output=True,
             message="Laufzeit blieb auch nach automatischer Reparatur unplausibel.",
         )
+
+    @staticmethod
+    def _mark_failed_result(final_result, messages: list[str]) -> None:
+        """Haelt einen verworfenen Reparaturpfad fuer alle Aufrufer fail-closed."""
+        final_result.duration_ok = False
+        reject_message = (
+            "Automatische Reparatur endgueltig verworfen; die Datei darf nicht "
+            "als fertige Ausgabe uebernommen werden."
+        )
+        if reject_message not in messages:
+            messages.append(reject_message)
+        final_result.messages = messages
 
     # --- Compatibility surface -------------------------------------------------
     # Existing tests/internal callers historically reached these methods on the

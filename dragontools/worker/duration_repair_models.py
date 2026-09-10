@@ -65,6 +65,9 @@ class TimestampRepairResult:
     reason: str = ""
     command: list[str] | None = None
     timing_summary: list[str] | None = None
+    retry_recommended: bool = False
+    tool_returncode: int | None = None
+    method: str = ""
 
 
 @dataclass

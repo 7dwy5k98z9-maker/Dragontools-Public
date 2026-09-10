@@ -77,6 +77,23 @@ def _build_video_streams(
             mi_v.get("FrameRate_Mode"),
             mi_v.get("FrameRate_Mode/String"),
         )
+        reported_bitrate = (
+            _safe_int(fp_v.get("bit_rate"), 0)
+            or (_mi_bitrate(mi_v) or 0)
+            or None
+        )
+        stream_size = _safe_int(mi_v.get("StreamSize"), 0)
+        derived_bitrate = (
+            int(round((stream_size * 8.0) / duration_s))
+            if stream_size and stream_size > 0 and duration_s and duration_s > 0
+            else None
+        )
+        # Manche MKV-Dateien enthalten einen defekten BPS-Tag, den MediaInfo als
+        # winzigen Videowert (z. B. 651 Bit/s) übernimmt. Streamgröße/Dauer ist
+        # für die durchschnittliche Bitrate in diesem Fall deutlich belastbarer.
+        bitrate = reported_bitrate
+        if derived_bitrate and (not bitrate or bitrate < 10_000):
+            bitrate = derived_bitrate
 
         # HDR-Erkennung: nur strukturierte Track-Felder
         mi_is_hdr, mi_has_hdr10plus, mi_dv_profile = detect_hdr_from_mediainfo_track(mi_v)
@@ -141,6 +158,7 @@ def _build_video_streams(
             frame_count=frame_count,
             frame_rate=frame_rate,
             frame_rate_mode=frame_rate_mode,
+            bitrate=bitrate,
         ))
     return video_streams
 

@@ -6,12 +6,16 @@ from pathlib import Path
 from uuid import uuid4
 
 from ..core.process_runner import tool_available
-from .duration_repair_commands import build_timestamp_repair_command, command_arg_after
+from .duration_repair_commands import (
+    build_genpts_repair_command,
+    build_timestamp_repair_command,
+    command_arg_after,
+)
 from .duration_repair_models import MediaTimingInfo, TimestampRepairResult, detect_timestamp_problem
 from .duration_repair_runtime import DurationRepairRuntime
-from .duration_repair_validation import validate_timestamp_repair
+from .duration_repair_stream_guard import RepairStreamGuard, StreamInventory
+from .duration_timestamp_candidate_service import TimestampCandidateService
 from .duration_timing_analyzer import MediaTimingAnalyzer, _fps_label
-from .tool_runner import log_tool_failure
 from .workflow_engine import WorkflowVerifyResult
 
 
@@ -22,6 +26,13 @@ class TimestampRepairService:
         self._runtime = runtime
         self._timing_analyzer = timing_analyzer
         self._setts_supported: bool | None = None
+        self._stream_guard = RepairStreamGuard(
+            timing_analyzer=timing_analyzer,
+            ffprobe_path=runtime.ffprobe_path,
+            mediainfo_path=runtime.mediainfo_path,
+            log=runtime.log,
+        )
+        self._candidate_service = TimestampCandidateService(runtime, timing_analyzer, self._stream_guard)
 
     def try_repair(
         self,
@@ -59,27 +70,20 @@ class TimestampRepairService:
         self._runtime.log("⚠️ Extreme Abweichung im Videostream erkannt.", "warn")
         self._runtime.log("ℹ️ Starte verlustfreie Timestamp-Reparatur.", "info")
         if before.frame_rate is not None:
-            self._runtime.log(
-                f"   Videotimeline wird mit {_fps_label(before.frame_rate)} fps rekonstruiert.",
-                "info",
-            )
+            self._runtime.log(f"   Rekonstruktionsrate: {_fps_label(before.frame_rate)} fps", "info")
 
         container_name = str(container or "").strip().lower().lstrip(".")
-        if container_name == "mp4":
-            if not tool_available(self._runtime.mp4box_path):
-                reason = "MP4Box wurde nicht gefunden - MP4-Timestamp-Reparatur nicht möglich."
-                self._runtime.log(f"❌ {reason}", "error")
-                return TimestampRepairResult(verify_result=reference_result, reason=reason, timing_summary=summary)
-        else:
-            if not tool_available(self._runtime.ffmpeg_path):
-                reason = "ffmpeg wurde nicht gefunden - Timestamp-Reparatur nicht möglich."
-                self._runtime.log(f"❌ {reason}", "error")
-                return TimestampRepairResult(verify_result=reference_result, reason=reason, timing_summary=summary)
-            if not self.ffmpeg_supports_setts():
-                reason = "Die gefundene FFmpeg-Version unterstützt den setts-Bitstreamfilter nicht."
-                self._runtime.log(f"❌ {reason}", "error")
-                return TimestampRepairResult(verify_result=reference_result, reason=reason, timing_summary=summary)
+        availability_error = self._tool_availability_error(container_name)
+        if availability_error:
+            self._runtime.log(f"❌ {availability_error}", "error")
+            return TimestampRepairResult(
+                verify_result=reference_result,
+                reason=availability_error,
+                timing_summary=summary,
+            )
 
+        before_ffprobe, before_mediainfo = self._stream_guard.inspect_pair(str(out))
+        self._log_reference_inventories(before_ffprobe, before_mediainfo)
         return self.repair_video_timestamps(
             out=out,
             container=container,
@@ -90,6 +94,8 @@ class TimestampRepairService:
             expected_contract=expected_contract,
             verified_hdr10plus=verified_hdr10plus,
             verified_dolby_vision=verified_dolby_vision,
+            before_ffprobe=before_ffprobe,
+            before_mediainfo=before_mediainfo,
         )
 
     def get_media_timing_info(self, path: str, *, expected_duration_s: float | None = None) -> MediaTimingInfo:
@@ -107,130 +113,113 @@ class TimestampRepairService:
         expected_contract=None,
         verified_hdr10plus: bool = False,
         verified_dolby_vision: bool = False,
+        before_ffprobe: StreamInventory | None = None,
+        before_mediainfo: StreamInventory | None = None,
     ) -> TimestampRepairResult:
         if before.frame_rate is None:
             return TimestampRepairResult(reason="Framerate fehlt.", timing_summary=timing_summary)
+        if before_ffprobe is None or before_mediainfo is None:
+            before_ffprobe, before_mediainfo = self._stream_guard.inspect_pair(str(out))
 
-        tmp = out.with_name(f"{out.stem}.timestamp_fix_{uuid4().hex}{out.suffix}")
-        command = self.build_timestamp_repair_command(out, tmp, before.frame_rate, container=container)
         container_name = str(container or "").strip().lower().lstrip(".")
+        primary_is_genpts = False
+        primary_tmp = out.with_name(f"{out.stem}.timestamp_fix_{uuid4().hex}{out.suffix}")
         if container_name == "mp4":
-            self._runtime.log(f"   MP4Box CFR-Neuaufbau: {_fps_label(before.frame_rate)} fps", "info")
-        else:
-            self._runtime.log("   FFmpeg setts: " + command_arg_after(command, "-bsf:v:0"), "info")
-        try:
-            label = "MP4Box-Timestamp-Reparatur" if container_name == "mp4" else "FFmpeg-Timestamp-Reparatur"
-            run = self._runtime.run_tool(command, label=label)
-            if run.returncode != 0:
-                tool_name = "MP4Box" if container_name == "mp4" else "ffmpeg"
-                stderr = (run.stderr or run.stdout or f"{tool_name} fehlgeschlagen.").strip()
-                log_tool_failure(run, label=label, log=self._runtime.log, tool_name=tool_name)
-                if stderr:
-                    self._runtime.log(
-                        f"❌ {tool_name}-Timestamp-Reparatur fehlgeschlagen: {stderr.splitlines()[-1]}",
-                        "error",
-                    )
-                self._runtime.safe_unlink(tmp)
-                return TimestampRepairResult(
-                    attempted=True,
-                    verify_result=None,
-                    reason=(
-                        "MP4Box-Timestamp-Reparatur fehlgeschlagen."
-                        if container_name == "mp4"
-                        else "FFmpeg-Timestamp-Reparatur fehlgeschlagen."
-                    ),
-                    command=command,
-                    timing_summary=timing_summary,
-                )
-            if not tmp.exists() or tmp.stat().st_size < max(1024, int(out.stat().st_size * 0.25)):
-                self._runtime.safe_unlink(tmp)
-                return TimestampRepairResult(
-                    attempted=True,
-                    reason="Timestamp-Reparatur erzeugte keine plausible Ausgabedatei.",
-                    command=command,
-                    timing_summary=timing_summary,
-                )
-
-            repaired_info = self.get_media_timing_info(str(tmp))
-            verify_kwargs = {
-                "expected_duration_ms": expected_duration_ms,
-                "source_has_audio": source_has_audio,
-            }
-            if expected_contract is not None:
-                verify_kwargs["expected_contract"] = expected_contract
-            if verified_hdr10plus:
-                verify_kwargs["verified_hdr10plus"] = True
-            if verified_dolby_vision:
-                verify_kwargs["verified_dolby_vision"] = True
-            verify_result = self._runtime.output_verifier.verify(str(tmp), container, **verify_kwargs)
-            ok, validation_messages = validate_timestamp_repair(
-                before=before,
-                repaired=repaired_info,
-                verify_result=verify_result,
-                expected_duration_ms=expected_duration_ms,
-                source_has_audio=source_has_audio,
+            primary_command = self.build_timestamp_repair_command(
+                out, primary_tmp, before.frame_rate, container=container
             )
-            if not ok:
-                for message in validation_messages:
-                    self._runtime.log(f"❌ Timestamp-Reparatur verworfen: {message}", "error")
-                messages = list(verify_result.messages or [])
-                messages.extend(validation_messages)
-                verify_result.messages = messages
-                duration_s = repaired_info.container_duration_s or verify_result.duration_s
-                self._runtime.safe_unlink(tmp)
-                return TimestampRepairResult(
-                    attempted=True,
-                    verify_result=verify_result,
-                    duration_s=duration_s,
-                    reason="Timestamp-Reparatur wurde nach Validierung verworfen.",
-                    command=command,
-                    timing_summary=timing_summary,
-                )
-
-            self._runtime.replace_file(tmp, out)
-            duration_s = repaired_info.container_duration_s or verify_result.duration_s
-            self._runtime.log("✅ Timestamp-Reparatur erfolgreich.", "info")
+            self._runtime.log(f"   MP4Box CFR-Neuaufbau: {_fps_label(before.frame_rate)} fps", "info")
+            primary_label = "MP4Box-Timestamp-Reparatur"
+            primary_method = "MP4Box CFR-Neuaufbau"
+        elif self.ffmpeg_supports_setts():
+            primary_command = self.build_timestamp_repair_command(
+                out, primary_tmp, before.frame_rate, container=container
+            )
+            self._runtime.log("   FFmpeg setts: " + command_arg_after(primary_command, "-bsf:v:0"), "info")
+            primary_label = "FFmpeg-setts-Timestamp-Reparatur"
+            primary_method = "FFmpeg setts"
+        else:
+            primary_is_genpts = True
+            primary_tmp = out.with_name(f"{out.stem}.timestamp_genpts_{uuid4().hex}{out.suffix}")
+            primary_command = build_genpts_repair_command(
+                out, primary_tmp, ffmpeg_path=self._runtime.ffmpeg_path
+            )
             self._runtime.log(
-                f"   Reparierte Videodauer: {_fmt_duration(repaired_info.video_duration_s)} | "
-                f"Audiodauer: {_fmt_duration(repaired_info.audio_duration_s)} | "
-                f"Container: {_fmt_duration(repaired_info.container_duration_s)}",
+                "ℹ️ FFmpeg-setts ist nicht verfügbar; starte direkt den verlustfreien +genpts-Fallback.",
                 "info",
             )
-            return TimestampRepairResult(
-                attempted=True,
-                repaired=True,
-                verify_result=verify_result,
-                duration_s=duration_s,
-                reason="Timestamp-Reparatur erfolgreich.",
-                command=command,
+            primary_label = "FFmpeg-+genpts-Timestamp-Reparatur"
+            primary_method = "FFmpeg +genpts"
+
+        fallback_tmp: Path | None = None
+        try:
+            result = self._attempt_candidate(
+                out=out,
+                tmp=primary_tmp,
+                command=primary_command,
+                label=primary_label,
+                method=primary_method,
+                container=container,
+                before=before,
+                before_ffprobe=before_ffprobe,
+                before_mediainfo=before_mediainfo,
+                expected_duration_ms=expected_duration_ms,
+                source_has_audio=source_has_audio,
                 timing_summary=timing_summary,
+                expected_contract=expected_contract,
+                verified_hdr10plus=verified_hdr10plus,
+                verified_dolby_vision=verified_dolby_vision,
             )
+            if (
+                result.repaired
+                or container_name != "mkv"
+                or primary_is_genpts
+                or not tool_available(self._runtime.ffmpeg_path)
+            ):
+                return result
+
+            self._runtime.log(
+                "ℹ️ Erste Timestamp-Reparatur wurde nicht akzeptiert. "
+                "Starte verlustfreien FFmpeg-+genpts-Fallback.",
+                "info",
+            )
+            fallback_tmp = out.with_name(f"{out.stem}.timestamp_genpts_{uuid4().hex}{out.suffix}")
+            fallback_command = build_genpts_repair_command(out, fallback_tmp, ffmpeg_path=self._runtime.ffmpeg_path)
+            fallback = self._attempt_candidate(
+                out=out,
+                tmp=fallback_tmp,
+                command=fallback_command,
+                label="FFmpeg-+genpts-Timestamp-Reparatur",
+                method="FFmpeg +genpts",
+                container=container,
+                before=before,
+                before_ffprobe=before_ffprobe,
+                before_mediainfo=before_mediainfo,
+                expected_duration_ms=expected_duration_ms,
+                source_has_audio=source_has_audio,
+                timing_summary=timing_summary,
+                expected_contract=expected_contract,
+                verified_hdr10plus=verified_hdr10plus,
+                verified_dolby_vision=verified_dolby_vision,
+            )
+            if not fallback.repaired and result.reason and result.reason not in fallback.reason:
+                fallback.reason = f"{fallback.reason} Vorheriger Versuch: {result.reason}"
+            return fallback
         except Exception as exc:
-            self._runtime.safe_unlink(tmp)
+            self._runtime.safe_unlink(primary_tmp)
+            if fallback_tmp is not None:
+                self._runtime.safe_unlink(fallback_tmp)
             self._runtime.log(f"❌ Timestamp-Reparatur fehlgeschlagen: {exc}", "error")
             return TimestampRepairResult(
                 attempted=True,
                 reason=f"Timestamp-Reparatur fehlgeschlagen: {exc}",
-                command=command,
+                command=primary_command,
                 timing_summary=timing_summary,
+                retry_recommended=False,
             )
 
-    def validate_timestamp_repair(
-        self,
-        *,
-        before: MediaTimingInfo,
-        repaired: MediaTimingInfo,
-        verify_result: WorkflowVerifyResult,
-        expected_duration_ms: int | None,
-        source_has_audio: bool,
-    ) -> tuple[bool, list[str]]:
-        return validate_timestamp_repair(
-            before=before,
-            repaired=repaired,
-            verify_result=verify_result,
-            expected_duration_ms=expected_duration_ms,
-            source_has_audio=source_has_audio,
-        )
+    def _attempt_candidate(self, **kwargs) -> TimestampRepairResult:
+        return self._candidate_service.attempt(**kwargs)
 
     def build_timestamp_repair_command(
         self,
@@ -280,6 +269,23 @@ class TimestampRepairService:
             self._setts_supported = False
             self._runtime.log(f"⚠️ FFmpeg-setts-Unterstützung konnte nicht geprüft werden: {exc}", "warn")
         return bool(self._setts_supported)
+
+    def _tool_availability_error(self, container_name: str) -> str:
+        if container_name == "mp4":
+            if not tool_available(self._runtime.mp4box_path):
+                return "MP4Box wurde nicht gefunden - MP4-Timestamp-Reparatur nicht möglich."
+            return ""
+        if not tool_available(self._runtime.ffmpeg_path):
+            return "ffmpeg wurde nicht gefunden - Timestamp-Reparatur nicht möglich."
+        return ""
+
+    def _log_reference_inventories(self, ffprobe: StreamInventory, mediainfo: StreamInventory) -> None:
+        def label(inv: StreamInventory) -> str:
+            if not inv.available:
+                return f"{inv.source}=nicht verfügbar"
+            return f"{inv.source}: V={inv.video}, A={inv.audio}, S={inv.subtitle}"
+
+        self._runtime.log(f"   Stream-Referenz: {label(ffprobe)} | {label(mediainfo)}", "info")
 
 
 def _fmt_duration(seconds: float | None) -> str:

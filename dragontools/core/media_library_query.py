@@ -277,6 +277,43 @@ def _append_preset_filter(
             where.append(f"NOT ({width} >= 1600 OR {height} >= 900) AND ({width} >= 1100 OR {height} >= 650)")
         else:
             where.append(f"({width} > 0 OR {height} > 0) AND {width} < 1100 AND {height} < 650")
+    elif preset_key in {
+        "size_under_1gb",
+        "size_1_2gb",
+        "size_2_5gb",
+        "size_5_10gb",
+        "size_10_20gb",
+        "size_over_20gb",
+        "size_unknown",
+    }:
+        gib = 1024 * 1024 * 1024
+        if preset_key == "size_unknown":
+            where.append("(mi.size_bytes IS NULL OR mi.size_bytes <= 0)")
+        elif preset_key == "size_under_1gb":
+            where.append("mi.size_bytes > 0 AND mi.size_bytes < ?")
+            params.append(gib)
+        elif preset_key == "size_1_2gb":
+            where.append("mi.size_bytes >= ? AND mi.size_bytes < ?")
+            params.extend((gib, 2 * gib))
+        elif preset_key == "size_2_5gb":
+            where.append("mi.size_bytes >= ? AND mi.size_bytes < ?")
+            params.extend((2 * gib, 5 * gib))
+        elif preset_key == "size_5_10gb":
+            where.append("mi.size_bytes >= ? AND mi.size_bytes < ?")
+            params.extend((5 * gib, 10 * gib))
+        elif preset_key == "size_10_20gb":
+            where.append("mi.size_bytes >= ? AND mi.size_bytes < ?")
+            params.extend((10 * gib, 20 * gib))
+        else:
+            where.append("mi.size_bytes >= ?")
+            params.append(20 * gib)
+    elif preset_key in {"duration_over_5h", "duration_under_1min", "duration_unknown"}:
+        if preset_key == "duration_over_5h":
+            where.append("mi.duration_s > 18000")
+        elif preset_key == "duration_under_1min":
+            where.append("mi.duration_s > 0 AND mi.duration_s < 60")
+        else:
+            where.append("(mi.duration_s IS NULL OR mi.duration_s <= 0)")
     elif preset_key in {"h264", "hevc", "av1", "video_codec_unknown"}:
         if preset_key == "h264":
             where.append(f"lower(coalesce({sql.video_codec_value}, '')) IN ('h264', 'avc', 'avc1')")
@@ -325,16 +362,36 @@ def _build_search_query(
     deviation_criterion: str,
     sql: _SearchSqlFragments,
 ) -> str:
+    video_type_v = _stream_type_condition("v", "video")
     query = f"""
         SELECT
             mi.item_type, mi.title, mi.series_title, mi.season, mi.episode, mi.year,
+            mi.container, mi.duration_s, mi.video_bitrate, mi.overall_bitrate,
             {sql.video_codec_value} AS video_codec,
             {sql.width_value} AS width,
             {sql.height_value} AS height,
             CASE WHEN (mi.is_hdr=1 OR {sql.hdr_stream_exists}) THEN 1 ELSE 0 END AS is_hdr,
             CASE WHEN (mi.has_hdr10plus=1 OR {sql.hdr10plus_stream_exists}) THEN 1 ELSE 0 END AS has_hdr10plus,
             CASE WHEN (mi.has_dolby_vision=1 OR {sql.dv_stream_exists}) THEN 1 ELSE 0 END AS has_dolby_vision,
-            mi.analysis_status, mi.path, mi.parent_path, mi.filename,
+            mi.size_bytes, mi.analysis_status, mi.path, mi.parent_path, mi.filename,
+            (SELECT v.profile FROM media_streams v WHERE v.media_id=mi.id AND {video_type_v}
+             ORDER BY coalesce(v.stream_index, 999999), v.id LIMIT 1) AS video_profile,
+            (SELECT v.pix_fmt FROM media_streams v WHERE v.media_id=mi.id AND {video_type_v}
+             ORDER BY coalesce(v.stream_index, 999999), v.id LIMIT 1) AS pix_fmt,
+            (SELECT v.bit_depth FROM media_streams v WHERE v.media_id=mi.id AND {video_type_v}
+             ORDER BY coalesce(v.stream_index, 999999), v.id LIMIT 1) AS bit_depth,
+            (SELECT v.frame_rate FROM media_streams v WHERE v.media_id=mi.id AND {video_type_v}
+             ORDER BY coalesce(v.stream_index, 999999), v.id LIMIT 1) AS frame_rate,
+            (SELECT v.frame_rate_mode FROM media_streams v WHERE v.media_id=mi.id AND {video_type_v}
+             ORDER BY coalesce(v.stream_index, 999999), v.id LIMIT 1) AS frame_rate_mode,
+            (SELECT v.frame_count FROM media_streams v WHERE v.media_id=mi.id AND {video_type_v}
+             ORDER BY coalesce(v.stream_index, 999999), v.id LIMIT 1) AS frame_count,
+            (SELECT v.color_space FROM media_streams v WHERE v.media_id=mi.id AND {video_type_v}
+             ORDER BY coalesce(v.stream_index, 999999), v.id LIMIT 1) AS color_space,
+            (SELECT v.color_transfer FROM media_streams v WHERE v.media_id=mi.id AND {video_type_v}
+             ORDER BY coalesce(v.stream_index, 999999), v.id LIMIT 1) AS color_transfer,
+            (SELECT v.color_primaries FROM media_streams v WHERE v.media_id=mi.id AND {video_type_v}
+             ORDER BY coalesce(v.stream_index, 999999), v.id LIMIT 1) AS color_primaries,
             CASE WHEN {sql.german_audio_exists} THEN 1 ELSE 0 END AS has_german_audio,
             (SELECT COUNT(*) FROM media_streams a WHERE a.media_id=mi.id AND {sql.audio_type}) AS audio_track_count,
             (SELECT group_concat(coalesce(language, '?') || ':' || coalesce(codec, '?'), ', ')

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from types import SimpleNamespace
+import pytest
 
 
 def _verify_result(*, duration_ok: bool, duration_s: float = 50.0):
@@ -897,3 +898,216 @@ def test_workflow_duration_repair_keeps_verified_dynamic_metadata_evidence(tmp_p
 
     assert seen["verified_hdr10plus"] is True
     assert seen["verified_dolby_vision"] is True
+
+
+def test_workflow_verify_rejected_repair_is_fail_closed_and_never_switches_to_archive(tmp_path):
+    from dragontools.worker.duration_repair_models import DurationRepairOutcome
+    from dragontools.worker.workflow_verification_service import WorkflowVerificationService
+
+    bad = _verify_result(duration_ok=False, duration_s=4_296_407.0)
+    # Reproduziert den alten Fehler: ein Detail-Pruefer liefert fuer den
+    # verworfenen Kandidaten versehentlich ein formal positives Ergebnis.
+    misleading_fixed = _verify_result(duration_ok=True, duration_s=1_441.2)
+    output = tmp_path / "film.mkv"
+    archive = tmp_path / "Archiv" / "film.mkv"
+
+    class Repairer:
+        def can_repair(self, **kwargs):
+            return True
+
+        def repair(self, **kwargs):
+            return DurationRepairOutcome(
+                attempted=True,
+                repaired=False,
+                verify_result=misleading_fixed,
+                archived_path=str(archive),
+                keep_failed_output=True,
+                message="Timestamp-Reparatur wurde verworfen.",
+            )
+
+    class Logger:
+        def info(self, _msg):
+            pass
+
+        def error(self, _msg):
+            pass
+
+    svc = WorkflowVerificationService(
+        output_verifier=_Verifier(bad),
+        duration_repair_service=Repairer(),
+        logger=Logger(),
+    )
+    ctx = SimpleNamespace(
+        output_path=str(output),
+        base_dir=tmp_path,
+        container="mkv",
+        duration_ms=1_441_200,
+        analysis=SimpleNamespace(audio_streams=[object()]),
+    )
+
+    with pytest.raises(RuntimeError, match="Verify fehlgeschlagen"):
+        svc.verify(ctx)
+
+    assert ctx.output_path == str(output)
+    assert ctx.duration_repair_archive_path == str(archive)
+    assert ctx.duration_repair_failed_closed is True
+    assert ctx.verify_result.duration_ok is False
+    assert ctx.verify_result.ok is False
+    assert any("Trickplay" in msg and "gestoppt" in msg for msg in ctx.verify_result.messages)
+
+
+def test_genpts_fallback_accepts_valid_candidate_even_with_ffmpeg_einval_returncode(tmp_path, monkeypatch):
+    import dragontools.worker.duration_repair_service as module
+    from dragontools.worker.duration_repair_service import DurationRepairService
+
+    out = tmp_path / "film.mkv"
+    out.write_bytes(b"original" * 500)
+    mkvmerge = _fake_tool(tmp_path / "mkvmerge.exe")
+    ffmpeg = _fake_tool(tmp_path / "ffmpeg.exe")
+    ffprobe = _fake_tool(tmp_path / "ffprobe.exe")
+    fixed_paths: set[str] = set()
+    commands: list[list[str]] = []
+
+    def fake_run(cmd, **kwargs):
+        commands.append(list(cmd))
+        exe = Path(cmd[0]).name.lower()
+        if exe == "mkvmerge.exe":
+            tmp = Path(cmd[cmd.index("-o") + 1])
+            tmp.write_bytes(b"remuxed" * 500)
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+        if exe == "ffprobe.exe":
+            target = str(Path(cmd[-1]))
+            duration = 1441.56 if target in fixed_paths else 4_296_408.0
+            return SimpleNamespace(
+                returncode=0,
+                stdout=_timing_probe_json(
+                    container_duration=duration,
+                    video_duration=duration,
+                    audio_count=1,
+                    subtitle_count=1,
+                ),
+                stderr="",
+            )
+        if exe == "ffmpeg.exe" and "-bsfs" in cmd:
+            return SimpleNamespace(returncode=0, stdout="setts\n", stderr="")
+        if exe == "ffmpeg.exe" and "-bsf:v:0" in cmd:
+            # Erster CFR/setts-Versuch scheitert ohne brauchbaren Kandidaten.
+            return SimpleNamespace(returncode=1, stdout="", stderr="setts failed")
+        if exe == "ffmpeg.exe" and "+genpts" in cmd:
+            target = Path(cmd[-1])
+            target.write_bytes(b"fixed" * 500)
+            fixed_paths.add(str(target))
+            # Windows zeigt -22/EINVAL haeufig unsigned als 4294967274.
+            return SimpleNamespace(returncode=4294967274, stdout="", stderr="Invalid argument")
+        raise AssertionError(cmd)
+
+    monkeypatch.setattr(module.subprocess, "run", fake_run)
+    service = DurationRepairService(
+        mkvmerge_path=mkvmerge,
+        ffmpeg_path=ffmpeg,
+        ffprobe_path=ffprobe,
+        output_verifier=_PathAwareVerifier(fixed_paths),
+        log=lambda *_: None,
+        run_tool_fn=_tool_runner_from_subprocess(fake_run),
+    )
+
+    outcome = service.repair(
+        output_path=str(out),
+        base_dir=tmp_path,
+        container="mkv",
+        expected_duration_ms=1_441_560,
+        source_has_audio=True,
+        initial_result=_verify_result(duration_ok=False, duration_s=4_296_408.0),
+    )
+
+    assert outcome.repaired is True
+    assert outcome.timestamp_fixed is True
+    assert out.read_bytes().startswith(b"fixed")
+    genpts = [cmd for cmd in commands if Path(cmd[0]).name.lower() == "ffmpeg.exe" and "+genpts" in cmd]
+    assert genpts
+    assert "-avoid_negative_ts" in genpts[0]
+    assert "make_zero" in genpts[0]
+
+
+def test_genpts_candidate_with_unexpected_nonzero_returncode_is_rejected(tmp_path, monkeypatch):
+    from dragontools.worker.duration_repair_models import MediaTimingInfo
+    from dragontools.worker.duration_repair_stream_guard import RepairStreamGuard, StreamInventory
+    from dragontools.worker.duration_timestamp_candidate_service import TimestampCandidateService
+
+    out = tmp_path / "film.mkv"
+    tmp = tmp_path / "film.genpts.mkv"
+    out.write_bytes(b"source" * 500)
+    tmp.write_bytes(b"candidate" * 500)
+
+    class Runtime:
+        output_verifier = _Verifier(_verify_result(duration_ok=True, duration_s=100.0))
+
+        @staticmethod
+        def run_tool(_command, *, label):
+            return SimpleNamespace(returncode=1, stdout="", stderr="generic failure")
+
+        @staticmethod
+        def safe_unlink(path):
+            Path(path).unlink(missing_ok=True)
+
+        @staticmethod
+        def log(*_args):
+            pass
+
+    analyzer = SimpleNamespace()
+    guard = SimpleNamespace()
+    service = TimestampCandidateService(Runtime(), analyzer, guard)
+    result = service.attempt(
+        out=out,
+        tmp=tmp,
+        command=["ffmpeg", "-fflags", "+genpts", str(tmp)],
+        label="FFmpeg-+genpts-Timestamp-Reparatur",
+        method="FFmpeg +genpts",
+        container="mkv",
+        before=MediaTimingInfo(path=str(out)),
+        before_ffprobe=StreamInventory("ffprobe", True, video=1),
+        before_mediainfo=StreamInventory("MediaInfo", True, video=1),
+        expected_duration_ms=100_000,
+        source_has_audio=False,
+        timing_summary=[],
+    )
+
+    assert result.repaired is False
+    assert result.retry_recommended is True
+    assert not tmp.exists()
+
+
+def test_workflow_runner_never_replaces_or_finalizes_after_failed_verification(tmp_path):
+    from dragontools.worker.workflow_engine import ConversionWorkflowRunner
+
+    calls: list[str] = []
+
+    class Services:
+        def analyze(self, ctx):
+            calls.append("analyze")
+
+        def build_plan(self, ctx, override):
+            calls.append("plan")
+
+        def process(self, ctx, override):
+            calls.append("process")
+
+        def verify(self, ctx):
+            calls.append("verify")
+            raise RuntimeError("Timestamp-Reparatur verworfen")
+
+        def replace(self, ctx):
+            calls.append("replace")
+
+        def finalize(self, ctx):
+            calls.append("finalize")
+
+        def fail(self, ctx, reason, traceback_text):
+            calls.append("fail")
+
+        def cleanup(self, ctx):
+            calls.append("cleanup")
+
+    runner = ConversionWorkflowRunner(Services(), replace_original=True)
+    assert runner.run(str(tmp_path / "quelle.mkv"), {}) is False
+    assert calls == ["analyze", "plan", "process", "verify", "fail", "cleanup"]

@@ -50,6 +50,36 @@ def build_timestamp_repair_command(
     ]
 
 
+def build_genpts_repair_command(
+    source: Path,
+    target: Path,
+    *,
+    ffmpeg_path: str,
+) -> list[str]:
+    """Lossless MKV fallback: rebuild presentation timestamps without CFR forcing."""
+    return [
+        ffmpeg_path,
+        "-hide_banner",
+        "-y",
+        "-fflags",
+        "+genpts",
+        "-i",
+        str(source),
+        "-map",
+        "0",
+        "-map_metadata",
+        "0",
+        "-map_chapters",
+        "0",
+        "-c",
+        "copy",
+        "-avoid_negative_ts",
+        "make_zero",
+        "-copy_unknown",
+        str(target),
+    ]
+
+
 def setts_filter_for_fps(fps: Fraction) -> str:
     num = int(fps.numerator)
     den = int(fps.denominator)

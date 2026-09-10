@@ -36,6 +36,8 @@ SEARCH_MODES = [
     ("HDR / Dynamikumfang", "dynamic_range"),
     ("Auflösung", "resolution"),
     ("Video-Codec", "video_codec"),
+    ("Dateigröße", "file_size"),
+    ("Laufzeitprüfung", "duration"),
     ("Abweichungen", "deviation"),
     ("Metadaten", "metadata"),
 ]
@@ -96,6 +98,20 @@ SEARCH_OPTIONS = {
         ("H.265 / HEVC", "hevc"),
         ("AV1", "av1"),
         ("Video-Codec unbekannt", "video_codec_unknown"),
+    ],
+    "file_size": [
+        ("Kleiner als 1 GiB", "size_under_1gb"),
+        ("1 bis unter 2 GiB", "size_1_2gb"),
+        ("2 bis unter 5 GiB", "size_2_5gb"),
+        ("5 bis unter 10 GiB", "size_5_10gb"),
+        ("10 bis unter 20 GiB", "size_10_20gb"),
+        ("20 GiB oder größer", "size_over_20gb"),
+        ("Dateigröße unbekannt", "size_unknown"),
+    ],
+    "duration": [
+        ("Länger als 5 Stunden", "duration_over_5h"),
+        ("Kürzer als 1 Minute", "duration_under_1min"),
+        ("Laufzeit unbekannt", "duration_unknown"),
     ],
     "deviation": [
         ("Deutsche Audiospur", "deviation_german_audio"),
@@ -343,14 +359,14 @@ class MediaLibraryDialogView:
         self.search_result_label = QLabel("0 Treffer")
         layout.addWidget(self.search_result_label)
 
-        self.search_table = QTableWidget(0, 12)
+        self.search_table = QTableWidget(0, 14)
         self.search_table.setHorizontalHeaderLabels(
-            ["Typ", "Titel", "Serie", "S", "E", "Jahr", "Video", "Bild", "Audio", "Untertitel", "Abweichung", "Pfad"]
+            ["Typ", "Titel", "Serie", "S", "E", "Jahr", "Video", "Bild", "Audio", "Untertitel", "Dauer", "Größe", "Abweichung", "Pfad"]
         )
         header = self.search_table.horizontalHeader()
-        for idx in range(11):
+        for idx in range(13):
             header.setSectionResizeMode(idx, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(11, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(13, QHeaderView.ResizeMode.Stretch)
         self.search_table.setSortingEnabled(True)
         layout.addWidget(self.search_table, 1)
         self.update_search_options()

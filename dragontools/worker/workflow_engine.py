@@ -109,6 +109,7 @@ class WorkflowContext:
     duration_repair_ffmpeg_cmd: list[str] | None = None
     duration_repair_timing_summary: list[str] | None = None
     duration_repair_archive_path: str | None = None
+    duration_repair_failed_closed: bool = False
     keep_failed_output: bool = False
     replacement_blocked: bool = False
     replacement_block_reason: str = ""

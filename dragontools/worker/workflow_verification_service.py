@@ -95,10 +95,30 @@ class WorkflowVerificationService:
         if outcome_message and outcome_message not in messages:
             messages.append(outcome_message)
         if archive_path:
-            ctx.output_path = archive_path
             archive_message = f"Fehlerhafte Ausgabedatei wurde archiviert: {archive_path}"
             if archive_message not in messages:
                 messages.append(archive_message)
+
+        # FAIL-CLOSED: Eine verworfene Reparatur darf niemals durch eine spaetere
+        # allgemeinere Output-Pruefung wieder zu einem erfolgreichen Ergebnis
+        # werden. Insbesondere darf der Archivpfad nicht als neuer Output-Pfad
+        # gesetzt werden, weil sonst Replace/Postprocessing/Trickplay/Move die
+        # bewusst verworfene Datei weiterverwenden koennten.
+        if bool(getattr(outcome, "attempted", False)) and not bool(
+            getattr(outcome, "repaired", False)
+        ):
+            ctx.duration_repair_failed_closed = True
+            repaired_result.duration_ok = False
+            blocked_message = (
+                "Automatische Laufzeit-/Timestamp-Reparatur wurde verworfen; "
+                "Output bleibt ungueltig. Replace, Postprocessing, Trickplay, "
+                "Datenbank-Update und Verschieben werden gestoppt."
+            )
+            if blocked_message not in messages:
+                messages.append(blocked_message)
+        else:
+            ctx.duration_repair_failed_closed = False
+
         repaired_result.messages = messages
         return repaired_result
 
