@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "profile": "source-with-build",
-  "app_version": "9.8.1",
+  "app_version": "9.8.2",
   "build_inputs_included": true,
   "build_strategy": "pyinstaller-cli",
   "build_script": "build_v9.bat",
@@ -15,5 +15,5 @@
   "build_environment_included": true,
   "ci_workflow_included": true,
   "dv_hdr_integration_tests_included": true,
-  "help_policy": "existing-comprehensive-help-updated-for-v9.8.1"
+  "help_policy": "existing-comprehensive-help-updated-for-v9.8.2"
 }

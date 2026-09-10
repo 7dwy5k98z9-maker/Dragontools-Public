@@ -1174,3 +1174,109 @@ def test_dv_pipeline_reset_clears_previous_run_sidecars():
     pipeline._reset_run_diagnostics()
 
     assert pipeline.last_sidecar_paths == []
+
+
+def test_cropped_dv_forces_final_rpu_integrity_check_for_mkv_and_mp4(tmp_path):
+    from dragontools.worker.dv_final_mux_service import DVFinalMuxService
+    from dragontools.worker.dv_runtime_models import DVTempState
+
+    service = DVFinalMuxService(
+        tools=SimpleNamespace(), temp_state=DVTempState(), audio_mux_service=None,
+        mp4box_muxer=None, mkv_muxer=None, rpu_service=None, hdr10plus_service=None,
+        subtitle_mux_service=None, subtitle_rules={}, log=lambda *_: None,
+        verbose_log=lambda *_: None, assert_nonempty_file=lambda *_: True,
+    )
+
+    for container in ("mkv", "mp4"):
+        output = tmp_path / f"out.{container}"
+        output.write_bytes(b"container")
+        state = SimpleNamespace(
+            request=SimpleNamespace(
+                output_path=str(output), container=container,
+                preserve_dv_hdr10plus_combo=False,
+            ),
+            effective_crop="crop=3240:2160:300:0",
+            verified_hdr10plus=False,
+            verified_dolby_vision=False,
+        )
+        seen = {}
+
+        def verify_fallback(_state, _runner, *, verify_dv, verify_hdr10plus):
+            seen[container] = (verify_dv, verify_hdr10plus)
+            return True
+
+        ok = service.verify_final_mux_metadata(
+            state,
+            SimpleNamespace(),
+            inspect_dynamic_hdr=lambda *_args, **_kwargs: SimpleNamespace(
+                conclusive=True,
+                dolby_vision=True,
+                dolby_vision_profile="8",
+                hdr10plus=False,
+                warnings=(),
+            ),
+            verify_fallback=verify_fallback,
+        )
+        assert ok is True
+        assert seen[container] == (True, False)
+
+
+def test_cropped_dv_postmux_extraction_uses_correct_mp4_and_mkv_bitstream_path(tmp_path):
+    from dragontools.worker.dv_final_mux_service import DVFinalMuxService
+    from dragontools.worker.dv_runtime_models import DVTempState
+
+    expected_rpu = tmp_path / "expected.rpu"
+    expected_rpu.write_bytes(b"RPU" * 1024)
+
+    for container in ("mkv", "mp4"):
+        root = tmp_path / container
+        root.mkdir()
+        output = root / f"out.{container}"
+        output.write_bytes(b"container")
+        commands = []
+
+        class Runner:
+            def run(self, command, **_kwargs):
+                commands.append(list(command))
+                Path(command[-1]).write_bytes(b"HEVC" * 1024)
+                return 0
+
+            def adapter(self, **_kwargs):
+                return lambda *args, **kw: 0
+
+        class RpuService:
+            def extract_rpu(self, _run_fn, *, input_hevc, output_rpu):
+                output_rpu.write_bytes(expected_rpu.read_bytes())
+                return True
+
+        service = DVFinalMuxService(
+            tools=SimpleNamespace(ffmpeg="ffmpeg"), temp_state=DVTempState(),
+            audio_mux_service=None, mp4box_muxer=None, mkv_muxer=None,
+            rpu_service=RpuService(), hdr10plus_service=None,
+            subtitle_mux_service=None, subtitle_rules={}, log=lambda *_: None,
+            verbose_log=lambda *_: None,
+            assert_nonempty_file=lambda path, _label: path.exists() and path.stat().st_size > 0,
+        )
+        state = SimpleNamespace(
+            request=SimpleNamespace(
+                output_path=str(output), container=container,
+                preserve_dv_hdr10plus_combo=False,
+            ),
+            files=SimpleNamespace(root=root),
+            rpu_to_use=expected_rpu,
+            verified_hdr10plus=False,
+            verified_dolby_vision=False,
+        )
+
+        assert service.verify_final_mux_metadata_fallback(
+            state,
+            Runner(),
+            verify_dv=True,
+            verify_hdr10plus=False,
+            sha256_file=lambda path: __import__("hashlib").sha256(Path(path).read_bytes()).hexdigest(),
+        ) is True
+        extract_cmd = commands[0]
+        if container == "mp4":
+            assert "hevc_mp4toannexb" in extract_cmd
+        else:
+            assert "hevc_mp4toannexb" not in extract_cmd

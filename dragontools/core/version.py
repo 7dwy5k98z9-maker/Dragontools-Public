@@ -7,7 +7,7 @@ verwenden koennen, ohne Seiteneffekte zu importieren.
 """
 from __future__ import annotations
 
-APP_VERSION = "9.8.1"
+APP_VERSION = "9.8.2"
 APP_VERSION_MAJOR = 9
 APP_VERSION_LABEL = f"V{APP_VERSION}"
 APP_BUILD_NAME = f"DragonToolsV{APP_VERSION}"

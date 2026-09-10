@@ -1,4 +1,4 @@
-# DragonTools V9.8.1
+# DragonTools V9.8.2
 
 DragonTools ist eine Windows-Anwendung zur Analyse, Konvertierung und Verwaltung von Video-, Audio- und Untertiteldateien. Das Projekt bündelt die benötigten Drittanbieterprogramme nicht im Git-Repository. Sie müssen separat von den jeweiligen Projektseiten heruntergeladen werden.
 
@@ -117,13 +117,13 @@ Der öffentliche Build benötigt keine externen Medienprogramme. Starte ihn aus 
 build_v9.bat
 ```
 
-Der fertige Build wird unter `dist/DragonToolsV9.8.1/` abgelegt. Der öffentliche Build enthält DragonTools und seine Python-Laufzeit, aber keine externen Medienprogramme. `build/` und `dist/` sind lokale Ausgaben und werden nicht in Git gespeichert.
+Der fertige Build wird unter `dist/DragonToolsV9.8.2/` abgelegt. Der öffentliche Build enthält DragonTools und seine Python-Laufzeit, aber keine externen Medienprogramme. `build/` und `dist/` sind lokale Ausgaben und werden nicht in Git gespeichert.
 
 ## Fertige Windows-Version
 
-Wer DragonTools nur verwenden möchte, kann unter [GitHub Releases](https://github.com/7dwy5k98z9-maker/Dragontools-Releases/releases) das Paket `DragonToolsV9.8.1-win64.zip` herunterladen. Python und Git werden dafür nicht benötigt.
+Wer DragonTools nur verwenden möchte, kann unter [GitHub Releases](https://github.com/7dwy5k98z9-maker/Dragontools-Releases/releases) das Paket `DragonToolsV9.8.2-win64.zip` herunterladen. Python und Git werden dafür nicht benötigt.
 
-Nach dem Entpacken wird `DragonToolsV9.8.1.exe` gestartet. Die Datei `TOOLS_INSTALLIEREN.txt` im Programmpaket erklärt, welche externen Werkzeuge benötigt werden und wo sie erhältlich sind. Vor dem Start sollte die veröffentlichte SHA-256-Prüfsumme kontrolliert werden.
+Nach dem Entpacken wird `DragonToolsV9.8.2.exe` gestartet. Die Datei `TOOLS_INSTALLIEREN.txt` im Programmpaket erklärt, welche externen Werkzeuge benötigt werden und wo sie erhältlich sind. Vor dem Start sollte die veröffentlichte SHA-256-Prüfsumme kontrolliert werden.
 
 ## Programm-Updates über GitHub
 

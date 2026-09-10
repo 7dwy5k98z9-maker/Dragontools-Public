@@ -20,11 +20,12 @@ ConverterThread behält die öffentliche Worker-Oberfläche, Queue-Fassade,
 Signale und die öffentliche Queue-/Lifecycle-API für GUI-Aufrufer.
 
 DV-Crop-Fix:
-  Der DV-RPU enthält die Mastering-Auflösung fest (z.B. 3840x2160).
-  Wenn der HEVC-Stream auf 1632px gecroppt wird aber der RPU 2160 sagt,
-  ignoriert der LG TV WebOS den HEVC-SPS und zeigt das Bild falsch.
-  Fix: Nach dem Encode -> dovi_tool editor setzt Level 5 active area
-  auf die exakten Crop-Offsets.
+  AutoCrop und RPU-Level-5 werden vor dem Encode abgeglichen. Wird der
+  HEVC-Stream anschließend physisch gecroppt, sind diese Pixel im Ziel-Frame
+  bereits entfernt. Deshalb setzt dovi_tool die finale RPU Active Area danach
+  auf 0/0/0/0; alte Crop-Offsets würden am DV-Gerät einen Double-Crop auslösen.
+  Die korrigierte RPU wird vor der Injection und bei gecroppten Ausgaben auch
+  nach dem finalen MKV-/MP4-Mux verifiziert.
 """
 from __future__ import annotations
 

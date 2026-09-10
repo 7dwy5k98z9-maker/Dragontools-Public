@@ -1,8 +1,8 @@
 {
   "format_version": 1,
-  "title": "Dragon Tools V9.8.1 – Änderungshistorie",
-  "app_version": "9.8.1",
-  "updated": "2026-09-09",
+  "title": "Dragon Tools V9.8.2 – Änderungshistorie",
+  "app_version": "9.8.2",
+  "updated": "2026-09-10",
   "sections": [
     {
       "title": "Überblick",
@@ -10,11 +10,18 @@
       "blocks": [
         "PyQt6-App: Dragon Tools – Multifunktionales Videobearbeitungstool\nAutor: Dragon Developer (GUI-Port)",
         "Dragon Tools ist ein modular aufgebautes PyQt6-Tool zur Video-Konvertierung,\nUntertitelverwaltung, Pfadorganisation und automatisierten Verarbeitung.\nSchwerpunkt der V9-Entwicklung liegt auf Stabilität, Release-Sicherheit,\nHDR/DV-Korrektheit, Fehlerdiagnose und wartbarer Modulstruktur.",
-        "Version: 9.8.1 (Release-Build)\nStand: 2026-09-09\nPlattform: Windows 10/11 (64-bit)",
-        "Diese Datei dokumentiert alle Änderungen der V9-Entwicklung in einer\ntechnisch gegliederten Struktur. Die Änderungen sind bewusst nicht nach\nV9.0, V9.1, V9.2, V9.3, V9.4, V9.5, V9.6, V9.7, V9.8 und V9.8.1 getrennt, sondern nach Funktionsbereichen\nzusammengeführt.",
+        "Version: 9.8.2 (Release-Build)\nStand: 2026-09-10\nPlattform: Windows 10/11 (64-bit)",
+        "Diese Datei dokumentiert alle Änderungen der V9-Entwicklung in einer\ntechnisch gegliederten Struktur. Die Änderungen sind bewusst nicht nach\nV9.0, V9.1, V9.2, V9.3, V9.4, V9.5, V9.6, V9.7, V9.8, V9.8.1 und V9.8.2 getrennt, sondern nach Funktionsbereichen\nzusammengeführt.",
         "Versionsbezogene Punkte bleiben erhalten, wenn sie selbst eine technische\nRelease-, Build- oder Kompatibilitätsänderung dokumentieren.",
-        "Hinweis zur historischen Einordnung:\nÄltere Änderungsblöcke beschreiben den damaligen Entwicklungsstand.\nAktuelle Gegenprüfungen des V9.8.1-Quellstands haben Vorrang, wenn ältere\nBuild-/Release-Aussagen aufgrund früherer Projektstände heute abweichen.",
+        "Hinweis zur historischen Einordnung:\nÄltere Änderungsblöcke beschreiben den damaligen Entwicklungsstand.\nAktuelle Gegenprüfungen des V9.8.2-Quellstands haben Vorrang, wenn ältere\nBuild-/Release-Aussagen aufgrund früherer Projektstände heute abweichen.",
         "Dragon Tools V8 ist in CHANGELOGV8.txt dokumentiert.\nÄltere Versionen (V1–V7) sind in CHANGELOGV7.txt dokumentiert.\nMenü: Hilfe → Änderungshistorie Legacy V8 / Legacy V7"
+      ]
+    },
+    {
+      "title": "V9.8.2 – DOLBY-VISION-CROP-KORREKTUR 10.09.2026",
+      "icon": "🎬",
+      "blocks": [
+        "[10.09.2026] V9.8.2: doppelten Dolby-Vision-Crop verhindert\n- Nach einem physischen FFmpeg-Pixelcrop wird die Dolby-Vision-RPU mit der von dovi_tool vorgesehenen Operation active_area.crop=true auf das bereits verkleinerte Zielbild normalisiert.\n- Bereits physisch entfernte Ränder werden dadurch nicht nochmals als Level-5-Active-Area angewendet; der mögliche Double-Crop auf Dolby-Vision-Wiedergabegeräten entfällt.\n- Die bearbeitete RPU wird vor der Injection fail-closed exportiert und auf ausschließlich nullgesetzte Level-5-Ränder geprüft.\n- Bei gecroppten Dolby-Vision-Ausgaben wird die RPU nach dem finalen MKV- oder MP4-Mux erneut aus dem Bitstream extrahiert und bytegenau mit der injizierten RPU verglichen.\n- Fehlerhafte, nicht prüfbare oder nach dem Mux abweichende RPUs führen zum sicheren Abbruch statt zu einer möglicherweise falsch gecroppten Dolby-Vision-Ausgabe.\n- Neue Regressionstests decken horizontalen und vertikalen Crop, die Nullprüfung, den sicheren Fehlerfall sowie MKV- und MP4-Rückprüfung ab."
       ]
     },
     {

@@ -33,8 +33,25 @@ def test_physical_crop_writes_zero_level5_offsets(tmp_path):
     logs = []
 
     def run_cmd(cmd, **kwargs):
-        rpu_final.write_bytes(b"edited")
-        return SimpleNamespace(returncode=0)
+        if "editor" in cmd:
+            rpu_final.write_bytes(b"edited")
+            return SimpleNamespace(returncode=0)
+        if "export" in cmd:
+            target = Path(cmd[-1].split("=", 1)[1])
+            target.write_text(
+                json.dumps({
+                    "active_area": {
+                        "crop": True,
+                        "presets": [
+                            {"id": 0, "left": 0, "right": 0, "top": 0, "bottom": 0}
+                        ],
+                        "edits": {"all": 0},
+                    }
+                }),
+                encoding="utf-8",
+            )
+            return 0
+        return 1
 
     editor = DVLevel5Editor(dovi_tool_path="dovi_tool", log=lambda m, l="info": logs.append((l, m)))
     result = editor.resolve_rpu_for_crop(
@@ -49,8 +66,7 @@ def test_physical_crop_writes_zero_level5_offsets(tmp_path):
 
     assert result == rpu_final
     payload = json.loads(edit_json.read_text(encoding="utf-8"))
-    preset = payload["active_area"]["presets"][0]
-    assert preset == {"id": 0, "left": 0, "right": 0, "top": 0, "bottom": 0}
+    assert payload == {"active_area": {"crop": True}}
 
 
 def test_dv_command_runner_uses_shared_process_control(monkeypatch):
@@ -132,3 +148,96 @@ def test_rpu_post_injection_hash_mismatch_is_rejected(tmp_path):
         scratch_rpu=scratch,
     ) is False
     assert "RPU-Inhalt" in stages.failure["reason"]
+
+
+def test_physical_left_right_crop_is_zeroed_in_rpu_for_mkv_and_mp4_logic(tmp_path):
+    """Regressionsfall: 3840 -> 3240 (300 px links/rechts) darf nicht doppelt croppen."""
+    from dragontools.worker.dv_level5_editor import DVLevel5Editor
+
+    for container in ("mkv", "mp4"):
+        root = tmp_path / container
+        root.mkdir()
+        rpu_orig = root / "orig.rpu"
+        rpu_orig.write_bytes(b"rpu")
+        rpu_final = root / "final.rpu"
+        edit_json = root / "level5.json"
+        seen = []
+
+        def run_cmd(cmd, **kwargs):
+            seen.append(list(cmd))
+            if "editor" in cmd:
+                rpu_final.write_bytes(b"edited")
+                return SimpleNamespace(returncode=0)
+            if "export" in cmd:
+                target = Path(cmd[-1].split("=", 1)[1])
+                target.write_text(json.dumps({
+                    "active_area": {
+                        "crop": True,
+                        "presets": [
+                            {"id": 0, "left": 0, "right": 0, "top": 0, "bottom": 0}
+                        ],
+                        "edits": {"0-100": 0},
+                    }
+                }), encoding="utf-8")
+                return 0
+            return 1
+
+        editor = DVLevel5Editor(dovi_tool_path="dovi_tool", log=lambda *_: None)
+        result = editor.resolve_rpu_for_crop(
+            run_cmd,
+            crop="crop=3240:2160:300:0",
+            media_info=SimpleNamespace(primary_video=SimpleNamespace(width=3840, height=2160)),
+            rpu_orig=rpu_orig,
+            rpu_final=rpu_final,
+            edit_json=edit_json,
+            save_failure_artifacts=lambda *args, **kwargs: root / "fail",
+        )
+
+        assert result == rpu_final
+        assert json.loads(edit_json.read_text(encoding="utf-8")) == {
+            "active_area": {"crop": True}
+        }
+        assert any("editor" in cmd for cmd in seen)
+        assert any("export" in cmd for cmd in seen)
+
+
+def test_physical_crop_fails_closed_if_final_rpu_still_has_nonzero_l5(tmp_path):
+    from dragontools.worker.dv_level5_editor import DVLevel5Editor
+
+    rpu_orig = tmp_path / "orig.rpu"
+    rpu_orig.write_bytes(b"rpu")
+    rpu_final = tmp_path / "final.rpu"
+    edit_json = tmp_path / "level5.json"
+    failures = []
+
+    def run_cmd(cmd, **kwargs):
+        if "editor" in cmd:
+            rpu_final.write_bytes(b"edited-but-wrong")
+            return SimpleNamespace(returncode=0)
+        if "export" in cmd:
+            target = Path(cmd[-1].split("=", 1)[1])
+            target.write_text(json.dumps({
+                "active_area": {
+                    "crop": True,
+                    "presets": [
+                        {"id": 0, "left": 300, "right": 300, "top": 0, "bottom": 0}
+                    ],
+                    "edits": {"0-100": 0},
+                }
+            }), encoding="utf-8")
+            return 0
+        return 1
+
+    editor = DVLevel5Editor(dovi_tool_path="dovi_tool", log=lambda *_: None)
+    result = editor.resolve_rpu_for_crop(
+        run_cmd,
+        crop="crop=3240:2160:300:0",
+        media_info=SimpleNamespace(primary_video=SimpleNamespace(width=3840, height=2160)),
+        rpu_orig=rpu_orig,
+        rpu_final=rpu_final,
+        edit_json=edit_json,
+        save_failure_artifacts=lambda *args, **kwargs: failures.append(True) or (tmp_path / "fail"),
+    )
+
+    assert result is None
+    assert failures == [True]

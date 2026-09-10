@@ -112,7 +112,7 @@ class EncodePlanService:
             if not crop:
                 self._logger.info("Auto-Crop: Keine schwarzen Balken erkannt.")
             elif pipeline == "dv" or str(pipeline).lower() == "pipeline.dv" or getattr(pipeline, "value", None) == "dv" or getattr(pipeline, "name", "").lower() == "dv":
-                self._logger.info(f"DV+Crop: {crop} → Level 5 wird in RPU gesetzt.")
+                self._logger.info(f"DV+Crop: {crop} → RPU wird nach physischem Crop auf L5=0/0/0/0 normalisiert.")
 
         burn_sub_or_vf, sn = self._stream_args.sub_args(input_path, media_info, file_override, container)
         scale_filter = _scale(active_scale_mode)

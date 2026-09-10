@@ -1,4 +1,4 @@
-DragonTools V9.8.1 - externe Werkzeuge
+DragonTools V9.8.2 - externe Werkzeuge
 ========================================
 
 Dieses Programmpaket enthaelt bewusst keine Drittanbieterprogramme.

@@ -180,6 +180,11 @@ class DVFinalMuxService:
         inspection = inspect_dynamic_hdr(req.output_path, self._tools)
 
         require_hdr10plus = bool(req.preserve_dv_hdr10plus_combo)
+        # Bei physischem Video-Crop genügt "DV vorhanden" nicht: Die finale
+        # Containerdatei muss exakt dieselbe, bereits L5-normalisierte RPU wie
+        # der injizierte HEVC-Stream enthalten. Das wird für MKV und MP4
+        # gleichermaßen per Bitstream-Rückprüfung erzwungen.
+        strict_crop_rpu_verify = bool(getattr(state, "effective_crop", None))
         missing_dv = True
         missing_hdr10plus = require_hdr10plus
 
@@ -201,11 +206,23 @@ class DVFinalMuxService:
 
             if not missing_dv and not missing_hdr10plus:
                 container = str(getattr(req, "container", "mp4") or "mp4").upper()
+                if not strict_crop_rpu_verify:
+                    self._log(
+                        f"✅ [DV][VERIFY] Finales {container}: Dolby Vision {dv_label} | HDR10+ {hdr_label}",
+                        "info",
+                    )
+                    return True
                 self._log(
-                    f"✅ [DV][VERIFY] Finales {container}: Dolby Vision {dv_label} | HDR10+ {hdr_label}",
+                    f"ℹ️  [DV][VERIFY] Physischer Crop aktiv – finale RPU wird im {container} "
+                    "zusätzlich bytegenau gegen die verifizierte Crop-RPU geprüft.",
                     "info",
                 )
-                return True
+                return verify_fallback(
+                    state,
+                    runner,
+                    verify_dv=True,
+                    verify_hdr10plus=False,
+                )
 
             missing = []
             if missing_dv:
@@ -229,7 +246,7 @@ class DVFinalMuxService:
         return verify_fallback(
             state,
             runner,
-            verify_dv=missing_dv,
+            verify_dv=bool(missing_dv or strict_crop_rpu_verify),
             verify_hdr10plus=missing_hdr10plus,
         )
 
@@ -280,7 +297,7 @@ class DVFinalMuxService:
                 input_hevc=final_hevc,
                 output_rpu=final_rpu,
             ):
-                self._log("❌ [DV][FALLBACK] Dolby-Vision-RPU ist im finalen MP4 nicht nachweisbar.", "error")
+                self._log(f"❌ [DV][FALLBACK] Dolby-Vision-RPU ist im finalen {container.upper()} nicht nachweisbar.", "error")
                 return False
             if not self._assert_nonempty_file(final_rpu, "STEP 7 Post-Mux RPU-Fallbackprüfung"):
                 return False

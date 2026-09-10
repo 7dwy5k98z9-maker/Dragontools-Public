@@ -28,6 +28,23 @@ def _parse_crop(crop_filter: str | None):
     return (int(m.group(1)), int(m.group(2)), int(m.group(3)), int(m.group(4))) if m else None
 
 
+def _physical_crop_level5_json(path: Path) -> dict:
+    """Erzeugt die dovi_tool-Konfiguration für einen *physischen* Video-Crop.
+
+    Sobald FFmpeg Pixel am codierten Frame entfernt hat, beziehen sich die
+    Level-5-Offsets auf dieses bereits verkleinerte Ziel-Frame. Deshalb müssen
+    vorhandene Active-Area-Offsets vollständig auf 0 gesetzt werden.
+
+    ``active_area.crop = true`` ist die von dovi_tool vorgesehene Operation,
+    um alle L5-Offsets zu nullen. Explizite Null-Presets allein sind nicht
+    ausreichend robust, weil bestehende framebezogene Active-Area-Edits in
+    einer RPU sonst erhalten bleiben können.
+    """
+    edit_json = {"active_area": {"crop": True}}
+    path.write_text(json.dumps(edit_json, indent=2), encoding="utf-8")
+    return edit_json
+
+
 def _level5_json(src_w, src_h, cw, ch, cx, cy, path: Path) -> dict:
     """
     Erstellt eine dovi_tool-editor JSON im active_area-Format,

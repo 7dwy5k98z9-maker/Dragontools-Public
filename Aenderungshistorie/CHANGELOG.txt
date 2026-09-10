@@ -1,3 +1,11 @@
+[10.09.2026] V9.8.2 - Dolby-Vision-Double-Crop behoben
+- Nach einem physischen FFmpeg-Pixelcrop wird die Dolby-Vision-RPU mit active_area.crop=true auf das bereits verkleinerte Zielbild normalisiert.
+- Bereits entfernte Raender werden dadurch nicht nochmals als Level-5-Active-Area angewendet.
+- Die bearbeitete RPU wird vor der Injection fail-closed exportiert und auf ausschliesslich nullgesetzte Level-5-Raender geprueft.
+- Bei gecroppten DV-Ausgaben wird die RPU nach dem finalen MKV- oder MP4-Mux erneut extrahiert und bytegenau mit der injizierten RPU verglichen.
+- Nicht pruefbare oder abweichende RPUs fuehren zum sicheren Abbruch statt zu einer moeglicherweise falsch gecroppten DV-Ausgabe.
+- Neue Regressionstests decken horizontalen und vertikalen Crop, die Nullpruefung, Fehlerfaelle sowie MKV- und MP4-Rueckpruefung ab.
+
 [09.09.2026] V9.8.1 - GitHub-Updatepruefung und oeffentliche Bereitstellung
 - DragonTools prueft nach dem Programmstart verzoegert und ohne Blockierung der Oberflaeche das neueste stabile Release im oeffentlichen GitHub-Release-Repository.
 - Ueber Hilfe -> Nach Updates suchen kann dieselbe Pruefung jederzeit manuell gestartet werden.
