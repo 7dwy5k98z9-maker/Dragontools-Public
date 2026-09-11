@@ -1,5 +1,5 @@
 {
-  "_schema_version": 4,
+  "_schema_version": 6,
   "language_priority": [
     "de",
     "en"
@@ -53,5 +53,7 @@
     "keep_german_if_no_burn": false,
     "keep_english_fallback": false
   },
-  "mp4_sidecars_enabled": true
+  "mp4_sidecars_enabled": true,
+  "additional_sidecars_enabled": false,
+  "text_to_srt_sidecar_enabled": false
 }

@@ -17,6 +17,8 @@ def test_short_and_long_log_are_split(tmp_path: Path):
     logger = DragonLogger(tmp_path, gui_callback=gui.append)
     logger.info("interne Detailmeldung")
     logger.info("Quelle: HEVC | 3840×2160 | HDR10+")
+    logger.info("  📄 Exportiere 2 externe Untertiteldatei(en) (zusätzliche Sidecar-Regel) …")
+    logger.info("  📄 Sidecar OK: Film.de.ass")
     logger.pipeline("hdr10+", "mkv", False, True)
     logger.error("Testfehler")
     assert logger.log_file is not None
@@ -26,6 +28,8 @@ def test_short_and_long_log_are_split(tmp_path: Path):
     assert "interne Detailmeldung" not in short
     assert "interne Detailmeldung" in long
     assert "Quelle: HEVC" in short
+    assert "Exportiere 2 externe Untertiteldatei" in short
+    assert "Sidecar OK: Film.de.ass" in short
     assert "Pipeline: HDR10+" in short
     assert "Testfehler" in short
     assert all("interne Detailmeldung" not in line for line in gui)

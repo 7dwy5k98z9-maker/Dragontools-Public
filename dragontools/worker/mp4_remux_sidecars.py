@@ -45,6 +45,7 @@ class MP4RemuxSidecarService:
             media_info=media_info,
             abort_check=self._abort_check,
             preserve_burn_candidate=True,
+            container="mp4",
         )
 
     def cleanup_generated(self, paths: list[str] | tuple[str, ...]) -> None:

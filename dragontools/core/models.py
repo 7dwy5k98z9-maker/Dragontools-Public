@@ -69,6 +69,8 @@ class SubtitleStream:
     codec: str
     event_count: int | None = None
     duration_s: float | None = None
+    source_kind: str = "internal"
+    external_path: str | None = None
 
 @dataclass(slots=True)
 class VideoStream:

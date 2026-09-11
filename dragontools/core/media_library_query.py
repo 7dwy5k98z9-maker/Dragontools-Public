@@ -367,6 +367,7 @@ def _build_search_query(
         SELECT
             mi.item_type, mi.title, mi.series_title, mi.season, mi.episode, mi.year,
             mi.container, mi.duration_s, mi.video_bitrate, mi.overall_bitrate,
+            mi.nfo_status, mi.trickplay_status,
             {sql.video_codec_value} AS video_codec,
             {sql.width_value} AS width,
             {sql.height_value} AS height,
@@ -403,7 +404,14 @@ def _build_search_query(
             (SELECT group_concat(coalesce(CAST(channels AS TEXT), '?'), ',')
                FROM media_streams s
               WHERE s.media_id=mi.id AND {sql.audio_type_s}) AS audio_channels,
-            (SELECT group_concat(coalesce(language, '?') || ':' || coalesce(codec, '?'), ', ')
+            (SELECT group_concat(
+                        coalesce(language, '?') || ':' || coalesce(codec, '?') ||
+                        CASE
+                            WHEN lower(coalesce(source_kind, 'internal'))='external' THEN ':extern'
+                            ELSE ':intern'
+                        END,
+                        ', '
+                    )
                FROM media_streams s
               WHERE s.media_id=mi.id AND {sql.subtitle_type}) AS subtitle_summary,
             (SELECT group_concat(coalesce(hdr_format, ''), ',')

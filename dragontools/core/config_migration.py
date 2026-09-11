@@ -14,7 +14,7 @@ SCHEMA_VERSION_KEY = "_schema_version"
 
 CURRENT_SCHEMA_VERSIONS: dict[str, int] = {
     "audio_rules": 4,
-    "subtitle_rules": 4,
+    "subtitle_rules": 6,
     "move_rules": 1,
     "renamer_rules": 1,
     "profiles": 3,

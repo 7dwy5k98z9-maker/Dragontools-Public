@@ -11,6 +11,7 @@ from .encoder_args import _vid_args
 from .hdr10_color import hdr10_output_args
 from .workflow_models import PipelineExecutionRequest, PipelineExecutionResult
 from .subtitle_sidecar_service import SubtitleSidecarService
+from ..rules.subtitle_rules import any_sidecar_export_enabled
 
 _VIDEO_STAT_TAGS_TO_CLEAR = ("BPS", "DURATION", "NUMBER_OF_FRAMES", "NUMBER_OF_BYTES")
 
@@ -153,12 +154,14 @@ class StandardPipelineRunner:
             )
 
         sidecars: tuple[str, ...] = ()
-        if str(request.container).lower() == "mp4":
+        target_container = str(request.container).lower()
+        if any_sidecar_export_enabled(self._subtitle_rules, container=target_container):
             export = self._subtitle_service.export_sidecars_result(
                 input_path=request.input_path,
                 output_base=Path(request.output_path).with_suffix(""),
                 media_info=request.media_info,
                 file_override=request.override,
+                container=target_container,
             )
             sidecars = tuple(export.exported_paths)
             if not export.complete:

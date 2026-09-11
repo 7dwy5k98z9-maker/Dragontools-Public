@@ -27,7 +27,14 @@ from .subtitle_selection import (
 )
 from .subtitle_keep_policy import _build_auto_keep_streams, _sort_keep_candidates
 from .subtitle_burn_policy import _evaluate_forced_burn_plausibility, _resolve_auto_burn
-from .subtitle_storage import build_mp4_subtitle_storage_plan, mp4_sidecars_enabled
+from .subtitle_storage import (
+    additional_sidecars_enabled,
+    any_sidecar_export_enabled,
+    ass_to_srt_sidecar_enabled,
+    build_mp4_subtitle_storage_plan,
+    mp4_sidecars_enabled,
+    text_to_srt_sidecar_enabled,
+)
 
 def compute_subtitle_plan(
     subtitle_streams: list[SubtitleStream],
@@ -204,10 +211,14 @@ __all__ = [
     "MP4SubtitleStoragePlan",
     "SubtitlePlan",
     "TEXT_SUBTITLE_CODECS",
+    "additional_sidecars_enabled",
+    "any_sidecar_export_enabled",
+    "ass_to_srt_sidecar_enabled",
     "build_mp4_subtitle_storage_plan",
     "choose_burn_subtitle",
     "choose_keep_subtitles",
     "compute_subtitle_plan",
     "migrate_subtitle_rules",
     "mp4_sidecars_enabled",
+    "text_to_srt_sidecar_enabled",
 ]

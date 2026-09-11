@@ -171,6 +171,8 @@ def _create_schema(conn: sqlite3.Connection) -> None:
             color_space TEXT,
             color_transfer TEXT,
             color_primaries TEXT,
+            source_kind TEXT NOT NULL DEFAULT 'internal',
+            external_path TEXT,
             title TEXT
         );
 
@@ -214,6 +216,8 @@ def _ensure_media_streams_schema(conn: sqlite3.Connection) -> None:
         "color_space": "TEXT",
         "color_transfer": "TEXT",
         "color_primaries": "TEXT",
+        "source_kind": "TEXT NOT NULL DEFAULT 'internal'",
+        "external_path": "TEXT",
     }
     for name, sql_type in additions.items():
         if name not in columns:

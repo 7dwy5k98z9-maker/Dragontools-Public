@@ -1,5 +1,7 @@
 @echo off
 setlocal EnableExtensions
+set "PYTHONUTF8=1"
+set "PYTHONIOENCODING=utf-8"
 
 REM Immer aus dem Ordner dieser BAT arbeiten. Wichtig bei Doppelklick/Verknuepfungen.
 pushd "%~dp0"

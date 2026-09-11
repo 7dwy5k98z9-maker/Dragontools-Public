@@ -41,7 +41,7 @@ def test_rules_dialog_storage_uses_atomic_json_writer(tmp_path, monkeypatch):
     path, payload = captured[0]
     assert path == tmp_path / "subtitle_rules.json"
     assert payload["mp4_sidecars_enabled"] is False
-    assert payload["_schema_version"] == 4
+    assert payload["_schema_version"] == 6
 
 
 def test_profile_manager_save_uses_atomic_json_writer(tmp_path, monkeypatch):

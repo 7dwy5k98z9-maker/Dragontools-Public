@@ -158,21 +158,28 @@ class ConverterStripHelper:
         cmd += ["-map", "0:v:0", "-c:v", "copy", out]
         ok = worker._progress.run(cmd) == 0
         self.last_sidecar_paths = []
-        if ok and str(container or "mkv").lower() == "mp4":
+        if ok:
             from pathlib import Path
+            from ..rules.subtitle_rules import any_sidecar_export_enabled
             from .subtitle_sidecar_service import SubtitleSidecarService
-            service = SubtitleSidecarService(
-                ffmpeg_path=worker.tools.ffmpeg, subtitle_rules=worker.subtitle_rules, log=worker.log, worker=worker
-            )
-            export = service.export_sidecars_result(
-                input_path=inp,
-                output_base=Path(out).with_suffix(""),
-                media_info=mi,
-                file_override=ov,
-                preserve_burn_candidate=True,
-            )
-            self.last_sidecar_paths = list(export.exported_paths)
-            if not export.complete:
-                worker.log(f"❌ Strip-Only MP4: {export.failure_summary()}", "error")
-                return False
+            target_container = str(container or "mkv").lower()
+            if any_sidecar_export_enabled(worker.subtitle_rules, container=target_container):
+                service = SubtitleSidecarService(
+                    ffmpeg_path=worker.tools.ffmpeg,
+                    subtitle_rules=worker.subtitle_rules,
+                    log=worker.log,
+                    worker=worker,
+                )
+                export = service.export_sidecars_result(
+                    input_path=inp,
+                    output_base=Path(out).with_suffix(""),
+                    media_info=mi,
+                    file_override=ov,
+                    preserve_burn_candidate=True,
+                    container=target_container,
+                )
+                self.last_sidecar_paths = list(export.exported_paths)
+                if not export.complete:
+                    worker.log(f"❌ Strip-Only Untertitel-Export: {export.failure_summary()}", "error")
+                    return False
         return ok

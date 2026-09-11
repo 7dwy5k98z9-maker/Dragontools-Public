@@ -10,6 +10,7 @@ from .dv_final_mux_service import DVFinalMuxService
 from .dv_pipeline_context import DVPipelineResult, DVPipelineState
 from .dv_video_stage_service import DVVideoStageService
 from ..core.media_analyzer import inspect_dynamic_hdr_with_mediainfo
+from ..rules.subtitle_rules import any_sidecar_export_enabled
 
 
 def _video_service(owner: "DVPipelineStages") -> DVVideoStageService:
@@ -165,12 +166,13 @@ class DVPipelineStages:
             )
 
         target_container = str(getattr(request, "container", "mp4") or "mp4").lower()
-        if target_container == "mp4":
+        if any_sidecar_export_enabled(getattr(self, "_subtitle_rules", {}), container=target_container):
             export_result = self._subtitle_service.export_sidecars_result(
                 input_path=request.input_path,
                 output_base=Path(request.output_path).with_suffix(""),
                 media_info=request.media_info,
                 file_override=request.override,
+                container=target_container,
             )
             state.sidecar_paths = list(export_result.exported_paths)
             if not export_result.complete:

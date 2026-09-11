@@ -237,7 +237,7 @@ def test_subtitle_default_schema_matches_central_schema_and_is_idempotent():
         (root / "config" / "default_subtitle_rules.json").read_text(encoding="utf-8")
     )
 
-    assert default_rules["_schema_version"] == current_schema_version("subtitle_rules") == 4
+    assert default_rules["_schema_version"] == current_schema_version("subtitle_rules") == 6
     migrated = migrate_subtitle_rules(default_rules)
-    assert migrated["_schema_version"] == 4
+    assert migrated["_schema_version"] == 6
     assert migrate_subtitle_rules(migrated) == migrated

@@ -1048,7 +1048,7 @@ def test_series_root_unusable_match_keeps_database_area_when_default_base_differ
     current_tv = tmp_path / "current" / "TV"
     current_anime.mkdir(parents=True)
     current_tv.mkdir(parents=True)
-    db_series_root = r"\\MediaServer\video\Serien\TV\Watson (2025)"
+    db_series_root = r"\\Medienspeicher\video\Serien\TV\Watson (2025)"
 
     with _db_connection(db_path) as conn:
         conn.execute(
@@ -1062,7 +1062,7 @@ def test_series_root_unusable_match_keeps_database_area_when_default_base_differ
                 "Watson",
                 None,
                 db_series_root,
-                r"\\MediaServer\video\Serien\TV",
+                r"\\Medienspeicher\video\Serien\TV",
                 "Watson (2025)",
                 "watson",
             ),
@@ -1403,6 +1403,8 @@ def test_media_library_csv_exports(tmp_path: Path) -> None:
     assert "Dynamikumfang" in overview_text
     assert "Audio" in overview_text
     assert "Untertitel" in overview_text
+    assert "NFO" in overview_text
+    assert "Trickplay" in overview_text
     assert any(path.name.startswith("dragontools_media_items_") for path in db_csvs)
     assert any(path.name.startswith("dragontools_media_streams_") for path in db_csvs)
 
@@ -1485,17 +1487,17 @@ def test_search_finds_duplicate_active_sxxexx_and_cleanup_removes_inactive(tmp_p
 def test_tv_and_anime_path_mappings_use_the_same_unc_normalization() -> None:
     tv = apply_path_mappings(
         "/TVSerien/American Dad! (2005)",
-        [PathMapping("TV", "/TVSerien", "//mediaserver/video/Serien/TV")],
+        [PathMapping("TV", "/TVSerien", "//medienspeicher/video/Serien/TV")],
     )
     anime = apply_path_mappings(
         "/Anime/Test Anime (2026)",
-        [PathMapping("Anime", "/Anime", r"\\MediaServer\video\Serien\Anime")],
+        [PathMapping("Anime", "/Anime", r"\\Medienspeicher\video\Serien\Anime")],
     )
 
-    assert tv == r"\\mediaserver\video\Serien\TV\American Dad! (2005)"
-    assert anime == r"\\MediaServer\video\Serien\Anime\Test Anime (2026)"
-    assert path_compare_key(tv).startswith(path_compare_key(r"\\MediaServer\video\Serien\TV"))
-    assert path_compare_key(anime).startswith(path_compare_key(r"\\MediaServer\video\Serien\Anime"))
+    assert tv == r"\\medienspeicher\video\Serien\TV\American Dad! (2005)"
+    assert anime == r"\\Medienspeicher\video\Serien\Anime\Test Anime (2026)"
+    assert path_compare_key(tv).startswith(path_compare_key(r"\\Medienspeicher\video\Serien\TV"))
+    assert path_compare_key(anime).startswith(path_compare_key(r"\\Medienspeicher\video\Serien\Anime"))
 
 
 def test_backup_database_names_are_collision_safe(tmp_path: Path) -> None:
@@ -1645,7 +1647,7 @@ def test_database_schema_migrates_legacy_media_items_with_size_bytes(tmp_path: P
         "profile", "duration_s", "frame_count", "frame_rate", "frame_rate_mode",
         "color_space", "color_transfer", "color_primaries",
     } <= stream_columns
-    assert schema == "4"
+    assert schema == "5"
 
 
 def test_storage_scan_records_real_file_size_and_size_filter(tmp_path: Path) -> None:
@@ -1812,3 +1814,123 @@ def test_jellyfin_import_keeps_direct_video_stream_properties(tmp_path: Path) ->
     assert rows[0]["color_space"] == "bt2020nc"
     assert rows[0]["color_transfer"] == "smpte2084"
     assert rows[0]["color_primaries"] == "bt2020"
+
+
+def test_storage_scan_records_external_subtitles_nfo_and_trickplay(tmp_path: Path) -> None:
+    db_path = tmp_path / "dragontools.sqlite3"
+    movie_dir = tmp_path / "video" / "Filme" / "Film (2026)"
+    movie_dir.mkdir(parents=True)
+    video = movie_dir / "Film (2026).mkv"
+    video.write_bytes(b"video")
+    (movie_dir / "Film (2026).de.ass").write_text("[Script Info]\n", encoding="utf-8")
+    (movie_dir / "Film (2026).de.forced.srt").write_text("1\n00:00:00,000 --> 00:00:01,000\nText\n", encoding="utf-8")
+    (movie_dir / "movie.nfo").write_text("<movie />", encoding="utf-8")
+    trickplay_dir = movie_dir / "Film (2026).trickplay" / "320 - 10x10"
+    trickplay_dir.mkdir(parents=True)
+    (trickplay_dir / "0.jpg").write_bytes(b"jpg")
+
+    scan_storage_paths_to_database(
+        db_path,
+        [PathMapping("Filme", "/Filme", str(tmp_path / "video" / "Filme"))],
+        analyzer=_fake_media_info,
+    )
+
+    with _db_connection(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        item = conn.execute("SELECT id, nfo_status, trickplay_status FROM media_items WHERE filename=?", (video.name,)).fetchone()
+        subtitles = conn.execute(
+            """
+            SELECT codec, language, forced, source_kind, external_path
+            FROM media_streams
+            WHERE media_id=? AND stream_type='Subtitle'
+            ORDER BY source_kind, codec
+            """,
+            (item["id"],),
+        ).fetchall()
+
+    assert item["nfo_status"] == "present"
+    assert item["trickplay_status"] == "present"
+    assert {(row["codec"], row["language"], row["source_kind"]) for row in subtitles} == {
+        ("subrip", "deu", "internal"),
+        ("ass", "deu", "external"),
+        ("subrip", "deu", "external"),
+    }
+    assert any(row["forced"] == 1 and row["source_kind"] == "external" for row in subtitles)
+    assert all(row["external_path"] for row in subtitles if row["source_kind"] == "external")
+
+
+def test_jellyfin_import_preserves_external_subtitle_marker_when_available(tmp_path: Path) -> None:
+    jellyfin_db = tmp_path / "jellyfin.db"
+    target_db = tmp_path / "dragontools.sqlite3"
+    with _db_connection(jellyfin_db) as conn:
+        conn.execute(
+            """
+            CREATE TABLE BaseItems (
+                Id TEXT PRIMARY KEY, Type TEXT, Name TEXT, Path TEXT,
+                SeriesName TEXT, ParentIndexNumber INTEGER, IndexNumber INTEGER, ProductionYear INTEGER
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE MediaStreamInfos (
+                ItemId TEXT, StreamIndex INTEGER, StreamType INTEGER, Codec TEXT,
+                Language TEXT, IsForced INTEGER, IsExternal INTEGER, Path TEXT
+            )
+            """
+        )
+        conn.execute(
+            "INSERT INTO BaseItems VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                "episode-1",
+                "MediaBrowser.Controller.Entities.TV.Episode",
+                "Folge",
+                "/Anime/Testserie (2026)/Staffel 01/Testserie - S01E01.mkv",
+                "Testserie",
+                1,
+                1,
+                2026,
+            ),
+        )
+        conn.executemany(
+            "INSERT INTO MediaStreamInfos VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            [
+                ("episode-1", 0, 1, "hevc", None, 0, 0, None),
+                ("episode-1", 1, 2, "ass", "deu", 0, 0, None),
+                (
+                    "episode-1",
+                    2,
+                    2,
+                    "subrip",
+                    "deu",
+                    1,
+                    1,
+                    "/Anime/Testserie (2026)/Staffel 01/Testserie - S01E01.de.forced.srt",
+                ),
+            ],
+        )
+
+    local_root = tmp_path / "video" / "Serien" / "Anime"
+    import_jellyfin_database(
+        jellyfin_db,
+        target_db,
+        [PathMapping("Anime", "/Anime", str(local_root))],
+    )
+
+    with _db_connection(target_db) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            """
+            SELECT codec, language, forced, source_kind, external_path
+            FROM media_streams
+            WHERE stream_type='Subtitle'
+            ORDER BY stream_index
+            """
+        ).fetchall()
+
+    assert [(row["codec"], row["source_kind"]) for row in rows] == [
+        ("ass", "internal"),
+        ("subrip", "external"),
+    ]
+    assert rows[1]["forced"] == 1
+    assert rows[1]["external_path"].endswith(str(Path("Testserie (2026)") / "Staffel 01" / "Testserie - S01E01.de.forced.srt"))

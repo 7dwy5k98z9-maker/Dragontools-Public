@@ -75,6 +75,8 @@ class ConversionConfigBuilder:
                 "keep_english_fallback": False,
             },
             "mp4_sidecars_enabled": True,
+            "additional_sidecars_enabled": False,
+            "text_to_srt_sidecar_enabled": False,
         }
         return load_subtitle_rules(default=fallback, reporter=self._log)
 

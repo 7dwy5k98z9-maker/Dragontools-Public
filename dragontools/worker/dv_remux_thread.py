@@ -41,6 +41,7 @@ from ..core.settings import (
     settings_text,
 )
 from ..rules.rule_loader import load_subtitle_rules
+from ..rules.subtitle_rules import any_sidecar_export_enabled
 from .worker_contracts import RemoveFileStatus, normalize_worker_path
 from .converter_utils import _fd, _fs
 from .converter_queue_state import ConverterQueueState
@@ -315,7 +316,7 @@ class DVRemuxThread(QThread):
                 return False
 
             staged_sidecars: list[str] = []
-            if self.container == "mp4":
+            if any_sidecar_export_enabled(self.subtitle_rules, container=self.container):
                 # MP4: globale Strategie. Bei aktivierter Option werden alle
                 # ausgewählten Subs extern gespeichert; sonst nur inkompatible
                 # Bitmap-Subs. Remux kann nicht burnen, daher Burn-Kandidat erhalten.
@@ -326,6 +327,7 @@ class DVRemuxThread(QThread):
                     file_override=file_override,
                     abort_check=lambda: self.abort_requested,
                     preserve_burn_candidate=True,
+                    container=self.container,
                 )
                 staged_sidecars = list(export_result.exported_paths)
                 if not export_result.complete:

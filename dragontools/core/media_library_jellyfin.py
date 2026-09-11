@@ -280,6 +280,16 @@ def _stream_from_jellyfin_row(row: sqlite3.Row, columns: dict[str, str]) -> dict
             row, columns, "ColorTransfer", "TransferCharacteristics", default=None
         ),
         "color_primaries": _row_value(row, columns, "ColorPrimaries", default=None),
+        "source_kind": (
+            "external"
+            if stream_type.casefold() == "subtitle"
+            and (
+                _bool(_row_value(row, columns, "IsExternal", "External", "IsExternalSubtitle", default=0))
+                or bool(_row_value(row, columns, "Path", "ExternalPath", "FilePath", default=None))
+            )
+            else "internal"
+        ),
+        "external_path": _row_value(row, columns, "Path", "ExternalPath", "FilePath", default=None),
         "title": _row_value(row, columns, "Title", "DisplayTitle", default=None),
         "rpu_present": _bool(_row_value(row, columns, "RpuPresentFlag", default=0)),
         "hdr10plus_present": _bool(_row_value(row, columns, "Hdr10PlusPresentFlag", default=0)),
@@ -412,7 +422,11 @@ def import_jellyfin_database(
                         skipped_items += 1
                         continue
                     seen_paths.add(path_key)
-                    streams = streams_by_item.get(source_id, [])
+                    streams = [dict(stream) for stream in streams_by_item.get(source_id, [])]
+                    for stream in streams:
+                        external_path = str(stream.get("external_path") or "").strip()
+                        if external_path and mappings_list:
+                            stream["external_path"] = apply_path_mappings(external_path, mappings_list)
                     is_hdr, has_hdr10plus, has_dv, dv_profile, width, height, video_codec, video_bitrate = (
                         _video_flags_from_streams(streams)
                     )

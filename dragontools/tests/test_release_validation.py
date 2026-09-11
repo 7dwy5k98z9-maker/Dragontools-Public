@@ -290,7 +290,7 @@ def test_release_validation_checks_required_files_and_schema(tmp_path):
     _write_package_smoke_files(root)
     config = root / "dragontools" / "config"
     _write_json(config / "default_audio_rules.json", {"_schema_version": 4})
-    _write_json(config / "default_subtitle_rules.json", {"_schema_version": 4})
+    _write_json(config / "default_subtitle_rules.json", {"_schema_version": 6})
     _write_json(config / "default_move_rules.json", {"_schema_version": 1})
     _write_json(config / "default_renamer_rules.json", {"_schema_version": 1})
     _write_json(config / "default_profiles.json", {"_schema_version": 3})
@@ -316,14 +316,14 @@ def test_release_validation_treats_schema_mismatch_as_error(tmp_path):
     by_title = {check.title: check for check in checks}
 
     assert by_title["Schema: Untertitel-Regeln"].status == "error"
-    assert "erwartet 4" in by_title["Schema: Untertitel-Regeln"].detail
+    assert "erwartet 6" in by_title["Schema: Untertitel-Regeln"].detail
 
 
 def test_release_validation_warns_about_private_paths(tmp_path):
     from dragontools.core.release_validation import validate_release
 
     root = tmp_path
-    (root / "help.html").write_text(r"C:\Users\ExampleUser\Documents\DragonTools", encoding="utf-8")
+    (root / "help.html").write_text(r"C:\Users\Marku\Documents\DragonTools", encoding="utf-8")
 
     checks = validate_release(root)
 
@@ -339,7 +339,7 @@ def test_app_bundle_validation_checks_exe_not_source_files(tmp_path):
     (app_dir / f"DragonToolsV{APP_VERSION}.exe").parent.mkdir(parents=True)
     (app_dir / f"DragonToolsV{APP_VERSION}.exe").write_bytes(b"exe")
     (data_dir / "help.html").parent.mkdir(parents=True)
-    (data_dir / "help.html").write_text("<html>PrivateName</html>", encoding="utf-8")
+    (data_dir / "help.html").write_text("<html>Marku</html>", encoding="utf-8")
     (data_dir / "Handbuch").mkdir()
     (data_dir / "Handbuch" / "Handbuch.pdf").write_bytes(b"%PDF")
     (data_dir / "Aenderungshistorie").mkdir()
@@ -347,7 +347,7 @@ def test_app_bundle_validation_checks_exe_not_source_files(tmp_path):
     _write_package_smoke_files(data_dir / "Python")
     config = data_dir / "dragontools" / "config"
     _write_json(config / "default_audio_rules.json", {"_schema_version": 4})
-    _write_json(config / "default_subtitle_rules.json", {"_schema_version": 4})
+    _write_json(config / "default_subtitle_rules.json", {"_schema_version": 6})
     _write_json(config / "default_move_rules.json", {"_schema_version": 1})
     _write_json(config / "default_renamer_rules.json", {"_schema_version": 1})
     _write_json(config / "default_profiles.json", {"_schema_version": 3})
@@ -397,7 +397,7 @@ def test_source_only_manifest_makes_source_archive_self_consistent(tmp_path):
     _write_package_smoke_files(root)
     config = root / "dragontools" / "config"
     _write_json(config / "default_audio_rules.json", {"_schema_version": 4})
-    _write_json(config / "default_subtitle_rules.json", {"_schema_version": 4})
+    _write_json(config / "default_subtitle_rules.json", {"_schema_version": 6})
     _write_json(config / "default_move_rules.json", {"_schema_version": 1})
     _write_json(config / "default_renamer_rules.json", {"_schema_version": 1})
     _write_json(config / "default_profiles.json", {"_schema_version": 3})
@@ -472,7 +472,7 @@ def test_package_only_manifest_validates_code_only_release(tmp_path):
     _write_package_smoke_files(root)
     config = root / "dragontools" / "config"
     _write_json(config / "default_audio_rules.json", {"_schema_version": 4})
-    _write_json(config / "default_subtitle_rules.json", {"_schema_version": 4})
+    _write_json(config / "default_subtitle_rules.json", {"_schema_version": 6})
     _write_json(config / "default_move_rules.json", {"_schema_version": 1})
     _write_json(config / "default_renamer_rules.json", {"_schema_version": 1})
     _write_json(config / "default_profiles.json", {"_schema_version": 3})

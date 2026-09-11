@@ -341,6 +341,114 @@ def test_structured_result_marks_partial_export_as_incomplete(tmp_path):
     assert "1/2" in result.failure_summary()
 
 
+def test_ass_sidecar_can_also_export_srt_variant(tmp_path):
+    from dragontools.worker.subtitle_sidecar_service import SubtitleSidecarService
+
+    svc = SubtitleSidecarService(
+        ffmpeg_path="ffmpeg",
+        subtitle_rules={
+            "mp4_sidecars_enabled": True,
+            "text_to_srt_sidecar_enabled": True,
+        },
+        log=lambda *_: None,
+    )
+    sub = _make_sub(3, "ass", "deu")
+    mi = _make_mi([sub])
+    plan = MagicMock(external_streams=[sub], burn_sub=None, burn_warnings=())
+    commands: list[list[str]] = []
+
+    def fake_run(cmd, **_kwargs):
+        commands.append(list(cmd))
+        Path(cmd[-1]).write_text("ok", encoding="utf-8")
+        return MagicMock(returncode=0, stderr=b"")
+
+    with (
+        patch("dragontools.worker.subtitle_sidecar_service.compute_subtitle_plan", return_value=plan),
+        patch("dragontools.worker.subtitle_sidecar_service.run_tool", side_effect=fake_run),
+    ):
+        result = svc.export_sidecars_result(
+            input_path="/src/input.mkv",
+            output_base=tmp_path / "Film",
+            media_info=mi,
+            container="mp4",
+        )
+
+    assert result.complete is True
+    assert result.expected_count == 2
+    assert [Path(path).name for path in result.exported_paths] == ["Film.de.ass", "Film.de.srt"]
+    assert commands[0][-2:] == ["ass", str(tmp_path / "Film.de.ass")]
+    assert commands[1][-2:] == ["srt", str(tmp_path / "Film.de.srt")]
+
+
+def test_mkv_text_to_srt_exports_only_srt_variant(tmp_path):
+    from dragontools.worker.subtitle_sidecar_service import SubtitleSidecarService
+
+    svc = SubtitleSidecarService(
+        ffmpeg_path="ffmpeg",
+        subtitle_rules={
+            "mp4_sidecars_enabled": True,
+            "additional_sidecars_enabled": False,
+            "text_to_srt_sidecar_enabled": True,
+        },
+        log=lambda *_: None,
+    )
+    sub = _make_sub(3, "ass", "deu")
+    mi = _make_mi([sub])
+    plan = MagicMock(external_streams=[sub], burn_sub=None, burn_warnings=())
+
+    def fake_run(cmd, **_kwargs):
+        Path(cmd[-1]).write_text("ok", encoding="utf-8")
+        return MagicMock(returncode=0, stderr=b"")
+
+    with (
+        patch("dragontools.worker.subtitle_sidecar_service.compute_subtitle_plan", return_value=plan),
+        patch("dragontools.worker.subtitle_sidecar_service.run_tool", side_effect=fake_run),
+    ):
+        result = svc.export_sidecars_result(
+            input_path="/src/input.mkv",
+            output_base=tmp_path / "Film",
+            media_info=mi,
+            container="mkv",
+        )
+
+    assert result.complete is True
+    assert result.expected_count == 1
+    assert [Path(path).name for path in result.exported_paths] == ["Film.de.srt"]
+    assert not (tmp_path / "Film.de.ass").exists()
+
+
+def test_mkv_mov_text_can_export_srt_sidecar(tmp_path):
+    from dragontools.worker.subtitle_sidecar_service import SubtitleSidecarService
+
+    svc = SubtitleSidecarService(
+        ffmpeg_path="ffmpeg",
+        subtitle_rules={"text_to_srt_sidecar_enabled": True},
+        log=lambda *_: None,
+    )
+    sub = _make_sub(5, "mov_text", "eng")
+    mi = _make_mi([sub])
+    plan = MagicMock(external_streams=[sub], burn_sub=None, burn_warnings=())
+
+    def fake_run(cmd, **_kwargs):
+        Path(cmd[-1]).write_text("ok", encoding="utf-8")
+        return MagicMock(returncode=0, stderr=b"")
+
+    with (
+        patch("dragontools.worker.subtitle_sidecar_service.compute_subtitle_plan", return_value=plan),
+        patch("dragontools.worker.subtitle_sidecar_service.run_tool", side_effect=fake_run),
+    ):
+        result = svc.export_sidecars_result(
+            input_path="/src/input.mp4",
+            output_base=tmp_path / "Film",
+            media_info=mi,
+            container="mkv",
+        )
+
+    assert result.complete is True
+    assert result.expected_count == 1
+    assert [Path(path).name for path in result.exported_paths] == ["Film.en.srt"]
+
+
 def test_sidecar_export_never_overwrites_existing_destination(tmp_path):
     from dragontools.worker.subtitle_sidecar_service import SubtitleSidecarService
 

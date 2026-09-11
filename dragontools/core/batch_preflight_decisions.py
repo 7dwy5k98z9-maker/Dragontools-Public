@@ -127,6 +127,7 @@ def _decision_reasons(preview: dict[str, Any], fs_info: dict[str, Any] | None = 
                 )
             else:
                 reasons.append("Untertitelregel: keine kompatiblen Untertitel zum Kopieren ausgewählt.")
+        _append_subtitle_sidecar_reasons(reasons, subs, sub_prefix)
 
     overrides = dict(preview.get("overrides") or {})
     if overrides.get("processing_mode") == "strip_only":
@@ -154,6 +155,39 @@ def _decision_reasons(preview: dict[str, Any], fs_info: dict[str, Any] | None = 
         reasons.append(f"Ausgabe: geplante Datei {Path(final_path).name}.")
 
     return reasons
+
+
+def _append_subtitle_sidecar_reasons(reasons: list[str], subs: dict[str, Any], sub_prefix: str) -> None:
+    native = [dict(entry) for entry in subs.get("native_sidecar_candidates") or []]
+    text_srt = [dict(entry) for entry in subs.get("text_to_srt_candidates") or []]
+    additional_enabled = bool(subs.get("additional_sidecars_enabled"))
+    mp4_enabled = bool(subs.get("mp4_sidecars_enabled"))
+    text_srt_enabled = bool(subs.get("text_to_srt_sidecar_enabled"))
+
+    if native:
+        if mp4_enabled and additional_enabled:
+            label = "MP4-/zusätzliche Sidecar-Regel"
+        elif mp4_enabled:
+            label = "MP4-Sidecar-Regel"
+        else:
+            label = "Zusätzliche Sidecar-Regel"
+        reasons.append(f"{label}: {_stream_list_label(native)} wird extern gespeichert.")
+    elif additional_enabled:
+        reasons.append(
+            f"{sub_prefix}: zusätzliche Sidecar-Regel ist aktiv, "
+            "aber keine ausgewählte Untertitelspur passt."
+        )
+
+    if text_srt:
+        reasons.append(
+            "Text-zu-SRT-Regel: "
+            f"{_stream_list_label(text_srt)} wird zusätzlich als SRT-Sidecar gespeichert."
+        )
+    elif text_srt_enabled:
+        reasons.append(
+            "Text-zu-SRT-Regel: aktiv, aber keine ausgewählte textbasierte "
+            "Untertitelspur ist verfügbar."
+        )
 
 
 def _warnings_for(path: str, preview: dict[str, Any]) -> tuple[list[str], bool]:

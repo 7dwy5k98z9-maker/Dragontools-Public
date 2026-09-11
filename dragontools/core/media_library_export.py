@@ -83,6 +83,8 @@ def export_search_results_to_csv(rows: Iterable[dict[str, Any]], output_file: st
         ("dynamic_range", "Dynamikumfang"),
         ("audio_summary", "Audio"),
         ("subtitle_summary", "Untertitel"),
+        ("nfo_status", "NFO"),
+        ("trickplay_status", "Trickplay"),
         ("deviation_reason", "Abweichung"),
         ("analysis_status", "Analyse"),
         ("path", "Pfad"),

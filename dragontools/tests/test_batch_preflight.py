@@ -284,6 +284,88 @@ def test_batch_preflight_explains_rule_decisions():
     assert "Stream-Copy" in reasons
 
 
+def test_batch_preflight_shows_subtitle_sidecar_results():
+    def fake_preview(path, **kwargs):
+        return _base_preview(
+            subtitles={
+                "source_count": 1,
+                "override_mode": "auto",
+                "burn_in": False,
+                "container_copy_supported": True,
+                "stream_copy_candidates": [
+                    {
+                        "index": 2,
+                        "language": "de",
+                        "codec": "ass",
+                        "forced": False,
+                    }
+                ],
+                "copy_candidate_count": 1,
+                "additional_sidecars_enabled": True,
+                "text_to_srt_sidecar_enabled": True,
+                "native_sidecar_candidates": [
+                    {
+                        "index": 2,
+                        "language": "de",
+                        "codec": "ass",
+                        "forced": False,
+                    }
+                ],
+                "native_sidecar_candidate_count": 1,
+                "text_to_srt_candidates": [
+                    {
+                        "index": 2,
+                        "language": "de",
+                        "codec": "ass",
+                        "forced": False,
+                    }
+                ],
+                "text_to_srt_candidate_count": 1,
+                "burn_blocked_reason": None,
+            }
+        )
+
+    rows = build_batch_preflight_rows([r"C:\in\film.mkv"], preview_builder=fake_preview)
+    reasons = "\n".join(rows[0]["decision_reasons"])
+
+    assert rows[0]["subtitles"] == "Copy 1 | Sidecar 1 | Text->SRT 1"
+    assert "Zusätzliche Sidecar-Regel: #2 de/ass wird extern gespeichert." in reasons
+    assert "Text-zu-SRT-Regel: #2 de/ass wird zusätzlich als SRT-Sidecar gespeichert." in reasons
+
+
+def test_rules_preview_derives_sidecar_candidates_from_selected_subtitles():
+    from dragontools.core.models import AudioStream, MediaInfo, SubtitleStream, VideoStream
+    from dragontools.core.rules_preview import build_rules_preview
+
+    media_info = MediaInfo(
+        path=r"C:\in\film.mkv",
+        audio_streams=[AudioStream(index=1, language="de", forced=False, title=None, codec="aac", channels=2)],
+        subtitle_streams=[SubtitleStream(index=2, language="de", forced=False, title=None, codec="ass")],
+        video_streams=[VideoStream(index=0, codec="h264", width=1920, height=1080)],
+        duration_s=120.0,
+    )
+
+    preview = build_rules_preview(
+        r"C:\in\film.mkv",
+        media_info=media_info,
+        subtitle_rules={
+            "language_priority": ["de"],
+            "preferred_formats": ["ass", "srt"],
+            "max_languages": 1,
+            "tracks_per_language": 1,
+            "additional_sidecars_enabled": True,
+            "text_to_srt_sidecar_enabled": True,
+        },
+    )
+    subtitles = preview["subtitles"]
+
+    assert subtitles["copy_candidate_count"] == 1
+    assert subtitles["native_sidecar_candidate_count"] == 1
+    assert subtitles["text_to_srt_candidate_count"] == 1
+    assert subtitles["native_sidecar_candidates"][0]["index"] == 2
+    assert subtitles["text_to_srt_candidates"][0]["index"] == 2
+
+
 def test_batch_preflight_report_includes_decisions_and_warnings():
     rows = [{
         "status": "Warnung",

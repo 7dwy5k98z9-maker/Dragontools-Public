@@ -173,6 +173,38 @@ class _SubtitleTab(QWidget):
         row_mp4.addStretch()
         mp4_l.addLayout(row_mp4)
         v.addWidget(mp4_grp)
+
+        sidecar_grp = QGroupBox("Zusätzliche Sidecars"); sidecar_l = QVBoxLayout(sidecar_grp)
+        self.additional_sidecars = QCheckBox("Ausgewählte Untertitel zusätzlich als Sidecar speichern")
+        self.additional_sidecars.setChecked(bool(self._data.get("additional_sidecars_enabled", False)))
+        row_extra = QHBoxLayout(); row_extra.addWidget(self.additional_sidecars)
+        row_extra.addWidget(InfoButton(
+            "Legt die vom Untertitel-Regelwerk ausgewählten Untertitel zusätzlich neben der "
+            "fertigen Videodatei ab.\n\n"
+            "Bei MKV bleiben die Untertitel weiterhin intern erhalten. Bei MP4 ergänzt diese "
+            "Option die bestehende MP4-Policy, wenn du zusätzlich externe Dateien möchtest."
+        ))
+        row_extra.addStretch()
+        sidecar_l.addLayout(row_extra)
+
+        self.text_to_srt_sidecar = QCheckBox("Text-Untertitel zusätzlich als SRT-Sidecar speichern")
+        self.text_to_srt_sidecar.setChecked(bool(
+            self._data.get(
+                "text_to_srt_sidecar_enabled",
+                self._data.get("ass_to_srt_sidecar_enabled", False),
+            )
+        ))
+        row_ass = QHBoxLayout(); row_ass.addWidget(self.text_to_srt_sidecar)
+        row_ass.addWidget(InfoButton(
+            "Erzeugt für ausgewählte textbasierte Untertitel zusätzlich eine SRT-Datei, "
+            "wenn FFmpeg das Quellformat lesen kann.\n\n"
+            "Das gilt z. B. für ASS/SSA, SubRip/SRT, mov_text/tx3g, WebVTT und einfache Textsubs. "
+            "Formatierungen, Positionierung und WebVTT-/ASS-Spezialdaten können dabei technisch "
+            "nicht vollständig erhalten bleiben; Text und Zeitstempel werden übernommen."
+        ))
+        row_ass.addStretch()
+        sidecar_l.addLayout(row_ass)
+        v.addWidget(sidecar_grp)
         scroll.setWidget(inner)
         outer.addWidget(scroll)
 
@@ -214,6 +246,8 @@ class _SubtitleTab(QWidget):
                 "keep_english_fallback": self.ks.isChecked() and has_english_fallback,
             },
             "mp4_sidecars_enabled": self.mp4_sidecars.isChecked(),
+            "additional_sidecars_enabled": self.additional_sidecars.isChecked(),
+            "text_to_srt_sidecar_enabled": self.text_to_srt_sidecar.isChecked(),
         }
 
 

@@ -11,6 +11,7 @@ from .hdr10_color import HDR10_OUTPUT_ARGS
 from .standard_pipeline_runner import _clear_reencoded_video_stat_tags
 from .subtitle_sidecar_service import SubtitleSidecarService
 from .workflow_models import PipelineExecutionRequest, PipelineExecutionResult
+from ..rules.subtitle_rules import any_sidecar_export_enabled
 
 
 class _AV1MetadataPipelineBase:
@@ -33,9 +34,10 @@ class _AV1MetadataPipelineBase:
         self._progress_runner = progress_runner
         self._temp_state = temp_state
         self._log_fn = log or (lambda *_args, **_kwargs: None)
+        self._subtitle_rules = dict(subtitle_rules or {})
         self._subtitle_service = SubtitleSidecarService(
             ffmpeg_path=tools.ffmpeg,
-            subtitle_rules=dict(subtitle_rules or {}),
+            subtitle_rules=self._subtitle_rules,
             log=self._log,
             worker=worker,
         )
@@ -118,13 +120,15 @@ class _AV1MetadataPipelineBase:
         return None
 
     def _export_mp4_sidecars(self, request: PipelineExecutionRequest) -> tuple[tuple[str, ...], PipelineExecutionResult | None]:
-        if str(request.container).lower() != "mp4":
+        target_container = str(request.container).lower()
+        if not any_sidecar_export_enabled(self._subtitle_rules, container=target_container):
             return (), None
         export = self._subtitle_service.export_sidecars_result(
             input_path=request.input_path,
             output_base=Path(request.output_path).with_suffix(""),
             media_info=request.media_info,
             file_override=request.override,
+            container=target_container,
         )
         sidecars = tuple(export.exported_paths)
         if not export.complete:

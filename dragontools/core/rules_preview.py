@@ -10,14 +10,52 @@ from ..rules.audio_rules import (
 )
 from ..rules.pipeline_selector import resolve_pipeline_context
 from ..rules.subtitle_rules import (
+    additional_sidecars_enabled,
+    build_mp4_subtitle_storage_plan,
     compute_subtitle_plan,
     mp4_sidecars_enabled,
+    text_to_srt_sidecar_enabled,
 )
+
+
+TEXT_TO_SRT_PREVIEW_CODECS = {
+    "ass",
+    "ssa",
+    "subrip",
+    "srt",
+    "subt",
+    "mov_text",
+    "tx3g",
+    "text",
+    "webvtt",
+}
 
 
 def _lang(value: Any) -> str:
     text = (str(value).strip().lower() if value is not None else "")
     return text or "und"
+
+
+def _subtitle_entry(stream) -> dict[str, Any]:
+    return {
+        "index": stream.index,
+        "language": _lang(stream.language),
+        "forced": bool(stream.forced),
+        "codec": (stream.codec or "").lower(),
+        "title": stream.title,
+    }
+
+
+def _subtitle_entries(streams) -> list[dict[str, Any]]:
+    return [_subtitle_entry(stream) for stream in streams]
+
+
+def _native_srt_sidecar_indices(streams) -> set[int]:
+    return {
+        int(stream.index)
+        for stream in streams
+        if str(getattr(stream, "codec", "") or "").lower() in {"subrip", "srt", "subt", "mov_text", "tx3g", "text"}
+    }
 
 
 def _build_audio_preview(mi, ov: dict[str, Any], container: str) -> dict[str, Any]:
@@ -73,6 +111,7 @@ def _build_subtitle_preview(
     ov: dict[str, Any],
     subtitle_rules: dict[str, Any] | None,
     pipeline: str,
+    container: str,
 ) -> dict[str, Any]:
     plan = compute_subtitle_plan(
         mi.subtitle_streams,
@@ -85,9 +124,59 @@ def _build_subtitle_preview(
     burn_sub = plan.burn_sub
     keep = list(plan.keep_streams)
     external_streams = list(plan.external_streams)
+    target_container = str(container or "mkv").lower()
+    mp4_export_enabled = target_container in {"mp4", "m4v", "mov"} and mp4_sidecars_enabled(subtitle_rules)
+    additional_enabled = additional_sidecars_enabled(subtitle_rules)
+    text_srt_enabled = text_to_srt_sidecar_enabled(subtitle_rules)
+    copy_supported = pipeline not in {"dv", "av1_dv"}
+
+    selected_for_sidecars = list(external_streams)
+    if target_container in {"mp4", "m4v", "mov"}:
+        storage = build_mp4_subtitle_storage_plan(
+            plan,
+            subtitle_rules=subtitle_rules,
+            preserve_burn_candidate=False,
+        )
+        stream_copy_candidates = list(storage.internal_streams)
+        normal_sidecar_streams = (
+            selected_for_sidecars
+            if (mp4_export_enabled or additional_enabled)
+            else list(storage.external_streams)
+        )
+    elif not copy_supported:
+        stream_copy_candidates = []
+        normal_sidecar_streams = (
+            selected_for_sidecars
+            if (mp4_export_enabled or additional_enabled)
+            else []
+        )
+    else:
+        stream_copy_candidates = keep
+        normal_sidecar_streams = selected_for_sidecars if additional_enabled else []
+
+    normal_srt_indices = _native_srt_sidecar_indices(normal_sidecar_streams)
+    text_srt_candidates = [
+        s for s in selected_for_sidecars
+        if str(getattr(s, "codec", "") or "").lower()
+        in TEXT_TO_SRT_PREVIEW_CODECS
+        and int(s.index) not in normal_srt_indices
+    ]
+    sidecar_fields = {
+        "mp4_sidecars_enabled": mp4_export_enabled,
+        "additional_sidecars_enabled": additional_enabled,
+        "text_to_srt_sidecar_enabled": text_srt_enabled,
+        "native_sidecar_candidates": _subtitle_entries(normal_sidecar_streams),
+        "native_sidecar_candidate_count": len(normal_sidecar_streams),
+        "text_to_srt_candidates": [
+            _subtitle_entry(s)
+            for s in text_srt_candidates
+        ] if text_srt_enabled else [],
+        "text_to_srt_candidate_count": len(text_srt_candidates) if text_srt_enabled else 0,
+        "sidecar_export_enabled": bool(normal_sidecar_streams or (text_srt_enabled and text_srt_candidates)),
+    }
 
     if pipeline in {"dv", "av1_dv"}:
-        external_enabled = mp4_sidecars_enabled(subtitle_rules)
+        external_enabled = bool(sidecar_fields["sidecar_export_enabled"])
         return {
             "override_mode": plan.override_mode,
             "source_count": len(mi.subtitle_streams),
@@ -120,17 +209,9 @@ def _build_subtitle_preview(
             "stream_copy_candidates": [],
             "copy_candidate_count": 0,
             "external_export_enabled": external_enabled,
-            "external_export_candidates": [
-                {
-                    "index": s.index,
-                    "language": _lang(s.language),
-                    "forced": bool(s.forced),
-                    "codec": (s.codec or "").lower(),
-                    "title": s.title,
-                }
-                for s in external_streams
-            ] if external_enabled else [],
-            "external_export_candidate_count": len(external_streams) if external_enabled else 0,
+            "external_export_candidates": _subtitle_entries(normal_sidecar_streams),
+            "external_export_candidate_count": len(normal_sidecar_streams),
+            **sidecar_fields,
         }
 
     return {
@@ -162,17 +243,9 @@ def _build_subtitle_preview(
             for stream in plan.burn_candidates
         ],
         "container_copy_supported": True,
-        "stream_copy_candidates": [
-            {
-                "index": s.index,
-                "language": _lang(s.language),
-                "forced": bool(s.forced),
-                "codec": (s.codec or "").lower(),
-                "title": s.title,
-            }
-            for s in keep
-        ],
-        "copy_candidate_count": len(keep),
+        "stream_copy_candidates": _subtitle_entries(stream_copy_candidates),
+        "copy_candidate_count": len(stream_copy_candidates),
+        **sidecar_fields,
     }
 
 
@@ -263,7 +336,7 @@ def build_rules_preview(
         "archive_reason": pipeline_ctx.get("archive_reason"),
         "ignored_hdr": list(pipeline_ctx.get("ignored_hdr") or []),
         "audio": _build_audio_preview(mi, ov, container),
-        "subtitles": _build_subtitle_preview(mi, ov, subtitle_rules, pipeline),
+        "subtitles": _build_subtitle_preview(mi, ov, subtitle_rules, pipeline, container),
         "overrides": ov,
         "move": {
             "planned_target": planned_target_dir(planned_target),

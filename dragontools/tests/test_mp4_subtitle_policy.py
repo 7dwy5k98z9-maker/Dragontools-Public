@@ -7,9 +7,11 @@ from unittest.mock import MagicMock, patch
 from dragontools.core.models import SubtitleStream
 from dragontools.rules.subtitle_rules import (
     SubtitlePlan,
+    any_sidecar_export_enabled,
     build_mp4_subtitle_storage_plan,
     migrate_subtitle_rules,
     mp4_sidecars_enabled,
+    text_to_srt_sidecar_enabled,
 )
 
 
@@ -37,6 +39,19 @@ def test_legacy_dv_sidecar_setting_migrates_to_global_mp4_setting():
     assert rules["mp4_sidecars_enabled"] is False
     assert rules["dv_extract_external_subs"] is False
     assert mp4_sidecars_enabled(rules) is False
+
+
+def test_new_sidecar_flags_are_migrated_and_gate_non_mp4_exports():
+    rules = migrate_subtitle_rules({
+        "additional_sidecars_enabled": "true",
+        "text_to_srt_sidecar_enabled": "1",
+    })
+
+    assert rules["_schema_version"] == 6
+    assert rules["additional_sidecars_enabled"] is True
+    assert text_to_srt_sidecar_enabled(rules) is True
+    assert any_sidecar_export_enabled({}, container="mkv") is False
+    assert any_sidecar_export_enabled(rules, container="mkv") is True
 
 
 def test_mp4_sidecars_enabled_exports_all_selected_subtitle_types():

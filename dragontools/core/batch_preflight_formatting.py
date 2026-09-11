@@ -143,6 +143,13 @@ def _subtitle_summary(preview: dict[str, Any]) -> str:
         count = int(subs.get("copy_candidate_count") or 0)
         parts.append(f"Copy {count}" if count else "Copy 0")
 
+    native_sidecars = int(subs.get("native_sidecar_candidate_count") or 0)
+    text_srt_sidecars = int(subs.get("text_to_srt_candidate_count") or 0)
+    if native_sidecars:
+        parts.append(f"Sidecar {native_sidecars}")
+    if text_srt_sidecars:
+        parts.append(f"Text->SRT {text_srt_sidecars}")
+
     return " | ".join(parts) if parts else "Keine Auswahl"
 
 

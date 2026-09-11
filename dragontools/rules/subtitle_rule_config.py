@@ -22,7 +22,7 @@ DEFAULT_PREFERRED_SUBTITLE_FORMATS = [
 
 
 DEFAULT_SUBTITLE_RULES: dict[str, Any] = {
-    SCHEMA_VERSION_KEY: 4,
+    SCHEMA_VERSION_KEY: 6,
     "language_priority": ["de", "en"],
     "max_languages": 1,
     "tracks_per_language": 1,
@@ -54,6 +54,8 @@ DEFAULT_SUBTITLE_RULES: dict[str, Any] = {
         "keep_english_fallback": False,
     },
     "mp4_sidecars_enabled": True,
+    "additional_sidecars_enabled": False,
+    "text_to_srt_sidecar_enabled": False,
 }
 
 
@@ -134,6 +136,13 @@ def migrate_subtitle_rules(
             migration_messages.append("Legacy-DV-Sidecar-Regel in globale MP4-Sidecar-Regel übernommen")
         else:
             migration_messages.append("MP4-Sidecar-Regel ergänzt")
+    if "additional_sidecars_enabled" not in raw:
+        migration_messages.append("Zusätzliche Sidecar-Regel ergänzt")
+    if "text_to_srt_sidecar_enabled" not in raw:
+        if "ass_to_srt_sidecar_enabled" in raw:
+            migration_messages.append("ASS/SSA-zu-SRT-Regel in Text-zu-SRT-Sidecar-Regel übernommen")
+        else:
+            migration_messages.append("Text-zu-SRT-Sidecar-Regel ergänzt")
     migrated.setdefault("preferred_languages", [priority[0]] if priority else ["de"])
     migrated.setdefault("fallback_languages", priority[1:] if len(priority) > 1 else ["en"])
     migrated.setdefault("preferred_formats", list(DEFAULT_SUBTITLE_RULES["preferred_formats"]))
@@ -145,6 +154,15 @@ def migrate_subtitle_rules(
         raw.get("mp4_sidecars_enabled", legacy_mp4_sidecars),
         DEFAULT_SUBTITLE_RULES["mp4_sidecars_enabled"],
     )
+    migrated["additional_sidecars_enabled"] = _safe_bool(
+        raw.get("additional_sidecars_enabled"),
+        DEFAULT_SUBTITLE_RULES["additional_sidecars_enabled"],
+    )
+    migrated["text_to_srt_sidecar_enabled"] = _safe_bool(
+        raw.get("text_to_srt_sidecar_enabled", raw.get("ass_to_srt_sidecar_enabled")),
+        DEFAULT_SUBTITLE_RULES["text_to_srt_sidecar_enabled"],
+    )
+    migrated.pop("ass_to_srt_sidecar_enabled", None)
     if "dv_extract_external_subs" in raw:
         migrated["dv_extract_external_subs"] = migrated["mp4_sidecars_enabled"]
 

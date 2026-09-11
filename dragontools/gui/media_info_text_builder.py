@@ -234,6 +234,35 @@ def _subtitle_preview_lines(preview: dict[str, Any]) -> list[str]:
             lines.append("Auto-Burn:      Blockiert - Forced-Spur wirkt wie Full Sub")
     for warning in list(subtitles.get("burn_warnings") or []):
         lines.append(f"Warnung:        {warning}")
+    native_sidecars = list(subtitles.get("native_sidecar_candidates", []) or [])
+    if native_sidecars:
+        reason = (
+            "MP4-Regel"
+            if bool(subtitles.get("mp4_sidecars_enabled")) and not bool(subtitles.get("additional_sidecars_enabled"))
+            else "zusätzlich"
+        )
+        lines.append(f"Sidecars:       {len(native_sidecars)} geplant ({reason})")
+        for idx, entry in enumerate(native_sidecars, start=1):
+            lines.append(
+                f"Sidecar {idx}:  Stream {entry.get('index')} | "
+                f"{_lang_label(entry.get('language'))} | "
+                f"{_safe(entry.get('codec'))} | "
+                f"Forced: {_yes_no(bool(entry.get('forced')))}"
+            )
+    elif bool(subtitles.get("additional_sidecars_enabled")):
+        lines.append("Sidecars:       Aktiv, aber kein ausgewählter Untertitel passt")
+    text_srt_candidates = list(subtitles.get("text_to_srt_candidates", []) or [])
+    if text_srt_candidates:
+        lines.append(f"Text→SRT:       {len(text_srt_candidates)} geplant")
+        for idx, entry in enumerate(text_srt_candidates, start=1):
+            lines.append(
+                f"SRT {idx}:      Stream {entry.get('index')} | "
+                f"{_lang_label(entry.get('language'))} | "
+                f"{_safe(entry.get('codec'))} | "
+                f"Forced: {_yes_no(bool(entry.get('forced')))}"
+            )
+    elif bool(subtitles.get("text_to_srt_sidecar_enabled")):
+        lines.append("Text→SRT:       Aktiv, aber kein ausgewählter Text-Untertitel passt")
 
     if not bool(subtitles.get("container_copy_supported", True)):
         lines.append("Stream-Kopie:   Nicht im DV-Zielcontainer vorgesehen")

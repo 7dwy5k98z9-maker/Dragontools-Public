@@ -44,9 +44,11 @@ from ..core.models import normalize_override_dict
 from .tool_runner import run_tool
 from .subtitle_sidecar_plan import build_sidecar_targets, select_sidecar_streams
 from ..rules.subtitle_rules import (
+    additional_sidecars_enabled,
     build_mp4_subtitle_storage_plan,
     compute_subtitle_plan,
     mp4_sidecars_enabled,
+    text_to_srt_sidecar_enabled,
 )
 
 
@@ -208,6 +210,7 @@ class SubtitleSidecarService:
         file_override=None,
         abort_check: "Callable[[], bool] | None" = None,
         preserve_burn_candidate: bool = False,
+        container: str = "mp4",
     ) -> SubtitleExportResult:
         """Export all subtitle streams that the MP4 policy requires externally."""
         subtitle_streams = getattr(media_info, "subtitle_streams", None) or []
@@ -226,49 +229,51 @@ class SubtitleSidecarService:
             compute_plan=compute_subtitle_plan,
             build_storage_plan=build_mp4_subtitle_storage_plan,
             sidecars_enabled=mp4_sidecars_enabled,
+            additional_sidecars_enabled=additional_sidecars_enabled,
+            text_to_srt_sidecar_enabled=text_to_srt_sidecar_enabled,
+            container=container,
         )
         for warning in getattr(selection.plan, "burn_warnings", ()) or ():
             self._log(f"  ⚠️ {warning}", "warn")
 
-        planned = selection.planned_stream_indices
-        if not selection.streams:
-            self._log_empty_selection(selection.storage)
-            return SubtitleExportResult(planned_stream_indices=planned)
-
-        reason = (
-            "globale MP4-Sidecar-Option"
-            if mp4_sidecars_enabled(self._subtitle_rules)
-            else "MP4-Kompatibilität (PGS/SUP/VobSub)"
-        )
-        self._log(
-            f"  📄 Exportiere {len(selection.streams)} externe Untertitelspur(en) ({reason}) …",
-            "info",
-        )
-
         targets, unsupported = build_sidecar_targets(
-            selection.streams,
+            selection.normal_streams,
             output_base,
+            ass_srt_streams=selection.ass_srt_streams,
             language_tag=lambda value: safe_lang_tag(lang_iso_tag(value)),
             filename_builder=sidecar_filename,
             codec_resolver=sub_codec_to_ext_and_args,
         )
+        planned = (
+            tuple(int(target.stream.index) for target in targets)
+            + tuple(int(stream.index) for stream, _language, _codec in unsupported)
+        )
+        if not targets and not unsupported:
+            self._log_empty_selection(selection.storage, container=container)
+            return SubtitleExportResult(planned_stream_indices=planned)
+
         failures: list[SubtitleExportFailure] = []
         exported: list[str] = []
         aborted = False
 
-        target_by_index = {int(target.stream.index): target for target in targets}
-        unsupported_by_index = {int(stream.index): (stream, language, codec) for stream, language, codec in unsupported}
-        for stream in selection.streams:
+        if abort_check and abort_check():
+            self._log("  📄 Sidecar-Export nach Abbruch-Signal gestoppt.", "warn")
+            return SubtitleExportResult(planned_stream_indices=planned, aborted=True)
+
+        reason = self._sidecar_reason(container, selection)
+        self._log(
+            f"  📄 Exportiere {len(targets)} externe Untertiteldatei(en) ({reason}) …",
+            "info",
+        )
+
+        for stream, language, codec in unsupported:
+            failures.append(self._unsupported_failure(stream, language, codec))
+
+        for target in targets:
             if abort_check and abort_check():
                 aborted = True
                 self._log("  📄 Sidecar-Export nach Abbruch-Signal gestoppt.", "warn")
                 break
-            target = target_by_index.get(int(stream.index))
-            if target is None:
-                unsupported_item = unsupported_by_index.get(int(stream.index))
-                if unsupported_item is not None:
-                    failures.append(self._unsupported_failure(*unsupported_item))
-                continue
             ok, failure, was_aborted = self._export_target(input_path, target)
             if ok:
                 exported.append(target.output_path)
@@ -285,8 +290,27 @@ class SubtitleSidecarService:
             aborted=aborted,
         )
 
-    def _log_empty_selection(self, storage) -> None:
-        if mp4_sidecars_enabled(self._subtitle_rules):
+    def _sidecar_reason(self, container: str, selection) -> str:
+        target_container = str(container or "mkv").lower()
+        reasons: list[str] = []
+        if target_container in {"mp4", "m4v", "mov"}:
+            if mp4_sidecars_enabled(self._subtitle_rules):
+                reasons.append("globale MP4-Sidecar-Option")
+            elif getattr(selection, "normal_streams", ()):
+                reasons.append("MP4-Kompatibilität (PGS/SUP/VobSub)")
+        if additional_sidecars_enabled(self._subtitle_rules):
+            reasons.append("zusätzliche Sidecar-Regel")
+        if getattr(selection, "ass_srt_streams", ()):
+            reasons.append("Text-Untertitel zusätzlich als SRT")
+        return ", ".join(dict.fromkeys(reasons)) or "Regelwerk"
+
+    def _log_empty_selection(self, storage, *, container: str = "mp4") -> None:
+        target_container = str(container or "mkv").lower()
+        if text_to_srt_sidecar_enabled(self._subtitle_rules):
+            self._log("  📄 Keine ausgewählten textbasierten Untertitel für SRT-Sidecars.", "info")
+        elif target_container not in {"mp4", "m4v", "mov"}:
+            self._log("  📄 Keine zusätzlichen Untertitel-Sidecars gemäß Regelwerk.", "info")
+        elif mp4_sidecars_enabled(self._subtitle_rules):
             self._log("  📄 Keine externen MP4-Untertitel gemäß Regelwerk.", "info")
         elif getattr(storage, "internal_streams", ()):
             self._log(
@@ -303,11 +327,13 @@ class SubtitleSidecarService:
 
     def _export_target(self, input_path: str, target) -> tuple[bool, SubtitleExportFailure | None, bool]:
         stream = target.stream
-        codec = str(stream.codec or "").lower()
-        codec_result = sub_codec_to_ext_and_args(codec)
-        if codec_result is None:  # defensive: planning already filtered this case
-            return False, self._unsupported_failure(stream, target.language, codec), False
-        _ext, codec_args = codec_result
+        codec = str(getattr(target, "output_codec", "") or stream.codec or "").lower()
+        codec_args = list(getattr(target, "codec_args", ()) or ())
+        if not codec_args:  # defensive: planning already filled this case
+            codec_result = sub_codec_to_ext_and_args(str(stream.codec or "").lower())
+            if codec_result is None:
+                return False, self._unsupported_failure(stream, target.language, codec), False
+            _ext, codec_args = codec_result
         out_file = Path(target.output_path)
         if out_file.exists() or out_file.is_symlink():
             reason = "Zieldatei existiert bereits; stilles Ueberschreiben blockiert"
@@ -337,7 +363,8 @@ class SubtitleSidecarService:
         except OSError:
             valid_output = False
         if completed.returncode == 0 and valid_output:
-            self._log(f"  📄 Sidecar OK: {out_file.name}", "info")
+            suffix = " (Text→SRT)" if getattr(target, "variant", "") == "text_to_srt" else ""
+            self._log(f"  📄 Sidecar OK: {out_file.name}{suffix}", "info")
             return True, None, False
 
         detail = str(completed.stderr or completed.stdout or "").strip()

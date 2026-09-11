@@ -12,6 +12,7 @@ from .dv_subtitle_mux_service import DVSubtitleMuxService, dv_subtitle_storage
 from .hdrplus_encode_service import HDRPlusEncodeService
 from .hdrplus_runtime_models import HDRPlusExecutionContext, HDRPlusPipelineOutcome
 from .subtitle_sidecar_service import SubtitleSidecarService
+from ..rules.subtitle_rules import any_sidecar_export_enabled
 
 _SUPPORTED_HDR10PLUS_SOURCE_CODECS = {"hevc"}
 
@@ -294,13 +295,14 @@ class HDRPlusPipelineCoordinator:
         return hooks.verify_final(context.output_path, paths.metadata_json)
 
     def _export_mp4_sidecars(self, context: HDRPlusExecutionContext) -> list[str] | None:
-        if context.container != "mp4":
+        if not any_sidecar_export_enabled(self._subtitle_rules, container=context.container):
             return []
         export = self._subtitle_service.export_sidecars_result(
             input_path=context.input_path,
             output_base=Path(context.output_path).with_suffix(""),
             media_info=context.media_info,
             file_override=dict(context.override),
+            container=context.container,
         )
         if not export.complete:
             self._log(f"❌ HDR10+ MP4: {export.failure_summary()}", "error")

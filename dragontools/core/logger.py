@@ -167,7 +167,11 @@ class DragonLogger(DragonLoggerMessageMixin):
                     traceback.print_exc(file=sys.stderr)
 
     def info(self, msg: str) -> None:
-        short = str(msg).startswith(("Quelle:", "Ziel:", "Ergebnis:"))
+        text = str(msg)
+        compact = text.lstrip()
+        short = text.startswith(("Quelle:", "Ziel:", "Ergebnis:")) or compact.startswith(
+            ("📄 Exportiere ", "📄 Sidecar OK:")
+        )
         self._write(f"ℹ️  {msg}", to_gui=short, to_short=short)
 
     def info_short(self, msg: str) -> None:

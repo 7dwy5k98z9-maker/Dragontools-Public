@@ -9,7 +9,10 @@ from typing import Any, Callable, Iterable
 
 from .media_library_db import _connect, _create_schema, backup_database, initialize_database
 from .media_library_paths import save_path_mappings
-from .media_library_repository import _fallback_item_from_path, _insert_item, _item_from_media_info, _streams_from_media_info
+from .media_library_repository import (
+    _fallback_item_from_path, _insert_item, _item_from_media_info,
+    _streams_from_media_info_with_sidecars, _subtitle_sidecar_streams,
+)
 from .media_library_types import DEFAULT_DB_FILENAME, AbortFn, LibraryScanResult, LogFn, PathMapping, ProgressFn, _now
 from .media_library_utils import _normalize_title
 from .models import MediaInfo
@@ -250,7 +253,7 @@ def scan_storage_paths_to_database(
                         info = analyze_fn(str(path_obj), tools)
                         item = _item_from_media_info(path_obj, info, source="storage_scan")
                         _apply_storage_scan_context(item, path_obj, area_label)
-                        streams = _streams_from_media_info(info)
+                        streams = _streams_from_media_info_with_sidecars(path_obj, info)
                         hierarchy_items += _insert_storage_scan_hierarchy(conn, item, path_obj, area_label)
                         _insert_item(conn, item, streams)
                         imported_items += 1
@@ -263,8 +266,10 @@ def scan_storage_paths_to_database(
                         item = _fallback_item_from_path(path_obj, source="storage_scan")
                         _apply_storage_scan_context(item, path_obj, area_label)
                         hierarchy_items += _insert_storage_scan_hierarchy(conn, item, path_obj, area_label)
-                        _insert_item(conn, item, [])
+                        streams = _subtitle_sidecar_streams(path_obj)
+                        _insert_item(conn, item, streams)
                         imported_items += 1
+                        imported_streams += len(streams)
                 conn.execute("INSERT OR REPLACE INTO meta(key, value) VALUES('updated_at', ?)", (_now(),))
 
         if aborted:

@@ -244,6 +244,8 @@ def test_rule_migrations_normalize_string_booleans():
     subtitle = migrate_subtitle_rules({
         "force_priority": "false",
         "dv_extract_external_subs": "0",
+        "additional_sidecars_enabled": "1",
+        "text_to_srt_sidecar_enabled": "false",
         "burn_in_rules": {
             "auto_burn_forced": "false",
             "ask_if_ambiguous": "0",
@@ -268,6 +270,8 @@ def test_rule_migrations_normalize_string_booleans():
     assert renamer["matching"]["fuzzy_prefix_min_words"] == 4
     assert subtitle["force_priority"] is False
     assert subtitle["dv_extract_external_subs"] is False
+    assert subtitle["additional_sidecars_enabled"] is True
+    assert subtitle["text_to_srt_sidecar_enabled"] is False
     assert subtitle["burn_in_rules"]["auto_burn_forced"] is False
     assert subtitle["burn_in_rules"]["ask_if_ambiguous"] is False
     assert subtitle["burn_in_rules"]["forced_plausibility"]["enabled"] is False
@@ -289,6 +293,19 @@ def test_current_subtitle_rules_do_not_log_runtime_marker_as_migration(tmp_path,
 
     assert migrated["_legacy_language_rules"] is False
     assert not (tmp_path / "migration.log").exists()
+
+
+def test_subtitle_migration_renames_schema5_ass_srt_option():
+    from dragontools.rules.subtitle_rule_config import migrate_subtitle_rules
+
+    migrated = migrate_subtitle_rules({
+        "_schema_version": 5,
+        "ass_to_srt_sidecar_enabled": "1",
+    })
+
+    assert migrated["_schema_version"] == 6
+    assert migrated["text_to_srt_sidecar_enabled"] is True
+    assert "ass_to_srt_sidecar_enabled" not in migrated
 
 
 def test_rule_loader_does_not_rewrite_current_subtitle_rules_for_runtime_marker(tmp_path, monkeypatch):

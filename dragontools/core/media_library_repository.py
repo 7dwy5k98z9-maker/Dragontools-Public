@@ -14,6 +14,101 @@ from .paths import path_compare_key
 
 _LOG = logging.getLogger(__name__)
 
+_SUBTITLE_SIDECAR_CODECS = {
+    ".srt": "subrip",
+    ".ass": "ass",
+    ".ssa": "ssa",
+    ".vtt": "webvtt",
+    ".sub": "dvd_subtitle",
+    ".idx": "dvd_subtitle",
+    ".sup": "hdmv_pgs_subtitle",
+}
+
+_LANG_HINTS = {
+    "de": "deu",
+    "deu": "deu",
+    "ger": "deu",
+    "german": "deu",
+    "deutsch": "deu",
+    "en": "eng",
+    "eng": "eng",
+    "english": "eng",
+}
+
+
+def _nfo_status_for_path(path: str | Path) -> str:
+    video = Path(path)
+    candidates = [video.with_suffix(".nfo"), video.parent / "movie.nfo"]
+    return "present" if any(candidate.exists() for candidate in candidates) else "missing"
+
+
+def _trickplay_status_for_path(path: str | Path) -> str:
+    video = Path(path)
+    root = video.with_name(f"{video.stem}.trickplay")
+    if not root.is_dir():
+        return "missing"
+    try:
+        return "present" if any(root.rglob("*.jpg")) else "empty"
+    except OSError:
+        return "unknown"
+
+
+def _language_from_sidecar_name(video: Path, sidecar: Path) -> str | None:
+    suffix = sidecar.stem[len(video.stem):].strip(" ._-")
+    if not suffix:
+        return None
+    for token in suffix.replace("-", ".").replace("_", ".").split("."):
+        normalized = _LANG_HINTS.get(token.casefold())
+        if normalized:
+            return normalized
+    return None
+
+
+def _subtitle_sidecar_streams(path: str | Path, start_index: int = 1000) -> list[dict[str, Any]]:
+    video = Path(path)
+    try:
+        entries = list(video.parent.iterdir())
+    except OSError:
+        return []
+    prefix = video.stem.casefold()
+    streams: list[dict[str, Any]] = []
+    for sidecar in sorted(entries, key=lambda entry: entry.name.casefold()):
+        ext = sidecar.suffix.casefold()
+        if ext not in _SUBTITLE_SIDECAR_CODECS:
+            continue
+        if sidecar.stem.casefold() != prefix and not sidecar.stem.casefold().startswith(prefix + "."):
+            continue
+        streams.append(
+            {
+                "stream_type": "Subtitle",
+                "stream_index": start_index + len(streams),
+                "codec": _SUBTITLE_SIDECAR_CODECS[ext],
+                "language": _language_from_sidecar_name(video, sidecar),
+                "forced": 1 if "forced" in sidecar.stem.casefold() else 0,
+                "channels": None,
+                "channel_layout": None,
+                "bitrate": None,
+                "width": None,
+                "height": None,
+                "hdr_format": None,
+                "dv_profile": None,
+                "pix_fmt": None,
+                "bit_depth": None,
+                "profile": None,
+                "duration_s": None,
+                "frame_count": None,
+                "frame_rate": None,
+                "frame_rate_mode": None,
+                "color_space": None,
+                "color_transfer": None,
+                "color_primaries": None,
+                "source_kind": "external",
+                "external_path": str(sidecar),
+                "title": sidecar.name,
+            }
+        )
+    return streams
+
 def _insert_item(conn: sqlite3.Connection, item: dict[str, Any], streams: list[dict[str, Any]]) -> int:
     now = _now()
     item.setdefault("created_at", now)
@@ -84,6 +179,8 @@ def _insert_item(conn: sqlite3.Connection, item: dict[str, Any], streams: list[d
             "color_space": None,
             "color_transfer": None,
             "color_primaries": None,
+            "source_kind": "internal",
+            "external_path": None,
         }.items():
             stream_row.setdefault(key, value)
         stream_row["stream_type"] = _normalize_stream_type(
@@ -99,12 +196,13 @@ def _insert_item(conn: sqlite3.Connection, item: dict[str, Any], streams: list[d
                 media_id, stream_type, stream_index, codec, language, forced, channels,
                 channel_layout, bitrate, width, height, hdr_format, dv_profile, pix_fmt,
                 bit_depth, profile, duration_s, frame_count, frame_rate, frame_rate_mode,
-                color_space, color_transfer, color_primaries, title
+                color_space, color_transfer, color_primaries, source_kind, external_path, title
             )
             VALUES(:media_id, :stream_type, :stream_index, :codec, :language, :forced, :channels,
                 :channel_layout, :bitrate, :width, :height, :hdr_format, :dv_profile,
                 :pix_fmt, :bit_depth, :profile, :duration_s, :frame_count, :frame_rate,
-                :frame_rate_mode, :color_space, :color_transfer, :color_primaries, :title)
+                :frame_rate_mode, :color_space, :color_transfer, :color_primaries,
+                :source_kind, :external_path, :title)
             """,
             {"media_id": media_id, **stream_row},
         )
@@ -138,6 +236,8 @@ def _streams_from_media_info(info: MediaInfo) -> list[dict[str, Any]]:
                 "color_space": stream.color_space,
                 "color_transfer": stream.color_transfer,
                 "color_primaries": stream.color_primaries,
+                "source_kind": "internal",
+                "external_path": None,
                 "title": None,
             }
         )
@@ -166,6 +266,8 @@ def _streams_from_media_info(info: MediaInfo) -> list[dict[str, Any]]:
                 "color_space": None,
                 "color_transfer": None,
                 "color_primaries": None,
+                "source_kind": "internal",
+                "external_path": None,
                 "title": stream.title,
             }
         )
@@ -194,9 +296,18 @@ def _streams_from_media_info(info: MediaInfo) -> list[dict[str, Any]]:
                 "color_space": None,
                 "color_transfer": None,
                 "color_primaries": None,
+                "source_kind": getattr(stream, "source_kind", "internal") or "internal",
+                "external_path": getattr(stream, "external_path", None),
                 "title": stream.title,
             }
         )
+    return streams
+
+
+def _streams_from_media_info_with_sidecars(path: str | Path, info: MediaInfo) -> list[dict[str, Any]]:
+    streams = _streams_from_media_info(info)
+    max_index = max((_int_or_none(stream.get("stream_index")) or -1 for stream in streams), default=-1)
+    streams.extend(_subtitle_sidecar_streams(path, max_index + 1))
     return streams
 
 
@@ -253,8 +364,8 @@ def _item_from_media_info(path: str | Path, info: MediaInfo, source: str = "drag
         "has_hdr10plus": 1 if info.has_hdr10plus else 0,
         "has_dolby_vision": 1 if info.dolby_vision else 0,
         "dv_profile": info.dolby_vision_profile,
-        "nfo_status": "unknown",
-        "trickplay_status": "unknown",
+        "nfo_status": _nfo_status_for_path(file_path),
+        "trickplay_status": _trickplay_status_for_path(file_path),
         "analysis_status": "ok",
         "exists_flag": 1,
         "active": 1,
@@ -325,8 +436,8 @@ def _fallback_item_from_path(path: str | Path, source: str = "storage_scan") -> 
         "has_hdr10plus": 0,
         "has_dolby_vision": 0,
         "dv_profile": None,
-        "nfo_status": "unknown",
-        "trickplay_status": "unknown",
+        "nfo_status": _nfo_status_for_path(file_path),
+        "trickplay_status": _trickplay_status_for_path(file_path),
         "analysis_status": "analysis_failed",
         "exists_flag": 1,
         "active": 1,
@@ -339,7 +450,7 @@ def record_media_file(db_path: str | Path, file_path: str | Path, tools: Any = N
     db = initialize_database(db_path)
     info = analyze_media(str(file_path), tools=tools)
     item = _item_from_media_info(file_path, info)
-    streams = _streams_from_media_info(info)
+    streams = _streams_from_media_info_with_sidecars(file_path, info)
     with closing(_connect(db)) as conn:
         with conn:
             _create_schema(conn)
@@ -446,7 +557,7 @@ def record_moved_file(
         raise FileNotFoundError(f"Zieldatei nicht gefunden: {dest}")
     info = analyze_media(str(dest), tools=tools)
     item = _item_from_media_info(dest, info)
-    streams = _streams_from_media_info(info)
+    streams = _streams_from_media_info_with_sidecars(dest, info)
     with closing(_connect(db)) as conn:
         with conn:
             _create_schema(conn)

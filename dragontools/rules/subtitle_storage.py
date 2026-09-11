@@ -22,6 +22,37 @@ def mp4_sidecars_enabled(subtitle_rules: dict | None) -> bool:
     return True
 
 
+def additional_sidecars_enabled(subtitle_rules: dict | None) -> bool:
+    """Ob ausgewählte Untertitel zusätzlich neben der Ausgabedatei landen."""
+    rules = subtitle_rules or {}
+    return _safe_bool(rules.get("additional_sidecars_enabled"), False)
+
+
+def text_to_srt_sidecar_enabled(subtitle_rules: dict | None) -> bool:
+    """Ob textbasierte Untertitel zusätzlich als SRT-Sidecar exportiert werden."""
+    rules = subtitle_rules or {}
+    return _safe_bool(
+        rules.get("text_to_srt_sidecar_enabled", rules.get("ass_to_srt_sidecar_enabled")),
+        False,
+    )
+
+
+def ass_to_srt_sidecar_enabled(subtitle_rules: dict | None) -> bool:
+    """Kompatibilitätsalias für Regeln aus Schema 5."""
+    return text_to_srt_sidecar_enabled(subtitle_rules)
+
+
+def any_sidecar_export_enabled(subtitle_rules: dict | None, *, container: str = "mp4") -> bool:
+    """Zentraler Schalter für Pipeline-Code, der nach dem Mux Sidecars exportiert."""
+    target_container = str(container or "mkv").lower()
+    if target_container in {"mp4", "m4v", "mov"}:
+        return True
+    return (
+        additional_sidecars_enabled(subtitle_rules)
+        or text_to_srt_sidecar_enabled(subtitle_rules)
+    )
+
+
 def build_mp4_subtitle_storage_plan(
     plan: SubtitlePlan,
     *,
