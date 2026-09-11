@@ -78,31 +78,28 @@ def test_iso_thread_and_widget_keep_series_detection_as_explicit_option():
     assert "tid in suggested" in widget_source
 
 
-def test_renamer_manual_series_search_is_batch_based_and_filters_non_series_rows():
-    actions_path = PACKAGE / "gui" / "movie_renamer_actions.py"
-    resolver_path = PACKAGE / "gui" / "movie_renamer_resolver.py"
-    table_path = PACKAGE / "gui" / "movie_renamer_table_controller.py"
+def test_renamer_manual_search_can_override_detected_media_type():
+    actions_path = PACKAGE / "gui" / "movie_renamer_search_actions.py"
+    resolver_path = PACKAGE / "gui" / "movie_renamer_resolve_search.py"
+    table_path = PACKAGE / "gui" / "movie_renamer_table_search.py"
 
     actions = ast.parse(actions_path.read_text(encoding="utf-8"))
     resolver = ast.parse(resolver_path.read_text(encoding="utf-8"))
     table = ast.parse(table_path.read_text(encoding="utf-8"))
 
-    action_cls = next(node for node in actions.body if isinstance(node, ast.ClassDef) and node.name == "MovieRenamerActionController")
-    manual = next(node for node in action_cls.body if isinstance(node, ast.FunctionDef) and node.name == "manual_series_search")
-    manual_text = ast.unparse(manual)
-    assert "manual_series_search_selection" in manual_text
-    assert "resolve_series_query(series_rows, query)" in manual_text
-    assert "len(rows) != 1" not in manual_text
+    action_cls = next(node for node in actions.body if isinstance(node, ast.ClassDef))
+    assert {node.name for node in action_cls.body if isinstance(node, ast.FunctionDef)} >= {
+        "manual_series_search", "manual_movie_search", "edit_search_query", "show_all_candidates"
+    }
 
-    resolver_cls = next(node for node in resolver.body if isinstance(node, ast.ClassDef) and node.name == "MovieRenamerResolveCoordinator")
-    resolve = next(node for node in resolver_cls.body if isinstance(node, ast.FunctionDef) and node.name == "resolve_series_query")
-    resolve_text = ast.unparse(resolve)
-    assert "rows: list[int]" in resolve_text
+    resolver_cls = next(node for node in resolver.body if isinstance(node, ast.ClassDef))
+    resolve_text = ast.unparse(resolver_cls)
+    assert "kind='series'" in resolve_text
+    assert "kind='movie'" in resolve_text
     assert "for row in sorted(set(rows))" in resolve_text
-    assert "jobs.append((row, path, normalized_query))" in resolve_text
 
-    table_cls = next(node for node in table.body if isinstance(node, ast.ClassDef) and node.name == "MovieRenamerTableController")
+    table_cls = next(node for node in table.body if isinstance(node, ast.ClassDef))
     selection = next(node for node in table_cls.body if isinstance(node, ast.FunctionDef) and node.name == "manual_series_search_selection")
     selection_text = ast.unparse(selection)
-    assert "== 'Serie'" in selection_text
-    assert "len(selected) - len(rows)" in selection_text
+    assert "selected_rows()" in selection_text
+    assert "== 'Serie'" not in selection_text

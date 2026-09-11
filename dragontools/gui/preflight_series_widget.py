@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
 """Seriengruppen-Widget des Move-Preflights."""
 from __future__ import annotations
+
 from typing import Any
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QComboBox, QLineEdit, QPushButton, QInputDialog
+
 from ..core.paths import user_path_name
 from .preflight_widget_common import _fmt_path, _series_root_from_input, _series_season_target, _base_path_key
 from .preflight_series_choices import NO_SERIES_FOLDER_CHOICE, hide_series_folder_choices, install_series_folder_choice, selected_series_folder_choice, show_series_folder_choices, validate_series_folder_choice
@@ -162,8 +164,6 @@ class SeriesGroupWidget(QWidget):
         else:
             self._preview.setText("  ⚠️ Kein Zielpfad – wird nicht verschoben")
             self._preview.setStyleSheet("color:#dc2626; font-size:11px;")
-
-    update_preview = _update_preview
 
     def _series_text_changed(self) -> None:
         combo = self.__dict__.get("_folder_choice_combo")

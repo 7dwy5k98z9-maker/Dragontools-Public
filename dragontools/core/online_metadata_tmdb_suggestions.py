@@ -31,7 +31,7 @@ class TmdbSuggestionMixin:
         try:
             from ..rules.move_rules import parse_series_match_details
             from ..rules.renamer_rules import (
-                minimum_candidate_score,
+                candidate_discovery_floor,
                 retry_without_year_enabled,
                 series_search_queries,
             )
@@ -68,7 +68,7 @@ class TmdbSuggestionMixin:
             ),
             reverse=True,
         )
-        title_floor = max(0.35, minimum_candidate_score() - 0.20)
+        title_floor = candidate_discovery_floor()
         cap = max(1, int(limit))
         suggestions: list[EpisodeMetadataSuggestion] = []
 

@@ -94,6 +94,27 @@ class _RenamerTab(QWidget):
         self.min_score.setToolTip("Treffer unter diesem Score werden nicht im Vorschlags-Dropdown gezeigt.")
         form.addRow("Mindestscore für Anzeige:", self.min_score)
 
+
+        fallback_scores = list(matching.get("fallback_candidate_scores") or [0.45, 0.30])
+        while len(fallback_scores) < 2:
+            fallback_scores.append(0.30 if fallback_scores else 0.45)
+
+        self.fallback_score_1 = QDoubleSpinBox()
+        self.fallback_score_1.setRange(0.0, 1.0)
+        self.fallback_score_1.setSingleStep(0.01)
+        self.fallback_score_1.setDecimals(2)
+        self.fallback_score_1.setValue(float(fallback_scores[0]))
+        self.fallback_score_1.setToolTip("Wenn die normale Mindestgrenze keinen Treffer liefert, wird automatisch diese Stufe versucht.")
+        form.addRow("Automatischer Fallback 1:", self.fallback_score_1)
+
+        self.fallback_score_2 = QDoubleSpinBox()
+        self.fallback_score_2.setRange(0.0, 1.0)
+        self.fallback_score_2.setSingleStep(0.01)
+        self.fallback_score_2.setDecimals(2)
+        self.fallback_score_2.setValue(float(fallback_scores[1]))
+        self.fallback_score_2.setToolTip("Letzte automatische Fuzzy-Stufe. Solche Treffer bleiben prüfbedürftig und werden nicht automatisch sicher akzeptiert.")
+        form.addRow("Automatischer Fallback 2:", self.fallback_score_2)
+
         self.review_score = QDoubleSpinBox()
         self.review_score.setRange(0.0, 1.0)
         self.review_score.setSingleStep(0.01)
@@ -173,11 +194,15 @@ class _RenamerTab(QWidget):
                 exceptions.append({"source": source, "replacement": replacement})
 
         return {
-            "_schema_version": 1,
+            "_schema_version": 2,
             "character_replacements": replacements,
             "title_exceptions": exceptions,
             "matching": {
                 "minimum_candidate_score": self.min_score.value(),
+                "fallback_candidate_scores": [
+                    self.fallback_score_1.value(),
+                    self.fallback_score_2.value(),
+                ],
                 "manual_review_below": self.review_score.value(),
                 "auto_accept_from": self.auto_score.value(),
                 "fuzzy_fallback": self.fuzzy.isChecked(),

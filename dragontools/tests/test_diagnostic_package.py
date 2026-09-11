@@ -7,16 +7,13 @@ from dragontools.core.settings import (
     SET_KEY_METADATA_TMDB_READ_TOKEN,
 )
 
-SAMPLE_VALUE_A = "tmdb-api-secret"
-SAMPLE_VALUE_B = "tmdb-read-token-secret"
-
 
 class _Settings:
     def __init__(self):
         self._store = {
             "a/key": "value",
-            SET_KEY_METADATA_TMDB_API_KEY: SAMPLE_VALUE_A,
-            SET_KEY_METADATA_TMDB_READ_TOKEN: SAMPLE_VALUE_B,
+            SET_KEY_METADATA_TMDB_API_KEY: "key",
+            SET_KEY_METADATA_TMDB_READ_TOKEN: "token",
         }
 
     def allKeys(self):
@@ -63,6 +60,6 @@ def test_create_diagnostic_package_collects_logs_and_settings(tmp_path, monkeypa
     with zipfile.ZipFile(target) as zf:
         settings_text = zf.read("settings.json").decode("utf-8")
 
-    assert SAMPLE_VALUE_A not in settings_text
-    assert SAMPLE_VALUE_B not in settings_text
+    assert '"key"' not in settings_text
+    assert '"token"' not in settings_text
     assert "********" in settings_text

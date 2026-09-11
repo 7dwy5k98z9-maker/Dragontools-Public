@@ -5,14 +5,15 @@ from __future__ import annotations
 from pathlib import Path
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QApplication, QFileDialog, QMessageBox, QInputDialog
+from PyQt6.QtWidgets import QApplication, QFileDialog, QMessageBox
 
 from ..core.movie_renamer import rename_movie_file
 from ..core.paths import VIDEO_EXTENSIONS, is_video_file, path_compare_key
 from .drop_path_extractor import _iter_video_files_in_folder
+from .movie_renamer_search_actions import MovieRenamerSearchActionsMixin
 
 
-class MovieRenamerActionController:
+class MovieRenamerActionController(MovieRenamerSearchActionsMixin):
     def __init__(self, owner, view, table_controller, resolver) -> None:
         self.owner = owner
         self.view = view
@@ -66,31 +67,6 @@ class MovieRenamerActionController:
         folder = QFileDialog.getExistingDirectory(self.owner, "Ordner auswählen")
         if folder:
             self.add_paths([folder])
-
-    def manual_series_search(self) -> None:
-        series_rows, skipped, current = self.table_controller.manual_series_search_selection()
-        if not series_rows:
-            if skipped:
-                self.view.status_lbl.setText(f"Keine Serien-Zeile ausgewählt. {skipped} Zeile(n) übersprungen.")
-            message = (
-                "Die markierten Dateien wurden nicht als Serie/Episode erkannt."
-                if skipped else "Bitte eine oder mehrere Serien-Dateien markieren."
-            )
-            QMessageBox.information(self.owner, "Eigene Seriensuche", message)
-            return
-
-        query, ok = QInputDialog.getText(
-            self.owner, "Eigene Seriensuche", "Serien-Suchbegriff:", text=current
-        )
-        query = str(query or "").strip()
-        if not ok or not query:
-            return
-        self.resolver.resolve_series_query(series_rows, query)
-        if skipped:
-            self.view.status_lbl.setText(
-                f"Eigene Seriensuche für {len(series_rows)} Datei(en) gestartet; "
-                f"{skipped} Nicht-Serien-Zeile(n) übersprungen."
-            )
 
     def accept_selected(self) -> None:
         rows = self.table_controller.selected_rows()

@@ -66,6 +66,7 @@ class MovieRenamerView:
         "Serie",
         "Jahr",
         "Vorschlag",
+        "Provider",
         "Sicherheit",
         "Neuer Dateiname",
         "Hinweise",
@@ -96,7 +97,10 @@ class MovieRenamerView:
         self.add_files_btn = QPushButton("➕ Dateien")
         self.add_folder_btn = QPushButton("📁 Ordner")
         self.resolve_btn = QPushButton("🔎 Vorschläge suchen")
-        self.manual_series_search_btn = QPushButton("🔍 Eigene Seriensuche")
+        self.manual_series_search_btn = QPushButton("📺 Als Serie suchen")
+        self.manual_movie_search_btn = QPushButton("🎬 Als Film suchen")
+        self.show_all_candidates_btn = QPushButton("🔎 Alle Treffer")
+        self.edit_search_btn = QPushButton("✏️ Suchbegriff")
         self.accept_selected_btn = QPushButton("✅ Auswahl akzeptieren")
         self.accept_safe_btn = QPushButton("✅ Sichere akzeptieren")
         self.reject_selected_btn = QPushButton("🚫 Auswahl ablehnen")
@@ -124,6 +128,7 @@ class MovieRenamerView:
         header.setSectionResizeMode(self.columns.SERIES, QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(self.columns.YEAR, QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(self.columns.MATCH, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(self.columns.PROVIDER, QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(self.columns.SCORE, QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(self.columns.TARGET, QHeaderView.ResizeMode.Stretch)
         header.setSectionResizeMode(self.columns.HINTS, QHeaderView.ResizeMode.Stretch)
@@ -140,6 +145,9 @@ class MovieRenamerView:
             self.add_folder_btn,
             self.resolve_btn,
             self.manual_series_search_btn,
+            self.manual_movie_search_btn,
+            self.show_all_candidates_btn,
+            self.edit_search_btn,
             self.accept_selected_btn,
             self.accept_safe_btn,
             self.reject_selected_btn,
@@ -153,6 +161,9 @@ class MovieRenamerView:
         return (
             self.resolve_btn,
             self.manual_series_search_btn,
+            self.manual_movie_search_btn,
+            self.show_all_candidates_btn,
+            self.edit_search_btn,
             self.accept_selected_btn,
             self.accept_safe_btn,
             self.reject_selected_btn,

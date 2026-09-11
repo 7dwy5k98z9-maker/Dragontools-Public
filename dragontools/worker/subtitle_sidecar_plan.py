@@ -2,9 +2,7 @@
 """Pure planning helpers for MP4 subtitle sidecar exports."""
 from __future__ import annotations
 
-from collections import Counter
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Callable, Iterable
 
 
@@ -31,26 +29,14 @@ class SidecarSelection:
     @property
     def streams(self) -> tuple[object, ...]:
         """Kompatibilitätsalias: alle Streams, die irgendein Sidecar-Ziel haben."""
-        return _dedupe_stream_objects((*self.normal_streams, *self.ass_srt_streams))
+        return dedupe_stream_objects((*self.normal_streams, *self.ass_srt_streams))
 
     @property
     def planned_stream_indices(self) -> tuple[int, ...]:
         return tuple(int(stream.index) for stream in self.streams)
 
 
-@dataclass(frozen=True)
-class SidecarTarget:
-    stream: object
-    language: str
-    key: tuple[str, bool]
-    number: int | None
-    output_path: str
-    codec_args: tuple[str, ...]
-    output_codec: str
-    variant: str = "native"
-
-
-def _dedupe_stream_objects(streams: Iterable[object]) -> tuple[object, ...]:
+def dedupe_stream_objects(streams: Iterable[object]) -> tuple[object, ...]:
     result: list[object] = []
     seen: set[int] = set()
     for stream in streams:
@@ -74,7 +60,7 @@ def _selected_streams(plan: object, *, preserve_burn_candidate: bool) -> list[ob
         and all(int(stream.index) != int(burn_sub.index) for stream in streams)
     ):
         streams.insert(0, burn_sub)
-    return list(_dedupe_stream_objects(streams))
+    return list(dedupe_stream_objects(streams))
 
 
 def select_sidecar_streams(
@@ -135,78 +121,6 @@ def select_sidecar_streams(
     return SidecarSelection(
         plan=plan,
         storage=storage,
-        normal_streams=_dedupe_stream_objects(normal_streams),
-        ass_srt_streams=_dedupe_stream_objects(ass_srt_streams),
+        normal_streams=dedupe_stream_objects(normal_streams),
+        ass_srt_streams=dedupe_stream_objects(ass_srt_streams),
     )
-
-
-def build_sidecar_targets(
-    streams: Iterable[object],
-    output_base: str | Path,
-    *,
-    ass_srt_streams: Iterable[object] = (),
-    language_tag: Callable[[str | None], str],
-    filename_builder: Callable[[Path, str, bool, str, int | None], str],
-    codec_resolver: Callable[[str], tuple[str, list[str]] | tuple[str, tuple[str, ...]] | None],
-) -> tuple[list[SidecarTarget], list[tuple[object, str, str]]]:
-    """Build deterministic names; unsupported codecs are returned separately."""
-    normal_streams = _dedupe_stream_objects(streams)
-    ass_srt_selected = _dedupe_stream_objects(
-        stream for stream in ass_srt_streams
-        if str(getattr(stream, "codec", "") or "").lower() in TEXT_TO_SRT_CODECS
-    )
-    stream_list = list(_dedupe_stream_objects((*normal_streams, *ass_srt_selected)))
-    normal_indices = {int(stream.index) for stream in normal_streams}
-    ass_srt_indices = {int(stream.index) for stream in ass_srt_selected}
-    languages = [language_tag(getattr(stream, "language", None) or "und") for stream in stream_list]
-    keys = [(language, bool(getattr(stream, "forced", False))) for language, stream in zip(languages, stream_list)]
-    counts = Counter(keys)
-    cursors: dict[tuple[str, bool], int] = {}
-    base = Path(str(output_base))
-    targets: list[SidecarTarget] = []
-    unsupported: list[tuple[object, str, str]] = []
-
-    for stream, language, key in zip(stream_list, languages, keys):
-        codec = str(getattr(stream, "codec", "") or "").lower()
-        number = None
-        if counts[key] > 1:
-            number = cursors.get(key, 1)
-            cursors[key] = number + 1
-        if int(stream.index) in normal_indices:
-            codec_result = codec_resolver(codec)
-            if codec_result is None:
-                unsupported.append((stream, language, codec))
-            else:
-                ext, codec_args = codec_result
-                output_path = filename_builder(
-                    base, language, bool(getattr(stream, "forced", False)), ext, number
-                )
-                targets.append(
-                    SidecarTarget(
-                        stream=stream,
-                        language=language,
-                        key=key,
-                        number=number,
-                        output_path=output_path,
-                        codec_args=tuple(str(arg) for arg in codec_args),
-                        output_codec=codec,
-                    )
-                )
-        if int(stream.index) in ass_srt_indices:
-            output_path = filename_builder(
-                base, language, bool(getattr(stream, "forced", False)), ".srt", number
-            )
-            if not any(target.output_path == output_path for target in targets):
-                targets.append(
-                    SidecarTarget(
-                        stream=stream,
-                        language=language,
-                        key=key,
-                        number=number,
-                        output_path=output_path,
-                        codec_args=("-c:s", "srt"),
-                        output_codec="srt",
-                        variant="text_to_srt",
-                    )
-                )
-    return targets, unsupported

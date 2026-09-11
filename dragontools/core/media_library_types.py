@@ -7,7 +7,7 @@ from typing import Callable
 
 from .paths import app_documents_dir
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 DEFAULT_DB_FILENAME = "dragontools_mediathek.sqlite3"
 
 LogFn = Callable[[str], None] | None
@@ -84,6 +84,20 @@ class LibraryImportResult:
     imported_items: int
     imported_streams: int
     skipped_items: int
+    warnings: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class LibraryLightScanResult:
+    db_path: Path
+    candidates: int
+    scanned_items: int
+    nfo_present: int
+    nfo_missing: int
+    nfo_unreachable: int
+    nfo_invalid: int
+    issues: int
+    aborted: bool
     warnings: tuple[str, ...]
 
 

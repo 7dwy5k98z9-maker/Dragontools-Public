@@ -8,7 +8,6 @@ from __future__ import annotations
 import os, sys
 from pathlib import Path
 
-from dragontools.core.settings import APP_ORG
 from dragontools.core.version import APP_VERSION
 
 FROZEN  = bool(getattr(sys, "frozen", False))
@@ -389,7 +388,7 @@ def main():
     from PyQt6.QtWidgets import QApplication
 
     app = QApplication(sys.argv)
-    app.setOrganizationName(APP_ORG)
+    app.setOrganizationName("DragonTools")
     app.setApplicationName("Dragon Tools")
     app.setApplicationVersion(APP_VERSION)
 

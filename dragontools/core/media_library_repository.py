@@ -115,26 +115,32 @@ def _insert_item(conn: sqlite3.Connection, item: dict[str, Any], streams: list[d
     item["updated_at"] = now
     item.setdefault("exists_flag", 1)
     item.setdefault("active", item.get("exists_flag", 1))
+    item.setdefault("original_title", None)
+    item.setdefault("nfo_path", None)
+    item.setdefault("nfo_type", None)
+    item.setdefault("nfo_mtime", None)
+    item.setdefault("nfo_scanned_at", None)
     conn.execute(
         """
         INSERT INTO media_items(
-            item_type, title, series_title, season, episode, year, source, source_id, provider,
+            item_type, title, original_title, series_title, season, episode, year, source, source_id, provider,
             path, parent_path, filename, normalized_title, container, duration_s, size_bytes,
             width, height, video_codec, video_bitrate, overall_bitrate, is_hdr, has_hdr10plus,
-            has_dolby_vision, dv_profile, nfo_status, trickplay_status, analysis_status,
-            exists_flag, active, created_at, updated_at
+            has_dolby_vision, dv_profile, nfo_status, nfo_path, nfo_type, nfo_mtime, nfo_scanned_at,
+            trickplay_status, analysis_status, exists_flag, active, created_at, updated_at
         )
         VALUES(
-            :item_type, :title, :series_title, :season, :episode, :year, :source, :source_id,
+            :item_type, :title, :original_title, :series_title, :season, :episode, :year, :source, :source_id,
             :provider, :path, :parent_path, :filename, :normalized_title, :container,
             :duration_s, :size_bytes, :width, :height, :video_codec, :video_bitrate,
             :overall_bitrate, :is_hdr, :has_hdr10plus, :has_dolby_vision, :dv_profile,
-            :nfo_status, :trickplay_status, :analysis_status, :exists_flag, :active, :created_at,
-            :updated_at
+            :nfo_status, :nfo_path, :nfo_type, :nfo_mtime, :nfo_scanned_at, :trickplay_status,
+            :analysis_status, :exists_flag, :active, :created_at, :updated_at
         )
         ON CONFLICT(path) DO UPDATE SET
             item_type=excluded.item_type,
             title=excluded.title,
+            original_title=excluded.original_title,
             series_title=excluded.series_title,
             season=excluded.season,
             episode=excluded.episode,
@@ -158,6 +164,10 @@ def _insert_item(conn: sqlite3.Connection, item: dict[str, Any], streams: list[d
             has_dolby_vision=excluded.has_dolby_vision,
             dv_profile=excluded.dv_profile,
             nfo_status=excluded.nfo_status,
+            nfo_path=excluded.nfo_path,
+            nfo_type=excluded.nfo_type,
+            nfo_mtime=excluded.nfo_mtime,
+            nfo_scanned_at=excluded.nfo_scanned_at,
             trickplay_status=excluded.trickplay_status,
             analysis_status=excluded.analysis_status,
             exists_flag=excluded.exists_flag,

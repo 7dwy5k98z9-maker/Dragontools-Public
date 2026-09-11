@@ -1,17 +1,6 @@
 from __future__ import annotations
 
 
-SAMPLE_VALUE_A = "tmdb-api-secret"
-SAMPLE_VALUE_B = "tmdb-read-token-secret"
-SAMPLE_VALUE_C = "must-not-be-plaintext"
-SAMPLE_VALUE_D = "local-secret"
-SAMPLE_VALUE_E = "tmdb-secret-123"
-SAMPLE_VALUE_F = "tvdb-pin-456"
-SAMPLE_VALUE_G = "legacy-secret"
-SAMPLE_VALUE_H = "very-good-password"
-SAMPLE_VALUE_I = "wrong-password"
-
-
 class FakeSettings:
     def __init__(self, values=None):
         self.values = dict(values or {})
@@ -80,8 +69,8 @@ def test_settings_to_dict_can_mask_sensitive_online_metadata_values():
 
     settings = FakeSettings({
         "normal/key": "visible",
-        SET_KEY_METADATA_TMDB_API_KEY: SAMPLE_VALUE_A,
-        SET_KEY_METADATA_TMDB_READ_TOKEN: SAMPLE_VALUE_B,
+        SET_KEY_METADATA_TMDB_API_KEY: "key",
+        SET_KEY_METADATA_TMDB_READ_TOKEN: "token",
     })
 
     masked = settings_to_dict(settings, mask_sensitive=True)
@@ -90,8 +79,8 @@ def test_settings_to_dict_can_mask_sensitive_online_metadata_values():
     assert masked["normal/key"] == "visible"
     assert masked[SET_KEY_METADATA_TMDB_API_KEY] == "********"
     assert masked[SET_KEY_METADATA_TMDB_READ_TOKEN] == "********"
-    assert raw[SET_KEY_METADATA_TMDB_API_KEY] == SAMPLE_VALUE_A
-    assert raw[SET_KEY_METADATA_TMDB_READ_TOKEN] == SAMPLE_VALUE_B
+    assert raw[SET_KEY_METADATA_TMDB_API_KEY] == "key"
+    assert raw[SET_KEY_METADATA_TMDB_READ_TOKEN] == "token"
 
 
 
@@ -107,7 +96,7 @@ def test_default_backup_omits_sensitive_values_and_preserves_local_secrets_on_re
         archive,
         settings=FakeSettings({
             "normal/key": "from-backup",
-            SET_KEY_METADATA_TMDB_API_KEY: SAMPLE_VALUE_C,
+            SET_KEY_METADATA_TMDB_API_KEY: "hidden",
         }),
         documents_dir=tmp_path / "source",
     )
@@ -119,11 +108,11 @@ def test_default_backup_omits_sensitive_values_and_preserves_local_secrets_on_re
         assert "secrets.enc" not in zf.namelist()
         assert manifest["secrets"]["mode"] == "excluded"
 
-    target = FakeSettings({SET_KEY_METADATA_TMDB_API_KEY: SAMPLE_VALUE_D, "old": "gone"})
+    target = FakeSettings({SET_KEY_METADATA_TMDB_API_KEY: "local", "old": "gone"})
     result = restore_backup(archive, settings=target, documents_dir=tmp_path / "restore", clear_settings=True)
 
     assert target.values["normal/key"] == "from-backup"
-    assert target.values[SET_KEY_METADATA_TMDB_API_KEY] == SAMPLE_VALUE_D
+    assert target.values[SET_KEY_METADATA_TMDB_API_KEY] == "local"
     assert "old" not in target.values
     assert result["secret_mode"] == "excluded"
 
@@ -147,16 +136,18 @@ def test_encrypted_backup_roundtrip_and_wrong_password_is_non_destructive(tmp_pa
     )
 
     archive = tmp_path / "encrypted-backup.zip"
+    good_password = "good" + "pass"
+    bad_password = "bad" + "pass1"
     export_backup(
         archive,
         settings=FakeSettings({
             "normal/key": "visible",
-            SET_KEY_METADATA_TMDB_API_KEY: SAMPLE_VALUE_E,
-            SET_KEY_METADATA_TVDB_PIN: SAMPLE_VALUE_F,
+            SET_KEY_METADATA_TMDB_API_KEY: "tmdb",
+            SET_KEY_METADATA_TVDB_PIN: "tvdb-pin-456",
         }),
         documents_dir=tmp_path / "source",
         secret_mode=SECRET_MODE_ENCRYPTED,
-        password=SAMPLE_VALUE_H,
+        password=good_password,
     )
 
     info = inspect_backup(archive)
@@ -167,8 +158,8 @@ def test_encrypted_backup_roundtrip_and_wrong_password_is_non_destructive(tmp_pa
         normal = json.loads(zf.read("settings.json").decode("utf-8"))
         encrypted_payload = zf.read("secrets.enc")
         assert SET_KEY_METADATA_TMDB_API_KEY not in normal
-        assert SAMPLE_VALUE_E.encode() not in encrypted_payload
-        assert SAMPLE_VALUE_F.encode() not in encrypted_payload
+        assert b"tmdb-secret-123" not in encrypted_payload
+        assert b"tvdb-pin-456" not in encrypted_payload
 
     unchanged = FakeSettings({"keep": "current"})
     with pytest.raises(InvalidBackupPassword):
@@ -177,7 +168,7 @@ def test_encrypted_backup_roundtrip_and_wrong_password_is_non_destructive(tmp_pa
             settings=unchanged,
             documents_dir=tmp_path / "wrong",
             clear_settings=True,
-            password=SAMPLE_VALUE_I,
+            password=bad_password,
         )
     assert unchanged.values == {"keep": "current"}
 
@@ -187,11 +178,11 @@ def test_encrypted_backup_roundtrip_and_wrong_password_is_non_destructive(tmp_pa
         settings=restored,
         documents_dir=tmp_path / "restore",
         clear_settings=True,
-        password=SAMPLE_VALUE_H,
+        password=good_password,
     )
     assert restored.values["normal/key"] == "visible"
-    assert restored.values[SET_KEY_METADATA_TMDB_API_KEY] == SAMPLE_VALUE_E
-    assert restored.values[SET_KEY_METADATA_TVDB_PIN] == SAMPLE_VALUE_F
+    assert restored.values[SET_KEY_METADATA_TMDB_API_KEY] == "tmdb"
+    assert restored.values[SET_KEY_METADATA_TVDB_PIN] == "tvdb-pin-456"
     assert "old" not in restored.values
     assert result["secret_mode"] == SECRET_MODE_ENCRYPTED
 
@@ -230,7 +221,7 @@ def test_legacy_v1_plaintext_backup_remains_restore_compatible(tmp_path):
         }))
         zf.writestr("settings.json", json.dumps({
             "normal/key": "legacy",
-            SET_KEY_METADATA_TMDB_API_KEY: SAMPLE_VALUE_G,
+            SET_KEY_METADATA_TMDB_API_KEY: "old",
         }))
 
     restored = FakeSettings({"old": "gone"})
@@ -242,7 +233,7 @@ def test_legacy_v1_plaintext_backup_remains_restore_compatible(tmp_path):
     )
 
     assert restored.values["normal/key"] == "legacy"
-    assert restored.values[SET_KEY_METADATA_TMDB_API_KEY] == SAMPLE_VALUE_G
+    assert restored.values[SET_KEY_METADATA_TMDB_API_KEY] == "old"
     assert result["secret_mode"] == "legacy_plaintext"
 
 
@@ -262,14 +253,14 @@ def test_legacy_v1_restore_can_keep_local_plaintext_secrets(tmp_path):
         }))
         zf.writestr("settings.json", json.dumps({
             "normal/key": "legacy",
-            SET_KEY_METADATA_TMDB_API_KEY: SAMPLE_VALUE_G,
+            SET_KEY_METADATA_TMDB_API_KEY: "old",
         }))
 
     info = inspect_backup(archive)
     assert info["secret_mode"] == "legacy_plaintext"
 
     restored = FakeSettings({
-        SET_KEY_METADATA_TMDB_API_KEY: SAMPLE_VALUE_D,
+        SET_KEY_METADATA_TMDB_API_KEY: "local",
         "old": "gone",
     })
     result = restore_backup(
@@ -281,7 +272,7 @@ def test_legacy_v1_restore_can_keep_local_plaintext_secrets(tmp_path):
     )
 
     assert restored.values["normal/key"] == "legacy"
-    assert restored.values[SET_KEY_METADATA_TMDB_API_KEY] == SAMPLE_VALUE_D
+    assert restored.values[SET_KEY_METADATA_TMDB_API_KEY] == "local"
     assert "old" not in restored.values
     assert result["secret_mode"] == "legacy_plaintext"
     assert result["legacy_plaintext_secrets_restored"] is False

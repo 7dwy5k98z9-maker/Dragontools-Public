@@ -29,6 +29,7 @@ class MovieRenamerWidget(QWidget):
     COL_SERIES = RenamerColumns.SERIES
     COL_YEAR = RenamerColumns.YEAR
     COL_MATCH = RenamerColumns.MATCH
+    COL_PROVIDER = RenamerColumns.PROVIDER
     COL_SCORE = RenamerColumns.SCORE
     COL_TARGET = RenamerColumns.TARGET
     COL_HINTS = RenamerColumns.HINTS
@@ -60,6 +61,9 @@ class MovieRenamerWidget(QWidget):
             "add_folder_btn",
             "resolve_btn",
             "manual_series_search_btn",
+            "manual_movie_search_btn",
+            "show_all_candidates_btn",
+            "edit_search_btn",
             "accept_selected_btn",
             "accept_safe_btn",
             "reject_selected_btn",
@@ -76,6 +80,9 @@ class MovieRenamerWidget(QWidget):
         self.add_folder_btn.clicked.connect(self._actions.choose_folder)
         self.resolve_btn.clicked.connect(self.resolve_proposals)
         self.manual_series_search_btn.clicked.connect(self._actions.manual_series_search)
+        self.manual_movie_search_btn.clicked.connect(self._actions.manual_movie_search)
+        self.show_all_candidates_btn.clicked.connect(self._actions.show_all_candidates)
+        self.edit_search_btn.clicked.connect(self._actions.edit_search_query)
         self.accept_selected_btn.clicked.connect(self.accept_selected)
         self.accept_safe_btn.clicked.connect(self.accept_safe)
         self.reject_selected_btn.clicked.connect(self.reject_selected)

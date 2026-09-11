@@ -19,8 +19,9 @@ from ..core.movie_renamer import (
     sanitize_filename_part,
 )
 from ..core.paths import path_compare_key
-from ..rules.renamer_rules import manual_review_below
+from ..rules.renamer_rules import manual_review_below, minimum_candidate_score
 from .movie_renamer_view import WideCandidateComboBox
+from .movie_renamer_table_search import MovieRenamerTableSearchMixin
 
 
 class RenamerColumns:
@@ -32,12 +33,13 @@ class RenamerColumns:
     SERIES = 5
     YEAR = 6
     MATCH = 7
-    SCORE = 8
-    TARGET = 9
-    HINTS = 10
+    PROVIDER = 8
+    SCORE = 9
+    TARGET = 10
+    HINTS = 11
 
 
-class MovieRenamerTableController:
+class MovieRenamerTableController(MovieRenamerTableSearchMixin):
     def __init__(self, table) -> None:
         self.table = table
         self.columns = RenamerColumns
@@ -68,20 +70,11 @@ class MovieRenamerTableController:
         self.set_item(row, self.columns.SERIES, series_parsed.series if series_parsed is not None else "", editable=False)
         self.set_item(row, self.columns.YEAR, str((series_parsed.year if series_parsed else movie_parsed.year) or ""), editable=False)
         self.set_item(row, self.columns.MATCH, "", editable=False)
+        self.set_item(row, self.columns.PROVIDER, "", editable=False)
         self.set_item(row, self.columns.SCORE, "", editable=False)
         self.set_item(row, self.columns.TARGET, "", editable=True)
         warnings = series_parsed.warnings if series_parsed is not None else movie_parsed.warnings
         self.set_item(row, self.columns.HINTS, "; ".join(warnings), editable=False)
-
-    def prepare_manual_series_search(self, row: int, query: str) -> None:
-        if row < 0 or row >= self.table.rowCount():
-            return
-        self.table.removeCellWidget(row, self.columns.MATCH)
-        self.set_row_proposal(row, None)
-        self.set_item(row, self.columns.SERIES, str(query or "").strip(), editable=False)
-        self.set_item(row, self.columns.MATCH, "manuelle Suche …", editable=False)
-        self.set_item(row, self.columns.SCORE, "", editable=False)
-        self.set_status(row, "🔎 Suche")
 
     def on_proposal_ready(self, row: int, proposal: RenameProposal) -> None:
         if row < 0 or row >= self.table.rowCount():
@@ -98,6 +91,7 @@ class MovieRenamerTableController:
 
         self.table.removeCellWidget(row, self.columns.MATCH)
         self.set_item(row, self.columns.MATCH, "kein Treffer", editable=False)
+        self.set_item(row, self.columns.PROVIDER, "", editable=False)
         self.set_item(row, self.columns.SCORE, "", editable=False)
         fallback = proposal.target_name or build_target_filename(
             proposal.parsed.query_title,
@@ -159,6 +153,15 @@ class MovieRenamerTableController:
         if target_exists:
             status = "conflict"
             warnings.append("Zieldatei existiert bereits.")
+        elif proposal.status == "fallback_ambiguous":
+            status = "fallback_ambiguous"
+            warnings.append("Letzte Fuzzy-Stufe liefert mehrere ähnlich schwache Treffer; bitte Kandidat manuell prüfen.")
+        elif float(getattr(proposal, "minimum_score_used", 0.0) or 0.0) <= 0.0 and getattr(proposal, "search_mode", "auto") != "auto":
+            status = "manual_review"
+            warnings.append("Manuelle Trefferliste: Auswahl bitte prüfen.")
+        elif float(getattr(proposal, "minimum_score_used", 0.0) or 0.0) < minimum_candidate_score():
+            status = "fallback_review"
+            warnings.append("Treffer stammt aus einer reduzierten Fuzzy-Stufe und sollte manuell geprüft werden.")
         elif selected.score < manual_review_below():
             status = "manual_review"
             warnings.append("Treffer ist unsicher und sollte manuell geprüft werden.")
@@ -175,7 +178,15 @@ class MovieRenamerTableController:
         )
         self.set_row_proposal(row, updated)
         self.set_item(row, self.columns.YEAR, str(year or ""), editable=False)
+        provider = str(getattr(selected, "provider", "") or "").strip().lower()
+        provider_label = {"thetvdb": "TheTVDB", "tmdb": "TMDB"}.get(provider, provider or "Metadaten")
+        self.set_item(row, self.columns.PROVIDER, provider_label, editable=False)
         score_text = f"{int(round(selected.score * 100))} %"
+        threshold = float(getattr(proposal, "minimum_score_used", 0.0) or 0.0)
+        if 0.0 < threshold < minimum_candidate_score():
+            score_text += f" · Fallback {int(round(threshold * 100))} %"
+        elif threshold <= 0.0 and getattr(proposal, "search_mode", "auto") != "auto":
+            score_text += " · alle Treffer"
         match_reason = str(getattr(selected, "match_reason", "") or "").strip()
         if match_reason:
             score_text += f" · {match_reason}"
@@ -193,6 +204,9 @@ class MovieRenamerTableController:
         generated = {
             "Zieldatei existiert bereits.",
             "Treffer ist unsicher und sollte manuell geprüft werden.",
+            "Treffer stammt aus einer reduzierten Fuzzy-Stufe und sollte manuell geprüft werden.",
+            "Letzte Fuzzy-Stufe liefert mehrere ähnlich schwache Treffer; bitte Kandidat manuell prüfen.",
+            "Manuelle Trefferliste: Auswahl bitte prüfen.",
         }
         return tuple(item for item in warnings if item not in generated)
 
@@ -222,6 +236,9 @@ class MovieRenamerTableController:
         return {
             "ok": "✅ Vorschlag",
             "manual_review": "⚠️ prüfen",
+            "fallback_review": "🟡 Fallback",
+            "fallback_ambiguous": "🟠 Fallback prüfen",
+            "below_threshold": "🟡 Treffer unter Grenze",
             "conflict": "⚠️ Konflikt",
             "no_match": "❌ kein Treffer",
             "not_movie": "🚫 Serie?",
@@ -258,13 +275,6 @@ class MovieRenamerTableController:
 
     def selected_rows(self) -> list[int]:
         return sorted({index.row() for index in self.table.selectedIndexes()})
-
-    def manual_series_search_selection(self) -> tuple[list[int], int, str]:
-        selected = self.selected_rows()
-        rows = [row for row in selected if self.row_item(row, self.columns.TYPE).text() == "Serie"]
-        values = {self.row_item(row, self.columns.SERIES).text().strip() for row in rows}
-        current = next(iter(values)) if len(values) == 1 else ""
-        return rows, len(selected) - len(rows), current
 
     def row_item(self, row: int, col: int) -> QTableWidgetItem:
         item = self.table.item(row, col)

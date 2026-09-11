@@ -1,35 +1,10 @@
 # -*- coding: utf-8 -*-
-"""
-dragontools/worker/subtitle_sidecar_service.py
+"""Zentraler Export-Dienst fuer externe Untertitel-Sidecars.
 
-Zentraler Export-Dienst für externe Sidecar-Untertiteldateien.
-
-Beide DV-Pipelines – DVProcessingPipeline und DVRemuxThread – verwenden
-diese Implementierung. Damit gibt es genau eine massgebliche Logik für:
-  - Dateinamensschema
-  - globale MP4-Sidecar-Regel / Codec-Kompatibilität
-  - Fehlerbehandlung / Rueckgabe als list[str]
-
-Dateinamensschema (Jellyfin/VLC-konform)
------------------------------------------
-  {output_stem}.{lang}{.forced}{.n}{ext}
-
-  lang   : ISO-639-1-Code (2-stellig) aus dem Stream, z.B. "de", "en", "ja".
-            Wenn kein 2-stelliger Code bekannt, wird der Originalcode verwendet.
-  forced : ".forced" wenn Sub-Stream als Forced markiert ist, sonst leer.
-  n      : Laufende Nummer (".1", ".2", …), NUR wenn mehrere Spuren derselben
-            Sprache+Forced-Kombination vorhanden sind. Einzelspuren haben
-            keine Nummer.
-  ext    : Dateierweiterung passend zum Codec (.srt, .ass, .sup, .mks …)
-
-Beispiele:
-  Film.de.srt                – eine deutsche Sub (nicht forced)
-  Film.de.forced.srt         – eine deutsche forced Sub
-  Film.de.1.srt              – erste von mehreren deutschen Subs
-  Film.de.2.srt              – zweite von mehreren deutschen Subs
-  Film.de.forced.1.srt       – erste von mehreren deutschen forced Subs
-  Film.en.srt                – englische Sub
-  Film.ja.sup                – japanische PGS-Sub
+Der Service buendelt Dateinamensschema, MP4-Kompatibilitaet, Zusatz-Sidecars,
+Text-zu-SRT-Export und strukturierte Fehler. Das Schema ist
+``{output_stem}.{lang}{.forced}{.n}{ext}``; Nummern werden nur bei mehreren
+Spuren derselben Sprache/Forced-Kombination gesetzt.
 """
 from __future__ import annotations
 
@@ -42,7 +17,8 @@ from typing import Callable
 from ..core.lang_codes import lang_iso_tag, sub_codec_to_ext_and_args
 from ..core.models import normalize_override_dict
 from .tool_runner import run_tool
-from .subtitle_sidecar_plan import build_sidecar_targets, select_sidecar_streams
+from .subtitle_sidecar_plan import select_sidecar_streams
+from .subtitle_sidecar_targets import build_sidecar_targets
 from ..rules.subtitle_rules import (
     additional_sidecars_enabled,
     build_mp4_subtitle_storage_plan,

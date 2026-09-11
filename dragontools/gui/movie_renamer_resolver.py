@@ -6,6 +6,7 @@ from PyQt6.QtCore import QSettings, QThread, QTimer, pyqtSignal
 from PyQt6.QtWidgets import QMessageBox, QWidget
 
 from ..core.movie_renamer import build_rename_proposal, parse_movie_release_name
+from .movie_renamer_resolve_search import MovieRenamerResolveSearchMixin
 from ..core.online_metadata import (
     OnlineMetadataAuthError,
     OnlineMetadataConfig,
@@ -35,11 +36,14 @@ class MovieRenameResolveThread(QThread):
             series_client = None
             for job in self._jobs:
                 row, path = job[0], job[1]
-                series_query_override = job[2] if len(job) > 2 else None
+                force_kind = str(job[2] if len(job) > 2 else "" or "").strip().lower() or None
+                query_override = str(job[3] if len(job) > 3 else "" or "").strip() or None
+                show_all_candidates = bool(job[4]) if len(job) > 4 else False
                 if self.isInterruptionRequested():
                     return
                 parsed = parse_movie_release_name(path)
-                if parsed.is_probable_series:
+                use_series = force_kind == "series" or (force_kind != "movie" and parsed.is_probable_series)
+                if use_series:
                     if series_client is None:
                         series_client = client_from_config(self._config, "series")
                 elif movie_client is None:
@@ -48,7 +52,10 @@ class MovieRenameResolveThread(QThread):
                     path,
                     movie_client=movie_client,
                     series_client=series_client,
-                    series_query_override=series_query_override,
+                    series_query_override=query_override if use_series else None,
+                    movie_query_override=query_override if not use_series else None,
+                    force_kind=force_kind,
+                    show_all_candidates=show_all_candidates,
                 )
                 self.proposal_ready.emit(row, proposal)
         except OnlineMetadataError as exc:
@@ -58,7 +65,7 @@ class MovieRenameResolveThread(QThread):
             self.failed.emit(f"Unerwarteter Fehler bei der Metadaten-Suche: {exc}")
 
 
-class MovieRenamerResolveCoordinator:
+class MovieRenamerResolveCoordinator(MovieRenamerResolveSearchMixin):
     def __init__(self, owner, settings: QSettings, table_controller, view) -> None:
         self.owner = owner
         self.settings = settings
@@ -105,24 +112,6 @@ class MovieRenamerResolveCoordinator:
         self.auto_resolve_pending = False
         if jobs:
             self.start_jobs(jobs, automatic=True)
-
-    def resolve_series_query(self, rows: list[int], query: str) -> None:
-        if self.thread is not None and self.thread.isRunning():
-            QMessageBox.information(self.owner, "Metadaten-Suche", "Die Vorschlagssuche läuft bereits.")
-            return
-
-        normalized_query = str(query or "").strip()
-        if not normalized_query:
-            return
-
-        jobs: list[tuple[int, str, str]] = []
-        for row in sorted(set(rows)):
-            path = self.table_controller.row_path(row)
-            if not path:
-                continue
-            self.table_controller.prepare_manual_series_search(row, normalized_query)
-            jobs.append((row, path, normalized_query))
-        self.start_jobs(jobs, automatic=False)
 
     def start_jobs(self, jobs: list[tuple], *, automatic: bool) -> None:
         if not jobs:

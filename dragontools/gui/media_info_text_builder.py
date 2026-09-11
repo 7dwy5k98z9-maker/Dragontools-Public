@@ -320,9 +320,14 @@ def _override_and_move_lines(preview: dict[str, Any]) -> list[str]:
 
 
 def _rules_preview_lines(preview: dict[str, Any]) -> list[str]:
+    target_video = preview.get("target_video", {}) or {}
+    target_resolution = _safe(target_video.get("resolution"))
+    if target_video.get("autocrop_pending") and target_resolution != "-":
+        target_resolution += " (vor Auto-Crop)"
     lines = [
         f"Pipeline:       {_safe(preview.get('pipeline'))}",
         f"Zielcontainer:  {_safe(preview.get('target_container'))}",
+        f"Endauflösung:   {target_resolution}",
         f"DV erhalten:    {_yes_no(bool(preview.get('dv_preserved')))}",
         f"HDR10+ erhalten: {_yes_no(bool(preview.get('hdr10plus_preserved')))}",
         "",

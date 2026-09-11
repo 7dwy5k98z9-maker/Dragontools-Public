@@ -21,6 +21,7 @@ from .media_library_dialog_view import (
 from .media_library_maintenance_controller import MediaLibraryMaintenanceController
 from .media_library_mapping_controller import MediaLibraryMappingController
 from .media_library_scan_controller import MediaLibraryScanCoordinator
+from .media_library_nfo_controller import MediaLibraryNfoController
 from .media_library_search_controller import MediaLibrarySearchController
 from .ui_helpers import install_persistent_window_geometry, save_window_geometry
 
@@ -52,6 +53,15 @@ class MediaLibraryDialog(QDialog):
         self._presenter = MediaLibraryDialogPresenter()
         self._view = MediaLibraryDialogView(self, self)
 
+        self._init_controllers()
+
+        self._load()
+        self._search.refresh_saved_queries()
+        self._view.tabs.setCurrentIndex(self.TAB_KEYS.get(initial_tab, 0))
+        self._refresh_stats()
+        install_persistent_window_geometry(self, "media_library_dialog", self.settings)
+
+    def _init_controllers(self) -> None:
         self._mapping = MediaLibraryMappingController(
             parent=self,
             view=self._view,
@@ -85,11 +95,15 @@ class MediaLibraryDialog(QDialog):
             on_failed=self._on_storage_scan_failed,
             on_running_changed=self._set_scan_running,
         )
-
-        self._load()
-        self._view.tabs.setCurrentIndex(self.TAB_KEYS.get(initial_tab, 0))
-        self._refresh_stats()
-        install_persistent_window_geometry(self, "media_library_dialog", self.settings)
+        self._nfo = MediaLibraryNfoController(
+            parent=self,
+            view=self._view,
+            presenter=self._presenter,
+            get_db_path=self._db_path,
+            save_state=self._save_without_popup,
+            refresh_stats=self._refresh_stats,
+            is_storage_scan_running=lambda: self._scan.is_running,
+        )
 
     # ── Settings / Fenster-Lifecycle ────────────────────────────────
 
@@ -128,11 +142,11 @@ class MediaLibraryDialog(QDialog):
         self.reject()
 
     def closeEvent(self, event) -> None:
-        if self._scan.is_running:
+        if self._scan.is_running or self._nfo.is_running:
             QMessageBox.information(
                 self,
                 "Mediathek-Scan läuft",
-                "Der Speicherpfad-Scan läuft noch. Bitte zuerst abbrechen oder warten, bis er fertig ist.",
+                "Ein Mediathek-Scan läuft noch. Bitte zuerst abbrechen oder vollständig abschließen.",
             )
             event.ignore()
             return
@@ -154,6 +168,7 @@ class MediaLibraryDialog(QDialog):
         )
         if file_name:
             self._view.db_path_edit.setText(file_name)
+            self._search.refresh_saved_queries()
 
     def browse_jellyfin_db(self) -> None:
         file_name, _ = QFileDialog.getOpenFileName(
@@ -219,7 +234,7 @@ class MediaLibraryDialog(QDialog):
     # ── Speicherpfad-Scan ───────────────────────────────────────────
 
     def scan_storage_paths(self) -> None:
-        if self._scan.is_running:
+        if self._scan.is_running or self._nfo.is_running:
             return
         scan_roots = self._storage_scan_roots()
         if not scan_roots:
@@ -293,6 +308,17 @@ class MediaLibraryDialog(QDialog):
     def _set_scan_running(self, running: bool) -> None:
         self._view.set_scan_running(running)
 
+    # ── NFO-Lightscan / Konsistenzprüfung ─────────────────────────
+
+    def scan_nfo_light(self) -> None:
+        self._nfo.scan_light()
+
+    def scan_nfo_full(self) -> None:
+        self._nfo.scan_full()
+
+    def abort_nfo_scan(self) -> None:
+        self._nfo.abort()
+
     # ── Suche / SQL als Delegates ──────────────────────────────────
 
     def _update_search_options(self, _index: int | None = None) -> None:
@@ -304,5 +330,29 @@ class MediaLibraryDialog(QDialog):
     def export_search_csv(self) -> None:
         self._search.export_search_csv()
 
+    def save_current_search(self) -> None:
+        self._search.save_current_search()
+
+    def load_saved_search(self) -> None:
+        self._search.load_saved_search()
+
+    def delete_saved_search(self) -> None:
+        self._search.delete_saved_search()
+
     def run_sql(self) -> None:
         self._search.run_sql()
+
+    def save_current_sql(self) -> None:
+        self._search.save_current_sql()
+
+    def load_saved_sql(self) -> None:
+        self._search.load_saved_sql()
+
+    def delete_saved_sql(self) -> None:
+        self._search.delete_saved_sql()
+
+    def show_sql_help(self) -> None:
+        self._search.show_sql_help()
+
+    def export_sql_help(self) -> None:
+        self._search.export_sql_help()

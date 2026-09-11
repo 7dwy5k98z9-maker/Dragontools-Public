@@ -1,7 +1,7 @@
 Dragon Tools V9.8.2 - Build-Hinweise
 =====================================
 
-Diese Hinweise gelten für den anonymisierten öffentlichen DragonTools-Quellstand unter Windows 10/11.
+Diese Hinweise gelten für den aktuellen DragonTools-Quellstand unter Windows 10/11.
 
 Voraussetzungen
 ---------------
@@ -25,7 +25,7 @@ Die Abhängigkeiten sind getrennt dokumentiert:
 
 Externe Medienprogramme
 -----------------------
-DragonTools bündelt Drittanbieterprogramme nicht im Git-Repository. Je nach verwendetem Arbeitsablauf werden FFmpeg/FFprobe, MKVToolNix, MediaInfo CLI, GPAC/MP4Box, dovi_tool, hdr10plus_tool, HandBrake, MakeMKV oder Rename My TV Series benötigt. Offizielle Downloadquellen und Zielpfade stehen in README.md und TOOLS_INSTALLIEREN.txt.
+DragonTools bündelt Drittanbieterprogramme nicht im Git-Repository. Je nach verwendetem Arbeitsablauf werden FFmpeg/FFprobe, MKVToolNix, MediaInfo CLI, GPAC/MP4Box, dovi_tool, hdr10plus_tool, HandBrake, MakeMKV oder Rename My TV Series benötigt. Offizielle Downloadquellen und Zielpfade stehen in README.md beziehungsweise im öffentlichen Paket in TOOLS_INSTALLIEREN.txt.
 
 Beim Start aus dem Quellcode können die Programme über die DragonTools-Einstellungen ausgewählt, über den Windows-PATH gefunden oder in der vorgesehenen third_party-Struktur abgelegt werden.
 
@@ -41,14 +41,11 @@ Das fertige Programm liegt anschließend unter:
 
 Prüfung vor einer Veröffentlichung
 ----------------------------------
-1. Datenschutzprüfung ausführen:
-
-   python scripts/check_public_privacy.py
-
-2. Gesamte Testsuite ausführen:
+1. Gesamte Testsuite ausführen:
 
    python -m pytest -m "not dv_hdr_integration"
 
+2. Release-Prüfung und Datenschutzprüfung ausführen.
 3. Einen frischen Build erstellen und starten.
 4. Den vollständigen Anwendungsordner als ZIP verpacken.
 5. Eine SHA-256-Prüfsumme erzeugen.
@@ -57,5 +54,5 @@ Wichtige Sicherheitshinweise
 ----------------------------
 - API-Schlüssel, lokale Einstellungen, Logs, Datenbanken und Medien gehören nicht in Git.
 - build, dist, Caches und externe Programme bleiben außerhalb der Git-Historie.
-- Diese Fassung verwendet ausschließlich Dragon Developer als Entwicklername.
+- Die öffentliche Fassung verwendet ausschließlich Dragon Developer als Entwicklername.
 - Bei einer fehlgeschlagenen Timestamp- oder Streamprüfung ersetzt oder verschiebt DragonTools die Quelldatei nicht.

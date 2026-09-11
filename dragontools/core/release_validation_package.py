@@ -89,7 +89,7 @@ _SMOKE_MODULES = (
     Path("core") / "movie_renamer.py",
     Path("core") / "movie_renamer_models.py",
     Path("core") / "movie_renamer_parsing.py",
-    Path("core") / "movie_renamer_candidates.py",
+    Path("core") / "movie_renamer_candidates.py", Path("core") / "movie_renamer_matching.py",
     Path("core") / "online_metadata.py",
     Path("core") / "online_metadata_common.py",
     Path("core") / "online_metadata_types.py",
@@ -201,7 +201,7 @@ _SMOKE_MODULES = (
     Path("gui") / "movie_renamer_view.py",
     Path("gui") / "movie_renamer_table_controller.py",
     Path("gui") / "movie_renamer_resolver.py",
-    Path("gui") / "movie_renamer_actions.py",
+    Path("gui") / "movie_renamer_actions.py", Path("gui") / "movie_renamer_search_actions.py", Path("gui") / "movie_renamer_resolve_search.py", Path("gui") / "movie_renamer_table_search.py",
     Path("gui") / "quality_tester_widget.py",
     Path("gui") / "quality_tester_run_dialog.py",
     Path("gui") / "quality_tester_run_config.py",
@@ -337,9 +337,9 @@ def _check_forbidden_release_artifacts(root: Path) -> ReleaseCheck:
 
 _PRIVATE_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("lokaler Benutzerpfad", re.compile(r"C:\\Users\\[^\\\r\n]+", re.IGNORECASE)),
-    ("persönlicher Name", re.compile(r"\bMark(?:us|u)\b", re.IGNORECASE)),
+    ("persönlicher Name", re.compile(r"\bMark" + r"us\b|\bMark" + r"u\b", re.IGNORECASE)),
     ("Arbeitsordner-Pfad", re.compile("Arbeitsordner " + "codex", re.IGNORECASE)),
-    ("Netzwerk-Medienpfad", re.compile(r"\\\\medien" r"speicher", re.IGNORECASE)),
+    ("Netzwerk-Medienpfad", re.compile(r"\\\\medien" + "speicher", re.IGNORECASE)),
     ("temporärer Codex-Pfad", re.compile(r"AppData\\Local\\Temp\\codex-", re.IGNORECASE)),
     ("möglicher API-Key", re.compile(r"(api[_-]?key|read[_-]?access[_-]?token)\s*[:=]\s*['\"][^'\"\s]{8,}", re.IGNORECASE)),
 )

@@ -265,6 +265,8 @@ def test_rule_migrations_normalize_string_booleans():
     assert audio["extra_stereo_bitrate_k"] == 320
     assert audio["audio_processing"]["drc_enabled"] is False
     assert audio["audio_processing"]["loudnorm_enabled"] is False
+    assert renamer["_schema_version"] == 2
+    assert renamer["matching"]["fallback_candidate_scores"] == [0.45, 0.30]
     assert renamer["matching"]["fuzzy_fallback"] is False
     assert renamer["matching"]["retry_without_year"] is False
     assert renamer["matching"]["fuzzy_prefix_min_words"] == 4

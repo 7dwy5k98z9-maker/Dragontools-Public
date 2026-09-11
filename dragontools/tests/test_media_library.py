@@ -35,6 +35,7 @@ from dragontools.core.media_library import (
     search_library,
 )
 from dragontools.core.models import AudioStream, MediaInfo, SubtitleStream, VideoStream
+from dragontools.core.media_library_nfo_scan import scan_nfo_inventory
 from dragontools.core.paths import path_compare_key
 
 
@@ -1048,7 +1049,7 @@ def test_series_root_unusable_match_keeps_database_area_when_default_base_differ
     current_tv = tmp_path / "current" / "TV"
     current_anime.mkdir(parents=True)
     current_tv.mkdir(parents=True)
-    db_series_root = r"\\Medienspeicher\video\Serien\TV\Watson (2025)"
+    db_series_root = r"\\TestServer\video\Serien\TV\Watson (2025)"
 
     with _db_connection(db_path) as conn:
         conn.execute(
@@ -1062,7 +1063,7 @@ def test_series_root_unusable_match_keeps_database_area_when_default_base_differ
                 "Watson",
                 None,
                 db_series_root,
-                r"\\Medienspeicher\video\Serien\TV",
+                r"\\TestServer\video\Serien\TV",
                 "Watson (2025)",
                 "watson",
             ),
@@ -1409,6 +1410,33 @@ def test_media_library_csv_exports(tmp_path: Path) -> None:
     assert any(path.name.startswith("dragontools_media_streams_") for path in db_csvs)
 
 
+def test_database_overview_csv_is_not_limited_to_500_rows(tmp_path: Path) -> None:
+    db_path = initialize_database(tmp_path / "dragontools.sqlite3")
+    parent = str(tmp_path / "Filme")
+    with _db_connection(db_path) as conn:
+        conn.executemany(
+            """
+            INSERT INTO media_items(
+                item_type, title, path, parent_path, filename, created_at, updated_at
+            ) VALUES('movie', ?, ?, ?, ?, '2026-09-11', '2026-09-11')
+            """,
+            [
+                (
+                    f"Film {index:04d}",
+                    str(Path(parent) / f"Film {index:04d}.mkv"),
+                    parent,
+                    f"Film {index:04d}.mkv",
+                )
+                for index in range(525)
+            ],
+        )
+
+    exported = export_database_to_csv(db_path, tmp_path / "csv")
+    overview = next(path for path in exported if "_medien_uebersicht_" in path.name)
+
+    assert len(overview.read_text(encoding="utf-8-sig").splitlines()) == 526
+
+
 def test_record_moved_file_replaces_same_episode_identity(tmp_path: Path, monkeypatch) -> None:
     from dragontools.core import media_analyzer
 
@@ -1487,17 +1515,17 @@ def test_search_finds_duplicate_active_sxxexx_and_cleanup_removes_inactive(tmp_p
 def test_tv_and_anime_path_mappings_use_the_same_unc_normalization() -> None:
     tv = apply_path_mappings(
         "/TVSerien/American Dad! (2005)",
-        [PathMapping("TV", "/TVSerien", "//medienspeicher/video/Serien/TV")],
+        [PathMapping("TV", "/TVSerien", "//testserver/video/Serien/TV")],
     )
     anime = apply_path_mappings(
         "/Anime/Test Anime (2026)",
-        [PathMapping("Anime", "/Anime", r"\\Medienspeicher\video\Serien\Anime")],
+        [PathMapping("Anime", "/Anime", r"\\TestServer\video\Serien\Anime")],
     )
 
-    assert tv == r"\\medienspeicher\video\Serien\TV\American Dad! (2005)"
-    assert anime == r"\\Medienspeicher\video\Serien\Anime\Test Anime (2026)"
-    assert path_compare_key(tv).startswith(path_compare_key(r"\\Medienspeicher\video\Serien\TV"))
-    assert path_compare_key(anime).startswith(path_compare_key(r"\\Medienspeicher\video\Serien\Anime"))
+    assert tv == r"\\testserver\video\Serien\TV\American Dad! (2005)"
+    assert anime == r"\\TestServer\video\Serien\Anime\Test Anime (2026)"
+    assert path_compare_key(tv).startswith(path_compare_key(r"\\TestServer\video\Serien\TV"))
+    assert path_compare_key(anime).startswith(path_compare_key(r"\\TestServer\video\Serien\Anime"))
 
 
 def test_backup_database_names_are_collision_safe(tmp_path: Path) -> None:
@@ -1647,7 +1675,7 @@ def test_database_schema_migrates_legacy_media_items_with_size_bytes(tmp_path: P
         "profile", "duration_s", "frame_count", "frame_rate", "frame_rate_mode",
         "color_space", "color_transfer", "color_primaries",
     } <= stream_columns
-    assert schema == "5"
+    assert schema == "6"
 
 
 def test_storage_scan_records_real_file_size_and_size_filter(tmp_path: Path) -> None:
@@ -1880,6 +1908,14 @@ def test_jellyfin_import_preserves_external_subtitle_marker_when_available(tmp_p
             """
         )
         conn.execute(
+            """
+            CREATE TABLE TrickplayInfos (
+                ItemId TEXT, Width INTEGER, Height INTEGER, TileWidth INTEGER,
+                TileHeight INTEGER, ThumbnailCount INTEGER, Interval INTEGER, Bandwidth INTEGER
+            )
+            """
+        )
+        conn.execute(
             "INSERT INTO BaseItems VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 "episode-1",
@@ -1901,6 +1937,16 @@ def test_jellyfin_import_preserves_external_subtitle_marker_when_available(tmp_p
                     "episode-1",
                     2,
                     2,
+                    "ass",
+                    "deu",
+                    0,
+                    1,
+                    "/Anime/Testserie (2026)/Staffel 01/Testserie - S01E01.default.de.ass",
+                ),
+                (
+                    "episode-1",
+                    3,
+                    2,
                     "subrip",
                     "deu",
                     1,
@@ -1908,6 +1954,10 @@ def test_jellyfin_import_preserves_external_subtitle_marker_when_available(tmp_p
                     "/Anime/Testserie (2026)/Staffel 01/Testserie - S01E01.de.forced.srt",
                 ),
             ],
+        )
+        conn.execute(
+            "INSERT INTO TrickplayInfos VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            ("episode-1", 320, 180, 10, 10, 12, 10000, 9000),
         )
 
     local_root = tmp_path / "video" / "Serien" / "Anime"
@@ -1930,7 +1980,451 @@ def test_jellyfin_import_preserves_external_subtitle_marker_when_available(tmp_p
 
     assert [(row["codec"], row["source_kind"]) for row in rows] == [
         ("ass", "internal"),
+        ("ass", "external"),
         ("subrip", "external"),
     ]
-    assert rows[1]["forced"] == 1
-    assert rows[1]["external_path"].endswith(str(Path("Testserie (2026)") / "Staffel 01" / "Testserie - S01E01.de.forced.srt"))
+    assert rows[2]["forced"] == 1
+    assert rows[1]["external_path"].endswith(str(Path("Testserie (2026)") / "Staffel 01" / "Testserie - S01E01.default.de.ass"))
+    assert rows[2]["external_path"].endswith(str(Path("Testserie (2026)") / "Staffel 01" / "Testserie - S01E01.de.forced.srt"))
+
+    with _db_connection(target_db) as conn:
+        trickplay_status = conn.execute(
+            "SELECT trickplay_status FROM media_items WHERE source_id='episode-1'"
+        ).fetchone()[0]
+    assert trickplay_status == "present"
+
+
+def test_jellyfin_import_marks_missing_and_empty_trickplay_infos(tmp_path: Path) -> None:
+    jellyfin_db = tmp_path / "jellyfin.db"
+    target_db = tmp_path / "dragontools.sqlite3"
+    with _db_connection(jellyfin_db) as conn:
+        conn.execute(
+            """
+            CREATE TABLE BaseItems (
+                Id TEXT PRIMARY KEY, Type TEXT, Name TEXT, Path TEXT,
+                SeriesName TEXT, ParentIndexNumber INTEGER, IndexNumber INTEGER, ProductionYear INTEGER
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE MediaStreamInfos (
+                ItemId TEXT, StreamIndex INTEGER, StreamType INTEGER, Codec TEXT,
+                Language TEXT, IsForced INTEGER, IsExternal INTEGER, Path TEXT
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE TrickplayInfos (
+                ItemId TEXT, Width INTEGER, Height INTEGER, TileWidth INTEGER,
+                TileHeight INTEGER, ThumbnailCount INTEGER, Interval INTEGER, Bandwidth INTEGER
+            )
+            """
+        )
+        conn.executemany(
+            "INSERT INTO BaseItems VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            [
+                (
+                    "episode-empty",
+                    "MediaBrowser.Controller.Entities.TV.Episode",
+                    "Leere Trickplay-Info",
+                    "/TVSerien/Testserie (2026)/Staffel 01/Testserie - S01E01.mkv",
+                    "Testserie",
+                    1,
+                    1,
+                    2026,
+                ),
+                (
+                    "episode-missing",
+                    "MediaBrowser.Controller.Entities.TV.Episode",
+                    "Keine Trickplay-Info",
+                    "/TVSerien/Testserie (2026)/Staffel 01/Testserie - S01E02.mkv",
+                    "Testserie",
+                    1,
+                    2,
+                    2026,
+                ),
+            ],
+        )
+        conn.executemany(
+            "INSERT INTO MediaStreamInfos VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            [
+                ("episode-empty", 0, 1, "hevc", None, 0, 0, None),
+                ("episode-missing", 0, 1, "hevc", None, 0, 0, None),
+            ],
+        )
+        conn.execute(
+            "INSERT INTO TrickplayInfos VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            ("episode-empty", 320, 180, 10, 10, 0, 10000, 0),
+        )
+
+    import_jellyfin_database(jellyfin_db, target_db)
+
+    with _db_connection(target_db) as conn:
+        rows = dict(conn.execute("SELECT source_id, trickplay_status FROM media_items"))
+
+    assert rows["episode-empty"] == "empty"
+    assert rows["episode-missing"] == "missing"
+
+
+def _create_extended_jellyfin_metadata_db(path: Path) -> None:
+    with _db_connection(path) as conn:
+        conn.execute(
+            """
+            CREATE TABLE TypedBaseItems (
+                Guid TEXT, Type TEXT, Name TEXT, OriginalTitle TEXT, Path TEXT,
+                SeriesName TEXT, ParentIndexNumber INTEGER, IndexNumber INTEGER,
+                ProductionYear INTEGER
+            )
+            """
+        )
+        conn.executemany(
+            "INSERT INTO TypedBaseItems VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [
+                (
+                    "movie-ext-1",
+                    "MediaBrowser.Controller.Entities.Movies.Movie",
+                    "Deutscher Titel",
+                    "Original Movie Title",
+                    "/Filme/O/Original Movie Title (2026)/Original Movie Title (2026).mkv",
+                    None, None, None, 2026,
+                ),
+                (
+                    "boxset-ext-1",
+                    "MediaBrowser.Controller.Entities.Movies.BoxSet",
+                    "Beispiel Collection",
+                    None, None, None, None, None, None,
+                ),
+            ],
+        )
+        conn.execute(
+            """
+            CREATE TABLE MediaStreams (
+                ItemId TEXT, StreamType TEXT, Codec TEXT, Language TEXT, Channels INTEGER,
+                BitRate INTEGER, Width INTEGER, Height INTEGER, IsForced INTEGER,
+                VideoRange TEXT, DvProfile TEXT
+            )
+            """
+        )
+        conn.execute(
+            "INSERT INTO MediaStreams VALUES ('movie-ext-1','Video','hevc',NULL,NULL,5000000,1920,1080,0,'SDR',NULL)"
+        )
+        conn.execute("CREATE TABLE BaseItemProviders(ItemId TEXT, ProviderId TEXT, ProviderValue TEXT)")
+        conn.executemany(
+            "INSERT INTO BaseItemProviders VALUES (?, ?, ?)",
+            [
+                ("movie-ext-1", "Tmdb", "12345"),
+                ("movie-ext-1", "Imdb", "tt12345"),
+            ],
+        )
+        conn.execute("CREATE TABLE ItemValues(ItemValueId INTEGER, Type INTEGER, Value TEXT)")
+        conn.executemany(
+            "INSERT INTO ItemValues VALUES (?, ?, ?)",
+            [(1, 2, "Action"), (2, 3, "Studio Beispiel"), (3, 4, "Liebling")],
+        )
+        conn.execute("CREATE TABLE ItemValuesMap(ItemId TEXT, ItemValueId INTEGER)")
+        conn.executemany(
+            "INSERT INTO ItemValuesMap VALUES ('movie-ext-1', ?)",
+            [(1,), (2,), (3,)],
+        )
+        conn.execute("CREATE TABLE Peoples(Id TEXT, Name TEXT, Type TEXT)")
+        conn.executemany(
+            "INSERT INTO Peoples VALUES (?, ?, ?)",
+            [("person-1", "Max Beispiel", "Actor"), ("person-2", "Erika Regie", "Director")],
+        )
+        conn.execute(
+            "CREATE TABLE PeopleBaseItemMap(ItemId TEXT, PeopleId TEXT, ListOrder INTEGER, Role TEXT, SortOrder INTEGER)"
+        )
+        conn.executemany(
+            "INSERT INTO PeopleBaseItemMap VALUES (?, ?, ?, ?, ?)",
+            [
+                ("movie-ext-1", "person-1", 0, "Figur A", 0),
+                ("movie-ext-1", "person-2", 1, "", 1),
+            ],
+        )
+        conn.execute("CREATE TABLE LinkedChildren(ParentId TEXT, ChildId TEXT, SortOrder INTEGER)")
+        conn.execute("INSERT INTO LinkedChildren VALUES ('boxset-ext-1', 'movie-ext-1', 1)")
+
+
+def test_jellyfin_import_adds_original_title_providers_values_people_and_collections(tmp_path: Path) -> None:
+    jellyfin_db = tmp_path / "library.db"
+    target_db = tmp_path / "dragontools.sqlite3"
+    _create_extended_jellyfin_metadata_db(jellyfin_db)
+
+    result = import_jellyfin_database(jellyfin_db, target_db)
+    assert result.imported_items == 1  # BoxSet bleibt Metadatenobjekt, kein Medium.
+
+    with _db_connection(target_db) as conn:
+        media = conn.execute(
+            "SELECT id, original_title FROM media_items WHERE source_id='movie-ext-1'"
+        ).fetchone()
+        assert media is not None
+        media_id = int(media[0])
+        assert media[1] == "Original Movie Title"
+
+        providers = dict(conn.execute(
+            "SELECT provider, provider_id FROM media_provider_ids WHERE media_id=?", (media_id,)
+        ).fetchall())
+        assert providers == {"imdb": "tt12345", "tmdb": "12345"}
+
+        values = set(conn.execute(
+            """
+            SELECT mv.kind, mv.value
+            FROM media_item_values miv
+            JOIN metadata_values mv ON mv.id=miv.value_id
+            WHERE miv.media_id=?
+            """,
+            (media_id,),
+        ).fetchall())
+        assert values == {("genre", "Action"), ("studio", "Studio Beispiel"), ("tag", "Liebling")}
+
+        people = set(conn.execute(
+            """
+            SELECT p.name, mp.role_type, mp.character_name
+            FROM media_people mp JOIN people p ON p.id=mp.person_id
+            WHERE mp.media_id=?
+            """,
+            (media_id,),
+        ).fetchall())
+        assert ("Max Beispiel", "Actor", "Figur A") in people
+        assert ("Erika Regie", "Director", "") in people
+
+        collection = conn.execute(
+            """
+            SELECT c.name, cm.sort_order
+            FROM collection_members cm
+            JOIN collections c ON c.id=cm.collection_id
+            WHERE cm.media_id=?
+            """,
+            (media_id,),
+        ).fetchone()
+        assert collection == ("Beispiel Collection", 1)
+
+
+def _insert_test_media_for_nfo(
+    db_path: Path, media_path: Path, *, provider_id: str = "12345", season: int | None = None, episode: int | None = None
+) -> int:
+    initialize_database(db_path)
+    now = "2026-09-11T11:00:00"
+    item_type = "episode" if episode is not None else "movie"
+    with _db_connection(db_path) as conn:
+        cursor = conn.execute(
+            """
+            INSERT INTO media_items(
+                item_type, title, original_title, series_title, season, episode, year,
+                source, source_id, path, parent_path, filename, normalized_title,
+                nfo_status, exists_flag, active, created_at, updated_at
+            ) VALUES(?, ?, ?, ?, ?, ?, ?, 'test', 'source-1', ?, ?, ?, ?,
+                     'unknown', 1, 1, ?, ?)
+            """,
+            (
+                item_type,
+                "Deutscher Titel",
+                "Original Title",
+                "Testserie" if item_type == "episode" else None,
+                season, episode, 2026,
+                str(media_path), str(media_path.parent), media_path.name, "deutscher titel", now, now,
+            ),
+        )
+        media_id = int(cursor.lastrowid)
+        conn.execute(
+            "INSERT INTO media_provider_ids(media_id, provider, provider_id, source) VALUES(?, 'tmdb', ?, 'test')",
+            (media_id, provider_id),
+        )
+    return media_id
+
+
+def test_nfo_lightscan_records_inventory_and_detects_mismatches_without_overwriting_db(tmp_path: Path) -> None:
+    db_path = tmp_path / "dragontools.sqlite3"
+    movie_path = tmp_path / "Film" / "Deutscher Titel.mkv"
+    movie_path.parent.mkdir()
+    movie_path.touch()
+    media_id = _insert_test_media_for_nfo(db_path, movie_path, provider_id="12345")
+    nfo_path = movie_path.parent / "movie.nfo"
+    nfo_path.write_text(
+        """<?xml version='1.0' encoding='utf-8'?>
+<movie>
+  <title>Deutscher Titel</title>
+  <originaltitle>Original Title</originaltitle>
+  <year>2026</year>
+  <uniqueid type='tmdb'>99999</uniqueid>
+</movie>
+""",
+        encoding="utf-8",
+    )
+
+    result = scan_nfo_inventory(db_path, backup=False)
+    assert result.candidates == 1
+    assert result.nfo_present == 1
+    assert result.nfo_missing == 0
+    assert result.issues == 1
+
+    with _db_connection(db_path) as conn:
+        item = conn.execute(
+            "SELECT nfo_status, nfo_path, nfo_type, nfo_mtime, nfo_scanned_at FROM media_items WHERE id=?",
+            (media_id,),
+        ).fetchone()
+        assert item[0] == "present"
+        assert Path(item[1]) == nfo_path
+        assert item[2] == "movie"
+        assert item[3] is not None and item[4]
+
+        # NFO-Daten werden getrennt gespeichert und überschreiben die DB-Wahrheit nicht.
+        assert conn.execute(
+            "SELECT provider_id FROM media_provider_ids WHERE media_id=? AND provider='tmdb'",
+            (media_id,),
+        ).fetchone()[0] == "12345"
+        assert conn.execute(
+            "SELECT provider_id FROM nfo_provider_ids WHERE media_id=? AND provider='tmdb'",
+            (media_id,),
+        ).fetchone()[0] == "99999"
+        issue = conn.execute(
+            "SELECT severity, field, db_value, nfo_value FROM nfo_issues WHERE media_id=?",
+            (media_id,),
+        ).fetchone()
+        assert issue == ("ERROR", "provider:tmdb", "12345", "99999")
+
+    # Unveränderte bereits geprüfte NFO wird im Lightscan nicht erneut geparst.
+    second = scan_nfo_inventory(db_path, backup=False)
+    assert second.candidates == 0
+    assert second.scanned_items == 0
+
+    rows = search_library(db_path, "nfo_provider_mismatch")
+    assert len(rows) == 1
+    assert rows[0]["nfo_issue_level"] == "ERROR"
+
+
+def test_nfo_lightscan_marks_unreachable_without_discarding_known_nfo_data(tmp_path: Path) -> None:
+    db_path = tmp_path / "dragontools.sqlite3"
+    media_dir = tmp_path / "NAS" / "Film"
+    media_dir.mkdir(parents=True)
+    movie_path = media_dir / "Deutscher Titel.mkv"
+    movie_path.touch()
+    media_id = _insert_test_media_for_nfo(db_path, movie_path, provider_id="12345")
+    nfo_path = media_dir / "movie.nfo"
+    nfo_path.write_text(
+        "<movie><title>Deutscher Titel</title><uniqueid type='tmdb'>12345</uniqueid></movie>",
+        encoding="utf-8",
+    )
+
+    first = scan_nfo_inventory(db_path, backup=False)
+    assert first.nfo_present == 1
+
+    # Simuliert einen nicht erreichbaren NAS-/Share-Pfad, ohne den DB-Pfad umzuschreiben.
+    offline_dir = tmp_path / "NAS_offline"
+    (tmp_path / "NAS").rename(offline_dir)
+
+    second = scan_nfo_inventory(db_path, backup=False)
+    assert second.candidates == 1
+    assert second.nfo_missing == 0
+    assert second.nfo_unreachable == 1
+    assert any("nicht erreichbar" in warning for warning in second.warnings)
+
+    with _db_connection(db_path) as conn:
+        item = conn.execute(
+            "SELECT nfo_status, nfo_path, nfo_type, nfo_mtime FROM media_items WHERE id=?",
+            (media_id,),
+        ).fetchone()
+        assert item[0] == "unreachable"
+        assert Path(item[1]) == nfo_path
+        assert item[2] == "movie"
+        assert item[3] is not None
+        assert conn.execute(
+            "SELECT provider_id FROM nfo_provider_ids WHERE media_id=? AND provider='tmdb'",
+            (media_id,),
+        ).fetchone()[0] == "12345"
+        assert conn.execute(
+            "SELECT parse_status FROM nfo_metadata WHERE media_id=?",
+            (media_id,),
+        ).fetchone()[0] == "ok"
+
+    rows = search_library(db_path, "nfo_unreachable")
+    assert len(rows) == 1
+    assert rows[0]["nfo_status"] == "unreachable"
+
+
+def test_media_library_public_facade_exports_nfo_lightscan_api() -> None:
+    from dragontools.core.media_library import LibraryLightScanResult as FacadeResult
+    from dragontools.core.media_library import scan_nfo_inventory as facade_scan
+
+    from dragontools.core.media_library_nfo_scan import scan_nfo_inventory as implementation_scan
+    from dragontools.core.media_library_types import LibraryLightScanResult
+
+    assert facade_scan is implementation_scan
+    assert FacadeResult is LibraryLightScanResult
+
+
+def test_nfo_lightscan_marks_missing_and_full_audit_rechecks_known_entries(tmp_path: Path) -> None:
+    db_path = tmp_path / "dragontools.sqlite3"
+    episode_path = tmp_path / "Serie" / "Folge - S01E02.mkv"
+    episode_path.parent.mkdir()
+    episode_path.touch()
+    media_id = _insert_test_media_for_nfo(db_path, episode_path, season=1, episode=2)
+
+    missing = scan_nfo_inventory(db_path, backup=False)
+    assert missing.nfo_missing == 1
+    with _db_connection(db_path) as conn:
+        assert conn.execute("SELECT nfo_status FROM media_items WHERE id=?", (media_id,)).fetchone()[0] == "missing"
+
+    nfo_path = episode_path.with_suffix(".nfo")
+    nfo_path.write_text(
+        """<episodedetails><title>Deutscher Titel</title><season>1</season><episode>3</episode><year>2026</year></episodedetails>""",
+        encoding="utf-8",
+    )
+    found = scan_nfo_inventory(db_path, backup=False)
+    assert found.nfo_present == 1
+    with _db_connection(db_path) as conn:
+        issue = conn.execute(
+            "SELECT severity, field, db_value, nfo_value FROM nfo_issues WHERE media_id=? AND field='episode'",
+            (media_id,),
+        ).fetchone()
+        assert issue == ("ERROR", "episode", "2", "3")
+
+    full = scan_nfo_inventory(db_path, full_audit=True, backup=False)
+    assert full.candidates == 1
+    assert full.scanned_items == 1
+
+
+def test_nfo_lightscan_dotted_series_folder_stays_unreachable_not_missing(tmp_path: Path) -> None:
+    db_path = tmp_path / "dragontools.sqlite3"
+    series_dir = tmp_path / "NAS" / "Mr. Robot"
+    series_dir.mkdir(parents=True)
+    nfo_path = series_dir / "tvshow.nfo"
+    nfo_path.write_text(
+        "<tvshow><title>Mr. Robot</title><uniqueid type='tvdb'>289590</uniqueid></tvshow>",
+        encoding="utf-8",
+    )
+
+    initialize_database(db_path)
+    with _db_connection(db_path) as conn:
+        conn.execute(
+            """
+            INSERT INTO media_items(
+                item_type, source, source_id, title, path, parent_path,
+                exists_flag, active, nfo_status, created_at, updated_at
+            ) VALUES('series', 'jellyfin', 'series-mr-robot', 'Mr. Robot', ?, ?, 1, 1, 'unknown', ?, ?)
+            """,
+            (str(series_dir), str(series_dir.parent), "2026-09-11T12:00:00", "2026-09-11T12:00:00"),
+        )
+        conn.commit()
+
+    first = scan_nfo_inventory(db_path, backup=False)
+    assert first.nfo_present == 1
+
+    # Der Share-Root bleibt erreichbar, nur der Serienordner ist offline/weg.
+    # Ein suffix-basierter Test würde "Mr. Robot" fälschlich als Datei werten,
+    # den erreichbaren Parent prüfen und anschließend "missing" setzen.
+    offline = tmp_path / "Mr_Robot_offline"
+    series_dir.rename(offline)
+
+    second = scan_nfo_inventory(db_path, backup=False)
+    assert second.nfo_unreachable == 1
+    assert second.nfo_missing == 0
+
+    with _db_connection(db_path) as conn:
+        row = conn.execute(
+            "SELECT nfo_status, nfo_path FROM media_items WHERE source_id='series-mr-robot'"
+        ).fetchone()
+        assert row[0] == "unreachable"
+        assert Path(row[1]) == nfo_path

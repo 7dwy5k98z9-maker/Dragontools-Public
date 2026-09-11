@@ -37,6 +37,7 @@ class BatchPreflightDialog(QDialog):
         "Status",
         "Datei",
         "Video",
+        "Endauflösung",
         "HDR/DV",
         "Audio",
         "Untertitel",
@@ -147,6 +148,7 @@ class BatchPreflightDialog(QDialog):
                 row.get("status", ""),
                 row.get("name", ""),
                 row.get("video", ""),
+                row.get("target_resolution", ""),
                 row.get("hdr", ""),
                 row.get("audio", ""),
                 row.get("subtitles", ""),
@@ -163,7 +165,7 @@ class BatchPreflightDialog(QDialog):
                     self._apply_status_color(item, row.get("severity"))
                 self._table.setItem(row_index, col_index, item)
 
-        widths = [90, 240, 140, 120, 240, 140, 210, 150, 130, 240]
+        widths = [90, 240, 140, 170, 120, 240, 140, 210, 150, 130, 240]
         for col_index, width in enumerate(widths):
             self._table.setColumnWidth(col_index, width)
 
@@ -203,6 +205,7 @@ class BatchPreflightDialog(QDialog):
         reasons = [str(v) for v in row.get("decision_reasons") or [] if v]
         lines = [
             f"Datei: {row.get('path', '')}",
+            f"Endauflösung: {row.get('target_resolution', '-')}",
             f"Pipeline: {row.get('pipeline', '-')}",
             f"Profil: {row.get('profile', '-')}",
             f"Analyse: {row.get('analysis_source', '-')}",

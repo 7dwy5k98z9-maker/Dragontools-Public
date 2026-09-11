@@ -2,8 +2,6 @@
 
 DragonTools ist eine Windows-Anwendung zur Analyse, Konvertierung und Verwaltung von Video-, Audio- und Untertiteldateien. Das Projekt bündelt die benötigten Drittanbieterprogramme nicht im Git-Repository. Sie müssen separat von den jeweiligen Projektseiten heruntergeladen werden.
 
-Veröffentlicht und gepflegt von **Dragon Developer**.
-
 ## Voraussetzungen
 
 - Windows 10 oder neuer
@@ -22,8 +20,8 @@ Die Python-Abhängigkeiten sind nach Einsatzzweck aufgeteilt:
 ## Projekt herunterladen und starten
 
 ```powershell
-git clone https://github.com/7dwy5k98z9-maker/Dragontools-Public.git
-cd Dragontools-Public
+git clone https://github.com/7dwy5k98z9-maker/Dragontools.git
+cd Dragontools
 py -3.13 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
@@ -53,7 +51,7 @@ Die Programme werden bewusst nicht mit diesem Repository verteilt. Lade sie auss
 | MakeMKV | ISO-, DVD- und Blu-ray-Workflows | [MakeMKV Download](https://www.makemkv.com/download/) | kompletter Programmordner unter `third_party/MakeMKV/`, mit `makemkvcon64.exe` oder `makemkvcon.exe` |
 | Rename My TV Series | Optionales externes Werkzeug zur Serienumbenennung | [Rename My TV Series 2](https://www.tweaking4all.com/home-theatre/rename-my-tv-series-v2/) | kompletter Programmordner unter `third_party/rmts/`, mit `RenameMyTVSeries.exe` |
 
-Nicht jede Funktion benötigt alle Werkzeuge. Fehlende optionale Werkzeuge deaktivieren oder begrenzen nur die zugehörigen Arbeitsabläufe. Das öffentliche Windows-Paket enthält diese Drittanbieterprogramme nicht. Installiere nur die Werkzeuge, die du für deine Arbeitsabläufe brauchst, und wähle ihre Pfade anschließend in DragonTools aus.
+Nicht jede Funktion benötigt alle Werkzeuge. Fehlende optionale Werkzeuge deaktivieren oder begrenzen nur die zugehörigen Arbeitsabläufe. Der vollständige EXE-Build erwartet hingegen sämtliche oben genannten Ordner und Programme.
 
 ## Alternative Werkzeugkonfiguration
 
@@ -63,7 +61,7 @@ Beim Start aus dem Quellcode sucht DragonTools Werkzeuge in dieser Reihenfolge:
 2. im Windows-`PATH`,
 3. in den bekannten Unterordnern von `third_party`.
 
-Die Pfade können in DragonTools unter den Einstellungen für externe Werkzeuge ausgewählt werden. Das ist praktisch, wenn die Programme bereits an anderer Stelle installiert sind. Alternativ können die Programme in der oben beschriebenen `third_party`-Struktur liegen.
+Die Pfade können in DragonTools unter den Einstellungen für externe Werkzeuge ausgewählt werden. Das ist praktisch, wenn die Programme bereits an anderer Stelle installiert sind. Für `build_v9.bat` müssen sie trotzdem in der oben beschriebenen `third_party`-Struktur vorhanden sein.
 
 ## Empfohlene Ordnerstruktur
 
@@ -111,11 +109,21 @@ Jeder Reparaturkandidat wird vor dem Ersetzen erneut auf Laufzeit, Lesbarkeit, V
 
 ## Jellyfin-Mediathek importieren
 
-DragonTools liest aktuelle Jellyfin-Datenbanken mit `BaseItems` und `MediaStreamInfos` ausschließlich als Quelle und erzeugt daraus eine eigene funktionale SQLite-Mediathek. Übernommen werden Filme, Serien, Staffeln, vorhandene Episoden und sonstige Videodateien einschließlich Pfad, Dateigröße, Laufzeit, Container, Auflösung, Video- und Gesamtbitrate, Video-Codec, Profil, Pixelformat, Bittiefe, Bildrate, Bildratenmodus, Frameanzahl, Farbraum, Transferfunktion, Farbprimärwerte, HDR/SDR, HDR10+ und Dolby Vision. Für Audio und Untertitel werden unter anderem Sprache, Codec, Kanäle, Kanalbelegung, Bitrate, Forced-Status, Streamdauer und vorhandene Eventanzahlen gespeichert. Personen, Studios, Genres, Playlists, Sammlungen und reine Metadatenpfade werden nicht importiert.
+DragonTools liest aktuelle Jellyfin-Datenbanken mit `BaseItems` und `MediaStreamInfos` ausschließlich als Quelle und erzeugt daraus eine eigene funktionale SQLite-Mediathek. Übernommen werden Filme, Serien, Staffeln, vorhandene Episoden und sonstige Videodateien einschließlich Pfad, Dateigröße, Laufzeit, Container, Auflösung, Video- und Gesamtbitrate, Video-Codec, Profil, Pixelformat, Bittiefe, Bildrate, Bildratenmodus, Frameanzahl, Farbraum, Transferfunktion, Farbprimärwerte, HDR/SDR, HDR10+ und Dolby Vision. Für Audio und Untertitel werden unter anderem Sprache, Codec, Kanäle, Kanalbelegung, Bitrate, Forced-Status, Streamdauer und vorhandene Eventanzahlen gespeichert. Seit Schema 6 werden zusätzlich Originaltitel, Provider-IDs (z. B. TMDB/TheTVDB/IMDb), Genres, Tags, Studios, Collections/Filmreihen und schlanke Personenbeziehungen importiert. Personen werden einmalig gespeichert und nur mit den Medien verknüpft; Biografien, Bilder und andere Personendetails werden nicht übernommen. Playlists und reine Metadatenpfade bleiben ausgeschlossen.
 
 Vor dem Import wird ein konsistenter Read-only-Snapshot einschließlich vorhandener WAL-Daten erzeugt und mit SQLite geprüft. Eine beschädigte oder unvollständig kopierte Jellyfin-Datenbank ersetzt die vorhandene DragonTools-Mediathek nicht. Gleichwertige Windows-/UNC-Pfade werden beim Neuaufbau nur einmal übernommen.
 
-Neue und bestehende DragonTools-Mediatheken werden kompatibel auf Schema 4 gebracht. Die Mediathek-Suche kann unter anderem Dateien ohne Laufzeit sowie auffällig kurze oder über fünf Stunden lange Videos anzeigen. CSV-Exporte enthalten dieselben erweiterten technischen Videofelder.
+Neue und bestehende DragonTools-Mediatheken werden kompatibel auf Schema 6 gebracht. Zusätzlich zum vollständigen Speicherpfad-Scan gibt es einen leichten NFO-Scan, der ausschließlich bereits bekannte Mediathek-Pfade prüft und weder MediaInfo noch ffprobe noch einen rekursiven NAS-Scan startet. Er speichert NFO-Status, Pfad, Typ und Zeitstempel und unterscheidet unter anderem `present`, `missing`, `unreachable`, `invalid` und `unreadable`. Ein offline gegangener NAS-/Share-Pfad wird als `unreachable` behandelt; vorhandene NFO-Prüfdaten bleiben erhalten. Aus NFOs gelesene Titel, Staffel/Folge, Jahr und Provider-IDs werden getrennt gespeichert und mit der Mediathek verglichen, ohne deren Metadaten zu überschreiben. Die NFO-Erstellung selbst verwendet weiterhin die Online-Metadatenabfrage und nicht die Mediathek-DB. Die Suche unterstützt gespeicherte GUI-/SQL-Abfragen; eine eingebaute SQL-Hilfe zeigt Tabellen, Spalten, Datentypen und Beispielabfragen. Trefferlisten bleiben in der GUI aus Performancegründen begrenzt; der CSV-Export führt dieselbe zuletzt ausgeführte Suche ohne Anzeigelimit aus und exportiert alle passenden Datensätze. CSV-Exporte enthalten die erweiterten technischen und NFO-bezogenen Felder.
+
+## Renamer: mehrstufige Suche und manuelle Korrektur
+
+Der Film-/Serien-Renamer bewertet Metadatenkandidaten in konfigurierbaren Stufen. Standardmäßig wird zuerst die normale Mindestübereinstimmung von **60 %** verwendet. Gibt es dort keinen Kandidaten, folgen automatisch die Fallback-Stufen **45 %** und **30 %**. Alle drei Grenzwerte sind unter **Regeln → Renamer-Regeln** separat einstellbar. Treffer aus reduzierten Stufen werden sichtbar als Fallback markiert und bleiben prüfbedürftig; die letzte Stufe behandelt mehrere ähnlich schwache Kandidaten bewusst als mehrdeutig statt blind zu raten.
+
+Wenn die automatische Typ-Erkennung falsch liegt, kann eine markierte Zeile gezielt **als Serie** oder **als Film** gesucht werden. Der Suchbegriff kann manuell geändert werden; außerdem lassen sich auf Wunsch alle Provider-Kandidaten ohne Fuzzy-Grenze anzeigen. Die Ergebnistabelle zeigt den tatsächlich gewählten Provider (**TMDB** oder **TheTVDB**) in einer eigenen Spalte.
+
+## Regel-/Profil-Simulator
+
+Der Regel-/Profil-Simulator zeigt neben Quelle, Pipeline, HDR/DV, Audio, Untertiteln und Ziel jetzt auch die **berechnete Endauflösung**. Dabei wird dieselbe Downscale-only-Logik wie im Encode-Pfad verwendet. Wenn Auto-Crop aktiv ist und der konkrete Crop erst während der Medienverarbeitung ermittelt werden kann, kennzeichnet der Simulator die Auflösung ausdrücklich als **vor Auto-Crop** statt eine nicht bekannte endgültige Crop-Auflösung zu erfinden.
 
 ## Windows-Anwendung bauen
 
@@ -125,19 +133,13 @@ Installiere zunächst die Build-Abhängigkeiten:
 python -m pip install -r requirements-build.txt
 ```
 
-Der öffentliche Build benötigt keine externen Medienprogramme. Starte ihn aus einer Eingabeaufforderung im Projektordner:
+Kontrolliere anschließend, dass alle externen Werkzeuge unter `third_party` vorhanden sind, und starte den Build aus einer Eingabeaufforderung im Projektordner:
 
 ```cmd
 build_v9.bat
 ```
 
-Der fertige Build wird unter `dist/DragonToolsV9.8.2/` abgelegt. Der öffentliche Build enthält DragonTools und seine Python-Laufzeit, aber keine externen Medienprogramme. `build/` und `dist/` sind lokale Ausgaben und werden nicht in Git gespeichert.
-
-## Fertige Windows-Version
-
-Wer DragonTools nur verwenden möchte, kann unter [GitHub Releases](https://github.com/7dwy5k98z9-maker/Dragontools-Releases/releases) das Paket `DragonToolsV9.8.2-win64.zip` herunterladen. Python und Git werden dafür nicht benötigt.
-
-Nach dem Entpacken wird `DragonToolsV9.8.2.exe` gestartet. Die Datei `TOOLS_INSTALLIEREN.txt` im Programmpaket erklärt, welche externen Werkzeuge benötigt werden und wo sie erhältlich sind. Vor dem Start sollte die veröffentlichte SHA-256-Prüfsumme kontrolliert werden.
+Der fertige Build wird unter `dist/DragonToolsV9.8.2/` abgelegt. `build/` und `dist/` sind lokale Ausgaben und werden nicht in Git gespeichert.
 
 ## Programm-Updates über GitHub
 
@@ -146,8 +148,6 @@ DragonTools prüft nach dem Programmstart verzögert und ohne Blockierung der Ob
 Bei einer neueren Version zeigt DragonTools die Versionsnummer und die Release-Hinweise an. Erst nach Zustimmung wird die GitHub-Downloadseite im Browser geöffnet. Es werden weder Dateien automatisch ersetzt noch Updates ohne Nachfrage installiert.
 
 Ist GitHub nicht erreichbar oder liefert die Releasequelle keine gültige Version, bleibt die automatische Prüfung still. Die private Quellcode-Historie und persönliche Zugangsdaten werden dafür weder benötigt noch übertragen. Ein ausgetauschtes Paket mit derselben Versionsnummer wird nicht als neueres Update erkannt; dafür ist eine höhere Versionsnummer erforderlich.
-
-Die fertigen Programmpakete werden künftig ausschließlich als [GitHub Releases](https://github.com/7dwy5k98z9-maker/Dragontools-Releases/releases) bereitgestellt. Der Quellcode und die Downloads bleiben dadurch sauber voneinander getrennt.
 
 ## Projekt aktualisieren
 
@@ -171,11 +171,3 @@ git push
 - Die Drittanbieterprogramme werden durch `.gitignore` ausgeschlossen.
 - Große fertige Programmpakete gehören später in einen GitHub Release und nicht direkt in die Git-Historie.
 - Medien dürfen nur im Rahmen der jeweils geltenden Rechte und Gesetze verarbeitet werden.
-
-## Datenschutz der Veröffentlichung
-
-Diese öffentliche Fassung besitzt eine eigene Git-Historie. Persönliche Namen, lokale Benutzerpfade, private Servernamen sowie Autoren- und Bearbeitungsmetadaten in Word- und PDF-Dateien wurden entfernt oder durch neutrale Angaben ersetzt. Vor jedem öffentlichen Push kann die Prüfung mit `python scripts/check_public_privacy.py` wiederholt werden.
-
-## Lizenz
-
-Für DragonTools wurde noch keine Open-Source-Lizenz erteilt. Eine Lizenz wird nicht automatisch erzeugt, weil MIT, GPL und andere Modelle sehr unterschiedliche Rechte und Pflichten festlegen. Bis zu einer bewussten Lizenzentscheidung bleibt der Quelltext urheberrechtlich geschützt; die öffentliche Sichtbarkeit allein erteilt keine zusätzliche Nutzungserlaubnis.

@@ -29,12 +29,12 @@ class ProjectStatistics:
 # Wird bei Dokumentations-/Release-Pflege aktualisiert und dient nur als
 # Fallback, wenn ein Frozen-Build keine .py-Quellen enthält.
 RELEASE_STATISTICS = ProjectStatistics(
-    python_files=583,
-    total_lines=105612,
-    code_lines=89549,
-    test_package_files=151,
-    test_files=148,
-    static_tests=1095,
+    python_files=601,
+    total_lines=111339,
+    code_lines=94633,
+    test_package_files=154,
+    test_files=151,
+    static_tests=1142,
     dynamic=False,
 )
 
@@ -110,24 +110,29 @@ def build_about_html(root: str | Path | None = None) -> str:
     source_note = "live aus dem Programmverzeichnis" if stats.dynamic else "verifizierte Release-Fallbackwerte"
     return (
         f"<b>Dragon Tools V{APP_VERSION}</b><br>"
-        "Dragon Tools bündelt Konvertierung, Remux, Analyse, Metadaten, Mediathek und Nachbearbeitung in einer PyQt6-Oberfläche.<br><br>"
-        "<b>Wichtige Funktionen</b><br>"
-        "H.264 · H.265 · AV1 · NVENC · QSV · AMF · CPU/x265<br>"
-        "Dolby Vision · HDR10+ · Auto-Crop · IMAX · Audio-/Untertitelregeln<br>"
-        "ISO/BDMV · Remux · Merge · Audio-Mux · Audio-Video-Matcher · Qualitätstester<br>"
-        "TMDB · TheTVDB · Renamer-Regeln · Fuzzy-Matching · Jellyfin NFO · Trickplay<br>"
-        "SQLite-Mediathek · Jellyfin-Import · SxxExx-Ersetzung · CSV-Auswertung<br><br>"
-        "<b>Stabilität und Ausgabeprüfung</b><br>"
-        "DV- und HDR10+-Erhalt mit MP4Box und mkvmerge, dem direkten 5-Schritt-Pfad "
-        "sowie kontrollierten Per-Datei-Overrides.<br><br>"
+        "Dragon Tools ist ein modulares Medienwerkzeug für Konvertierung, Remux, Analyse, Metadaten, Mediathek, Validierung und Nachbearbeitung in einer PyQt6-Oberfläche.<br><br>"
+        "<b>Video &amp; HDR</b><br>"
+        "H.264 · H.265/HEVC · AV1 · NVENC · QSV · AMF · CPU/x265<br>"
+        "DV- und HDR10+-Erhalt · Dolby-Vision-RPU-Prüfung · Auto-Crop · IMAX · Downscale-only<br>"
+        "Der HDR10+-Workflow nutzt den direkten 5-Schritt-Pfad; MP4Box und mkvmerge/mkvextract sichern die jeweiligen MP4-/MKV-Spezialpfade ab.<br><br>"
+        "<b>Workflow &amp; Sicherheit</b><br>"
+        "Per-Datei-Overrides · Audio-/Untertitelregeln · Sidecars · ISO/BDMV · Remux · Merge · Audio-Mux<br>"
+        "Audio-Video-Matcher · Qualitätstester · Timestamp-Reparatur · transaktionaler Output-Commit · Move-Recovery<br><br>"
+        "<b>Metadaten &amp; Mediathek</b><br>"
+        "TMDB · TheTVDB · Renamer-Regeln · mehrstufiges Fuzzy-Matching · Jellyfin-NFO · Trickplay<br>"
+        "SQLite-Mediathek Schema 6 · Jellyfin-Import · Provider-IDs · Genres/Tags/Studios · Personenbeziehungen · Collections<br>"
+        "Renamer: konfigurierbare 60/45/30-%-Suchstufen · manuelle Film-/Seriensuche · Provider-Anzeige · Rohkandidaten<br>"
+        "NFO-Lightscan/-Konsistenzprüfung · gespeicherte GUI-/SQL-Suchen · SQL-Schemahilfe · vollständiger CSV-Export<br><br>"
         f"<b>Projektumfang ({source_note})</b><br>"
         f"{_fmt_int(stats.python_files)} Python-Dateien · {_fmt_int(stats.total_lines)} Gesamtzeilen · "
-        f"{_fmt_int(stats.code_lines)} Code Zeilen<br>"
+        f"{_fmt_int(stats.code_lines)} Codezeilen<br>"
         f"Tests-Paket: {stats.test_package_files} Python-Dateien · {stats.test_files} test_*.py · "
-        f"{stats.static_tests} statisch erkannte Tests<br>V9.8-Abnahme (09.09.2026): 1.106 Tests bestanden · 2 gezielte Skips · 0 Fehler · 427 Produktivmodule importiert<br><br>"
-        "Entwicklungszeit gesamt: 4.000 Stunden<br>"
-        "V8 → V9: 2.000 Stunden · V7 → V8: 1.600 Stunden<br>"
-        "Testzeit: V8 400h · V9 140h<br><br>"
+        f"{stats.static_tests} statisch erkannte Tests<br>"
+        "Aktueller Renamer-/Regelsimulator-Abnahmelauf (11.09.2026): 78/78 Tests bestanden.<br>"
+        "Der Regel-/Profil-Simulator zeigt zusätzlich die berechnete Endauflösung; bei aktivem Auto-Crop wird der Vor-Crop-Stand gekennzeichnet.<br><br>"
+        "Entwicklungszeit gesamt: rund 6.000 Stunden<br>"
+        "V8 → V9: rund 2.000 Stunden · V9 → V9.8: rund 2.000 Stunden · V7 → V8: rund 1.600 Stunden<br>"
+        "Testzeit: V1–V7 knapp 150h · V8 rund 400h · V9 bisher rund 140h<br><br>"
         "Vorherige Version V8: 111 Programme · 25.800 Zeilen · 21.200 Codezeilen.<br>"
         "Vorherige Version V7: 6 Programme · 26.568 Zeilen · 19.880 Codezeilen.<br><br>"
         "Shortcuts: F1=Hilfe · F2=Handbuch · F9=Werkzeuge · F11=Legacy V8 · F12=Changelog V9<br>"

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 from .media_analyzer import analyze_media
+from .encoder_profile_override import effective_encoder_settings
 from .models import normalize_override_dict
 from .paths import ToolPaths, get_tool_paths
 from ..rules.move_rules import planned_target_dir
@@ -289,6 +290,58 @@ def _build_video_preview(mi) -> dict[str, Any]:
     }
 
 
+
+
+def _even_width_for_height(width: int, height: int, target_height: int) -> int:
+    if width <= 0 or height <= 0 or target_height <= 0:
+        return max(0, width)
+    if target_height == height:
+        return width
+    scaled = width * target_height / height
+    return max(2, int(round(scaled / 2.0)) * 2)
+
+
+def _build_target_video_preview(
+    mi,
+    ov: dict[str, Any],
+    encoder_settings: dict[str, Any],
+    *,
+    autocrop_enabled: bool,
+) -> dict[str, Any]:
+    pv = mi.primary_video
+    if pv is None or not pv.width or not pv.height:
+        return {
+            "width": None,
+            "height": None,
+            "resolution": "unbekannt",
+            "scale_mode": str(encoder_settings.get("scale_mode") or "original"),
+            "autocrop_pending": bool(autocrop_enabled),
+        }
+
+    source_width = int(pv.width)
+    source_height = int(pv.height)
+    strip_only = str(ov.get("processing_mode") or "").strip().lower() == "strip_only"
+    scale_mode = str(encoder_settings.get("scale_mode") or "original").strip().lower()
+    target_height = {"4k": 2160, "1080p": 1080, "720p": 720, "480p": 480}.get(scale_mode)
+
+    if strip_only or target_height is None:
+        out_height = source_height
+        out_width = source_width
+    else:
+        out_height = min(source_height, target_height)
+        out_width = _even_width_for_height(source_width, source_height, out_height)
+
+    return {
+        "width": out_width,
+        "height": out_height,
+        "resolution": f"{out_width}x{out_height}",
+        "scale_mode": scale_mode,
+        "source_width": source_width,
+        "source_height": source_height,
+        "autocrop_pending": bool(autocrop_enabled and not strip_only),
+        "strip_only": strip_only,
+    }
+
 def build_rules_preview(
     file_path: str,
     *,
@@ -300,6 +353,11 @@ def build_rules_preview(
     media_info=None,
     global_preserve_dv: bool = True,
     global_preserve_hdrplus: bool = True,
+    default_crf: int = 23,
+    default_preset: str = "medium",
+    default_scale_mode: str = "original",
+    default_encoder_options: dict[str, Any] | None = None,
+    autocrop_enabled: bool = False,
 ) -> dict[str, Any]:
     """
     Baut eine reine Anzeige-/Preview-Struktur aus den vorhandenen Analyse- und Regelbausteinen.
@@ -308,6 +366,17 @@ def build_rules_preview(
     resolved_tools = tools or get_tool_paths()
     mi = media_info if media_info is not None else analyze_media(file_path, resolved_tools)
     ov = normalize_override_dict(file_override)
+    encoder_settings = effective_encoder_settings(
+        default_codec=codec,
+        default_crf=int(default_crf),
+        default_preset=str(default_preset or "medium"),
+        default_scale_mode=str(default_scale_mode or "original"),
+        default_encoder_options=dict(default_encoder_options or {}),
+        file_override=ov,
+    )
+    target_video = _build_target_video_preview(
+        mi, ov, encoder_settings, autocrop_enabled=autocrop_enabled
+    )
 
     pipeline_ctx = resolve_pipeline_context(
         mi,
@@ -337,6 +406,8 @@ def build_rules_preview(
         "ignored_hdr": list(pipeline_ctx.get("ignored_hdr") or []),
         "audio": _build_audio_preview(mi, ov, container),
         "subtitles": _build_subtitle_preview(mi, ov, subtitle_rules, pipeline, container),
+        "encoder": encoder_settings,
+        "target_video": target_video,
         "overrides": ov,
         "move": {
             "planned_target": planned_target_dir(planned_target),

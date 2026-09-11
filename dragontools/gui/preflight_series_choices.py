@@ -13,7 +13,7 @@ NO_SERIES_FOLDER_CHOICE = object()
 def install_series_folder_choice(widget, layout: QVBoxLayout) -> None:
     combo = QComboBox()
     combo.setVisible(False)
-    combo.currentIndexChanged.connect(widget.update_preview)
+    combo.currentIndexChanged.connect(lambda _idx=0: getattr(widget, "_update_preview")())
     widget._folder_choice_combo = combo
     layout.addWidget(combo)
 
@@ -63,7 +63,7 @@ def show_series_folder_choices(
     widget._metadata_hint.setText("  ⚠️ Mehrere passende Serienordner gefunden – bitte Zielordner auswählen.")
     widget._metadata_hint.setStyleSheet("color:#b45309; font-size:11px;")
     widget._metadata_hint.setVisible(True)
-    widget.update_preview()
+    getattr(widget, "_update_preview")()
 
 
 def validate_series_folder_choice(widget) -> tuple[bool, str]:

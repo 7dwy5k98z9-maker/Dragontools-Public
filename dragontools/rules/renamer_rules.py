@@ -9,7 +9,7 @@ from ..core.type_utils import _safe_bool, _safe_int
 from .rule_loader import load_named_rules
 
 _DEFAULT = {
-    "_schema_version": 1,
+    "_schema_version": 2,
     "character_replacements": [
         {"character": "*", "replacement": "X"},
         {"character": '"', "replacement": "'"},
@@ -26,6 +26,7 @@ _DEFAULT = {
     "title_exceptions": [],
     "matching": {
         "minimum_candidate_score": 0.60,
+        "fallback_candidate_scores": [0.45, 0.30],
         "manual_review_below": 0.72,
         "auto_accept_from": 0.78,
         "fuzzy_fallback": True,
@@ -90,10 +91,21 @@ def migrate_renamer_rules(data: dict[str, Any] | None) -> dict[str, Any]:
 
     matching = dict(raw.get("matching") or {})
     defaults = _DEFAULT["matching"]
+    raw_fallback_scores = list(matching.get("fallback_candidate_scores") or [])
+    fallback_scores = [
+        _clamp_float(
+            raw_fallback_scores[index] if index < len(raw_fallback_scores) else default,
+            default,
+            0.0,
+            1.0,
+        )
+        for index, default in enumerate(defaults["fallback_candidate_scores"])
+    ]
     result["matching"] = {
         "minimum_candidate_score": _clamp_float(
             matching.get("minimum_candidate_score"), defaults["minimum_candidate_score"], 0.0, 1.0
         ),
+        "fallback_candidate_scores": fallback_scores,
         "manual_review_below": _clamp_float(
             matching.get("manual_review_below"), defaults["manual_review_below"], 0.0, 1.0
         ),
@@ -106,7 +118,7 @@ def migrate_renamer_rules(data: dict[str, Any] | None) -> dict[str, Any]:
             matching.get("fuzzy_prefix_min_words"), defaults["fuzzy_prefix_min_words"], 2, 8
         ),
     }
-    result["_schema_version"] = 1
+    result["_schema_version"] = 2
     return result
 
 
@@ -194,6 +206,51 @@ def matching_rules() -> dict[str, Any]:
 def minimum_candidate_score() -> float:
     return float(matching_rules().get("minimum_candidate_score", 0.60))
 
+
+
+
+def fallback_candidate_scores() -> tuple[float, ...]:
+    """Zusätzliche automatische Mindestwerte unterhalb des normalen Scores.
+
+    Die Werte werden absteigend, ohne Duplikate und nur unterhalb des normalen
+    Mindestwerts geliefert. Damit bleibt die erste Stufe immer die reguläre
+    Renamer-Grenze (standardmäßig 60 %).
+    """
+    primary = minimum_candidate_score()
+    raw = matching_rules().get("fallback_candidate_scores") or (0.45, 0.30)
+    result: list[float] = []
+    for value in raw:
+        score = _clamp_float(value, 0.0, 0.0, 1.0)
+        if score >= primary or score in result:
+            continue
+        result.append(score)
+    return tuple(sorted(result, reverse=True))
+
+
+def candidate_score_stages(*, include_all: bool = False) -> tuple[float, ...]:
+    values = [minimum_candidate_score(), *fallback_candidate_scores()]
+    if include_all:
+        values.append(0.0)
+    seen: set[float] = set()
+    result: list[float] = []
+    for value in values:
+        score = round(max(0.0, min(1.0, float(value))), 4)
+        if score not in seen:
+            seen.add(score)
+            result.append(score)
+    return tuple(result)
+
+
+def candidate_discovery_floor() -> float:
+    """Lockere interne Provider-Vorauswahl für die letzte Fallback-Stufe.
+
+    Die Provider dürfen Kandidaten nicht schon bei 40 % verwerfen, wenn der
+    Renamer bewusst bis 30 % heruntergeht. Ein kleiner Puffer hält trotzdem
+    vollkommen fachfremde Rohresultate aus der teureren Episodenauflösung fern.
+    """
+    stages = candidate_score_stages()
+    lowest = min(stages) if stages else minimum_candidate_score()
+    return max(0.0, lowest - 0.05)
 
 def manual_review_below() -> float:
     return float(matching_rules().get("manual_review_below", 0.72))

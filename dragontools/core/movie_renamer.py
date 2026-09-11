@@ -1,10 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Compatibility facade and orchestration for file renaming.
-
-Parsing, models, and metadata candidate scoring are intentionally separated so
-this module only coordinates the rename proposal workflow. Existing imports
-from ``dragontools.core.movie_renamer`` remain stable.
-"""
+"""Compatibility facade and orchestration for file renaming."""
 from __future__ import annotations
 
 from dataclasses import replace
@@ -43,16 +38,14 @@ from .movie_renamer_candidates import (
 )
 from .online_metadata_common import default_episode_title
 from .paths import path_compare_key
-from ..rules.renamer_rules import (
-    apply_title_exception,
-    manual_review_below,
-    minimum_candidate_score,
-)
+from ..rules.renamer_rules import apply_title_exception
+from .movie_renamer_matching import candidate_status, select_score_stage, stage_warning
 
 
 def _series_candidate_from_result(raw: Any, parsed: ParsedSeriesReleaseName) -> SeriesRenameCandidate | None:
     """Compatibility wrapper that preserves monkeypatchable alias rules."""
     return _candidate_series_from_result(raw, parsed, title_exception=apply_title_exception)
+
 
 def build_movie_rename_proposal(
     path: str | Path,
@@ -60,12 +53,20 @@ def build_movie_rename_proposal(
     resolver: MovieSearchResolver | None = None,
     client: Any | None = None,
     limit: int = 6,
+    query_override: str | None = None,
+    force: bool = False,
+    minimum_score_override: float | None = None,
+    show_all_candidates: bool = False,
 ) -> MovieRenameProposal:
     source_path = Path(path)
     parsed = parse_movie_release_name(source_path)
     warnings = list(parsed.warnings)
+    manual_query = str(query_override or "").strip()
+    if manual_query:
+        parsed = replace(parsed, query_title=manual_query)
+        warnings.append(f"Manuelle Filmsuche: {manual_query}")
     candidates: list[MovieRenameCandidate] = []
-    if parsed.is_probable_series:
+    if parsed.is_probable_series and not force:
         return MovieRenameProposal(
             source_path=source_path,
             parsed=parsed,
@@ -82,9 +83,17 @@ def build_movie_rename_proposal(
     except Exception as exc:
         warnings.append(f"Metadaten-Suche fehlgeschlagen: {exc}")
 
-    candidates = [item for item in candidates if item.score >= minimum_candidate_score()]
+    candidates, threshold = select_score_stage(
+        candidates,
+        minimum_score_override=minimum_score_override,
+        show_all_candidates=show_all_candidates,
+    )
     candidates = _limit_candidates_with_provider_coverage(candidates, client=client, limit=limit)
+    fallback_warning = stage_warning(threshold)
+    if fallback_warning:
+        warnings.append(fallback_warning)
     selected = candidates[0] if candidates else None
+    search_mode = "manual_movie" if force or manual_query else "auto"
     if not selected:
         return MovieRenameProposal(
             source_path=source_path,
@@ -92,18 +101,16 @@ def build_movie_rename_proposal(
             candidates=tuple(candidates),
             status="no_match",
             warnings=tuple(warnings + ["Kein passender Metadaten-Treffer gefunden."]),
+            minimum_score_used=threshold,
+            search_mode=search_mode,
         )
 
     target_name = build_target_filename(selected.title, selected.year or parsed.year, parsed.suffix)
     target_path = source_path.with_name(target_name)
     target_exists = target_path.exists() and path_compare_key(target_path) != path_compare_key(source_path)
-    status = "ok"
-    if target_exists:
-        status = "conflict"
-        warnings.append("Zieldatei existiert bereits.")
-    elif selected.score < manual_review_below():
-        status = "manual_review"
-        warnings.append("Treffer ist unsicher und sollte manuell geprüft werden.")
+    status, warning = candidate_status(candidates, threshold=threshold, target_exists=target_exists)
+    if warning:
+        warnings.append(warning)
 
     return MovieRenameProposal(
         source_path=source_path,
@@ -116,6 +123,8 @@ def build_movie_rename_proposal(
         confidence=selected.score,
         warnings=tuple(warnings),
         target_exists=target_exists,
+        minimum_score_used=threshold,
+        search_mode=search_mode,
     )
 
 
@@ -126,6 +135,9 @@ def build_series_rename_proposal(
     client: Any | None = None,
     limit: int = 6,
     query_override: str | None = None,
+    force: bool = False,
+    minimum_score_override: float | None = None,
+    show_all_candidates: bool = False,
 ) -> SeriesRenameProposal:
     source_path = Path(path)
     parsed = parse_series_release_name(source_path)
@@ -134,13 +146,15 @@ def build_series_rename_proposal(
         empty = ParsedSeriesReleaseName(
             source_name=fallback.source_name,
             suffix=fallback.suffix,
-            series=fallback.query_title,
+            series=str(query_override or fallback.query_title).strip(),
             season=0,
             episode=0,
             year=fallback.year,
             warnings=tuple(fallback.warnings + ("Kein Serienmuster erkannt.",)),
         )
-        return SeriesRenameProposal(source_path=source_path, parsed=empty, status="not_series", warnings=empty.warnings)
+        if not force:
+            return SeriesRenameProposal(source_path=source_path, parsed=empty, status="not_series", warnings=empty.warnings)
+        parsed = empty
 
     warnings = list(parsed.warnings)
     manual_query = str(query_override or "").strip()
@@ -157,9 +171,17 @@ def build_series_rename_proposal(
     except Exception as exc:
         warnings.append(f"Serien-Metadatensuche fehlgeschlagen: {exc}")
 
-    candidates = [item for item in candidates if item.score >= minimum_candidate_score()]
+    candidates, threshold = select_score_stage(
+        candidates,
+        minimum_score_override=minimum_score_override,
+        show_all_candidates=show_all_candidates,
+    )
     candidates = _limit_candidates_with_provider_coverage(candidates, client=client, limit=limit)
+    fallback_warning = stage_warning(threshold)
+    if fallback_warning:
+        warnings.append(fallback_warning)
     selected = candidates[0] if candidates else None
+    search_mode = "manual_series" if force or manual_query else "auto"
     if selected is None:
         target_name = build_series_target_filename(
             parsed.series,
@@ -176,6 +198,8 @@ def build_series_rename_proposal(
             target_path=target_path,
             status="no_match",
             warnings=tuple(warnings + ["Kein passender Serien-/Episodentreffer gefunden."]),
+            minimum_score_used=threshold,
+            search_mode=search_mode,
         )
 
     target_name = build_series_target_filename(
@@ -187,13 +211,9 @@ def build_series_rename_proposal(
     )
     target_path = source_path.with_name(target_name)
     target_exists = target_path.exists() and path_compare_key(target_path) != path_compare_key(source_path)
-    status = "ok"
-    if target_exists:
-        status = "conflict"
-        warnings.append("Zieldatei existiert bereits.")
-    elif selected.score < manual_review_below():
-        status = "manual_review"
-        warnings.append("Treffer ist unsicher und sollte manuell geprüft werden.")
+    status, warning = candidate_status(candidates, threshold=threshold, target_exists=target_exists)
+    if warning:
+        warnings.append(warning)
 
     return SeriesRenameProposal(
         source_path=source_path,
@@ -206,6 +226,8 @@ def build_series_rename_proposal(
         confidence=selected.score,
         warnings=tuple(warnings),
         target_exists=target_exists,
+        minimum_score_used=threshold,
+        search_mode=search_mode,
     )
 
 
@@ -218,21 +240,34 @@ def build_rename_proposal(
     series_resolver: SeriesSearchResolver | None = None,
     limit: int = 6,
     series_query_override: str | None = None,
+    movie_query_override: str | None = None,
+    force_kind: str | None = None,
+    minimum_score_override: float | None = None,
+    show_all_candidates: bool = False,
 ) -> RenameProposal:
+    forced = str(force_kind or "").strip().lower()
     parsed = parse_movie_release_name(path)
-    if parsed.is_probable_series:
+    use_series = forced == "series" or (forced != "movie" and parsed.is_probable_series)
+    if use_series:
         return build_series_rename_proposal(
             path,
             resolver=series_resolver,
             client=series_client,
             limit=limit,
             query_override=series_query_override,
+            force=forced == "series",
+            minimum_score_override=minimum_score_override,
+            show_all_candidates=show_all_candidates,
         )
     return build_movie_rename_proposal(
         path,
         resolver=movie_resolver,
         client=movie_client,
         limit=limit,
+        query_override=movie_query_override,
+        force=forced == "movie",
+        minimum_score_override=minimum_score_override,
+        show_all_candidates=show_all_candidates,
     )
 
 

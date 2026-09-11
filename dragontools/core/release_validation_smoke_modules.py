@@ -27,7 +27,7 @@ REFACTOR_SMOKE_MODULES = (
     *_module_paths(
         "worker",
         "tool_runner tool_process_lifecycle move_thread move_batch_executor move_completion_service "
-        "subtitle_sidecar_service subtitle_sidecar_plan converter_progress converter_media_probe "
+        "subtitle_sidecar_service subtitle_sidecar_plan subtitle_sidecar_targets converter_progress converter_media_probe "
         "converter_process_executor converter_progress_parser media_contract media_contract_builder "
         "media_contract_types output_verifier output_probe output_contract_verifier",
     ),

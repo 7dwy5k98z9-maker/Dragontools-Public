@@ -14,6 +14,7 @@ from .release_validation_common import (
     APP_VERSION,
     ReleaseCheck,
     _check_exists,
+    _check_matching_file,
     _check_schema_file,
     _looks_like_app_data_dir,
     _project_root_from_module,
@@ -194,6 +195,35 @@ def validate_release(
         checks.append(_check_exists(dist_dir / "Daten" / "help.html", "Build: Help-Datei"))
         checks.append(_check_exists(dist_dir / "Daten" / "Aenderungshistorie" / "CHANGELOG.json", "Build: Changelog JSON"))
         checks.append(_check_exists(dist_dir / "Daten" / "Aenderungshistorie" / "CHANGELOG.txt", "Build: Changelog TXT-Fallback", required=False))
+
+        # Existenz allein reicht bei Dokumenten nicht: Ein alter dist-Ordner kann
+        # formal vollständig sein, aber noch Help/Handbuch/Changelog eines
+        # früheren Quellstands enthalten. Der Source-Check vergleicht deshalb
+        # die tatsächlich eingebundenen Artefakte bytegenau.
+        checks.append(_check_matching_file(
+            root / "help.html",
+            dist_dir / "Daten" / "help.html",
+            "Build: Help-Aktualität",
+        ))
+        checks.append(_check_matching_file(
+            root / "Handbuch" / "Handbuch.pdf",
+            dist_dir / "Daten" / "Handbuch" / "Handbuch.pdf",
+            "Build: Handbuch-Aktualität",
+        ))
+        checks.append(_check_matching_file(
+            root / "Aenderungshistorie" / "CHANGELOG.json",
+            dist_dir / "Daten" / "Aenderungshistorie" / "CHANGELOG.json",
+            "Build: Changelog-JSON-Aktualität",
+        ))
+        source_changelog_txt = root / "Aenderungshistorie" / "CHANGELOG.txt"
+        built_changelog_txt = dist_dir / "Daten" / "Aenderungshistorie" / "CHANGELOG.txt"
+        if source_changelog_txt.exists() or built_changelog_txt.exists():
+            checks.append(_check_matching_file(
+                source_changelog_txt,
+                built_changelog_txt,
+                "Build: Changelog-TXT-Aktualität",
+            ))
+
         checks.append(_check_exists(dist_dir / "Daten" / "Programme", "Build: Programme/Tools", required=False))
         checks.append(_check_python_package_smoke(dist_dir / "Daten" / "Python", "Build: Python-Paket-Smoke-Test"))
         dist_bytecode_check = _check_forbidden_release_artifacts(dist_dir / "Daten")

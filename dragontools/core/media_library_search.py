@@ -31,7 +31,7 @@ def search_library(
     db_path: str | Path,
     preset: str = "all",
     text: str = "",
-    limit: int = 500,
+    limit: int | None = 500,
     *,
     scope: str = "all",
     media_type: str = "all",

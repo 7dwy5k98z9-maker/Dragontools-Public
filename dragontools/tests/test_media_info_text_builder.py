@@ -41,6 +41,7 @@ def test_build_media_info_text_preserves_all_sections(monkeypatch):
         lambda *_args, **_kwargs: {
             "pipeline": "DV8",
             "target_container": "mkv",
+            "target_video": {"resolution": "3840x1600", "autocrop_pending": False},
             "dv_preserved": True,
             "hdr10plus_preserved": True,
             "audio": {
@@ -85,6 +86,7 @@ def test_build_media_info_text_preserves_all_sections(monkeypatch):
     assert "Audio 1: Deutsch | eac3 | 5.1 | 640 kbps | Titel: Deutsch" in text
     assert "Untertitel 1: Deutsch | subrip | Forced: Ja | Titel: Forced" in text
     assert "Pipeline:       DV8" in text
+    assert "Endauflösung:   3840x1600" in text
     assert "Verarbeitung:   Strip-Only" in text
     assert r"Zielordner:     D:\\Filme" in text
 

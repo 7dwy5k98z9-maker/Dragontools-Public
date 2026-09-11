@@ -17,6 +17,11 @@ from .media_library_db import (
     initialize_database,
 )
 from .media_library_paths import _matches_any_mapping_prefix, apply_path_mappings, save_path_mappings
+from .media_library_jellyfin_metadata import (
+    apply_auxiliary_metadata,
+    apply_collection_metadata,
+    load_jellyfin_auxiliary_metadata,
+)
 from .media_library_repository import _insert_item, _item_from_media_info, _streams_from_media_info
 from .media_library_types import DEFAULT_DB_FILENAME, LibraryImportResult, LogFn, PathMapping, _now
 from .media_library_utils import (
@@ -76,6 +81,18 @@ def _pick_jellyfin_stream_table(conn: sqlite3.Connection) -> str | None:
     for table in tables:
         columns = _table_columns(conn, table)
         if "streamtype" in columns and "itemid" in columns:
+            return table
+    return None
+
+
+def _pick_jellyfin_trickplay_table(conn: sqlite3.Connection) -> str | None:
+    tables = _table_names(conn)
+    for candidate in ("TrickplayInfos", "TrickplayInfo", "trickplayinfos"):
+        if candidate in tables:
+            return candidate
+    for table in tables:
+        columns = _table_columns(conn, table)
+        if "itemid" in columns and "thumbnailcount" in columns:
             return table
     return None
 
@@ -227,7 +244,7 @@ def _jellyfin_hdr_format(row: sqlite3.Row, columns: dict[str, str]) -> str:
 
 
 def _stream_from_jellyfin_row(row: sqlite3.Row, columns: dict[str, str]) -> dict[str, Any]:
-    raw_stream_type = str(_row_value(row, columns, "StreamType", "type", default="") or "")
+    raw_stream_type = _row_value(row, columns, "StreamType", "type", default="")
     codec = _row_value(row, columns, "Codec", default=None)
     channels = _int_or_none(_row_value(row, columns, "Channels", default=None))
     width = _int_or_none(_row_value(row, columns, "Width", default=None))
@@ -255,6 +272,11 @@ def _stream_from_jellyfin_row(row: sqlite3.Row, columns: dict[str, str]) -> dict
     frame_rate_mode = None
     if average_frame_rate and real_frame_rate:
         frame_rate_mode = "CFR" if abs(average_frame_rate - real_frame_rate) <= 0.001 else "VFR"
+    external_path = _row_value(row, columns, "Path", "ExternalPath", "FilePath", default=None)
+    is_external_subtitle = stream_type.casefold() == "subtitle" and (
+        _bool(_row_value(row, columns, "IsExternal", "External", "IsExternalSubtitle", default=0))
+        or bool(external_path)
+    )
     return {
         "stream_type": stream_type,
         "stream_index": _int_or_none(_row_value(row, columns, "Index", "StreamIndex", default=None)),
@@ -280,20 +302,33 @@ def _stream_from_jellyfin_row(row: sqlite3.Row, columns: dict[str, str]) -> dict
             row, columns, "ColorTransfer", "TransferCharacteristics", default=None
         ),
         "color_primaries": _row_value(row, columns, "ColorPrimaries", default=None),
-        "source_kind": (
-            "external"
-            if stream_type.casefold() == "subtitle"
-            and (
-                _bool(_row_value(row, columns, "IsExternal", "External", "IsExternalSubtitle", default=0))
-                or bool(_row_value(row, columns, "Path", "ExternalPath", "FilePath", default=None))
-            )
-            else "internal"
-        ),
-        "external_path": _row_value(row, columns, "Path", "ExternalPath", "FilePath", default=None),
+        "source_kind": "external" if is_external_subtitle else "internal",
+        "external_path": external_path if is_external_subtitle else None,
         "title": _row_value(row, columns, "Title", "DisplayTitle", default=None),
         "rpu_present": _bool(_row_value(row, columns, "RpuPresentFlag", default=0)),
         "hdr10plus_present": _bool(_row_value(row, columns, "Hdr10PlusPresentFlag", default=0)),
     }
+
+
+def _trickplay_status_by_item(conn: sqlite3.Connection, table: str) -> dict[str, str]:
+    columns = _table_columns(conn, table)
+    item_col = columns.get("itemid") or columns.get("item_id") or columns.get("mediacontainerid")
+    if not item_col:
+        return {}
+    cur = conn.execute(f"SELECT * FROM {table}")
+    row_columns = _column_map(cur)
+    statuses: dict[str, str] = {}
+    for row in cur.fetchall():
+        item_id = str(row[item_col] or "").casefold()
+        if not item_id:
+            continue
+        thumbnail_count = _int_or_none(
+            _row_value(row, row_columns, "ThumbnailCount", "Count", "ImageCount", default=None)
+        )
+        status = "empty" if thumbnail_count is not None and thumbnail_count <= 0 else "present"
+        if statuses.get(item_id) != "present":
+            statuses[item_id] = status
+    return statuses
 
 
 def _jellyfin_duration_seconds(row: sqlite3.Row, columns: dict[str, str]) -> float | None:
@@ -380,10 +415,17 @@ def import_jellyfin_database(
             streams_by_item = _group_streams_by_item(source_conn, stream_table) if stream_table else {}
             if not stream_table:
                 warnings.append("Keine MediaStreams-Tabelle gefunden. Streamdetails werden nur bei Analyse ergänzt.")
+            trickplay_table = _pick_jellyfin_trickplay_table(source_conn)
+            trickplay_by_item = (
+                _trickplay_status_by_item(source_conn, trickplay_table) if trickplay_table else {}
+            )
 
             item_cur = source_conn.execute(f"SELECT * FROM {item_table}")
             item_columns = _column_map(item_cur)
             rows = item_cur.fetchall()
+            auxiliary_metadata = load_jellyfin_auxiliary_metadata(
+                source_conn, item_table, rows, item_columns
+            )
             item_names_by_id = {
                 _jellyfin_item_id(row, item_columns): str(
                     _row_value(row, item_columns, "Name", "OriginalTitle", "SortName", default="") or ""
@@ -398,6 +440,7 @@ def import_jellyfin_database(
             with target_conn:
                 _create_schema(target_conn)
                 seen_paths: set[str] = set()
+                source_to_media_id: dict[str, int] = {}
                 for row in rows:
                     raw_path = str(_row_value(row, item_columns, "Path", default="") or "")
                     name = str(_row_value(row, item_columns, "Name", "OriginalTitle", "SortName", default="") or "")
@@ -458,6 +501,9 @@ def import_jellyfin_database(
                     item = {
                         "item_type": item_type,
                         "title": name or path_obj.stem,
+                        "original_title": str(
+                            _row_value(row, item_columns, "OriginalTitle", default="") or ""
+                        ).strip() or None,
                         "series_title": series_title or None,
                         "season": season_number,
                         "episode": _int_or_none(
@@ -490,7 +536,10 @@ def import_jellyfin_database(
                         "has_dolby_vision": has_dv,
                         "dv_profile": dv_profile,
                         "nfo_status": "unknown",
-                        "trickplay_status": "unknown",
+                        "trickplay_status": trickplay_by_item.get(
+                            source_id,
+                            "missing" if trickplay_table and item_type in {"movie", "episode", "video"} else "unknown",
+                        ),
                         "analysis_status": "jellyfin",
                         "exists_flag": 1,
                         "active": 1,
@@ -505,8 +554,12 @@ def import_jellyfin_database(
                         except Exception as exc:
                             warnings.append(f"Analyse fehlgeschlagen: {path_obj.name}: {exc}")
                     imported_streams += len(streams)
-                    _insert_item(target_conn, item, streams)
+                    media_id = _insert_item(target_conn, item, streams)
+                    if source_id:
+                        source_to_media_id[source_id] = media_id
+                        apply_auxiliary_metadata(target_conn, media_id, source_id, auxiliary_metadata)
                     imported_items += 1
+                apply_collection_metadata(target_conn, source_to_media_id, auxiliary_metadata)
                 target_conn.execute("INSERT OR REPLACE INTO meta(key, value) VALUES('updated_at', ?)", (_now(),))
 
         # Auch die neu aufgebaute DragonTools-DB laeuft im WAL-Modus. Vor dem

@@ -81,11 +81,32 @@ class MediaLibraryDialogPresenter:
             image,
             row.get("audio_summary"),
             row.get("subtitle_summary"),
+            row.get("nfo_status"),
+            row.get("nfo_issue_level"),
             MediaLibraryDialogPresenter.format_duration(row.get("duration_s")),
             MediaLibraryDialogPresenter.format_size(row.get("size_bytes")),
             row.get("deviation_reason"),
             row.get("path"),
         ]
+
+    @staticmethod
+    def format_nfo_scan_result(result: Any) -> str:
+        details = (
+            "NFO-Prüfung abgeschlossen.\n\n"
+            f"Kandidaten: {getattr(result, 'candidates', 0)}\n"
+            f"Geprüft: {getattr(result, 'scanned_items', 0)}\n"
+            f"NFO vorhanden: {getattr(result, 'nfo_present', 0)}\n"
+            f"NFO fehlt: {getattr(result, 'nfo_missing', 0)}\n"
+            f"Speicherpfad nicht erreichbar: {getattr(result, 'nfo_unreachable', 0)}\n"
+            f"NFO ungültig/nicht lesbar: {getattr(result, 'nfo_invalid', 0)}\n"
+            f"Gefundene Abweichungen: {getattr(result, 'issues', 0)}"
+        )
+        warnings = list(getattr(result, "warnings", ()) or ())
+        if warnings:
+            details += "\n\nHinweise:\n- " + "\n- ".join(warnings[:12])
+            if len(warnings) > 12:
+                details += f"\n- ... {len(warnings) - 12} weitere Hinweise"
+        return details
 
     @staticmethod
     def format_import_result(result: Any) -> str:

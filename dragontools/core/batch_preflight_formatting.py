@@ -46,6 +46,15 @@ def _video_summary(preview: dict[str, Any]) -> str:
     return " | ".join(parts)
 
 
+
+
+def _target_resolution_summary(preview: dict[str, Any]) -> str:
+    target = dict(preview.get("target_video") or {})
+    resolution = _text(target.get("resolution"), "unbekannt")
+    if target.get("autocrop_pending"):
+        return f"{resolution} (vor Auto-Crop)"
+    return resolution
+
 def _hdr_summary(preview: dict[str, Any]) -> str:
     video = dict(preview.get("video") or {})
     parts: list[str] = []

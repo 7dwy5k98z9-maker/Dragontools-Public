@@ -17,6 +17,7 @@ from ..core.media_library_db import (
     get_stats,
     initialize_database,
     normalize_database_stream_types,
+    sql_is_read_only,
 )
 from ..core.media_library_export import (
     export_database,
@@ -24,6 +25,9 @@ from ..core.media_library_export import (
     export_search_results_to_csv,
 )
 from ..core.media_library_jellyfin import import_jellyfin_database
+from ..core.media_library_nfo_scan import scan_nfo_inventory
+from ..core.media_library_saved_queries import delete_named_query, load_saved_queries, save_named_query
+from ..core.media_library_sql_help import build_schema_help, export_schema_help
 from ..core.media_library_paths import dump_path_mappings, load_path_mappings, save_path_mappings
 from ..core.media_library_search import search_library
 from ..core.media_library_types import PathMapping, default_media_library_db_path
@@ -138,8 +142,26 @@ class MediaLibraryDialogService:
     def export_database_csv(self, db_path: str, folder: str):
         return export_database_to_csv(db_path, folder)
 
-    def export_search_csv(self, rows: list[dict[str, Any]], file_name: str):
-        return export_search_results_to_csv(rows, file_name)
+    def export_search_csv(
+        self,
+        db_path: str,
+        preset: str,
+        text: str,
+        file_name: str,
+        *,
+        scope: str,
+        media_type: str,
+    ) -> tuple[Path, int]:
+        """Export all rows matching a search, independent of the GUI display limit."""
+        rows = search_library(
+            db_path,
+            preset,
+            text,
+            limit=None,
+            scope=scope,
+            media_type=media_type,
+        )
+        return export_search_results_to_csv(rows, file_name), len(rows)
 
     def normalize_stream_types(self, db_path: str) -> int:
         return normalize_database_stream_types(db_path, backup=True)
@@ -158,15 +180,53 @@ class MediaLibraryDialogService:
         *,
         scope: str,
         media_type: str,
+        limit: int | None = 500,
     ) -> list[dict[str, Any]]:
-        return search_library(db_path, preset, text, scope=scope, media_type=media_type)
+        return search_library(
+            db_path,
+            preset,
+            text,
+            limit=limit,
+            scope=scope,
+            media_type=media_type,
+        )
 
     def execute_sql(self, db_path: str, sql: str):
         return execute_sql(db_path, sql, backup=True)
 
     @staticmethod
     def sql_is_mutating(sql: str) -> bool:
-        return not sql.strip().casefold().startswith(("select", "pragma", "with"))
+        return not sql_is_read_only(sql)
+
+    def nfo_light_scan(self, db_path: str, *, full_audit: bool, logger=None, progress=None, should_abort=None):
+        return scan_nfo_inventory(
+            db_path,
+            full_audit=full_audit,
+            backup=True,
+            logger=logger,
+            progress=progress,
+            should_abort=should_abort,
+        )
+
+    @staticmethod
+    def load_saved_queries(db_path: str):
+        return load_saved_queries(db_path)
+
+    @staticmethod
+    def save_named_query(db_path: str, kind: str, name: str, payload: dict[str, Any]):
+        return save_named_query(db_path, kind, name, payload)
+
+    @staticmethod
+    def delete_named_query(db_path: str, kind: str, name: str):
+        return delete_named_query(db_path, kind, name)
+
+    @staticmethod
+    def schema_help(db_path: str) -> str:
+        return build_schema_help(db_path)
+
+    @staticmethod
+    def export_schema_help(db_path: str, output_file: str):
+        return export_schema_help(db_path, output_file)
 
     @staticmethod
     def tool_paths(settings: Any):

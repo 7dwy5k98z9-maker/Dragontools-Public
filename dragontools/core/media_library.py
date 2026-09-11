@@ -21,6 +21,7 @@ from .media_library_export import (
     export_search_results_to_csv,
 )
 from .media_library_jellyfin import import_jellyfin_database
+from .media_library_nfo_scan import scan_nfo_inventory
 from .media_library_paths import (
     apply_path_mappings,
     dump_path_mappings,
@@ -41,6 +42,7 @@ from .media_library_types import (
     DEFAULT_DB_FILENAME,
     SCHEMA_VERSION,
     LibraryImportResult,
+    LibraryLightScanResult,
     LibraryScanResult,
     LibraryStats,
     PathMapping,
@@ -55,6 +57,7 @@ __all__ = [
     "PathMapping",
     "LibraryStats",
     "LibraryImportResult",
+    "LibraryLightScanResult",
     "LibraryScanResult",
     "describe_series_path_resolution",
     "default_media_library_dir",
@@ -77,6 +80,7 @@ __all__ = [
     "record_moved_file",
     "record_moved_file_from_settings",
     "scan_storage_paths_to_database",
+    "scan_nfo_inventory",
     "import_jellyfin_database",
     "execute_sql",
     "search_library",

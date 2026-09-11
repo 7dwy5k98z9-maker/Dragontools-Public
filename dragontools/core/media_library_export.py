@@ -32,7 +32,12 @@ def export_database_to_csv(db_path: str | Path, output_dir: str | Path) -> list[
     export_media_overview_to_csv(db, overview_target)
     targets.append(overview_target)
     with closing(_connect(db)) as conn:
-        for table in ("media_items", "media_streams", "path_mappings", "meta"):
+        for table in (
+            "media_items", "media_streams", "media_provider_ids", "metadata_values",
+            "media_item_values", "people", "media_people", "collections",
+            "collection_members", "nfo_metadata", "nfo_provider_ids", "nfo_issues",
+            "path_mappings", "meta"
+        ):
             cur = conn.execute(f"SELECT * FROM {table}")
             columns = [desc[0] for desc in cur.description or []]
             rows = cur.fetchall()
@@ -47,7 +52,7 @@ def export_database_to_csv(db_path: str | Path, output_dir: str | Path) -> list[
 
 
 def export_media_overview_to_csv(db_path: str | Path, output_file: str | Path) -> Path:
-    rows = search_library(db_path, "all", "", limit=1_000_000, media_type="videos")
+    rows = search_library(db_path, "all", "", limit=None, media_type="videos")
     return export_search_results_to_csv(rows, output_file)
 
 
@@ -58,6 +63,7 @@ def export_search_results_to_csv(rows: Iterable[dict[str, Any]], output_file: st
         ("area", "Bereich"),
         ("item_type", "Typ"),
         ("title", "Titel"),
+        ("original_title", "Originaltitel"),
         ("series_title", "Serie"),
         ("season", "Staffel"),
         ("episode", "Episode"),
@@ -84,6 +90,9 @@ def export_search_results_to_csv(rows: Iterable[dict[str, Any]], output_file: st
         ("audio_summary", "Audio"),
         ("subtitle_summary", "Untertitel"),
         ("nfo_status", "NFO"),
+        ("nfo_type", "NFO-Typ"),
+        ("nfo_issue_level", "NFO-Prüfung"),
+        ("nfo_path", "NFO-Pfad"),
         ("trickplay_status", "Trickplay"),
         ("deviation_reason", "Abweichung"),
         ("analysis_status", "Analyse"),

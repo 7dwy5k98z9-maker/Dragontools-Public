@@ -64,6 +64,8 @@ class MovieRenameProposal:
     confidence: float = 0.0
     warnings: tuple[str, ...] = ()
     target_exists: bool = False
+    minimum_score_used: float = 0.0
+    search_mode: str = "auto"
 
     @property
     def can_auto_accept(self) -> bool:
@@ -128,6 +130,8 @@ class SeriesRenameProposal:
     confidence: float = 0.0
     warnings: tuple[str, ...] = ()
     target_exists: bool = False
+    minimum_score_used: float = 0.0
+    search_mode: str = "auto"
 
     @property
     def can_auto_accept(self) -> bool:

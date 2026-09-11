@@ -25,7 +25,7 @@ def _candidate_request(path: str | Path):
     try:
         from ..rules.move_rules import parse_series_match_details
         from ..rules.renamer_rules import (
-            minimum_candidate_score,
+            candidate_discovery_floor,
             retry_without_year_enabled,
             series_search_queries,
         )
@@ -48,7 +48,7 @@ def _candidate_request(path: str | Path):
         "episode": episode,
         "search_terms": series_search_queries(query),
         "retry_without_year": retry_without_year_enabled(),
-        "title_floor": max(0.35, minimum_candidate_score() - 0.20),
+        "title_floor": candidate_discovery_floor(),
     }
 
 

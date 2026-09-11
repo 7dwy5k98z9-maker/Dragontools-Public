@@ -20,7 +20,7 @@ def _search_duplicate_active_episode_rows(
     db_path: str | Path,
     text: str,
     *,
-    limit: int,
+    limit: int | None,
     scope: str,
     media_type: str,
 ) -> list[dict[str, Any]]:
@@ -30,7 +30,7 @@ def _search_duplicate_active_episode_rows(
         db_path,
         "all",
         text,
-        limit=1_000_000,
+        limit=None,
         scope=scope,
         media_type="episodes",
     )
@@ -71,6 +71,8 @@ def _search_duplicate_active_episode_rows(
             str(row.get("filename") or "").casefold(),
         )
     )
+    if limit is None:
+        return duplicates
     return duplicates[: max(1, int(limit))]
 
 
@@ -78,7 +80,7 @@ def search_library(
     db_path: str | Path,
     preset: str = "all",
     text: str = "",
-    limit: int = 500,
+    limit: int | None = 500,
     *,
     scope: str = "all",
     media_type: str = "all",
@@ -112,8 +114,13 @@ def search_library(
     _append_preset_filter(preset_key, deviation_criterion, where, params, sql)
     _append_text_filter(where, params, text)
 
-    query = _build_search_query(where, deviation_criterion=deviation_criterion, sql=sql)
-    if not deviation_criterion:
+    query = _build_search_query(
+        where,
+        deviation_criterion=deviation_criterion,
+        sql=sql,
+        apply_limit=limit is not None,
+    )
+    if not deviation_criterion and limit is not None:
         params.append(max(1, int(limit)))
 
     with closing(_connect(db)) as conn:
@@ -124,5 +131,6 @@ def search_library(
         row.setdefault("deviation_reason", "")
         row["area"] = _area_for_path(row.get("path"), mappings)
     if deviation_criterion:
-        return _find_deviations(rows, deviation_criterion, max(1, int(limit)))
+        deviation_limit = max(1, len(rows)) if limit is None else max(1, int(limit))
+        return _find_deviations(rows, deviation_criterion, deviation_limit)
     return rows

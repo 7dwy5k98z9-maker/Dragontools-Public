@@ -62,7 +62,7 @@ def test_queue_action_collaborators_are_bounded_and_single_owner():
             assert method.name not in owners, f"{method.name} duplicated in {filename} and {owners[method.name]}"
             owners[method.name] = filename
 
-    assert len(owners) == 39
+    assert len(owners) == 40
 
 
 def test_queue_action_mixins_keep_unique_aggregation_surface():
@@ -87,6 +87,7 @@ def test_queue_action_mixins_keep_unique_aggregation_surface():
         "_ctx_menu",
         "_terminate_current_ffmpeg_for_path",
         "_show_media_info",
+        "_rule_test_preview_options",
         "_show_rule_test",
         "show_batch_rule_test",
         "_encoder_profile_choices",

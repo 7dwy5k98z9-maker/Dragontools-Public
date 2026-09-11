@@ -58,6 +58,30 @@ def _load_json(path: Path) -> dict:
         return {}
 
 
+
+
+def _check_matching_file(source: Path, built: Path, title: str) -> ReleaseCheck:
+    """Verify that a built documentation artifact matches its source byte-for-byte."""
+    if not source.exists() or not built.exists():
+        missing = []
+        if not source.exists():
+            missing.append(f"Quelle fehlt: {source}")
+        if not built.exists():
+            missing.append(f"Build fehlt: {built}")
+        return ReleaseCheck("warn", title, "; ".join(missing))
+    try:
+        source_bytes = source.read_bytes()
+        built_bytes = built.read_bytes()
+    except OSError as exc:
+        return ReleaseCheck("error", title, f"Vergleich fehlgeschlagen: {exc}")
+    if source_bytes == built_bytes:
+        return ReleaseCheck("ok", title, f"Build entspricht Quelle: {source.name}")
+    return ReleaseCheck(
+        "error",
+        title,
+        f"Build-Datei ist veraltet oder abweichend: {built} (Quelle: {source})",
+    )
+
 def _check_schema_file(path: Path, expected_version: int, title: str) -> ReleaseCheck:
     if not path.exists():
         return ReleaseCheck("error", title, f"Nicht gefunden: {path}")

@@ -7,7 +7,7 @@ from .batch_preflight_storage import filesystem_preflight, format_gb
 from .batch_preflight_decisions import _decision_reasons, _warnings_for
 from .batch_preflight_formatting import (
     _audio_summary, _hdr_summary, _pipeline_summary, _profile_summary,
-    _subtitle_summary, _target_summary, _text, _video_summary,
+    _subtitle_summary, _target_resolution_summary, _target_summary, _text, _video_summary,
 )
 
 PreviewBuilder = Callable[..., dict[str, Any]]
@@ -40,6 +40,7 @@ def _row_from_preview(
         "problem": severity in PROBLEM_SEVERITIES,
         "status": {"ok": "OK", "warn": "Warnung", "error": "Fehler"}[severity],
         "video": _video_summary(preview),
+        "target_resolution": _target_resolution_summary(preview),
         "hdr": _hdr_summary(preview),
         "audio": _audio_summary(preview),
         "subtitles": _subtitle_summary(preview),
@@ -63,6 +64,7 @@ def _error_row(path: str, exc: Exception) -> dict[str, Any]:
         "problem": True,
         "status": "Fehler",
         "video": "Analyse fehlgeschlagen",
+        "target_resolution": "-",
         "hdr": "-",
         "audio": "-",
         "subtitles": "-",
@@ -154,6 +156,7 @@ def build_batch_preflight_rows(
     filesystem_checks: bool = False,
     tools: Any = None,
     preview_builder: PreviewBuilder | None = None,
+    preview_options: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     """
     Erstellt die Tabellenzeilen für den Batch-Preflight.
@@ -177,6 +180,7 @@ def build_batch_preflight_rows(
                 planned_target=targets.get(path),
                 subtitle_rules=subtitle_rules,
                 tools=tools,
+                **dict(preview_options or {}),
             )
             rows.append(
                 _row_from_preview(

@@ -61,12 +61,17 @@ def _resolve_series_results(
         return resolver(parsed.series, parsed.season, parsed.episode, parsed.year) or ()
     if client is None:
         return ()
+    lookup_name = f"{parsed.series}"
+    if parsed.year:
+        lookup_name += f" ({parsed.year})"
+    lookup_name += f" - S{parsed.season:02d}E{parsed.episode:02d}{parsed.suffix or '.mkv'}"
+    lookup_path = Path(lookup_name)
     if hasattr(client, "resolve_episode_candidates"):
-        suggestions = client.resolve_episode_candidates(Path(parsed.source_name), limit=6)
+        suggestions = client.resolve_episode_candidates(lookup_path, limit=6)
         if suggestions:
             return suggestions
     if hasattr(client, "resolve_episode_file"):
-        suggestion = client.resolve_episode_file(Path(parsed.source_name))
+        suggestion = client.resolve_episode_file(lookup_path)
         if suggestion is not None:
             return (suggestion,)
     if hasattr(client, "resolve_series"):

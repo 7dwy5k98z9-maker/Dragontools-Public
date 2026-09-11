@@ -39,6 +39,7 @@ SEARCH_MODES = [
     ("Dateigröße", "file_size"),
     ("Laufzeitprüfung", "duration"),
     ("Abweichungen", "deviation"),
+    ("NFO / NFO-Prüfung", "nfo"),
     ("Metadaten", "metadata"),
 ]
 
@@ -122,6 +123,17 @@ SEARCH_OPTIONS = {
         ("Audiokanäle", "deviation_audio_channels"),
         ("Anzahl Audiospuren", "deviation_audio_track_count"),
     ],
+    "nfo": [
+        ("NFO vorhanden", "nfo_present"),
+        ("NFO fehlt", "nfo_missing"),
+        ("NFO-Speicherpfad nicht erreichbar", "nfo_unreachable"),
+        ("NFO ungültig / nicht lesbar", "nfo_invalid"),
+        ("NFO noch nicht geprüft", "nfo_unknown"),
+        ("NFO mit Abweichungen", "nfo_has_issues"),
+        ("NFO mit Fehlern", "nfo_errors"),
+        ("NFO mit Warnungen", "nfo_warnings"),
+        ("Provider-ID stimmt nicht", "nfo_provider_mismatch"),
+    ],
     "metadata": [
         ("Unvollständige / fehlende Metadaten", "metadata_incomplete"),
         ("Videoeigenschaften unbekannt", "video_properties_unknown"),
@@ -138,6 +150,9 @@ class MediaLibraryDialogActions(Protocol):
     def import_jellyfin(self) -> None: ...
     def scan_storage_paths(self) -> None: ...
     def abort_storage_scan(self) -> None: ...
+    def scan_nfo_light(self) -> None: ...
+    def scan_nfo_full(self) -> None: ...
+    def abort_nfo_scan(self) -> None: ...
     def export_database(self) -> None: ...
     def export_database_csv(self) -> None: ...
     def normalize_stream_types(self) -> None: ...
@@ -148,7 +163,15 @@ class MediaLibraryDialogActions(Protocol):
     def save_mappings(self) -> None: ...
     def run_search(self) -> None: ...
     def export_search_csv(self) -> None: ...
+    def save_current_search(self) -> None: ...
+    def load_saved_search(self) -> None: ...
+    def delete_saved_search(self) -> None: ...
     def run_sql(self) -> None: ...
+    def save_current_sql(self) -> None: ...
+    def load_saved_sql(self) -> None: ...
+    def delete_saved_sql(self) -> None: ...
+    def show_sql_help(self) -> None: ...
+    def export_sql_help(self) -> None: ...
     def save_and_close(self) -> None: ...
     def add_mapping_row(self, mapping) -> None: ...
 
@@ -160,6 +183,7 @@ class MediaLibraryDialogView:
         self.dialog = dialog
         self.actions = actions
         self.scan_sensitive_widgets: list[QWidget] = []
+        self.nfo_scan_sensitive_widgets: list[QWidget] = []
         self._build()
 
     def _build(self) -> None:
@@ -233,6 +257,15 @@ class MediaLibraryDialogView:
         scan_abort_btn = QPushButton("Scan abbrechen")
         scan_abort_btn.clicked.connect(self.actions.abort_storage_scan)
         scan_abort_btn.setEnabled(False)
+        nfo_light_btn = QPushButton("NFO-Lightscan")
+        nfo_light_btn.setToolTip("Prüft nur fehlende, unbekannte oder seit dem letzten Scan geänderte NFOs.")
+        nfo_light_btn.clicked.connect(self.actions.scan_nfo_light)
+        nfo_full_btn = QPushButton("NFO vollständig prüfen")
+        nfo_full_btn.setToolTip("Liest alle bekannten NFOs neu ein und vergleicht sie mit der Mediathek-Datenbank.")
+        nfo_full_btn.clicked.connect(self.actions.scan_nfo_full)
+        nfo_abort_btn = QPushButton("NFO-Scan abbrechen")
+        nfo_abort_btn.clicked.connect(self.actions.abort_nfo_scan)
+        nfo_abort_btn.setEnabled(False)
         export_btn = QPushButton("DB exportieren")
         export_btn.clicked.connect(self.actions.export_database)
         export_csv_btn = QPushButton("DB als CSV exportieren")
@@ -248,10 +281,13 @@ class MediaLibraryDialogView:
         import_layout.addWidget(export_btn, 1, 2)
         import_layout.addWidget(scan_btn, 2, 0, 1, 2)
         import_layout.addWidget(scan_abort_btn, 2, 2)
-        import_layout.addWidget(export_csv_btn, 3, 0, 1, 3)
-        import_layout.addWidget(normalize_btn, 4, 0, 1, 3)
-        import_layout.addWidget(cleanup_btn, 5, 0, 1, 3)
-        import_layout.addWidget(save_btn, 6, 0, 1, 3)
+        import_layout.addWidget(nfo_light_btn, 3, 0)
+        import_layout.addWidget(nfo_full_btn, 3, 1)
+        import_layout.addWidget(nfo_abort_btn, 3, 2)
+        import_layout.addWidget(export_csv_btn, 4, 0, 1, 3)
+        import_layout.addWidget(normalize_btn, 5, 0, 1, 3)
+        import_layout.addWidget(cleanup_btn, 6, 0, 1, 3)
+        import_layout.addWidget(save_btn, 7, 0, 1, 3)
         self.scan_progress = QProgressBar()
         self.scan_progress.setRange(0, 100)
         self.scan_progress.setValue(0)
@@ -260,10 +296,22 @@ class MediaLibraryDialogView:
             "MediaInfo ist die primäre Analysequelle; ffprobe ergänzt fehlende Werte."
         )
         self.scan_status_label.setWordWrap(True)
-        import_layout.addWidget(self.scan_progress, 7, 0, 1, 3)
-        import_layout.addWidget(self.scan_status_label, 8, 0, 1, 3)
+        import_layout.addWidget(self.scan_progress, 8, 0, 1, 3)
+        import_layout.addWidget(self.scan_status_label, 9, 0, 1, 3)
+        self.nfo_progress = QProgressBar()
+        self.nfo_progress.setRange(0, 100)
+        self.nfo_progress.setValue(0)
+        self.nfo_status_label = QLabel(
+            "NFO-Lightscan arbeitet nur auf den bereits bekannten DB-Pfaden und startet keine Videoanalyse."
+        )
+        self.nfo_status_label.setWordWrap(True)
+        import_layout.addWidget(self.nfo_progress, 10, 0, 1, 3)
+        import_layout.addWidget(self.nfo_status_label, 11, 0, 1, 3)
         self.scan_btn = scan_btn
         self.scan_abort_btn = scan_abort_btn
+        self.nfo_light_btn = nfo_light_btn
+        self.nfo_full_btn = nfo_full_btn
+        self.nfo_abort_btn = nfo_abort_btn
         self.scan_sensitive_widgets = [
             new_btn,
             import_btn,
@@ -273,6 +321,12 @@ class MediaLibraryDialogView:
             normalize_btn,
             cleanup_btn,
             save_btn,
+            nfo_light_btn,
+            nfo_full_btn,
+        ]
+        self.nfo_scan_sensitive_widgets = [
+            new_btn, import_btn, scan_btn, export_btn, export_csv_btn, normalize_btn,
+            cleanup_btn, save_btn, nfo_light_btn, nfo_full_btn
         ]
         layout.addWidget(import_group)
 
@@ -288,7 +342,7 @@ class MediaLibraryDialogView:
         layout = QVBoxLayout(page)
         hint = QLabel(
             "Pfad-Mapping übersetzt Jellyfin-Pfade in deine Windows-/NAS-Pfade, z. B. /Anime -> "
-            "\\\\MediaServer\\video\\Serien\\Anime. Die Einträge sind frei anpassbar."
+            "\\\\Medienserver\\video\\Serien\\Anime. Die Einträge sind frei anpassbar."
         )
         hint.setWordWrap(True)
         layout.addWidget(hint)
@@ -320,6 +374,22 @@ class MediaLibraryDialogView:
     def _build_search_tab(self) -> QWidget:
         page = QWidget()
         layout = QVBoxLayout(page)
+
+        saved_bar = QHBoxLayout()
+        saved_bar.addWidget(QLabel("Gespeicherte Suche:"))
+        self.saved_search_combo = QComboBox()
+        self.saved_search_combo.setMinimumWidth(240)
+        saved_bar.addWidget(self.saved_search_combo, 1)
+        load_saved_search_btn = QPushButton("Laden")
+        load_saved_search_btn.clicked.connect(self.actions.load_saved_search)
+        save_search_btn = QPushButton("Aktuelle speichern")
+        save_search_btn.clicked.connect(self.actions.save_current_search)
+        delete_search_btn = QPushButton("Löschen")
+        delete_search_btn.clicked.connect(self.actions.delete_saved_search)
+        saved_bar.addWidget(load_saved_search_btn)
+        saved_bar.addWidget(save_search_btn)
+        saved_bar.addWidget(delete_search_btn)
+        layout.addLayout(saved_bar)
 
         top = QGridLayout()
         self.search_mode_combo = QComboBox()
@@ -359,14 +429,14 @@ class MediaLibraryDialogView:
         self.search_result_label = QLabel("0 Treffer")
         layout.addWidget(self.search_result_label)
 
-        self.search_table = QTableWidget(0, 14)
+        self.search_table = QTableWidget(0, 16)
         self.search_table.setHorizontalHeaderLabels(
-            ["Typ", "Titel", "Serie", "S", "E", "Jahr", "Video", "Bild", "Audio", "Untertitel", "Dauer", "Größe", "Abweichung", "Pfad"]
+            ["Typ", "Titel", "Serie", "S", "E", "Jahr", "Video", "Bild", "Audio", "Untertitel", "NFO", "NFO-Prüfung", "Dauer", "Größe", "Abweichung", "Pfad"]
         )
         header = self.search_table.horizontalHeader()
-        for idx in range(13):
+        for idx in range(15):
             header.setSectionResizeMode(idx, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(13, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(15, QHeaderView.ResizeMode.Stretch)
         self.search_table.setSortingEnabled(True)
         layout.addWidget(self.search_table, 1)
         self.update_search_options()
@@ -397,6 +467,22 @@ class MediaLibraryDialogView:
         warning.setWordWrap(True)
         layout.addWidget(warning)
 
+        saved_bar = QHBoxLayout()
+        saved_bar.addWidget(QLabel("Gespeicherte SQL-Abfrage:"))
+        self.saved_sql_combo = QComboBox()
+        self.saved_sql_combo.setMinimumWidth(260)
+        saved_bar.addWidget(self.saved_sql_combo, 1)
+        load_sql_btn = QPushButton("Laden")
+        load_sql_btn.clicked.connect(self.actions.load_saved_sql)
+        save_sql_btn = QPushButton("Speichern")
+        save_sql_btn.clicked.connect(self.actions.save_current_sql)
+        delete_sql_btn = QPushButton("Löschen")
+        delete_sql_btn.clicked.connect(self.actions.delete_saved_sql)
+        saved_bar.addWidget(load_sql_btn)
+        saved_bar.addWidget(save_sql_btn)
+        saved_bar.addWidget(delete_sql_btn)
+        layout.addLayout(saved_bar)
+
         self.sql_edit = QTextEdit()
         self.sql_edit.setPlaceholderText("SELECT * FROM media_items LIMIT 50")
         self.sql_edit.setPlainText(
@@ -405,8 +491,15 @@ class MediaLibraryDialogView:
         layout.addWidget(self.sql_edit, 1)
 
         bar = QHBoxLayout()
+        help_btn = QPushButton("SQL-Hilfe / Tabellen & Attribute")
+        help_btn.setToolTip("Zeigt verfügbare SQL-Befehle, alle Tabellen, Spalten und Beispielabfragen.")
+        help_btn.clicked.connect(self.actions.show_sql_help)
+        export_help_btn = QPushButton("Schema-Info exportieren")
+        export_help_btn.clicked.connect(self.actions.export_sql_help)
         run_btn = QPushButton("SQL ausführen")
         run_btn.clicked.connect(self.actions.run_sql)
+        bar.addWidget(help_btn)
+        bar.addWidget(export_help_btn)
         bar.addStretch(1)
         bar.addWidget(run_btn)
         layout.addLayout(bar)
@@ -420,3 +513,8 @@ class MediaLibraryDialogView:
         for widget in self.scan_sensitive_widgets:
             widget.setEnabled(not running)
         self.scan_abort_btn.setEnabled(running)
+
+    def set_nfo_scan_running(self, running: bool) -> None:
+        for widget in self.nfo_scan_sensitive_widgets:
+            widget.setEnabled(not running)
+        self.nfo_abort_btn.setEnabled(running)

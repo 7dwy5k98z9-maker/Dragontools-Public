@@ -50,6 +50,7 @@ def format_batch_preflight_report(
             f"{index:03d}. {row.get('status', '-')}: {row.get('name', '-')}",
             f"Pfad: {row.get('path', '-')}",
             f"Video: {row.get('video', '-')}",
+            f"Endauflösung: {row.get('target_resolution', '-')}",
             f"HDR/DV: {row.get('hdr', '-')}",
             f"Audio: {row.get('audio', '-')}",
             f"Untertitel: {row.get('subtitles', '-')}",

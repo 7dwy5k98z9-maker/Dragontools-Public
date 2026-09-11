@@ -5,7 +5,10 @@ from pathlib import Path
 from typing import Any
 
 from .media_library_scope import _mapping_prefixes_for_scope, _path_prefix_condition
-from .media_library_utils import _AUDIO_CODECS, _SUBTITLE_CODECS, _VIDEO_CODECS, _normalize_title
+from .media_library_query_filters import NFO_ISSUE_LEVEL_SQL, append_nfo_filter, append_text_filter
+from .media_library_utils import _AUDIO_CODECS, _SUBTITLE_CODECS, _VIDEO_CODECS
+
+_append_text_filter = append_text_filter  # Compatibility für media_library_search.
 
 def _stream_type_condition(alias: str, expected: str) -> str:
     value = f"lower(trim(coalesce({alias}.stream_type, '')))"
@@ -335,25 +338,8 @@ def _append_preset_filter(
         where.append(
             f"(NOT ({sql.video_exists}) OR trim(coalesce({sql.video_codec_value}, ''))='' OR ({sql.width_value} <= 0 AND {sql.height_value} <= 0))"
         )
-
-
-def _append_text_filter(where: list[str], params: list[Any], text: str) -> None:
-    if not text.strip():
-        return
-    needle = f"%{text.strip().casefold()}%"
-    normalized_needle = f"%{_normalize_title(text.strip())}%"
-    where.append(
-        """
-        (
-            lower(coalesce(mi.title, '')) LIKE ?
-            OR lower(coalesce(mi.series_title, '')) LIKE ?
-            OR lower(coalesce(mi.filename, '')) LIKE ?
-            OR lower(coalesce(mi.path, '')) LIKE ?
-            OR lower(coalesce(mi.normalized_title, '')) LIKE ?
-        )
-        """
-    )
-    params.extend([needle, needle, needle, needle, normalized_needle])
+    else:
+        append_nfo_filter(preset_key, where)
 
 
 def _build_search_query(
@@ -361,13 +347,15 @@ def _build_search_query(
     *,
     deviation_criterion: str,
     sql: _SearchSqlFragments,
+    apply_limit: bool = True,
 ) -> str:
     video_type_v = _stream_type_condition("v", "video")
     query = f"""
         SELECT
-            mi.item_type, mi.title, mi.series_title, mi.season, mi.episode, mi.year,
+            mi.item_type, mi.title, mi.original_title, mi.series_title, mi.season, mi.episode, mi.year,
             mi.container, mi.duration_s, mi.video_bitrate, mi.overall_bitrate,
-            mi.nfo_status, mi.trickplay_status,
+            mi.nfo_status, mi.nfo_path, mi.nfo_type, mi.nfo_scanned_at, mi.trickplay_status,
+            {NFO_ISSUE_LEVEL_SQL} AS nfo_issue_level,
             {sql.video_codec_value} AS video_codec,
             {sql.width_value} AS width,
             {sql.height_value} AS height,
@@ -421,6 +409,6 @@ def _build_search_query(
         WHERE {' AND '.join(where)}
         ORDER BY coalesce(mi.series_title, mi.title, mi.filename), mi.season, mi.episode
     """
-    if not deviation_criterion:
+    if not deviation_criterion and apply_limit:
         query += " LIMIT ?"
     return query

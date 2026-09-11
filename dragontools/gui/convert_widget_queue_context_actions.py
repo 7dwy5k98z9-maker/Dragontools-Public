@@ -104,6 +104,24 @@ class ConvertWidgetQueueContextActionsMixin:
         )
         dlg.exec()
 
+
+    def _rule_test_preview_options(self) -> dict:
+        from ..core.encoder_profile_override import SCALE_LABELS_TO_MODE
+
+        scale_text = str(self.scale_combo.currentText() or "original")
+        scale_mode = SCALE_LABELS_TO_MODE.get(scale_text, SCALE_LABELS_TO_MODE.get(scale_text.lower(), "original"))
+        try:
+            encoder_options = dict(self._enc_settings.collect_enc_opts() or {})
+        except Exception:
+            encoder_options = {}
+        return {
+            "default_crf": int(self.crf_spin.value()),
+            "default_preset": str(self.preset_combo.currentText() or "medium"),
+            "default_scale_mode": scale_mode,
+            "default_encoder_options": encoder_options,
+            "autocrop_enabled": bool(self.autocrop_cb.isChecked()),
+        }
+
     def _show_rule_test(self, path: str) -> None:
         from PyQt6.QtWidgets import QApplication
 
@@ -120,6 +138,7 @@ class ConvertWidgetQueueContextActionsMixin:
                 subtitle_rules=self._get_subtitle_rules(),
                 overwrite_original=self.over_cb.isChecked(),
                 filesystem_checks=True,
+                preview_options=self._rule_test_preview_options(),
             )
         finally:
             QApplication.restoreOverrideCursor()
@@ -153,6 +172,7 @@ class ConvertWidgetQueueContextActionsMixin:
                 subtitle_rules=self._get_subtitle_rules(),
                 overwrite_original=self.over_cb.isChecked(),
                 filesystem_checks=True,
+                preview_options=self._rule_test_preview_options(),
             )
         finally:
             QApplication.restoreOverrideCursor()

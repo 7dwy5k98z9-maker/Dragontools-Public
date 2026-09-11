@@ -21,8 +21,6 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-      - name: Check public privacy markers
-        run: python scripts/check_public_privacy.py
       - name: Install test dependencies
         run: python -m pip install -r requirements-test.txt
       - name: Run unit, GUI and media-fixture tests

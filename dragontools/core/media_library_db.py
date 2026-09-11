@@ -106,6 +106,7 @@ def _create_schema(conn: sqlite3.Connection) -> None:
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             item_type TEXT NOT NULL DEFAULT 'video',
             title TEXT,
+            original_title TEXT,
             series_title TEXT,
             season INTEGER,
             episode INTEGER,
@@ -130,6 +131,10 @@ def _create_schema(conn: sqlite3.Connection) -> None:
             has_dolby_vision INTEGER NOT NULL DEFAULT 0,
             dv_profile TEXT,
             nfo_status TEXT NOT NULL DEFAULT 'unknown',
+            nfo_path TEXT,
+            nfo_type TEXT,
+            nfo_mtime REAL,
+            nfo_scanned_at TEXT,
             trickplay_status TEXT NOT NULL DEFAULT 'unknown',
             analysis_status TEXT NOT NULL DEFAULT 'unknown',
             exists_flag INTEGER NOT NULL DEFAULT 1,
@@ -180,6 +185,98 @@ def _create_schema(conn: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_media_streams_media_type ON media_streams(media_id, stream_type);
         CREATE INDEX IF NOT EXISTS idx_media_streams_type_lang ON media_streams(stream_type, language);
         CREATE INDEX IF NOT EXISTS idx_media_streams_type_codec ON media_streams(stream_type, codec);
+
+        CREATE TABLE IF NOT EXISTS media_provider_ids (
+            media_id INTEGER NOT NULL REFERENCES media_items(id) ON DELETE CASCADE,
+            provider TEXT NOT NULL,
+            provider_id TEXT NOT NULL,
+            source TEXT NOT NULL DEFAULT '',
+            PRIMARY KEY(media_id, provider)
+        );
+        CREATE INDEX IF NOT EXISTS idx_media_provider_lookup
+            ON media_provider_ids(provider, provider_id);
+
+        CREATE TABLE IF NOT EXISTS metadata_values (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            kind TEXT NOT NULL,
+            value TEXT NOT NULL,
+            normalized_value TEXT NOT NULL,
+            UNIQUE(kind, normalized_value)
+        );
+        CREATE TABLE IF NOT EXISTS media_item_values (
+            media_id INTEGER NOT NULL REFERENCES media_items(id) ON DELETE CASCADE,
+            value_id INTEGER NOT NULL REFERENCES metadata_values(id) ON DELETE CASCADE,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY(media_id, value_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_metadata_values_kind_value
+            ON metadata_values(kind, normalized_value);
+
+        CREATE TABLE IF NOT EXISTS people (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source_id TEXT,
+            name TEXT NOT NULL,
+            UNIQUE(source_id)
+        );
+        CREATE TABLE IF NOT EXISTS media_people (
+            media_id INTEGER NOT NULL REFERENCES media_items(id) ON DELETE CASCADE,
+            person_id INTEGER NOT NULL REFERENCES people(id) ON DELETE CASCADE,
+            role_type TEXT NOT NULL DEFAULT '',
+            character_name TEXT NOT NULL DEFAULT '',
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY(media_id, person_id, role_type, character_name)
+        );
+        CREATE INDEX IF NOT EXISTS idx_media_people_media ON media_people(media_id);
+
+        CREATE TABLE IF NOT EXISTS collections (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source TEXT NOT NULL,
+            source_id TEXT NOT NULL,
+            name TEXT NOT NULL,
+            UNIQUE(source, source_id)
+        );
+        CREATE TABLE IF NOT EXISTS collection_members (
+            collection_id INTEGER NOT NULL REFERENCES collections(id) ON DELETE CASCADE,
+            media_id INTEGER NOT NULL REFERENCES media_items(id) ON DELETE CASCADE,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY(collection_id, media_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_collection_members_media ON collection_members(media_id);
+
+        CREATE TABLE IF NOT EXISTS nfo_metadata (
+            media_id INTEGER PRIMARY KEY REFERENCES media_items(id) ON DELETE CASCADE,
+            title TEXT,
+            original_title TEXT,
+            series_title TEXT,
+            season INTEGER,
+            episode INTEGER,
+            year INTEGER,
+            runtime_minutes INTEGER,
+            parse_status TEXT NOT NULL DEFAULT 'unknown',
+            parse_error TEXT,
+            parsed_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS nfo_provider_ids (
+            media_id INTEGER NOT NULL REFERENCES media_items(id) ON DELETE CASCADE,
+            provider TEXT NOT NULL,
+            provider_id TEXT NOT NULL,
+            PRIMARY KEY(media_id, provider)
+        );
+        CREATE INDEX IF NOT EXISTS idx_nfo_provider_lookup
+            ON nfo_provider_ids(provider, provider_id);
+
+        CREATE TABLE IF NOT EXISTS nfo_issues (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            media_id INTEGER NOT NULL REFERENCES media_items(id) ON DELETE CASCADE,
+            severity TEXT NOT NULL,
+            field TEXT NOT NULL,
+            db_value TEXT,
+            nfo_value TEXT,
+            message TEXT NOT NULL,
+            checked_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_nfo_issues_media ON nfo_issues(media_id);
+        CREATE INDEX IF NOT EXISTS idx_nfo_issues_severity ON nfo_issues(severity);
         """
     )
     _ensure_media_items_schema(conn)
@@ -193,10 +290,18 @@ def _create_schema(conn: sqlite3.Connection) -> None:
 
 def _ensure_media_items_schema(conn: sqlite3.Connection) -> None:
     columns = _table_columns(conn, "media_items") if "media_items" in _table_names(conn) else {}
-    if "active" not in columns:
-        conn.execute("ALTER TABLE media_items ADD COLUMN active INTEGER NOT NULL DEFAULT 1")
-    if "size_bytes" not in columns:
-        conn.execute("ALTER TABLE media_items ADD COLUMN size_bytes INTEGER")
+    additions = {
+        "original_title": "TEXT",
+        "nfo_path": "TEXT",
+        "nfo_type": "TEXT",
+        "nfo_mtime": "REAL",
+        "nfo_scanned_at": "TEXT",
+        "active": "INTEGER NOT NULL DEFAULT 1",
+        "size_bytes": "INTEGER",
+    }
+    for name, sql_type in additions.items():
+        if name not in columns:
+            conn.execute(f"ALTER TABLE media_items ADD COLUMN {name} {sql_type}")
     conn.execute("UPDATE media_items SET active=0 WHERE exists_flag=0")
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_media_items_active_episode "
@@ -342,17 +447,32 @@ def cleanup_inactive_media_items(db_path: str | Path, *, backup: bool = True) ->
     return count
 
 
+def sql_is_read_only(sql: str) -> bool:
+    """Conservative classification used by GUI and executor.
+
+    Only plain SELECT statements are considered read-only. PRAGMA and WITH are
+    intentionally treated as potentially mutating so a backup is created.
+    """
+    statement = (sql or "").lstrip()
+    while statement.startswith("--"):
+        newline = statement.find("\n")
+        if newline < 0:
+            return True
+        statement = statement[newline + 1 :].lstrip()
+    return statement.casefold().startswith("select")
+
+
 def execute_sql(db_path: str | Path, sql: str, *, backup: bool = True) -> tuple[list[str], list[tuple[Any, ...]], str]:
     statement = (sql or "").strip()
     if not statement:
         return [], [], "Kein SQL-Befehl eingegeben."
     db = initialize_database(db_path)
-    is_select = statement.casefold().startswith(("select", "pragma", "with"))
-    if not is_select and backup:
+    read_only = sql_is_read_only(statement)
+    if not read_only and backup:
         backup_database(db, "pre_sql")
     with closing(_connect(db)) as conn:
         with conn:
-            if is_select:
+            if read_only:
                 cur = conn.execute(statement)
                 columns = [desc[0] for desc in cur.description or []]
                 rows = [tuple(row) for row in cur.fetchall()]
