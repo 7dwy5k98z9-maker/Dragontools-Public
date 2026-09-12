@@ -90,6 +90,55 @@ def _series_root_candidates_for_current_paths(
 
     return result
 
+def _series_lookup_rows(
+    conn: sqlite3.Connection,
+    *,
+    target_norm: str,
+    series_name: str,
+) -> list[sqlite3.Row]:
+    """Liefert nur DB-Zeilen, die als Serienwurzel wirklich infrage kommen.
+
+    Der Preflight ruft diese Suche pro Seriengruppe auf. Bei großen Mediatheken
+    darf hier nicht der gesamte Bestand in Python normalisiert werden; SQLite
+    soll zuerst anhand des gespeicherten Normalisierungsschlüssels eingrenzen.
+    """
+    plain_name = str(series_name or "").strip().casefold()
+    if not target_norm and not plain_name:
+        return []
+
+    select_sql = """
+        SELECT item_type, title, series_title, path, parent_path, year
+        FROM media_items
+        WHERE exists_flag=1
+          AND active=1
+          AND item_type IN ({placeholders})
+          AND (
+              normalized_title=?
+              OR lower(trim(coalesce(series_title, '')))=?
+              OR lower(trim(coalesce(title, '')))=?
+          )
+        ORDER BY
+            CASE item_type
+                WHEN 'series' THEN 0
+                WHEN 'folder' THEN 1
+                WHEN 'season' THEN 2
+                WHEN 'episode' THEN 3
+                ELSE 4
+            END,
+            coalesce(year, 999999),
+            coalesce(series_title, title, filename, path)
+        LIMIT 1000
+    """
+    for item_types in (("series", "folder"), ("season",), ("episode",)):
+        placeholders = ",".join("?" for _ in item_types)
+        rows = conn.execute(
+            select_sql.format(placeholders=placeholders),
+            (*item_types, target_norm, plain_name, plain_name),
+        ).fetchall()
+        if rows:
+            return rows
+    return []
+
 def find_series_root(
     db_path: str | Path,
     series_name: str,
@@ -118,15 +167,7 @@ def find_series_root(
             bases.append((str(entry), ""))
 
     with closing(_connect(db)) as conn:
-        rows = conn.execute(
-            """
-            SELECT item_type, title, series_title, path, parent_path, year
-            FROM media_items
-            WHERE exists_flag=1
-              AND active=1
-              AND item_type IN ('series', 'season', 'episode', 'folder')
-            """
-        ).fetchall()
+        rows = _series_lookup_rows(conn, target_norm=target_norm, series_name=series_name)
 
     search_base_mappings = _mapping_candidates_from_search_bases(bases)
     current_mappings = _unique_mappings([*(mappings or []), *search_base_mappings])

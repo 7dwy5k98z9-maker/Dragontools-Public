@@ -900,6 +900,67 @@ def test_series_root_uses_year_to_disambiguate_duplicate_series_names(tmp_path: 
     assert Path(match["series_dir"]) == new_dir
 
 
+def test_series_root_prefilters_large_library_before_path_resolution(tmp_path: Path, monkeypatch) -> None:
+    from dragontools.core import media_library_series_paths as series_paths
+
+    db_path = initialize_database(tmp_path / "dragontools.sqlite3")
+    anime_root = tmp_path / "Anime"
+    target_dir = anime_root / "Iron Wok Jan (2026)"
+    target_dir.mkdir(parents=True)
+
+    with _db_connection(db_path) as conn:
+        noise_rows = [
+            (
+                "series",
+                f"Noise Series {index}",
+                str(anime_root / f"Noise Series {index}"),
+                str(anime_root),
+                f"Noise Series {index}",
+                f"noise series {index}",
+            )
+            for index in range(1500)
+        ]
+        conn.executemany(
+            """
+            INSERT INTO media_items(
+                item_type, title, path, parent_path, filename, normalized_title,
+                analysis_status, exists_flag, active, created_at, updated_at
+            ) VALUES(?, ?, ?, ?, ?, ?, 'storage_scan', 1, 1, '2026-09-12', '2026-09-12')
+            """,
+            noise_rows,
+        )
+        conn.execute(
+            """
+            INSERT INTO media_items(
+                item_type, title, path, parent_path, filename, normalized_title, year,
+                analysis_status, exists_flag, active, created_at, updated_at
+            ) VALUES('series', 'Iron Wok Jan', ?, ?, ?, 'iron wok jan', 2026,
+                     'storage_scan', 1, 1, '2026-09-12', '2026-09-12')
+            """,
+            (str(target_dir), str(anime_root), target_dir.name),
+        )
+
+    inspected_roots: list[str] = []
+    original = series_paths._series_root_candidates_for_current_paths
+
+    def spy(root: str, **kwargs):
+        inspected_roots.append(root)
+        return original(root, **kwargs)
+
+    monkeypatch.setattr(series_paths, "_series_root_candidates_for_current_paths", spy)
+
+    match = find_series_root(
+        db_path,
+        "Iron Wok Jan",
+        [(str(anime_root), "Anime")],
+        require_existing=True,
+    )
+
+    assert match is not None
+    assert Path(match["series_dir"]) == target_dir
+    assert inspected_roots == [str(target_dir)]
+
+
 def test_series_root_reapplies_mapping_and_can_require_existing_path(tmp_path: Path) -> None:
     db_path = initialize_database(tmp_path / "dragontools.sqlite3")
     external_root = "/video/Serien/TV"

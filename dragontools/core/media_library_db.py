@@ -150,6 +150,8 @@ def _create_schema(conn: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_media_items_parent ON media_items(parent_path);
         CREATE INDEX IF NOT EXISTS idx_media_items_video ON media_items(video_codec, width, height);
         CREATE INDEX IF NOT EXISTS idx_media_items_active_episode ON media_items(active, item_type, parent_path, season, episode);
+        CREATE INDEX IF NOT EXISTS idx_media_items_series_lookup
+            ON media_items(active, exists_flag, item_type, normalized_title, year);
 
         CREATE TABLE IF NOT EXISTS media_streams (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
