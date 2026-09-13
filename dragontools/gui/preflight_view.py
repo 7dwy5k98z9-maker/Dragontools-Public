@@ -7,8 +7,9 @@ from PyQt6.QtCore import QSettings, QTimer
 from PyQt6.QtWidgets import (
     QVBoxLayout, QLabel, QScrollArea, QWidget, QCheckBox, QDialogButtonBox,
 )
-from ..core.settings import APP_ORG, APP_NAME, SET_KEY_PREFLIGHT_SAVE_REPORT
-from ..core.paths import user_path_name
+from ..core.settings_app import APP_ORG, APP_NAME
+from ..core.settings_storage import SET_KEY_PREFLIGHT_SAVE_REPORT
+from ..core.path_syntax import user_path_name
 from ..core.movie_renamer import parse_series_release_name, release_style_warnings
 from .preflight_widgets import SeriesGroupWidget, FilmWidget, _sep
 

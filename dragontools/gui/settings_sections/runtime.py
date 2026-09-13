@@ -4,7 +4,7 @@ from pathlib import Path
 from PyQt6.QtWidgets import QCheckBox, QComboBox, QFrame, QGridLayout, QGroupBox, QLabel, QLineEdit, QMessageBox, QPushButton, QSpinBox
 from ...core import settings as cfg
 from ...core.parallel_settings import migrate_parallel_defaults
-from ...core.paths import find_tool, get_tool_paths, invalidate_tool_paths
+from ...core.tool_paths import find_tool, get_tool_paths, invalidate_tool_paths
 from ..info_button import InfoButton
 from .base import SettingsSection
 

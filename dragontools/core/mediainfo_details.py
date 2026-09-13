@@ -8,7 +8,7 @@ from typing import Any
 
 from .media_metadata import _parse_mediainfo_duration_s
 from .models import MediaInfo
-from .paths import get_tool_paths
+from .tool_paths import get_tool_paths
 from .process_runner import run_analysis_tool
 
 

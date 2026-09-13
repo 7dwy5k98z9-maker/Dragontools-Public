@@ -41,7 +41,7 @@ class SourceVisualSampler:
             )
             data = json.loads(result.stdout or "{}")
             return float((data.get("format") or {}).get("duration") or 0.0)
-        except Exception:
+        except (OSError, subprocess.SubprocessError, json.JSONDecodeError, TypeError, ValueError):
             return 0.0
 
     @staticmethod
@@ -94,7 +94,7 @@ class SourceVisualSampler:
             if result.returncode != 0:
                 return b""
             return bytes(result.stdout or b"")
-        except Exception:
+        except (OSError, subprocess.SubprocessError, TypeError, ValueError):
             return b""
 
     def read_group(
@@ -151,7 +151,7 @@ class SourceVisualSampler:
                 if result.returncode != 0:
                     return None
                 return [output.read_bytes() if output.is_file() else b"" for output in outputs]
-        except Exception:
+        except (OSError, subprocess.SubprocessError, TypeError, ValueError):
             return None
 
 

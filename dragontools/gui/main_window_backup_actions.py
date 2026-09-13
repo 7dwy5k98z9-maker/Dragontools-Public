@@ -91,7 +91,7 @@ class MainWindowBackupActionsMixin:
 
     def _restore_backup(self) -> None:
         from PyQt6.QtWidgets import QFileDialog
-        from ..core.paths import invalidate_tool_paths
+        from ..core.tool_paths import invalidate_tool_paths
         from ..core.settings_backup import (
             InvalidBackupPassword,
             SECRET_MODE_ENCRYPTED,

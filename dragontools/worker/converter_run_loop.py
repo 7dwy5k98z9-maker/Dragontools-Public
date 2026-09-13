@@ -8,7 +8,7 @@ import time
 from pathlib import Path
 
 from ..core.crash_guard import mark_activity
-from ..core.paths import path_compare_key
+from ..core.path_syntax import path_compare_key
 from ..core.process_runner import subprocess_no_window_kwargs as _no_window_kwargs
 
 

@@ -5,7 +5,8 @@ from pathlib import Path
 
 from PyQt6.QtWidgets import QFileDialog, QMessageBox
 
-from ..core.paths import VIDEO_EXTENSIONS, app_documents_dir
+from ..core.path_syntax import VIDEO_EXTENSIONS
+from ..core.path_defaults import app_documents_dir
 
 
 def default_matcher_output_path(target_text: str) -> Path | None:

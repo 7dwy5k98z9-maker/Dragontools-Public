@@ -6,7 +6,7 @@ from typing import Any
 
 from .media_library_db import _table_columns, _table_names
 from .media_library_utils import _float_or_none, _infer_item_type
-from .paths import VIDEO_EXTENSIONS
+from .path_syntax import VIDEO_EXTENSIONS
 
 _IMPORTABLE_JELLYFIN_ITEM_TYPES = {"movie", "series", "season", "episode", "video"}
 

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from enum import Enum
 
-from ..core.paths import path_compare_key
+from ..core.path_syntax import path_compare_key
 
 
 class RemoveFileStatus(str, Enum):

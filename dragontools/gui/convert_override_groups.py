@@ -155,10 +155,7 @@ class ConvertOverrideGroupBuilderMixin:
         return bc, subtitle_status, subtitle_panel, spl, subtitle_rows, imax_cb
 
     def _build_hdr_policy_group(self, cv: QVBoxLayout, ov: dict):
-        from ..core.settings import (
-            SET_KEY_PRESERVE_DV, SET_KEY_PRESERVE_HDRPLUS,
-            SET_KEY_AV1_PRESERVE_DV, SET_KEY_AV1_PRESERVE_HDRPLUS,
-        )
+        from ..core.settings_conversion import SET_KEY_PRESERVE_DV, SET_KEY_PRESERVE_HDRPLUS, SET_KEY_AV1_PRESERVE_DV, SET_KEY_AV1_PRESERVE_HDRPLUS
         from PyQt6.QtCore import QSettings as _QS
 
         ow = self.owner

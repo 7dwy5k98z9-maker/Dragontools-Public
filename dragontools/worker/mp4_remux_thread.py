@@ -8,7 +8,7 @@ from PyQt6.QtCore import pyqtSignal
 from .base_worker import BaseWorker
 from ..core.logger import create_worker_logger
 from ..core.media_analyzer import analyze_media
-from ..core.paths import get_tool_paths
+from ..core.tool_paths import get_tool_paths
 from ..core.sidecar_transaction import SidecarCommitTransaction
 from ..core.timeout_settings import get_timeout
 from ..rules.rule_loader import load_subtitle_rules

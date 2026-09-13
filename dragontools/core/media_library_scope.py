@@ -6,7 +6,7 @@ from typing import Any, Iterable
 from .media_library_paths import _has_prefix, _normalize_slashes, get_path_mappings
 from .media_library_types import PathMapping
 from .media_library_utils import _normalize_title
-from .paths import normalize_user_path
+from .path_syntax import normalize_user_path
 
 def _path_norm_sql(alias: str = "mi") -> str:
     return f"lower(replace(coalesce({alias}.path, ''), char(92), '/'))"

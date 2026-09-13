@@ -9,7 +9,8 @@ from PyQt6.QtWidgets import (
 )
 
 from ..core.audit_log import log_qsettings_changes, snapshot_qsettings
-from ..core.settings import APP_NAME, APP_ORG, APP_VERSION
+from ..core.settings_app import APP_NAME, APP_ORG
+from ..core.version import APP_VERSION
 from .info_button import InfoButton
 from .settings_sections import (
     MediaPostprocessSection, RuntimeToolsSection, SafetyValidationSection,

@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 
 from ..core.batch_preflight import build_batch_preflight_rows
-from ..core.paths import display_name, is_video_file, to_long_path
+from ..core.path_syntax import display_name, is_video_file, to_long_path
 
 
 class ConvertWidgetRecoveryService:

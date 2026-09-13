@@ -35,6 +35,13 @@ Menü: Hilfe → Änderungshistorie Legacy V8 / Legacy V7
 
 === 🚀 V9.8.2 – AKTUELLER STAND 13.09.2026 ===
 
+[13.09.2026] V9.8.2: Technical Review Patch v4 und Dokumentationsabgleich abgeschlossen
+- Release-Validierung, Timestamp-Kandidatenprüfung und -archivierung, Strip-Only, Audio-/Video-Time-Mapping, Qualitätsvergleich und -test, Streamargumente, finaler DV-Mux, Conversion-Fortschritt und ISO-Eingabeverarbeitung sind in fokussierte Fachservices getrennt.
+- Die bisherigen Fassaden, Importpfade, Monkeypatch-Punkte und Kompatibilitätshooks bleiben erhalten; die ausgelagerten Fachservices bleiben Qt-frei.
+- README, Hilfe, DOCX-Dokumentation, PDF-Handbuch, Hilfe -> Über und beide Changelog-Formate wurden auf denselben v4-Stand gebracht.
+- Aktuelle Vermessung: 787 Python-Dateien einschließlich DragonToolsV9.py, 119.402 Gesamtzeilen, 101.135 nichtleere/nicht reine Kommentarzeilen, 172 Python-Dateien im Testpaket, 169 test_*.py und 1.245 statisch erkennbare Testfunktionen.
+- Vollständiger lokaler Testlauf: 1.269 bestanden, 2 reale DV/HDR-Integrationstests mangels konfigurierter Werkzeuge und Testmedien übersprungen; compileall ohne Fehler.
+
 [13.09.2026] V9.8.2: Timestamp-Reparatur an Batch-Fallback angeglichen
 - Der verlustfreie FFmpeg-Fallback nutzt jetzt +genpts+igndts, damit defekte PTS/DTS-Timelines wie im bewährten externen Reparaturskript robuster neu aufgebaut werden.
 - Verworfene Timestamp-Reparaturkandidaten werden, soweit möglich, unter Archiv\Timestamp_Reparatur abgelegt. Dadurch bleiben fehlerhafte Kandidaten für spätere Analyse erhalten, statt lautlos aus dem Temp-Ordner zu verschwinden.

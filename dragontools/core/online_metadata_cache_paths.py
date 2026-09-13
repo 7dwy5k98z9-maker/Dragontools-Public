@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .paths import app_documents_dir
+from .path_defaults import app_documents_dir
 from .online_metadata_types import _metadata_provider_value
 
 

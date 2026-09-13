@@ -13,7 +13,7 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
 )
 
-from ..core.paths import user_path_name
+from ..core.path_syntax import user_path_name
 from .preflight_series_choices import hide_series_folder_choices, install_series_folder_choice
 from .preflight_widget_common import _fmt_path
 

@@ -11,8 +11,6 @@ Menge lose gehaltener Attribute am QThread und machen Ownership explizit:
 - ``ConverterServiceRegistry``: Composition-Root-Container für Services; keine
   Fachlogik und keine implizite Service-Erzeugung.
 
-``NestedStateAlias`` dient ausschließlich als dünne Kompatibilitätsbrücke für
-bestehende Aufrufer, die historische Worker-Attribute direkt lesen/setzen.
 """
 from __future__ import annotations
 
@@ -22,26 +20,6 @@ import threading
 from typing import Any
 
 from .converter_config import ConverterConfig
-
-
-class NestedStateAlias:
-    """Descriptor für verhaltensfreie Legacy-Aliase auf ein Context-Feld."""
-
-    __slots__ = ("_container_name", "_field_name")
-
-    def __init__(self, container_name: str, field_name: str) -> None:
-        self._container_name = container_name
-        self._field_name = field_name
-
-    def __get__(self, instance, owner=None):
-        if instance is None:
-            return self
-        container = object.__getattribute__(instance, self._container_name)
-        return getattr(container, self._field_name)
-
-    def __set__(self, instance, value) -> None:
-        container = object.__getattribute__(instance, self._container_name)
-        setattr(container, self._field_name, value)
 
 
 @dataclass(slots=True)

@@ -2,7 +2,7 @@
 from __future__ import annotations
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QMessageBox
-from ..core.paths import display_name, strip_long_path_prefix
+from ..core.path_syntax import display_name, strip_long_path_prefix
 from ..worker.worker_contracts import RemoveFileStatus
 
 class ConvertWidgetQueueRemoveMixin:

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-from ..core.paths import display_name, path_compare_key
+from ..core.path_syntax import display_name, path_compare_key
 
 
 class ParallelChildResultCoordinator:

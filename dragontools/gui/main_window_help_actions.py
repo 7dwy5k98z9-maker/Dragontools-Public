@@ -8,8 +8,8 @@ from PyQt6.QtGui import QDesktopServices
 from PyQt6.QtWidgets import QApplication, QMessageBox
 
 from .shortcut_dialog import ShortcutDialog
-from ..core.paths import BASE, EXE_DIR
-from ..core.settings import APP_VERSION
+from ..core.resource_paths import BASE, EXE_DIR
+from ..core.version import APP_VERSION
 from ..core.update_check import UpdateCheckResult
 
 

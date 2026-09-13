@@ -11,8 +11,11 @@ from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import QMainWindow, QMessageBox, QWidget
 
 from ..core.crash_guard import clear_activity
-from ..core.settings import APP_ORG, APP_NAME, APP_VERSION
-from ..core.paths import EXE_DIR, BASE, ensure_default_storage_dirs, get_tool_paths
+from ..core.settings_app import APP_ORG, APP_NAME
+from ..core.version import APP_VERSION
+from ..core.resource_paths import EXE_DIR, BASE
+from ..core.path_defaults import ensure_default_storage_dirs
+from ..core.tool_paths import get_tool_paths
 from .styles import STYLE_LIGHT
 from .application_shutdown import shutdown_loaded_widgets
 from .main_window_actions import MainWindowActionsMixin

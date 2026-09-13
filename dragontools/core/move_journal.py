@@ -11,6 +11,7 @@ from .json_io import atomic_write_json as _atomic_write_json
 from .move_journal_contracts import MOVE_JOURNAL_VERSION, JOURNAL_FILE_PREFIX, ARCHIVE_DIR_NAME, TERMINAL_OK, MoveJournalWriteError
 from .move_journal_storage import (move_journal_dir, active_move_journal_path, new_move_journal_path, list_move_journal_paths, read_move_journal_path, read_active_move_journals, read_active_move_journal, archive_move_journal_path, archive_active_move_journal)
 from .move_journal_resume import build_move_resume_plan, format_unfinished_move_summary
+from .move_journal_recovery import recover_interrupted_backups
 from .move_journal_utils import (_remove_path, _normalize_status, _has_retryable_files, _json_safe_dict, _dedupe, _unique_archive_path, _now)
 
 _LOG = logging.getLogger(__name__)
@@ -54,124 +55,6 @@ def recover_active_move_backups(root: str | Path | None = None) -> dict[str, int
                 _LOG.warning("Abgeschlossenes Move-Journal konnte nicht archiviert werden: %s (%s)", path, exc)
                 totals["failed"] += 1
     return totals
-
-def recover_interrupted_backups(data: dict[str, Any]) -> dict[str, int]:
-    """Stellt sichere Backups wieder her und erkennt Crash-Erfolge.
-
-    Ein laufender Move kann nach dem Kopieren/Hardlinken crashen, bevor das
-    Journal finalisiert wurde. Ein Commit gilt nur dann als eindeutig belegt,
-    wenn das Ziel existiert und die Quelle nicht mehr existiert. Existieren
-    Quelle und Ziel gleichzeitig, bleibt die Recovery absichtlich konservativ:
-    Altbestand-Backups werden erhalten und der Zustand als mehrdeutig markiert.
-    """
-    restored = 0
-    kept = 0
-    failed = 0
-    completed = 0
-    cleaned = 0
-    ambiguous = 0
-    changed = False
-    files = data.get("files") if isinstance(data.get("files"), dict) else {}
-    for source_text, row in files.items():
-        if not isinstance(row, dict):
-            continue
-        dest = Path(str(row.get("dest_path") or "")) if row.get("dest_path") else None
-        source = Path(str(source_text)) if source_text else None
-        source_exists = bool(source and source.exists())
-        dest_exists = bool(dest and dest.exists())
-        status = _normalize_status(row.get("status"))
-        phase = str(row.get("phase") or "")
-
-        cleanup_pending = bool(row.get("cleanup_pending"))
-        if cleanup_pending and dest_exists and source_exists and source is not None:
-            try:
-                _remove_path(source)
-                source_exists = False
-                row["cleanup_pending"] = False
-                row["cleanup_message"] = ""
-                row["status"] = "running" if phase == "sidecars_pending" else "ok"
-                if phase != "sidecars_pending":
-                    row["phase"] = "completed"
-                row["message"] = "Cleanup nach Crash erfolgreich abgeschlossen"
-                row["finished_at"] = row.get("finished_at") or _now()
-                cleaned += 1
-                changed = True
-            except OSError:
-                failed += 1
-
-        commit_proven = dest_exists and not source_exists
-        ambiguous_state = dest_exists and source_exists
-
-        if status in {"running", "warn"} and commit_proven and phase != "sidecars_pending":
-            row["status"] = "ok"
-            row["finished_at"] = row.get("finished_at") or _now()
-            row["message"] = str(row.get("message") or "Nach Crash als abgeschlossen erkannt")
-            row.pop("recovery_status", None)
-            completed += 1
-            changed = True
-        elif ambiguous_state:
-            recovery_message = (
-                "Recovery mehrdeutig: Quelle und Ziel existieren; "
-                "Altbestand-Backup bleibt erhalten und es erfolgt keine automatische Bereinigung."
-            )
-            if row.get("recovery_status") != "ambiguous_source_and_destination":
-                row["recovery_status"] = "ambiguous_source_and_destination"
-                changed = True
-            if row.get("message") != recovery_message:
-                row["message"] = recovery_message
-                changed = True
-            ambiguous += 1
-
-        pairs = row.get("backup_pairs") if isinstance(row.get("backup_pairs"), list) else []
-        remaining: list[dict[str, str]] = []
-        for pair in pairs:
-            if not isinstance(pair, dict):
-                continue
-            original_text = str(pair.get("original") or "")
-            backup_text = str(pair.get("backup") or "")
-            if not original_text or not backup_text:
-                continue
-            original = Path(original_text)
-            backup = Path(backup_text)
-            if not backup.exists():
-                changed = True
-                continue
-            if commit_proven:
-                try:
-                    _remove_path(backup)
-                    cleaned += 1
-                    changed = True
-                except OSError:
-                    failed += 1
-                    remaining.append({"original": original_text, "backup": backup_text})
-                continue
-            if ambiguous_state:
-                kept += 1
-                remaining.append({"original": original_text, "backup": backup_text})
-                continue
-            if original.exists():
-                kept += 1
-                remaining.append({"original": original_text, "backup": backup_text})
-                continue
-            try:
-                os.replace(str(backup), str(original))
-                restored += 1
-                changed = True
-            except OSError:
-                failed += 1
-                remaining.append({"original": original_text, "backup": backup_text})
-        row["backup_pairs"] = remaining
-
-    if changed or restored or failed:
-        data["updated_at"] = _now()
-    return {
-        "restored": restored,
-        "kept": kept,
-        "failed": failed,
-        "completed": completed,
-        "cleaned": cleaned,
-        "ambiguous": ambiguous,
-    }
 
 class MoveJournal:
     def __init__(

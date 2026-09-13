@@ -4,7 +4,8 @@ from __future__ import annotations
 from PyQt6.QtCore import QSettings
 from PyQt6.QtWidgets import QDialog, QWidget
 
-from ..core.settings import APP_NAME, APP_ORG, APP_VERSION
+from ..core.settings_app import APP_NAME, APP_ORG
+from ..core.version import APP_VERSION
 from .online_metadata_dialog_state import OnlineMetadataDialogStateMixin
 from .online_metadata_dialog_view import OnlineMetadataDialogViewMixin
 from .ui_helpers import install_persistent_window_geometry

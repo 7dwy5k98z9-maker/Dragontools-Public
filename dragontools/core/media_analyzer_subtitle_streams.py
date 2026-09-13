@@ -61,7 +61,7 @@ def _parse_stream_duration_s(*values) -> float | None:
             continue
         try:
             parts = [float(part.replace(",", ".")) for part in text.split(":")]
-        except Exception:
+        except (TypeError, ValueError):
             continue
         if len(parts) == 3:
             return parts[0] * 3600.0 + parts[1] * 60.0 + parts[2]

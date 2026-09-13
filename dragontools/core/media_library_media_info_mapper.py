@@ -6,6 +6,7 @@ from typing import Any
 
 from .media_library_sidecars import _nfo_status_for_path, _subtitle_sidecar_streams, _trickplay_status_for_path
 from .media_library_utils import _infer_item_type, _int_or_none, _normalize_title
+from .media_library_episode_identity import episode_series_root
 from .models import MediaInfo
 
 _LOG = logging.getLogger(__name__)
@@ -196,6 +197,13 @@ def _item_from_media_info(path: str | Path, info: MediaInfo, source: str = "drag
         episode=episode,
         size_bytes=size_bytes,
     )
+    if item_type == "episode":
+        import re
+
+        series_root = episode_series_root(str(file_path))
+        year_match = re.search(r"\b(19\d{2}|20\d{2})\b", series_root or "")
+        if year_match:
+            item["year"] = int(year_match.group(1))
     item.update(
         {
             "duration_s": info.duration_s,

@@ -16,7 +16,7 @@ from .log_cleanup import (
     _file_category,
 )
 from .logger import log_base_from_settings, verbose_log_dir_from_settings
-from .settings import APP_VERSION
+from .version import APP_VERSION
 from .settings_backup import _iter_backup_files, dragon_documents_dir, settings_to_dict
 
 
@@ -99,7 +99,7 @@ def _diagnose_info(created_at: str, log_root: Path, documents_dir: Path) -> str:
 
 
 def _diagnostic_tool_paths() -> dict[str, str]:
-    from .paths import get_tool_paths
+    from .tool_paths import get_tool_paths
 
     tools = get_tool_paths()
     return {

@@ -6,7 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterable
 
-from .paths import app_documents_dir
+from .path_defaults import app_documents_dir
 
 
 REMINDER_DIRNAME = "Erinnerungen"

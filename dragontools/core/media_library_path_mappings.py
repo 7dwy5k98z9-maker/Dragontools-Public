@@ -9,7 +9,7 @@ from typing import Any, Iterable
 from .media_library_db import _connect, initialize_database
 from .media_library_types import PathMapping, _now
 from .media_library_utils import _normalize_title
-from .paths import join_user_path, normalize_user_path, path_compare_key
+from .path_syntax import join_user_path, normalize_user_path, path_compare_key
 
 def load_path_mappings(value: Any) -> list[PathMapping]:
     if not value:

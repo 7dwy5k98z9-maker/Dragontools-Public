@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 import zipfile
 
-from .settings import SENSITIVE_SETTINGS_KEYS
+from .settings_metadata import SENSITIVE_SETTINGS_KEYS
 
 BACKUP_FORMAT = "DragonToolsBackup"
 BACKUP_FORMAT_VERSION = 2

@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable
 
-from .paths import app_documents_dir
+from .path_defaults import app_documents_dir
 
 SCHEMA_VERSION = 6
 DEFAULT_DB_FILENAME = "dragontools_mediathek.sqlite3"

@@ -18,7 +18,7 @@ from ..core.movie_renamer import (
     parse_series_release_name,
     sanitize_filename_part,
 )
-from ..core.paths import path_compare_key
+from ..core.path_syntax import path_compare_key
 from ..rules.renamer_rules import manual_review_below, minimum_candidate_score
 from .movie_renamer_view import WideCandidateComboBox
 from .movie_renamer_table_search import MovieRenamerTableSearchMixin

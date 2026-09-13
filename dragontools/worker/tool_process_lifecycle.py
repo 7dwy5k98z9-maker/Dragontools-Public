@@ -24,10 +24,15 @@ def process_group_kwargs() -> dict[str, object]:
 def worker_lock(worker):
     if worker is None:
         return None
+    state = getattr(worker, "_control_state", None)
+    if state is not None:
+        return getattr(state, "process_lock", None)
     return getattr(worker, "_lock", None) or getattr(worker, "_process_lock", None)
 
 
 def current_process_attr(worker) -> str:
+    if worker is not None and getattr(worker, "_control_state", None) is not None:
+        return "current_process"
     if worker is not None and hasattr(worker, "_current_process"):
         return "_current_process"
     return "current_process"
@@ -169,9 +174,14 @@ class ProcessLifecycle:
         self.last_activity = time.monotonic()
 
     def _abort_requested(self) -> bool:
-        if self.worker is None or not getattr(self.worker, "abort_requested", False):
+        if self.worker is None:
             return False
-        return self.abort_on_request or getattr(self.worker, "abort_type", None) == "sofort"
+        state = getattr(self.worker, "_control_state", None)
+        requested = bool(state.abort_requested) if state is not None else bool(getattr(self.worker, "abort_requested", False))
+        abort_type = state.abort_type if state is not None else getattr(self.worker, "abort_type", None)
+        if not requested:
+            return False
+        return self.abort_on_request or abort_type == "sofort"
 
     def _terminate(self) -> None:
         if self.proc is None:
@@ -197,7 +207,11 @@ class ProcessLifecycle:
         return 130
 
     def handle_pause(self) -> None:
-        if self.worker is None or self.lock is None or not getattr(self.worker, "_paused", False):
+        if self.worker is None or self.lock is None:
+            return
+        state = getattr(self.worker, "_control_state", None)
+        paused = bool(state.paused) if state is not None else bool(getattr(self.worker, "_paused", False))
+        if not paused:
             return
         pause_started = time.monotonic()
         wait_while_paused(self.worker, self.lock)
@@ -205,7 +219,12 @@ class ProcessLifecycle:
         self.started += pause_duration
         self.last_activity += pause_duration
 
-    def handle_timeout(self, *, display: Literal["minutes", "seconds"] = "minutes") -> int | None:
+    def handle_timeout(
+        self,
+        *,
+        display: Literal["minutes", "seconds"] = "minutes",
+        message: str | None = None,
+    ) -> int | None:
         if self.timeout_s is None:
             return None
         origin = self.last_activity if self.timeout_mode == "inactivity" else self.started
@@ -213,12 +232,13 @@ class ProcessLifecycle:
             return None
 
         self.timed_out = True
-        if display == "seconds":
-            message = f"❌ {self.label}: Timeout nach {self.timeout_s}s - Prozess wird abgebrochen."
-        else:
-            minutes = max(1, int(round(float(self.timeout_s) / 60)))
-            kind = "Inaktivitäts-Timeout" if self.timeout_mode == "inactivity" else "Timeout"
-            message = f"❌ {self.label}: {kind} nach {minutes} Min - Prozess wird abgebrochen."
+        if message is None:
+            if display == "seconds":
+                message = f"❌ {self.label}: Timeout nach {self.timeout_s}s - Prozess wird abgebrochen."
+            else:
+                minutes = max(1, int(round(float(self.timeout_s) / 60)))
+                kind = "Inaktivitäts-Timeout" if self.timeout_mode == "inactivity" else "Timeout"
+                message = f"❌ {self.label}: {kind} nach {minutes} Min - Prozess wird abgebrochen."
         dispatch_log(self.log, message, "error")
         self._terminate()
         return 124

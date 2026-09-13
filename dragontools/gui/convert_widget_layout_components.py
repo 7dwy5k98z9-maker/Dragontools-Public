@@ -8,7 +8,8 @@ from PyQt6.QtWidgets import (
     QScrollArea, QSpinBox, QFrame, QSizePolicy, QTextEdit, QVBoxLayout, QWidget,
     QGridLayout, QToolButton,
 )
-from ..core.settings import SET_KEY_AUTOCROP_ENABLED, SET_KEY_IMAX_DETECT, settings_bool, settings_value, ui_section_expanded_key
+from ..core.settings_conversion import SET_KEY_AUTOCROP_ENABLED, SET_KEY_IMAX_DETECT
+from ..core.settings_access import settings_bool, settings_value, ui_section_expanded_key
 from .convert_widget_custom_widgets import BannerLabel, DragonProgressBar, _find_banner_single
 from .convert_widget_file_queue import FileListWidget
 from .info_button import InfoButton

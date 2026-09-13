@@ -4,7 +4,7 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
-from .paths import normalize_user_path, to_long_path
+from .path_syntax import normalize_user_path, to_long_path
 
 
 def _resolved(path_like) -> Path:

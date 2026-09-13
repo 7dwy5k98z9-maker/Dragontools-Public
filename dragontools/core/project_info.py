@@ -11,8 +11,8 @@ from dataclasses import dataclass
 import ast
 from pathlib import Path
 
-from .paths import BASE
-from .settings import APP_VERSION
+from .resource_paths import BASE
+from .version import APP_VERSION
 
 
 @dataclass(frozen=True)
@@ -29,12 +29,12 @@ class ProjectStatistics:
 # Wird bei Dokumentations-/Release-Pflege aktualisiert und dient nur als
 # Fallback, wenn ein Frozen-Build keine .py-Quellen enthält.
 RELEASE_STATISTICS = ProjectStatistics(
-    python_files=729,
-    total_lines=118227,
-    code_lines=100301,
-    test_package_files=167,
-    test_files=164,
-    static_tests=1224,
+    python_files=787,
+    total_lines=119402,
+    code_lines=101135,
+    test_package_files=172,
+    test_files=169,
+    static_tests=1245,
     dynamic=False,
 )
 
@@ -126,7 +126,7 @@ def build_about_html(root: str | Path | None = None) -> str:
         "DB-first Preflight · frische Batch-Metadaten für finale Rename-/NFO-Läufe · TheTVDB-Sprachfallback<br>"
         "Generische Episodentitel wie Folge XX werden bei Bedarf frisch geprüft statt dauerhaft aus dem Cache übernommen.<br><br>"
         "<b>Architektur</b><br>"
-        "Zwölf Refactoring-/Stabilitätsblöcke trennen große GUI-, Core- und Worker-Abläufe in fokussierte Fachmodule.<br>"
+        "Zwölf Refactoring-/Stabilitätsblöcke und der kumulative Technical Review Patch v4 trennen große GUI-, Core- und Worker-Abläufe in fokussierte Fachmodule; Release-Validierung, Timestamp-Kandidaten, Strip-Only, Time-Mapping, Qualitätsservices, Streamargumente, finaler DV-Mux, Conversion-Fortschritt und ISO-Eingaben besitzen getrennte Fachservices.<br>"
         "Schmale Fassaden halten bestehende Importpfade stabil; der Release-Smoke deckt alle im Review-Manifest neu eingeführten Produktivmodule ab.<br>"
         "Die Quellbildprüfung bündelt mehrere Probezeitpunkte pro FFmpeg-Prozess und reduziert damit Prozessstarts deutlich.<br><br>"
         f"<b>Projektumfang ({source_note})</b><br>"
@@ -134,7 +134,7 @@ def build_about_html(root: str | Path | None = None) -> str:
         f"{_fmt_int(stats.code_lines)} Codezeilen<br>"
         f"Tests-Paket: {stats.test_package_files} Python-Dateien · {stats.test_files} test_*.py · "
         f"{stats.static_tests} statisch erkannte Tests<br>"
-        "Aktueller Dokumentations-/Review-Stand: 13.09.2026 · Refactoring-/Stabilitätsblöcke 1-12 dokumentiert.<br>"
+        "Aktueller Dokumentations-/Review-Stand: 13.09.2026 · Refactoring-/Stabilitätsblöcke 1-12 und Technical Review Patch v4 dokumentiert.<br>"
         "Gezielte Regressionen, compileall, Architekturgrenzen und Release-Smoke sichern die geänderten Bereiche; "
         "bekannte Review-Host-Probleme werden getrennt von fachlichen Regressionen geführt.<br><br>"
         "Entwicklungszeit gesamt: rund 6.000 Stunden<br>"

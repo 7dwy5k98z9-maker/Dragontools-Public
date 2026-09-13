@@ -8,7 +8,7 @@ from pathlib import Path
 from PyQt6.QtCore import QThread, pyqtSignal
 
 from ..core.logger import create_worker_logger
-from ..core.paths import get_tool_paths
+from ..core.tool_paths import get_tool_paths
 from .iso_disc_inspector import (
     ISODiscInspector,
     _format_size,
@@ -22,12 +22,14 @@ from .iso_makemkv_service import ISOMakeMKVService, tool_exists as _tool_exists
 from .iso_models import ISOUserAbortError
 from .iso_selection import choose_auto_titles
 from .process_control import terminate_process_tree
+from .iso_input_processor import ISOInputProcessor
+from .iso_processor_host_mixin import ISOProcessorHostMixin
 
 # Historical internal name kept for tests/callers that may catch it.
 _UserAbortError = ISOUserAbortError
 
 
-class ISOThread(QThread):
+class ISOThread(ISOProcessorHostMixin, QThread):
     """Qt lifecycle/orchestration for conservative ISO/disc extraction.
 
     MakeMKV parsing/extraction, disc inspection and the FFmpeg fallback are
@@ -92,6 +94,7 @@ class ISOThread(QThread):
             log=self._log,
             progress=self.file_progress.emit,
         )
+        self._input_processor = ISOInputProcessor(self)
 
     def _log(self, message: str, level: str = "info") -> None:
         if level == "error":
@@ -159,109 +162,11 @@ class ISOThread(QThread):
             self.finished.emit()
 
     def _process_input(self, path: str, total: int) -> None:
-        src = Path(path)
-        output_dir = self.output_dir or str(src.parent)
-        iso_type = self._detect_iso_type(path)
-        self._logger.file_start(
-            self._current_idx,
-            total,
-            path,
-            "iso",
-            None,
-            "makemkvcon",
-            iso_type,
-            q_label="Quelle",
-        )
-        self.file_progress.emit(path, 2, None)
-        if iso_type == "unknown":
-            msg = "Eingabe ist keine klar erkennbare DVD-/Blu-ray-Struktur. MakeMKV-Scan wird nicht gestartet."
-            self._log(f"⚠️ {msg}")
-            self.file_result.emit(path, False, msg)
-            return
+        self._input_processor.process(path, total)
 
-        self._last_scan_error = None
-        titles = self._scan_titles(path) if self._makemkv_available() else []
-        self.file_progress.emit(path, 15, titles)
-        if not titles:
-            fallback_titles = self._scan_ffmpeg_fallback_titles(path) if self.ffmpeg_fallback else []
-            if fallback_titles:
-                self.file_progress.emit(path, 15, fallback_titles)
-                if self.scan_only:
-                    self.file_result.emit(path, True, "Analyse abgeschlossen (nur FFmpeg-Fallback möglich)")
-                    return
-            if self.ffmpeg_fallback and not self.scan_only:
-                self._log(
-                    "⚠️ MakeMKV lieferte keine nutzbaren Titel. "
-                    "FFmpeg-Fallback startet ohne Titelmenü.",
-                    "warn",
-                )
-                ok = self._extract_with_ffmpeg_fallback(path, output_dir)
-                if ok:
-                    self.file_progress.emit(path, 100, None)
-                    self.file_result.emit(path, True, "Extraktion über FFmpeg-Fallback abgeschlossen")
-                else:
-                    msg = (
-                        self._last_ffmpeg_fallback_error
-                        or self._last_scan_error
-                        or "Keine extrahierbaren Titel gefunden."
-                    )
-                    self.file_result.emit(path, False, msg)
-                return
-
-            msg = self._last_scan_error or "Keine extrahierbaren Titel gefunden."
-            self._log(f"⚠️ {msg}")
-            self.file_result.emit(path, False, msg)
-            return
-
-        if self.scan_only:
-            self.file_result.emit(path, True, "Analyse abgeschlossen")
-            return
-
-        explicit = list(self.selected_titles.get(path) or self.selected_titles.get(str(src.resolve())) or [])
-        if explicit:
-            title_ids = explicit
-            self._log(f"ℹ️ Verwende explizit ausgewählte Titel: {', '.join(map(str, title_ids))}")
-        elif self.auto_main_title:
-            title_ids, series_disc = choose_auto_titles(
-                titles, detect_series_disc=self.auto_series_disc
-            )
-            if not title_ids:
-                msg = "Es konnte kein Haupttitel vorgeschlagen werden."
-                self._log(f"⚠️ {msg}")
-                self.file_result.emit(path, False, msg)
-                return
-            if series_disc:
-                self._log(f"ℹ️ Serien-Disc erkannt; Episoden-Titel: {', '.join(map(str, title_ids))}")
-            else:
-                self._log(f"ℹ️ Haupttitel-Vorschlag: {title_ids[0]}")
-        else:
-            msg = "Keine Titel ausgewählt und kein automatischer Haupttitel-Vorschlag aktiv."
-            self._log(f"⚠️ {msg}")
-            self.file_result.emit(path, False, msg)
-            return
-
-        self.file_progress.emit(path, 25, title_ids)
-        ok = self._extract_titles(path, title_ids, output_dir)
-        if self.abort_requested:
-            self.file_result.emit(path, False, "Abgebrochen")
-            return
-        if not ok:
-            if self.ffmpeg_fallback:
-                self._log(
-                    "⚠️ MakeMKV-Extraktion fehlgeschlagen. "
-                    "FFmpeg-Fallback wird einmalig versucht.",
-                    "warn",
-                )
-                ok = self._extract_with_ffmpeg_fallback(path, output_dir)
-                if ok:
-                    self.file_progress.emit(path, 100, None)
-                    self.file_result.emit(path, True, "Extraktion über FFmpeg-Fallback abgeschlossen")
-                    return
-            self.file_result.emit(path, False, "Extraktion fehlgeschlagen")
-            return
-
-        self.file_progress.emit(path, 100, None)
-        self.file_result.emit(path, True, "Extraktion abgeschlossen")
+    def select_auto_titles(self, titles: list[dict]) -> tuple[list[int], bool]:
+        """Resolve automatic title selection from the thread-owned user options."""
+        return choose_auto_titles(titles, detect_series_disc=self.auto_series_disc)
 
     # --- Compatibility/delegation surface ------------------------------------
 

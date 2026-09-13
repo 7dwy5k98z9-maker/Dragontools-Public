@@ -4,7 +4,7 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
-from .paths import VIDEO_EXTENSIONS
+from .path_syntax import VIDEO_EXTENSIONS
 
 
 VIDEO_SUFFIXES = {ext.casefold() for ext in VIDEO_EXTENSIONS}
@@ -47,11 +47,11 @@ def _episode_identity_for_named_path(path: str | os.PathLike) -> EpisodeIdentity
     zugeordnet werden können.
     """
     p = Path(path)
-    try:
-        from ..rules.move_rules import parse_series_match_details
+    from ..rules.move_rules import parse_series_match_details
 
+    try:
         parsed = parse_series_match_details(p.name)
-    except Exception:
+    except (TypeError, ValueError, OSError):
         return None
     if not parsed:
         return None
@@ -64,7 +64,7 @@ def _episode_identity_for_named_path(path: str | os.PathLike) -> EpisodeIdentity
         return None
     try:
         season = int(parsed["season"])
-    except Exception:
+    except (KeyError, TypeError, ValueError):
         return None
     series = str(parsed.get("series") or "").strip()
     return EpisodeIdentity(

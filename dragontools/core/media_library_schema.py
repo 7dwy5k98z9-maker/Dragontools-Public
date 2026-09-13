@@ -5,14 +5,46 @@ import sqlite3
 from .media_library_migrations import _ensure_media_items_schema, _ensure_media_streams_schema
 from .media_library_types import SCHEMA_VERSION
 
+class UnsupportedMediaLibrarySchemaError(RuntimeError):
+    """Raised when this DragonTools build would open a newer library schema."""
+
+
+def _existing_schema_version(conn: sqlite3.Connection) -> int | None:
+    table = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='meta'"
+    ).fetchone()
+    if table is None:
+        return None
+    row = conn.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()
+    if row is None:
+        return None
+    try:
+        return int(row["value"])
+    except (TypeError, ValueError, KeyError, IndexError) as exc:
+        raise UnsupportedMediaLibrarySchemaError(
+            f"Ungültige Mediathek-Schemaversion: {row['value']!r}"
+        ) from exc
+
+
+def _assert_schema_not_newer(conn: sqlite3.Connection) -> int | None:
+    stored = _existing_schema_version(conn)
+    if stored is not None and stored > SCHEMA_VERSION:
+        raise UnsupportedMediaLibrarySchemaError(
+            "Die Mediathek-Datenbank wurde mit einer neueren DragonTools-Version "
+            f"erstellt (Schema {stored}); diese Version unterstützt nur Schema "
+            f"{SCHEMA_VERSION}. Die Datenbank wird nicht verändert."
+        )
+    return stored
+
 
 def _create_schema(conn: sqlite3.Connection) -> None:
     """Create/migrate the schema in a migration-safe order.
 
-    Tables are created first, then missing legacy columns are added, and only
-    afterwards are indexes created.  This is important for older DragonTools
-    databases where an index may reference a column that did not yet exist.
+    Future schemas are rejected *before* any DDL/DML is executed. Older schemas
+    are upgraded by the compatibility migrations below and receive the current
+    version marker only after those steps completed successfully.
     """
+    _assert_schema_not_newer(conn)
     conn.executescript(
         """
         CREATE TABLE IF NOT EXISTS meta (

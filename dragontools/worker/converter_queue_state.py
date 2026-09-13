@@ -4,7 +4,7 @@ from __future__ import annotations
 import threading
 from typing import Callable
 
-from ..core.paths import display_name, normalize_user_path, path_compare_key
+from ..core.path_syntax import display_name, normalize_user_path, path_compare_key
 from .worker_contracts import RemoveFileStatus, normalize_worker_path
 
 

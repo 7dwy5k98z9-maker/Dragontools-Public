@@ -20,6 +20,7 @@ from .conversion_diagnostics import ConversionDiagnosticsService
 from .conversion_progress_presenter import (
     ConversionProgressPresenter,
 )
+from .conversion_job_journal_tracker import ConversionJobJournalTracker
 from .conversion_start_coordinator import ConversionStartCoordinator
 from .conversion_worker_factory import ConversionConfigBuilder, ConversionWorkerFactory
 from .conversion_worker_lifecycle import ConversionWorkerLifecycle
@@ -78,12 +79,14 @@ class ConversionController:
             config_builder=self._config_builder,
             qt_parent=qt_parent,
         )
+        self._job_journal_tracker = ConversionJobJournalTracker(state=state, log=log)
         self._progress = ConversionProgressPresenter(
             state=state,
             ui=ui,
             log=log,
             refresh_queue=refresh_queue,
             set_file_list_item_text=lambda path, text: set_file_list_item_text(self._ui.file_list, path, text),
+            mark_file_started=self._job_journal_tracker.mark_file_started,
         )
         self._lifecycle = ConversionWorkerLifecycle(
             state=state,

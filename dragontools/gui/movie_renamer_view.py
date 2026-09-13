@@ -18,7 +18,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from ..core.settings import APP_VERSION
+from ..core.version import APP_VERSION
 from .file_drop_widgets import FileDropTable
 
 

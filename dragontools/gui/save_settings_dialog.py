@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-from ..core.settings import APP_VERSION
+from ..core.version import APP_VERSION
 from .settings_dialog import SettingsDialog
 
 

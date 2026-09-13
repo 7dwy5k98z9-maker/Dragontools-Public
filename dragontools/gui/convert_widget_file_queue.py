@@ -10,7 +10,7 @@ from .drop_path_extractor import (
     _log_drop_message, _log_drop_rejection, _log_long_path_dragdrop_warning,
     _mime_has_file_payload, _resolve_drop_logger, _warn_non_video_file,
 )
-from ..core.paths import display_name, display_path, is_video_file, normalize_user_path, path_compare_key, strip_long_path_prefix, to_long_path
+from ..core.path_syntax import display_name, display_path, is_video_file, normalize_user_path, path_compare_key, strip_long_path_prefix, to_long_path
 from .convert_widget_queue_add import ConvertWidgetQueueAddMixin, VIDEO_FILE_DIALOG_PATTERNS
 from .convert_widget_queue_remove import ConvertWidgetQueueRemoveMixin
 

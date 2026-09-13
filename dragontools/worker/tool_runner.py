@@ -272,6 +272,9 @@ def run_tool_bytes(
             rc = lifecycle.handle_abort()
             if rc is not None:
                 break
+            # Binary-producing tools must obey the exact same pause semantics
+            # as text tools. Paused time is excluded from the absolute timeout.
+            lifecycle.handle_pause()
             rc = lifecycle.handle_timeout(display="seconds")
             if rc is not None:
                 break

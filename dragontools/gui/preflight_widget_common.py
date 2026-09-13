@@ -5,7 +5,7 @@ from __future__ import annotations
 from PyQt6.QtWidgets import QFrame
 
 from ..rules.move_rules import move_safe_stem, sanitize_win_segment
-from ..core.paths import join_user_path, path_compare_key
+from ..core.path_syntax import join_user_path, path_compare_key
 
 def _safe_stem(path: str) -> str:
     """Dateiname für die Move-Zielfindung ohne technische Codec-Suffixe."""

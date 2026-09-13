@@ -8,8 +8,10 @@ from typing import Any, Iterable
 from .media_library_db import _connect, initialize_database
 from .media_library_repository_items import _insert_item, _item_from_media_info, _streams_from_media_info_with_sidecars
 from .media_library_types import _now, default_media_library_db_path
-from .media_library_utils import _int_or_none, _normalize_title
-from .paths import path_compare_key
+from .media_library_utils import _int_or_none
+from .media_library_episode_identity import episode_series_identity, same_series_for_episode_replacement
+from .path_syntax import path_compare_key
+from .move_conflicts import episode_identity_for_path
 
 
 def _deactivate_paths(conn: sqlite3.Connection, paths: Iterable[str | Path]) -> int:
@@ -41,10 +43,8 @@ def _deactivate_existing_episode_identity(conn: sqlite3.Connection, item: dict[s
     if str(item.get("item_type") or "").casefold() != "episode":
         return 0
     try:
-        from .move_conflicts import episode_identity_for_path
-
         identity = episode_identity_for_path(item.get("path") or item.get("filename") or "")
-    except Exception:
+    except (TypeError, ValueError, OSError):
         identity = None
     if identity is None:
         season = _int_or_none(item.get("season"))
@@ -55,11 +55,13 @@ def _deactivate_existing_episode_identity(conn: sqlite3.Connection, item: dict[s
     else:
         season = identity.season
         target_episodes = identity.episodes
+    target_series = episode_series_identity(item)
     parent_path = str(item.get("parent_path") or "")
-    normalized_title = str(item.get("normalized_title") or _normalize_title(item.get("series_title") or item.get("title")))
+    normalized_title = target_series.normalized_title
     rows = conn.execute(
         """
-        SELECT id, path, filename, season, episode
+        SELECT id, path, filename, season, episode, year, series_title,
+               parent_path, normalized_title
         FROM media_items
         WHERE active=1
           AND exists_flag=1
@@ -75,10 +77,13 @@ def _deactivate_existing_episode_identity(conn: sqlite3.Connection, item: dict[s
     ).fetchall()
     ids: list[int] = []
     for row in rows:
+        row_series = episode_series_identity(dict(row))
+        if not same_series_for_episode_replacement(target_series, row_series):
+            continue
         row_identity = None
         try:
             row_identity = episode_identity_for_path(row["path"] or row["filename"] or "")
-        except Exception:
+        except (TypeError, ValueError, OSError):
             row_identity = None
         if row_identity is not None:
             if row_identity.season != season or row_identity.episodes != target_episodes:
@@ -127,10 +132,7 @@ def record_moved_file_from_settings(
     tools: Any = None,
     replaced_paths: Iterable[str | Path] = (),
 ) -> bool:
-    from .settings import (
-        SET_KEY_MEDIA_LIBRARY_DB_PATH,
-        SET_KEY_MEDIA_LIBRARY_ENABLED,
-    )
+    from .settings_media_library import SET_KEY_MEDIA_LIBRARY_DB_PATH, SET_KEY_MEDIA_LIBRARY_ENABLED
 
     enabled = settings.value(SET_KEY_MEDIA_LIBRARY_ENABLED, False, type=bool)
     if not enabled:

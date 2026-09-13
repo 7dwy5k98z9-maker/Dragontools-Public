@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from .json_io import atomic_write_json
-from .paths import app_documents_dir
+from .path_defaults import app_documents_dir
 
 _LOG = logging.getLogger(__name__)
 FORMAT_VERSION = 1

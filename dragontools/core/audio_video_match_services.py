@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 from typing import Callable
 
@@ -16,7 +17,7 @@ from .audio_video_match_models import (
 from .audio_video_match_utils import format_seconds, parse_cut_regions
 from .audio_video_time_mapping import _linear_regression, classify_time_mapping, select_landmark_times
 from .media_analyzer import analyze_media
-from .paths import ToolPaths, get_tool_paths
+from .tool_paths import ToolPaths, get_tool_paths
 
 class VideoAnalyzer:
     def __init__(self, tools: ToolPaths | None = None) -> None:
@@ -116,7 +117,13 @@ class AudioVideoMatcher:
                     unmatched.append(reference.time_s)
                 else:
                     points.append(match)
-            except Exception:
+            except (OSError, RuntimeError, ValueError, subprocess.SubprocessError) as exc:
+                # A failed probe at one landmark is recoverable, but keep the
+                # reason visible. Programming errors must not silently degrade
+                # into a low-confidence match.
+                self._log_progress(
+                    f"Landmarke {idx}/{len(landmarks)} konnte nicht ausgewertet werden: {exc}"
+                )
                 unmatched.append(landmark)
 
         self._log_progress("Zeitmodell berechnen")

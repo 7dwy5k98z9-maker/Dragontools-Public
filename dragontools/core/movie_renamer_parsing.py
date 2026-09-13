@@ -6,7 +6,7 @@ from pathlib import Path
 
 from .movie_renamer_models import ParsedMovieReleaseName, ParsedSeriesReleaseName
 from .online_metadata_common import default_episode_title, normalize_episode_metadata_title, parse_series_query
-from .paths import path_compare_key
+from .path_syntax import path_compare_key
 from ..rules.renamer_rules import sanitize_renamer_text
 
 VIDEO_SUFFIXES = {

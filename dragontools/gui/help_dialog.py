@@ -12,8 +12,8 @@ from PyQt6.QtCore import QUrl
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QTextBrowser,
 )
-from ..core.paths import EXE_DIR, BASE
-from ..core.settings import APP_VERSION
+from ..core.resource_paths import EXE_DIR, BASE
+from ..core.version import APP_VERSION
 from .ui_helpers import install_persistent_window_geometry
 
 FROZEN = bool(getattr(sys, "frozen", False))

@@ -57,7 +57,7 @@ def record_media_library_move(
     record_replacement_reminder(move_result, dest_path, replaced_paths, log=log)
     try:
         from .media_library_repository import record_moved_file_from_settings
-        from .paths import get_tool_paths
+        from .tool_paths import get_tool_paths
 
         changed = record_moved_file_from_settings(
             settings,

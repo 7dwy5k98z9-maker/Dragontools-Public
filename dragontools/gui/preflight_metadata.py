@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from PyQt6.QtCore import QSettings
 
-from ..core.settings import APP_NAME, APP_ORG
+from ..core.settings_app import APP_NAME, APP_ORG
 from .preflight_metadata_apply import apply_metadata_result
 from .preflight_metadata_common import MetadataLookupCache
 from .preflight_metadata_movie import resolve_movie_metadata
@@ -24,11 +24,7 @@ def online_metadata_enabled() -> bool:
 def media_library_preflight_enabled() -> bool:
     try:
         from ..core.media_library import default_media_library_db_path
-        from ..core.settings import (
-            SET_KEY_MEDIA_LIBRARY_DB_PATH,
-            SET_KEY_MEDIA_LIBRARY_ENABLED,
-            SET_KEY_MEDIA_LIBRARY_PREFLIGHT_ENABLED,
-        )
+        from ..core.settings_media_library import SET_KEY_MEDIA_LIBRARY_DB_PATH, SET_KEY_MEDIA_LIBRARY_ENABLED, SET_KEY_MEDIA_LIBRARY_PREFLIGHT_ENABLED
         settings = QSettings(APP_ORG, APP_NAME)
         if not settings.value(SET_KEY_MEDIA_LIBRARY_ENABLED, False, type=bool):
             return False

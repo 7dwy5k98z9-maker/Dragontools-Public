@@ -18,8 +18,8 @@ from PyQt6.QtWidgets import (
     QFileDialog, QDialogButtonBox, QMessageBox,
 )
 
-from ..core.settings import APP_ORG, APP_NAME
-from ..core.paths import EXE_DIR
+from ..core.settings_app import APP_ORG, APP_NAME
+from ..core.resource_paths import EXE_DIR
 from .ui_helpers import install_persistent_window_geometry
 
 # QSettings-Keys für Tab-Sichtbarkeit
@@ -157,7 +157,7 @@ class TabManagerDialog(QDialog):
         v.addWidget(bb)
 
     def _launch(self, exe_name: str) -> None:
-        from ..core.paths import find_tool_in_settings
+        from ..core.tool_paths import find_tool_in_settings
         # Mapping: exe_name → TOOL_KEYS-Schlüssel + mögliche Exe-Namen
         tool_map = {
             "HandBrake.exe":        ("handbrake", ["HandBrake.exe", "HandBrakeCLI.exe"]),

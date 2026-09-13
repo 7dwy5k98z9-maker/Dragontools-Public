@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 
-from ..core.paths import is_video_file, normalize_user_path, strip_long_path_prefix, to_long_path
+from ..core.path_syntax import is_video_file, normalize_user_path, strip_long_path_prefix, to_long_path
 
 
 def iter_video_files_in_folder(folder_path: str) -> tuple[list[str], int]:

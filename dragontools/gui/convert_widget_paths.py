@@ -7,21 +7,9 @@ anything about the widget layout.
 """
 from __future__ import annotations
 
-from ..core.paths import default_target_paths, get_tool_paths, invalidate_tool_paths
-from ..core.settings import (
-    SET_KEY_PATH_H264_TV,
-    SET_KEY_PATH_H264_ANIME,
-    SET_KEY_PATH_H264_FILME,
-    SET_KEY_PATH_H265_TV,
-    SET_KEY_PATH_H265_ANIME,
-    SET_KEY_PATH_H265_FILME,
-    SET_KEY_PATH_AV1_TV,
-    SET_KEY_PATH_AV1_ANIME,
-    SET_KEY_PATH_AV1_FILME,
-    SET_KEY_PATH_TV,
-    SET_KEY_PATH_ANIME,
-    SET_KEY_PATH_FILME,
-)
+from ..core.path_defaults import default_target_paths
+from ..core.tool_paths import get_tool_paths, invalidate_tool_paths
+from ..core.settings_storage import SET_KEY_PATH_H264_TV, SET_KEY_PATH_H264_ANIME, SET_KEY_PATH_H264_FILME, SET_KEY_PATH_H265_TV, SET_KEY_PATH_H265_ANIME, SET_KEY_PATH_H265_FILME, SET_KEY_PATH_AV1_TV, SET_KEY_PATH_AV1_ANIME, SET_KEY_PATH_AV1_FILME, SET_KEY_PATH_TV, SET_KEY_PATH_ANIME, SET_KEY_PATH_FILME
 
 
 class ConvertWidgetTargetPathService:

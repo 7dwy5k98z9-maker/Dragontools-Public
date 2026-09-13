@@ -10,7 +10,7 @@ from pathlib import Path
 from PyQt6.QtCore import QThread, pyqtSignal
 
 from ..core.lang_codes import lang_iso_tag, sub_codec_to_ext_and_args
-from ..core.paths import ToolPaths
+from ..core.tool_paths import ToolPaths
 from ..worker.process_control import terminate_process_tree
 from ..worker.tool_runner import run_tool
 from ..subtitle.extractor import extract_with_ffmpeg

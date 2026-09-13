@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Subprocess lifecycle for converter helper operations."""
+"""Converter subprocess adapter using one shared ProcessLifecycle."""
 from __future__ import annotations
 
 import subprocess
@@ -7,27 +7,19 @@ import threading
 import time
 from pathlib import Path
 
-from ..core.crash_guard import mark_activity
 from ..core.process_runner import subprocess_no_window_kwargs as _no_window_kwargs
 from .process_control import terminate_process_tree
-
+from .tool_process_lifecycle import ProcessLifecycle, close_process_streams, current_process_attr, process_group_kwargs, worker_lock
 
 def _cmd_for_log(cmd: list[str]) -> str:
     return subprocess.list2cmdline([str(part) for part in cmd])
 
+def _popen_kwargs() -> dict[str, object]:
+    return {**_no_window_kwargs(), **process_group_kwargs()}
 
-def _close_process_streams(proc) -> None:
-    if proc is None:
-        return
-    for name in ("stdout", "stderr"):
-        stream = getattr(proc, name, None)
-        if stream is None:
-            continue
-        try:
-            if not stream.closed:
-                stream.close()
-        except (OSError, ValueError):
-            pass
+def _set_last_stderr(worker, value: str) -> None:
+    target = getattr(worker, "_temp_state", worker)
+    setattr(target, "stderr" if target is not worker else "_last_stderr", value)
 
 
 class ConverterProcessExecutor:
@@ -38,88 +30,121 @@ class ConverterProcessExecutor:
         if proc is None:
             return
         worker = self.worker
-        terminate_process_tree(worker, worker._lock, log=worker.log, attr_name="_current_process", label=label)
+        lock = worker_lock(worker)
+        if lock is None:
+            try:
+                proc.terminate()
+            except OSError:
+                pass
+            return
+        terminate_process_tree(
+            worker, lock, log=worker.log, attr_name=current_process_attr(worker), label=label
+        )
 
-    def _register(self, proc, label: str, command, *, path=None) -> None:
-        worker = self.worker
-        with worker._lock:
-            worker._current_process = proc
-        mark_activity(f"{label} laeuft", file_path=path, command=command, extra={"pid": proc.pid})
-
-    def _clear(self, proc, label: str, command, rc, *, path=None) -> None:
-        _close_process_streams(proc)
-        worker = self.worker
-        with worker._lock:
-            if worker._current_process is proc:
-                worker._current_process = None
-        mark_activity(f"{label} beendet", file_path=path, command=command, extra={"returncode": rc})
+    def _lifecycle(
+        self,
+        command: list[str],
+        *,
+        label: str,
+        timeout_s: int | float | None,
+        timeout_mode: str = "absolute",
+        path=None,
+    ) -> ProcessLifecycle:
+        return ProcessLifecycle(
+            command=command, label=label, timeout_s=timeout_s, worker=self.worker,
+            log=self.worker.log, timeout_mode=timeout_mode, file_path=path,
+        )
 
     def run(self, cmd, *, timeout_s: int | None = None, label: str = "Subprozess") -> int:
-        worker = self.worker
         timeout_s = 14_400 if timeout_s is None else timeout_s
-        mark_activity(f"{label} wird gestartet", command=cmd)
+        full = [str(part) for part in cmd]
+        lifecycle = self._lifecycle(full, label=label, timeout_s=timeout_s)
+        lifecycle.mark_starting()
         proc = subprocess.Popen(
-            cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
-            text=True, encoding="utf-8", errors="replace", **_no_window_kwargs(),
+            full,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            stdin=subprocess.DEVNULL,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            **_popen_kwargs(),
         )
-        self._register(proc, label, cmd)
+        lifecycle.register(proc)
 
-        def drain_stdout():
+        def drain_stdout() -> None:
             try:
+                if proc.stdout is None:
+                    return
                 for _line in proc.stdout:
-                    worker.wait_if_paused()
+                    lifecycle.note_activity()
             except (OSError, ValueError):
                 return
 
         thread = threading.Thread(target=drain_stdout, daemon=True)
         thread.start()
-        rc = None
+        rc: int | None = None
         try:
-            rc = proc.wait(timeout=timeout_s)
-        except subprocess.TimeoutExpired:
-            worker.log(f"❌ {label}: Timeout nach {timeout_s}s – Prozess wird abgebrochen.", "error")
-            self.terminate(proc, label=label, timeout_s=timeout_s)
-            rc = 124
+            while True:
+                polled = proc.poll()
+                if polled is not None:
+                    rc = int(polled)
+                    break
+                lifecycle.handle_pause()
+                abort_rc = lifecycle.handle_abort()
+                if abort_rc is not None:
+                    rc = abort_rc
+                    break
+                timeout_rc = lifecycle.handle_timeout(display="seconds")
+                if timeout_rc is not None:
+                    rc = timeout_rc
+                    break
+                time.sleep(0.1)
         finally:
             thread.join(timeout=2)
-            self._clear(proc, label, cmd, rc)
+            lifecycle.finish(rc)
+            close_process_streams(proc)
             if thread.is_alive():
                 thread.join(timeout=0.5)
-        return rc
+        return int(rc if rc is not None else 1)
 
     def run_capture(self, cmd, *, timeout_s: int | None = None, label: str = "Tool-Prozess") -> tuple[int, str, str]:
-        worker = self.worker
         timeout_s = 14_400 if timeout_s is None else timeout_s
-        full = list(cmd)
+        full = [str(part) for part in cmd]
         if full and Path(full[0]).stem.lower() == "ffmpeg" and "-nostdin" not in full:
             full = [full[0], "-nostdin"] + full[1:]
-        mark_activity(f"{label} wird gestartet", command=full)
+        lifecycle = self._lifecycle(full, label=label, timeout_s=timeout_s)
+        lifecycle.mark_starting()
         proc = subprocess.Popen(
-            full, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL,
-            text=True, encoding="utf-8", errors="replace", **_no_window_kwargs(),
+            full,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            stdin=subprocess.DEVNULL,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            **_popen_kwargs(),
         )
-        self._register(proc, label, full)
-        start = time.monotonic()
-        rc = None
+        lifecycle.register(proc)
+        rc: int | None = None
         stdout = stderr = ""
         try:
             while True:
-                if getattr(worker, "abort_requested", False) and getattr(worker, "abort_type", "") == "sofort":
-                    self.terminate(proc, label=label, timeout_s=timeout_s)
-                    rc = 130
+                lifecycle.handle_pause()
+                abort_rc = lifecycle.handle_abort()
+                if abort_rc is not None:
+                    rc = abort_rc
                     break
-                if timeout_s is not None and time.monotonic() - start >= timeout_s:
-                    worker.log(f"❌ {label}: Timeout nach {timeout_s}s – Prozess wird abgebrochen.", "error")
-                    self.terminate(proc, label=label, timeout_s=timeout_s)
-                    rc = 124
+                timeout_rc = lifecycle.handle_timeout(display="seconds")
+                if timeout_rc is not None:
+                    rc = timeout_rc
                     break
                 try:
                     stdout, stderr = proc.communicate(timeout=0.2)
                     rc = int(proc.returncode or 0)
                     break
                 except subprocess.TimeoutExpired:
-                    if getattr(worker, "_paused", False):
-                        worker.wait_if_paused()
+                    continue
             if rc in {124, 130}:
                 try:
                     out, err = proc.communicate(timeout=3)
@@ -128,13 +153,13 @@ class ConverterProcessExecutor:
                 except subprocess.TimeoutExpired:
                     pass
         finally:
-            self._clear(proc, label, full, rc)
+            lifecycle.finish(rc)
+            close_process_streams(proc)
         return int(rc if rc is not None else 1), stdout or "", stderr or ""
-
     def run_progress(self, cmd, path, dur_ms, *, timeout_s, label: str, probe_frames, read_progress) -> int:
         worker = self.worker
         total_frames = None if dur_ms else probe_frames(path)
-        full = list(cmd)
+        full = [str(part) for part in cmd]
         if full and Path(full[0]).stem.lower() == "ffmpeg":
             progress_args: list[str] = []
             if "-nostdin" not in full:
@@ -149,21 +174,37 @@ class ConverterProcessExecutor:
             verbose = getattr(worker, "_verbose_logger", None)
             if verbose:
                 verbose.write(f"[FFMPEG FINAL CMD] {_cmd_for_log(full)}")
-        worker._last_stderr = ""
+
+        _set_last_stderr(worker, "")
         stderr_lines: list[str] = []
-        mark_activity(f"{label} wird gestartet", file_path=path, command=full)
-        proc = subprocess.Popen(
-            full, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL,
-            text=True, encoding="utf-8", errors="replace", **_no_window_kwargs(), bufsize=1,
+        lifecycle = self._lifecycle(
+            full,
+            label=label,
+            timeout_s=timeout_s,
+            timeout_mode="inactivity",
+            path=path,
         )
-        self._register(proc, label, full, path=path)
-        last_activity = [time.monotonic()]
+        lifecycle.mark_starting()
+        proc = subprocess.Popen(
+            full,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            stdin=subprocess.DEVNULL,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            bufsize=1,
+            **_popen_kwargs(),
+        )
+        lifecycle.register(proc)
 
-        def note_activity():
-            last_activity[0] = time.monotonic()
+        def note_activity() -> None:
+            lifecycle.note_activity()
 
-        def drain_stderr():
+        def drain_stderr() -> None:
             try:
+                if proc.stderr is None:
+                    return
                 for line in proc.stderr:
                     note_activity()
                     text = line.rstrip()
@@ -174,38 +215,45 @@ class ConverterProcessExecutor:
 
         stderr_thread = threading.Thread(target=drain_stderr, daemon=True)
         progress_thread = threading.Thread(
-            target=read_progress, args=(proc, path, dur_ms, total_frames, note_activity), daemon=True
+            target=read_progress,
+            args=(proc, path, dur_ms, total_frames, note_activity),
+            daemon=True,
         )
         stderr_thread.start()
         progress_thread.start()
-        rc = None
+        rc: int | None = None
         try:
             while True:
-                rc = proc.poll()
-                if rc is not None:
+                polled = proc.poll()
+                if polled is not None:
+                    rc = int(polled)
                     break
-                if getattr(worker, "_paused", False):
-                    worker.wait_if_paused()
-                    note_activity()
-                    continue
-                if worker.abort_requested and worker.abort_type == "sofort":
-                    self.terminate(proc, label=label, timeout_s=timeout_s)
-                    rc = 130
+                lifecycle.handle_pause()
+                abort_rc = lifecycle.handle_abort()
+                if abort_rc is not None:
+                    rc = abort_rc
                     break
-                if timeout_s is not None and time.monotonic() - last_activity[0] >= timeout_s:
-                    mins = max(1, int(round(timeout_s / 60)))
-                    worker.log(f"❌ {label}: Keine ffmpeg-Rückmeldung seit {mins} Min – Prozess wird abgebrochen.", "error")
-                    self.terminate(proc, label=label, timeout_s=timeout_s)
-                    rc = 124
+                minutes = max(1, int(round(float(timeout_s) / 60))) if timeout_s is not None else 0
+                timeout_rc = lifecycle.handle_timeout(
+                    display="minutes",
+                    message=(
+                        f"❌ {label}: Keine ffmpeg-Rückmeldung seit {minutes} Min – Prozess wird abgebrochen."
+                        if timeout_s is not None
+                        else None
+                    ),
+                )
+                if timeout_rc is not None:
+                    rc = timeout_rc
                     break
                 time.sleep(0.5)
         finally:
             progress_thread.join(timeout=2)
             stderr_thread.join(timeout=2)
-            worker._last_stderr = "\n".join(stderr_lines[-10:])
-            self._clear(proc, label, full, rc, path=path)
+            _set_last_stderr(worker, "\n".join(stderr_lines[-10:]))
+            lifecycle.finish(rc)
+            close_process_streams(proc)
             if progress_thread.is_alive():
                 progress_thread.join(timeout=0.5)
             if stderr_thread.is_alive():
                 stderr_thread.join(timeout=0.5)
-        return rc
+        return int(rc if rc is not None else 1)

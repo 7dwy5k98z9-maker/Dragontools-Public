@@ -8,7 +8,10 @@ from pathlib import Path
 from typing import Callable
 
 from .move_journal import MoveJournalWriteError
-from .move_transaction import PathSwapTransaction, PathTransactionRollbackError, remove_path
+from .move_transaction import (
+    PathSwapTransaction, PathTransactionRollbackError, remove_path, unique_staging_path,
+)
+from .move_copy_verification import verify_staged_file_copy
 from .move_conflicts import same_path
 
 
@@ -52,17 +55,8 @@ class MoveTransferExecutor:
         hook=None,
     ) -> bool:
         destination_installed = False
-        tmp_p = Path(str(dst_p) + ".__partial__")
+        tmp_p = unique_staging_path(dst_p)
         try:
-            if tmp_p.exists():
-                try:
-                    tmp_p.unlink()
-                except OSError as exc:
-                    self.log(f"⚠️ Konnte temporäre Datei nicht entfernen: {tmp_p.name} – {exc}", "warn")
-                    if backup_pairs:
-                        self.conflicts.rollback(src_p, backup_pairs, result)
-                    return False
-
             try:
                 moved_size = src_p.stat().st_size
                 os.link(str(src_p), str(dst_p))
@@ -100,9 +94,7 @@ class MoveTransferExecutor:
                     except OSError:
                         pass
 
-                copied_size = tmp_p.stat().st_size
-                if copied_size != source_size:
-                    raise OSError(f"Größenprüfung fehlgeschlagen: Quelle={source_size} Byte, Kopie={copied_size} Byte")
+                verify_staged_file_copy(src_p, tmp_p)
                 shutil.copystat(src_p, tmp_p)
                 os.replace(str(tmp_p), str(dst_p))
                 destination_installed = True

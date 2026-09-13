@@ -10,7 +10,7 @@ from __future__ import annotations
 from PyQt6.QtCore import QSettings
 from PyQt6.QtWidgets import QWidget
 
-from ..core.settings import APP_NAME, APP_ORG
+from ..core.settings_app import APP_NAME, APP_ORG
 from .movie_renamer_actions import MovieRenamerActionController
 from .movie_renamer_resolver import MovieRenamerResolveCoordinator
 from .movie_renamer_table_controller import (

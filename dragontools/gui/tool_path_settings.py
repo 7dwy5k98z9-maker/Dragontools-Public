@@ -5,16 +5,16 @@ Qt-Implementierung des ToolPathSettingsProvider.
 Diese Datei gehoert zur GUI-Schicht und ist die einzige Stelle im Projekt,
 die für ToolPaths Qt (QSettings) importiert.
 
-Warum hier und nicht in core/paths.py?
+Warum hier und nicht in core/tool_paths.py?
     Das core-Paket soll keine Qt-Abhängigkeit haben, damit Worker-Code,
     Tests und spaetere CLI-Nutzung ohne Qt-Eventloop funktionieren.
-    core.paths.ToolPathSettingsProvider definiert das Interface (kein Qt).
+    core.tool_paths.ToolPathSettingsProvider definiert das Interface (kein Qt).
     Diese Klasse implementiert es mit QSettings.
 
 Verwendung (einmalig beim App-Start in main_window.py):
 
     from dragontools.gui.tool_path_settings import QtToolPathSettingsProvider
-    from dragontools.core.paths import get_tool_paths
+    from dragontools.core.tool_paths import get_tool_paths
 
     get_tool_paths(provider=QtToolPathSettingsProvider())
 
@@ -29,8 +29,9 @@ from pathlib import Path
 
 from PyQt6.QtCore import QSettings
 
-from ..core.paths import ToolPathSettingsProvider
-from ..core.settings import APP_ORG, APP_NAME, TOOL_KEYS
+from ..core.tool_paths import ToolPathSettingsProvider
+from ..core.settings_app import APP_ORG, APP_NAME
+from ..core.settings_storage import TOOL_KEYS
 
 
 class QtToolPathSettingsProvider(ToolPathSettingsProvider):

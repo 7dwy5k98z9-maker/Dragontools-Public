@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Any
 
-from .paths import VIDEO_EXTENSIONS
+from .path_syntax import VIDEO_EXTENSIONS
+
+_LOG = logging.getLogger(__name__)
 
 _VIDEO_CODECS = {
     "h264", "avc", "avc1", "hevc", "h265", "h.265", "hev1", "hvc1", "av1", "av01",
@@ -67,11 +70,18 @@ def _infer_item_type(type_text: str, path: str) -> str:
     if "movie" in text or "film" in text:
         return "movie"
     if suffix in VIDEO_EXTENSIONS:
-        try:
-            from ..rules.move_rules import parse_series_match_details
+        from ..rules.move_rules import parse_series_match_details
 
+        try:
             return "episode" if parse_series_match_details(path) else "movie"
         except Exception:
+            # Classification is a fallback path; keep the file usable, but do
+            # not hide parser/programming failures from diagnostics.
+            _LOG.warning(
+                "Dateityp konnte fuer %s nicht aus SxxExx abgeleitet werden.",
+                path,
+                exc_info=True,
+            )
             return "video"
     return "folder"
 
@@ -79,7 +89,7 @@ def _infer_item_type(type_text: str, path: str) -> str:
 def _safe_parent(path: str) -> str:
     try:
         return str(Path(path).parent)
-    except Exception:
+    except (TypeError, ValueError, OSError):
         return ""
 
 

@@ -1,25 +1,29 @@
 from __future__ import annotations
 
 import sqlite3
-import re
 from contextlib import closing
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
 from .media_library_db import _connect, initialize_database_once
-from .media_library_types import PathMapping, default_media_library_db_path, describe_series_path_resolution
+from .media_library_types import PathMapping, default_media_library_db_path
 from .media_library_utils import _normalize_title
 from .media_library_series_lookup import _series_lookup_rows
-from .paths import join_user_path, normalize_user_path, path_compare_key, path_is_same_or_child, user_path_name, user_path_parent
+from .media_library_series_resolution import (
+    _ambiguous_series_years,
+    _normalized_search_bases,
+    _resolved_series_result,
+    _series_candidate_year,
+    _series_root_from_db_row,
+    _unusable_series_result,
+    _year_suffix_from_text,
+)
+from .path_syntax import join_user_path, normalize_user_path, path_compare_key, path_is_same_or_child, user_path_name, user_path_parent
 from .media_library_path_mappings import (
-    _area_from_root, _area_key, _area_label, _join_mapped_path, _matching_current_mappings,
+    _area_from_root, _area_key, _join_mapped_path, _matching_current_mappings,
     _mapping_candidates_from_search_bases, _normalize_slashes, _prefix_rest, _unique_mappings,
     apply_path_mappings, get_path_mappings, load_path_mappings,
 )
-
-def _year_suffix_from_text(value: str | None) -> int | None:
-    match = re.search(r"\((19\d{2}|20\d{2})\)\s*$", str(value or "").strip())
-    return int(match.group(1)) if match else None
 
 def _series_root_candidates_for_current_paths(
     root: str,
@@ -91,6 +95,7 @@ def _series_root_candidates_for_current_paths(
 
     return result
 
+
 def find_series_root(
     db_path: str | Path,
     series_name: str,
@@ -112,13 +117,7 @@ def find_series_root(
     if not target_norm:
         return None
     target_year = _year_suffix_from_text(series_name) or (int(year) if year else None)
-
-    bases: list[tuple[str, str]] = []
-    for entry in search_bases or []:
-        if isinstance(entry, tuple):
-            bases.append((str(entry[0]), str(entry[1] or "")))
-        else:
-            bases.append((str(entry), ""))
+    bases = _normalized_search_bases(search_bases)
 
     if connection is None:
         with closing(_connect(db)) as conn:
@@ -129,29 +128,11 @@ def find_series_root(
     search_base_mappings = _mapping_candidates_from_search_bases(bases)
     current_mappings = _unique_mappings([*(mappings or []), *search_base_mappings])
     stored_mappings_list = _unique_mappings(stored_mappings or [])
-    rejected: dict[str, str] = {}
 
-    # Without a requested year, two actual series roots with different series
-    # years are ambiguous. Do not silently pick the oldest row; let the caller
-    # resolve the year online and retry the same indexed DB lookup. Episode/season
-    # production years are deliberately ignored because they are not series years.
+    # Ohne gewünschtes Serienjahr sind mehrere echte Serienjahre mehrdeutig.
+    # Staffel-/Folgenjahre werden durch _series_candidate_year bewusst ignoriert.
     if target_year is None:
-        series_years: set[int] = set()
-        for row in rows:
-            name = str(row["series_title"] or row["title"] or "")
-            if _normalize_title(name) != target_norm:
-                continue
-            root = _series_root_from_db_row(row)
-            if not root:
-                continue
-            candidate_year = _year_suffix_from_text(user_path_name(root))
-            if candidate_year is None and str(row["item_type"] or "").casefold() in {"series", "folder"}:
-                try:
-                    candidate_year = int(row["year"]) if row["year"] else None
-                except (TypeError, ValueError):
-                    candidate_year = None
-            if candidate_year:
-                series_years.add(candidate_year)
+        series_years = _ambiguous_series_years(rows, target_norm)
         if len(series_years) > 1:
             return {
                 "series_dir": "",
@@ -160,31 +141,7 @@ def find_series_root(
                 "suggested_series_name": series_name,
             }
 
-    def remember_rejected(root: str, mapped_root: str, reason: str, matched_base: tuple[str, str] | None) -> None:
-        nonlocal rejected
-        if rejected and not matched_base:
-            return
-        area = _area_from_root(root, [*stored_mappings_list, *current_mappings])
-        base_type = matched_base[1] if matched_base else _area_label(area)
-        prefix = "Mediathek-Treffer ist aktuell nicht erreichbar"
-        if base_type:
-            prefix += f" (Bereich {base_type})"
-        message = f"{prefix}: {mapped_root}"
-        db_path = normalize_user_path(root)
-        if db_path and path_compare_key(db_path) != path_compare_key(mapped_root):
-            message += f" | DB-Pfad: {db_path}"
-        if reason:
-            message += f" | Grund: {reason}"
-        rejected = {
-            "series_dir": "",
-            "base": matched_base[0] if matched_base else "",
-            "base_type": base_type,
-            "source": "database",
-            "unusable_reason": message,
-            "suggested_series_name": user_path_name(root) or series_name,
-            "database_path": db_path,
-        }
-
+    rejected: dict[str, str] = {}
     for row in rows:
         name = str(row["series_title"] or row["title"] or "")
         if _normalize_title(name) != target_norm:
@@ -192,16 +149,10 @@ def find_series_root(
         root = _series_root_from_db_row(row)
         if not root:
             continue
-        row_year = row["year"] if "year" in row.keys() else None
-        try:
-            row_year = int(row_year) if row_year else None
-        except (TypeError, ValueError):
-            row_year = None
-        candidate_year = _year_suffix_from_text(user_path_name(root))
-        if candidate_year is None and str(row["item_type"] or "").casefold() in {"series", "folder"}:
-            candidate_year = row_year
+        candidate_year = _series_candidate_year(row, root)
         if target_year and candidate_year and candidate_year != target_year:
             continue
+
         for mapped_root, note in _series_root_candidates_for_current_paths(
             root,
             current_mappings=current_mappings,
@@ -210,53 +161,45 @@ def find_series_root(
         ):
             matched_base = _match_base(mapped_root, bases)
             if bases and not matched_base:
-                remember_rejected(
-                    root,
-                    mapped_root,
-                    "liegt nicht unter den aktuell eingestellten Speicherpfaden",
-                    matched_base,
-                )
+                if not rejected:
+                    rejected = _unusable_series_result(
+                        root=root,
+                        mapped_root=mapped_root,
+                        reason="liegt nicht unter den aktuell eingestellten Speicherpfaden",
+                        matched_base=matched_base,
+                        series_name=series_name,
+                        stored_mappings=stored_mappings_list,
+                        current_mappings=current_mappings,
+                    )
                 continue
             if require_existing:
                 exists = dir_exists(mapped_root) if dir_exists else Path(mapped_root).is_dir()
                 if not exists:
-                    remember_rejected(root, mapped_root, "Ordner existiert nicht oder ist nicht erreichbar", matched_base)
+                    # Ein Treffer unter einer konfigurierten Basis ist aussagekräftiger
+                    # als ein vorheriger generischer/unmapped Treffer.
+                    if matched_base or not rejected:
+                        rejected = _unusable_series_result(
+                            root=root,
+                            mapped_root=mapped_root,
+                            reason="Ordner existiert nicht oder ist nicht erreichbar",
+                            matched_base=matched_base,
+                            series_name=series_name,
+                            stored_mappings=stored_mappings_list,
+                            current_mappings=current_mappings,
+                        )
                     continue
-            result = {
-                "series_dir": mapped_root,
-                "base": matched_base[0] if matched_base else user_path_parent(mapped_root),
-                "base_type": matched_base[1] if matched_base else "",
-                "source": "database",
-            }
-            result["mapping_notice"] = describe_series_path_resolution(
-                note,
-                result["base_type"],
+            return _resolved_series_result(
+                root=root,
+                mapped_root=mapped_root,
+                note=note,
+                matched_base=matched_base,
+                series_name=series_name,
             )
-            if note:
-                result["mapping_note"] = note
-                result["database_path"] = normalize_user_path(root)
-            root_name = user_path_name(root)
-            if root_name and _normalize_title(root_name) != _normalize_title(series_name):
-                result["suggested_series_name"] = root_name
-            return result
+
     if include_unusable and rejected:
         return rejected
     return None
 
-
-def _series_root_from_db_row(row: sqlite3.Row) -> str:
-    path = str(row["path"] or row["parent_path"] or "")
-    item_type = str(row["item_type"] or "").casefold()
-    if item_type == "series":
-        return path
-    if item_type == "season":
-        return user_path_parent(path)
-    if item_type == "episode":
-        parent = user_path_parent(path)
-        if user_path_name(parent).casefold().startswith(("staffel", "season", "saison", "special")):
-            return user_path_parent(parent)
-        return parent
-    return path
 
 
 def _match_base(path: str, bases: list[tuple[str, str]]) -> tuple[str, str] | None:
@@ -274,12 +217,7 @@ def find_series_dir_from_settings(
     year: int | None = None,
     dir_exists: Callable[[str], bool] | None = None,
 ) -> dict[str, str] | None:
-    from .settings import (
-        SET_KEY_MEDIA_LIBRARY_DB_PATH,
-        SET_KEY_MEDIA_LIBRARY_ENABLED,
-        SET_KEY_MEDIA_LIBRARY_PATH_MAPPINGS,
-        SET_KEY_MEDIA_LIBRARY_PREFLIGHT_ENABLED,
-    )
+    from .settings_media_library import SET_KEY_MEDIA_LIBRARY_DB_PATH, SET_KEY_MEDIA_LIBRARY_ENABLED, SET_KEY_MEDIA_LIBRARY_PATH_MAPPINGS, SET_KEY_MEDIA_LIBRARY_PREFLIGHT_ENABLED
 
     if not settings.value(SET_KEY_MEDIA_LIBRARY_ENABLED, False, type=bool):
         return None

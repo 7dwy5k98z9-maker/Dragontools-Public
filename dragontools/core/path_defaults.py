@@ -81,20 +81,7 @@ def default_target_path_for_settings_key(
 
     Bewusst als String, weil die GUI/QSettings-Schicht ebenfalls Strings nutzt.
     """
-    from .settings import (
-        SET_KEY_PATH_ANIME,
-        SET_KEY_PATH_AV1_ANIME,
-        SET_KEY_PATH_AV1_FILME,
-        SET_KEY_PATH_AV1_TV,
-        SET_KEY_PATH_FILME,
-        SET_KEY_PATH_H264_ANIME,
-        SET_KEY_PATH_H264_FILME,
-        SET_KEY_PATH_H264_TV,
-        SET_KEY_PATH_H265_ANIME,
-        SET_KEY_PATH_H265_FILME,
-        SET_KEY_PATH_H265_TV,
-        SET_KEY_PATH_TV,
-    )
+    from .settings_storage import SET_KEY_PATH_ANIME, SET_KEY_PATH_AV1_ANIME, SET_KEY_PATH_AV1_FILME, SET_KEY_PATH_AV1_TV, SET_KEY_PATH_FILME, SET_KEY_PATH_H264_ANIME, SET_KEY_PATH_H264_FILME, SET_KEY_PATH_H264_TV, SET_KEY_PATH_H265_ANIME, SET_KEY_PATH_H265_FILME, SET_KEY_PATH_H265_TV, SET_KEY_PATH_TV
 
     key_map = {
         SET_KEY_PATH_H264_TV: ("h264", "tv"),
@@ -123,3 +110,16 @@ def ensure_default_storage_dirs(root: str | os.PathLike[str] | None = None) -> d
         }
         for codec in ("h264", "h265", "av1")
     }
+
+__all__ = [
+    "DEFAULT_DOCUMENTS_DIRNAME",
+    "DEFAULT_OUTPUT_DIRNAME",
+    "DEFAULT_CODEC_DIRS",
+    "DEFAULT_MEDIA_TYPE_DIRS",
+    "app_documents_dir",
+    "default_output_base",
+    "default_target_path",
+    "default_target_paths",
+    "default_target_path_for_settings_key",
+    "ensure_default_storage_dirs",
+]

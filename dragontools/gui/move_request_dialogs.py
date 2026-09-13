@@ -183,7 +183,8 @@ class MoveRequestDialogHandler:
 
     def handle_shutdown_countdown(self, rid: str, payload: dict) -> None:
             try:
-                from ..core.settings import APP_ORG, APP_NAME, SET_KEY_SHUTDOWN_COUNTDOWN
+                from ..core.settings_app import APP_ORG, APP_NAME
+                from ..core.settings_storage import SET_KEY_SHUTDOWN_COUNTDOWN
                 _s = QSettings(APP_ORG, APP_NAME)
                 countdown_secs = int(_s.value(SET_KEY_SHUTDOWN_COUNTDOWN, 30, type=int))
                 countdown_secs = max(5, countdown_secs)

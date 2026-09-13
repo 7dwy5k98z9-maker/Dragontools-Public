@@ -9,8 +9,8 @@ from pathlib import Path
 from typing import Any
 
 from ..rules.move_rules import parse_series_match_details
-from .paths import user_path_name, user_path_stem
-from .settings import APP_VERSION
+from .path_syntax import user_path_name, user_path_stem
+from .version import APP_VERSION
 
 
 REPORT_DIR_NAME = "PreflightReports"

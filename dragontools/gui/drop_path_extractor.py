@@ -14,12 +14,7 @@ from .drop_path_windows import (
     resolve_shell_idlist_to_paths as _resolve_shell_idlist_to_paths_impl,
 )
 
-from ..core.paths import (
-    display_name,
-    normalize_user_path,
-    strip_long_path_prefix,
-    to_long_path,
-)
+from ..core.path_syntax import display_name, normalize_user_path, strip_long_path_prefix, to_long_path
 
 DND_DEBUG = False
 _WARNED_DROP_MESSAGES: set[tuple[int, str]] = set()

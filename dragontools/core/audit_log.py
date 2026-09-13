@@ -5,12 +5,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from .settings import (
-    APP_NAME,
-    APP_ORG,
-    LOG_ROOT_KEYS,
-    SENSITIVE_SETTINGS_KEYS,
-)
+from .settings_app import APP_NAME, APP_ORG
+from .settings_storage import LOG_ROOT_KEYS
+from .settings_metadata import SENSITIVE_SETTINGS_KEYS
 
 
 def settings_change_log_dir(settings=None, *, log_root: str | Path | None = None) -> Path:

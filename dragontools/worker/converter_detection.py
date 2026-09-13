@@ -17,6 +17,12 @@ from pathlib import Path
 from ..core.process_runner import subprocess_no_window_kwargs as _no_window_kwargs
 
 
+def _tools(worker):
+    services = getattr(worker, "_services", None)
+    tools = getattr(services, "tools", None) if services is not None else None
+    return tools if tools is not None else getattr(worker, "tools")
+
+
 def _safe_int(value, default: int) -> int:
     try:
         return int(float(value))
@@ -124,7 +130,7 @@ class ConverterDetectionHelper:
         try:
             for offset in offsets:
                 cmd = [
-                    worker.tools.ffmpeg, "-hide_banner", "-ss", str(offset), "-i", path,
+                    _tools(worker).ffmpeg, "-hide_banner", "-ss", str(offset), "-i", path,
                     "-t", str(probe_duration_s), "-vf", "cropdetect=limit=0.08:round=2:reset=1",
                     "-an", "-sn", "-f", "null", "-",
                 ]
@@ -196,7 +202,7 @@ class ConverterDetectionHelper:
         for offset in offsets:
             try:
                 cmd = [
-                    worker.tools.ffmpeg, "-hide_banner", "-ss", str(offset), "-i", path,
+                    _tools(worker).ffmpeg, "-hide_banner", "-ss", str(offset), "-i", path,
                     "-t", str(probe_duration_s), "-vf", "cropdetect=limit=0.08:round=2:reset=1",
                     "-an", "-sn", "-f", "null", "-",
                 ]

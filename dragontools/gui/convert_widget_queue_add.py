@@ -6,7 +6,7 @@ from .drop_path_extractor import (
     _debug_mime_data, _extract_dropped_local_path, _extract_paths_from_mime_data, _iter_video_files_in_folder,
     _log_drop_rejection, _log_long_path_dragdrop_warning, _warn_non_video_file,
 )
-from ..core.paths import display_name, is_video_file, normalize_user_path, strip_long_path_prefix, to_long_path, VIDEO_EXTENSIONS
+from ..core.path_syntax import display_name, is_video_file, normalize_user_path, strip_long_path_prefix, to_long_path, VIDEO_EXTENSIONS
 
 VIDEO_FILE_DIALOG_PATTERNS = " ".join(f"*{ext}" for ext in sorted(VIDEO_EXTENSIONS))
 

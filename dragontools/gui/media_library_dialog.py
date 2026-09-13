@@ -8,7 +8,8 @@ from PyQt6.QtCore import QSettings
 from PyQt6.QtWidgets import QDialog, QFileDialog, QMessageBox, QTableWidget, QWidget
 
 from ..core.media_library_types import PathMapping
-from ..core.settings import APP_NAME, APP_ORG, APP_VERSION
+from ..core.settings_app import APP_NAME, APP_ORG
+from ..core.version import APP_VERSION
 from .media_library_dialog_presenter import MediaLibraryDialogPresenter
 from .media_library_dialog_service import MediaLibraryDialogService, MediaLibraryDialogState
 from .media_library_dialog_view import (

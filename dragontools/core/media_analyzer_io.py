@@ -5,7 +5,7 @@ import json
 import traceback
 from pathlib import Path
 
-from .paths import ToolPaths
+from .tool_paths import ToolPaths
 from .process_runner import run_analysis_tool as _run_tool
 from .type_utils import _safe_int
 
@@ -82,7 +82,7 @@ def _mi_bitrate(track: dict) -> int | None:
             continue
         try:
             return int(float(str(value).replace(" ", "")))
-        except Exception:
+        except (TypeError, ValueError):
             continue
     return None
 

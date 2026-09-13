@@ -78,7 +78,7 @@ def _can_write_probe(directory: Path) -> tuple[bool, str | None]:
     except Exception as exc:
         try:
             probe.unlink(missing_ok=True)
-        except Exception:
+        except OSError:
             pass
         return False, str(exc)
 
@@ -89,7 +89,7 @@ def _disk_free(directory: Path) -> int | None:
         return None
     try:
         return shutil.disk_usage(base).free
-    except Exception:
+    except OSError:
         return None
 
 

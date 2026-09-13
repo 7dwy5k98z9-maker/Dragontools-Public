@@ -7,7 +7,8 @@ from pathlib import Path
 from PyQt6.QtCore import QSettings
 from PyQt6.QtWidgets import QMessageBox
 
-from ..core.settings import APP_NAME, APP_ORG, SET_KEY_MOVE_CONFLICT
+from ..core.settings_app import APP_NAME, APP_ORG
+from ..core.settings_storage import SET_KEY_MOVE_CONFLICT
 from .move_lifecycle_helpers import (
     input_paths_for_output,
     retire_move_thread,

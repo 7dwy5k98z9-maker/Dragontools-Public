@@ -5,7 +5,8 @@ import traceback
 
 from PyQt6.QtCore import QSettings
 
-from ..core.settings import APP_NAME, APP_ORG, SET_KEY_MOVE_CONFLICT
+from ..core.settings_app import APP_NAME, APP_ORG
+from ..core.settings_storage import SET_KEY_MOVE_CONFLICT
 from .move_lifecycle_helpers import format_move_eta, merge_restored_target_paths, retire_move_thread
 
 

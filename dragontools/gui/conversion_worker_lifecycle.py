@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Callable
 
-from ..core.paths import path_compare_key
+from ..core.path_syntax import path_compare_key
 
 
 class ConversionWorkerLifecycle:
@@ -60,12 +60,13 @@ class ConversionWorkerLifecycle:
         thread = self._state.thread
         if not thread:
             return
-        if not (hasattr(thread, "pause") and hasattr(thread, "resume") and hasattr(thread, "_paused")):
+        if not (hasattr(thread, "pause") and hasattr(thread, "resume")):
             self._log("⏸ Pause wird von diesem Worker nicht unterstützt.", "warn")
             self._ui.pause_btn.setEnabled(False)
             self._refresh_queue()
             return
-        if thread._paused:
+        paused = bool(getattr(thread, "is_paused", getattr(thread, "_paused", False)))
+        if paused:
             thread.resume()
             self._ui.pause_btn.setText("⏸ Pause")
         else:

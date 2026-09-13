@@ -15,7 +15,7 @@ from PyQt6.QtWidgets import (
     QProgressBar, QTextEdit, QGroupBox,
 )
 
-from ..core.paths import get_tool_paths
+from ..core.tool_paths import get_tool_paths
 from .subtitle_widget_workers import _SubWorker, _ExtractWorker, _InjectWorker, _ConvertWorker
 from .subtitle_widget_files import _FileDropList, _parse_exts
 

@@ -15,7 +15,7 @@ from .online_metadata_common import (
     OnlineMetadataAuthError,
     OnlineMetadataError,
 )
-from .settings import APP_VERSION
+from .version import APP_VERSION
 
 class TvdbTransportMixin:
     def enable_fresh_session(self) -> None:

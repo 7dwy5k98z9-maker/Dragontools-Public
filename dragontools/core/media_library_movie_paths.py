@@ -7,13 +7,18 @@ from typing import Any, Callable, Iterable
 
 from .media_library_db import _connect, initialize_database_once
 from .german_title_variants import german_umlaut_search_variants
-from .media_library_series_paths import _match_base, _series_root_candidates_for_current_paths, _year_suffix_from_text
-from .media_library_types import PathMapping, default_media_library_db_path, describe_series_path_resolution
+from .media_library_series_paths import _match_base, _series_root_candidates_for_current_paths
+from .media_library_types import PathMapping, default_media_library_db_path
 from .media_library_utils import _normalize_title
-from .paths import normalize_user_path, path_compare_key, user_path_name, user_path_parent
+from .media_library_movie_resolution import (
+    movie_candidate_year,
+    movie_row_matches,
+    resolved_movie_result,
+    unusable_movie_result,
+)
+from .media_library_series_resolution import _normalized_search_bases, _year_suffix_from_text
+from .path_syntax import user_path_parent
 from .media_library_path_mappings import (
-    _area_from_root,
-    _area_label,
     _mapping_candidates_from_search_bases,
     _unique_mappings,
     get_path_mappings,
@@ -97,65 +102,23 @@ def find_movie_root(
     if not target_norms:
         return None
     target_year = _year_suffix_from_text(movie_title) or (int(year) if year else None)
-
-    bases: list[tuple[str, str]] = []
-    for entry in search_bases or []:
-        if isinstance(entry, tuple):
-            bases.append((str(entry[0]), str(entry[1] or "")))
-        else:
-            bases.append((str(entry), ""))
+    bases = _normalized_search_bases(search_bases)
 
     with closing(_connect(db)) as conn:
         rows = _movie_lookup_rows(conn, target_norms=target_norms, movie_title=movie_title)
 
-    search_base_mappings = _mapping_candidates_from_search_bases(bases)
-    current_mappings = _unique_mappings([*(mappings or []), *search_base_mappings])
+    current_mappings = _unique_mappings([
+        *(mappings or []),
+        *_mapping_candidates_from_search_bases(bases),
+    ])
     stored_mappings_list = _unique_mappings(stored_mappings or [])
     rejected: dict[str, str] = {}
 
-    def remember_rejected(root: str, mapped_root: str, reason: str, matched_base: tuple[str, str] | None) -> None:
-        nonlocal rejected
-        if rejected and not matched_base:
-            return
-        area = _area_from_root(root, [*stored_mappings_list, *current_mappings])
-        base_type = matched_base[1] if matched_base else _area_label(area)
-        prefix = "Mediathek-Filmtreffer ist aktuell nicht erreichbar"
-        if base_type:
-            prefix += f" (Bereich {base_type})"
-        message = f"{prefix}: {mapped_root}"
-        db_path_text = normalize_user_path(root)
-        if db_path_text and path_compare_key(db_path_text) != path_compare_key(mapped_root):
-            message += f" | DB-Pfad: {db_path_text}"
-        if reason:
-            message += f" | Grund: {reason}"
-        rejected = {
-            "movie_dir": "",
-            "base": matched_base[0] if matched_base else "",
-            "base_type": base_type,
-            "source": "database",
-            "unusable_reason": message,
-            "suggested_movie_name": user_path_name(root) or movie_title,
-            "database_path": db_path_text,
-        }
-
     for row in rows:
         root = _movie_dir_from_db_row(row)
-        if not root:
+        if not root or not movie_row_matches(row, root, target_norms):
             continue
-        names = (
-            str(row["title"] or ""),
-            str(row["original_title"] or ""),
-            str(row["filename"] or ""),
-            user_path_name(root),
-        )
-        if not set(target_norms).intersection({_normalize_title(name) for name in names if name}):
-            continue
-        row_year = row["year"] if "year" in row.keys() else None
-        try:
-            row_year = int(row_year) if row_year else None
-        except (TypeError, ValueError):
-            row_year = None
-        candidate_year = _year_suffix_from_text(user_path_name(root)) or row_year
+        candidate_year = movie_candidate_year(row, root)
         if target_year and candidate_year and candidate_year != target_year:
             continue
         for mapped_root, note in _series_root_candidates_for_current_paths(
@@ -165,33 +128,32 @@ def find_movie_root(
             search_bases=bases,
         ):
             matched_base = _match_base(mapped_root, bases)
+            rejection_reason = ""
             if bases and not matched_base:
-                remember_rejected(
-                    root,
-                    mapped_root,
-                    "liegt nicht unter den aktuell eingestellten Speicherpfaden",
-                    matched_base,
-                )
-                continue
-            if require_existing:
+                rejection_reason = "liegt nicht unter den aktuell eingestellten Speicherpfaden"
+            elif require_existing:
                 exists = dir_exists(mapped_root) if dir_exists else Path(mapped_root).is_dir()
                 if not exists:
-                    remember_rejected(root, mapped_root, "Ordner existiert nicht oder ist nicht erreichbar", matched_base)
-                    continue
-            result = {
-                "movie_dir": mapped_root,
-                "base": matched_base[0] if matched_base else user_path_parent(mapped_root),
-                "base_type": matched_base[1] if matched_base else "",
-                "source": "database",
-            }
-            result["mapping_notice"] = describe_series_path_resolution(note, result["base_type"])
-            if note:
-                result["mapping_note"] = note
-                result["database_path"] = normalize_user_path(root)
-            root_name = user_path_name(root)
-            if root_name:
-                result["suggested_movie_name"] = root_name
-            return result
+                    rejection_reason = "Ordner existiert nicht oder ist nicht erreichbar"
+            if rejection_reason:
+                if matched_base or not rejected:
+                    rejected = unusable_movie_result(
+                        root=root,
+                        mapped_root=mapped_root,
+                        reason=rejection_reason,
+                        matched_base=matched_base,
+                        movie_title=movie_title,
+                        stored_mappings=stored_mappings_list,
+                        current_mappings=current_mappings,
+                    )
+                continue
+            return resolved_movie_result(
+                root=root,
+                mapped_root=mapped_root,
+                note=note,
+                matched_base=matched_base,
+            )
+
     if include_unusable and rejected:
         return rejected
     return None
@@ -205,12 +167,7 @@ def find_movie_dir_from_settings(
     year: int | None = None,
     dir_exists: Callable[[str], bool] | None = None,
 ) -> dict[str, str] | None:
-    from .settings import (
-        SET_KEY_MEDIA_LIBRARY_DB_PATH,
-        SET_KEY_MEDIA_LIBRARY_ENABLED,
-        SET_KEY_MEDIA_LIBRARY_PATH_MAPPINGS,
-        SET_KEY_MEDIA_LIBRARY_PREFLIGHT_ENABLED,
-    )
+    from .settings_media_library import SET_KEY_MEDIA_LIBRARY_DB_PATH, SET_KEY_MEDIA_LIBRARY_ENABLED, SET_KEY_MEDIA_LIBRARY_PATH_MAPPINGS, SET_KEY_MEDIA_LIBRARY_PREFLIGHT_ENABLED
 
     if not settings.value(SET_KEY_MEDIA_LIBRARY_ENABLED, False, type=bool):
         return None

@@ -31,7 +31,10 @@ def read_progress(worker, proc, path, dur_ms: int | None, total_frames: int | No
         worker.wait_if_paused()
         if proc.poll() is not None:
             break
-        if worker.abort_requested and worker.abort_type == "sofort":
+        control = getattr(worker, "_control_state", None)
+        abort_requested = control.abort_requested if control is not None else getattr(worker, "abort_requested", False)
+        abort_type = control.abort_type if control is not None else getattr(worker, "abort_type", None)
+        if abort_requested and abort_type == "sofort":
             break
         if on_activity:
             on_activity()

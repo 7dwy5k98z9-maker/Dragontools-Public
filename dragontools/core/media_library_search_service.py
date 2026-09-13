@@ -15,7 +15,8 @@ from .media_library_query import (
 from .media_library_scope import _area_for_path
 from .media_library_search_enrichment import enrich_search_rows_with_streams
 from .media_library_utils import _int_or_none
-from .paths import path_compare_key
+from .move_conflicts import episode_identity_for_path
+from .path_syntax import path_compare_key
 
 def _search_duplicate_active_episode_rows(
     db_path: str | Path,
@@ -35,14 +36,9 @@ def _search_duplicate_active_episode_rows(
         scope=scope,
         media_type="episodes",
     )
-    try:
-        from .move_conflicts import episode_identity_for_path
-    except Exception:
-        episode_identity_for_path = None
-
     groups: dict[tuple[str, int, tuple[int, ...]], list[dict[str, Any]]] = defaultdict(list)
     for row in rows:
-        identity = episode_identity_for_path(row.get("path") or row.get("filename") or "") if episode_identity_for_path else None
+        identity = episode_identity_for_path(row.get("path") or row.get("filename") or "")
         if identity is not None:
             season = identity.season
             episodes = identity.episodes

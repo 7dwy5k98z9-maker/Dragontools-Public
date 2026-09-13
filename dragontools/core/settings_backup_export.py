@@ -6,7 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from .settings import APP_VERSION
+from .version import APP_VERSION
 from .settings_backup_common import (
     BACKUP_FORMAT,
     BACKUP_FORMAT_VERSION,

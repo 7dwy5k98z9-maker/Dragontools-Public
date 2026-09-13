@@ -7,8 +7,8 @@ from PyQt6.QtWidgets import (
     QVBoxLayout, QWidget,
 )
 
-from ..core.paths import app_documents_dir
-from ..core.settings import APP_VERSION
+from ..core.path_defaults import app_documents_dir
+from ..core.version import APP_VERSION
 from ..worker.quality_test_thread import QualityTestThread
 from .file_drop_widgets import FileDropTable
 from .info_button import InfoButton

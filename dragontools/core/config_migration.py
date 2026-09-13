@@ -38,7 +38,7 @@ def schema_version(data: Any) -> int:
     value = data.get(SCHEMA_VERSION_KEY)
     try:
         return max(0, int(value))
-    except Exception:
+    except (TypeError, ValueError):
         return 0
 
 

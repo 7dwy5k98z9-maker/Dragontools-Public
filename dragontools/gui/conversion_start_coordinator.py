@@ -10,7 +10,7 @@ from PyQt6.QtWidgets import QMessageBox
 
 from ..core.disk_space import check_conversion_disk_space, format_disk_space_issues
 from ..core.parallel_settings import parallel_jobs_for_encoder
-from ..core.settings import APP_NAME, APP_ORG
+from ..core.settings_app import APP_NAME, APP_ORG
 
 
 class ConversionStartCoordinator:

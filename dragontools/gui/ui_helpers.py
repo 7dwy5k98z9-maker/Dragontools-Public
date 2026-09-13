@@ -10,7 +10,7 @@ from __future__ import annotations
 from PyQt6.QtCore import QSettings, Qt
 from PyQt6.QtWidgets import QListWidget, QWidget
 
-from ..core.settings import APP_NAME, APP_ORG
+from ..core.settings_app import APP_NAME, APP_ORG
 
 
 def set_file_list_item_text(file_list: QListWidget, path: str, text: str) -> None:

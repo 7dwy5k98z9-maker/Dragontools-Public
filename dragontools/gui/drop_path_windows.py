@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ..core.paths import normalize_user_path
+from ..core.path_syntax import normalize_user_path
 
 
 def extract_itemidlist_bytes(data: bytes, offset: int) -> bytes:

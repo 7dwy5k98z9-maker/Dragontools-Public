@@ -4,7 +4,8 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 
-from .settings import LOG_ENABLED_KEYS, LOG_ROOT_KEYS, app_qsettings, settings_bool, settings_text
+from .settings_storage import LOG_ENABLED_KEYS, LOG_ROOT_KEYS
+from .settings_access import app_qsettings, settings_bool, settings_text
 
 _DE_MONTHS: dict[int, str] = {
     1: "Januar", 2: "Februar", 3: "März", 4: "April", 5: "Mai", 6: "Juni",

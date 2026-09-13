@@ -5,7 +5,7 @@ import threading
 from concurrent.futures import Future, ThreadPoolExecutor, wait
 from pathlib import Path
 
-from ..core.settings import DEFAULT_TRICKPLAY_MAX_JOBS
+from ..core.settings_postprocess import DEFAULT_TRICKPLAY_MAX_JOBS
 from .log_dispatch import dispatch_log
 from .postprocess_config import config_from_settings
 from .postprocess_metadata import PostProcessMetadataSession

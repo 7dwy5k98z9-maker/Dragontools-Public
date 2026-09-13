@@ -5,7 +5,7 @@ from typing import Any
 from .encoder_profile_override import effective_encoder_settings
 from .media_analyzer import analyze_media
 from .models import normalize_override_dict
-from .paths import ToolPaths, get_tool_paths
+from .tool_paths import ToolPaths, get_tool_paths
 from .rules_preview_audio import build_audio_preview as _build_audio_preview
 from .rules_preview_common import enum_value as _value, lang as _lang
 from .rules_preview_subtitles import (

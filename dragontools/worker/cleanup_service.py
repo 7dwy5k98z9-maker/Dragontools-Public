@@ -124,7 +124,7 @@ def cleanup_empty_overwrite_dirs(
         base_dir = Path(raw_base)
         try:
             base_key = base_dir.resolve()
-        except Exception:
+        except (OSError, RuntimeError):
             base_key = base_dir
         if base_key in seen:
             continue
@@ -144,13 +144,8 @@ def cleanup_empty_overwrite_dirs(
             try:
                 if any(tmp_dir.iterdir()):
                     continue
-            except Exception:
+            except OSError:
                 pass
-            log(
-                f"📝 Temporärer Overwrite-Ordner konnte nicht gelöscht werden: {exc}",
-                "warn",
-            )
-        except Exception as exc:
             log(
                 f"📝 Temporärer Overwrite-Ordner konnte nicht gelöscht werden: {exc}",
                 "warn",

@@ -18,8 +18,8 @@ from PyQt6.QtWidgets import (
 )
 
 from ..core.changelog import ChangelogDocument, ChangelogSection, load_changelog, paginate_blocks
-from ..core.paths import EXE_DIR, BASE
-from ..core.settings import APP_VERSION
+from ..core.resource_paths import EXE_DIR, BASE
+from ..core.version import APP_VERSION
 from .ui_helpers import install_persistent_window_geometry
 
 

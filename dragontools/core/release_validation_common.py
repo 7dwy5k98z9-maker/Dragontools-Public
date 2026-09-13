@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .config_migration import current_schema_version
-from .settings import APP_VERSION
+from .version import APP_VERSION
 
 @dataclass(frozen=True)
 class ReleaseCheck:

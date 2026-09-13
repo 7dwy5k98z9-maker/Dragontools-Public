@@ -5,15 +5,8 @@ import os
 from pathlib import Path
 from typing import Callable
 
-from ..core.settings import (
-    SET_KEY_SAVE_ALLOW_LARGER_OUTPUT,
-    SET_KEY_SAVE_ALLOW_LARGER_OUTPUT_PERCENT,
-    SET_KEY_SAVE_MIN_OUTPUT_SIZE_ENABLED,
-    SET_KEY_SAVE_MIN_OUTPUT_SIZE_PERCENT,
-    app_qsettings,
-    settings_bool,
-    settings_int,
-)
+from ..core.settings_conversion import SET_KEY_SAVE_ALLOW_LARGER_OUTPUT, SET_KEY_SAVE_ALLOW_LARGER_OUTPUT_PERCENT, SET_KEY_SAVE_MIN_OUTPUT_SIZE_ENABLED, SET_KEY_SAVE_MIN_OUTPUT_SIZE_PERCENT
+from ..core.settings_access import app_qsettings, settings_bool, settings_int
 
 
 def _log_warn(logger: Callable[[str], None] | Callable[[str, str], None] | None, message: str) -> None:

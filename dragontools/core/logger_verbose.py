@@ -5,10 +5,8 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from .settings import (
-    SET_KEY_LOG_ROOT, SET_KEY_VERBOSE_LOG_ENABLED, SET_KEY_VERBOSE_LOG_ROOT,
-    app_qsettings, settings_bool, settings_text,
-)
+from .settings_storage import SET_KEY_LOG_ROOT, SET_KEY_VERBOSE_LOG_ENABLED, SET_KEY_VERBOSE_LOG_ROOT
+from .settings_access import app_qsettings, settings_bool, settings_text
 
 _VERBOSE_MAX_FILES = 10
 

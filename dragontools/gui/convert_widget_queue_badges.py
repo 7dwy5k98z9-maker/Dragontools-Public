@@ -5,13 +5,8 @@ from PyQt6.QtCore import Qt
 
 from ..core.models import normalize_override_dict
 from ..core.encoder_profile_override import MODE_TO_SCALE_LABEL, normalize_encoder_override
-from ..core.paths import display_name
-from ..core.settings import (
-    DEFAULT_NFO_ENABLED,
-    DEFAULT_TRICKPLAY_ENABLED,
-    SET_KEY_NFO_ENABLED,
-    SET_KEY_TRICKPLAY_ENABLED,
-)
+from ..core.path_syntax import display_name
+from ..core.settings_postprocess import DEFAULT_NFO_ENABLED, DEFAULT_TRICKPLAY_ENABLED, SET_KEY_NFO_ENABLED, SET_KEY_TRICKPLAY_ENABLED
 
 
 class ConvertWidgetQueueBadgesMixin:

@@ -31,30 +31,11 @@ from ..core.media_library_sql_help import build_schema_help, export_schema_help
 from ..core.media_library_paths import dump_path_mappings, load_path_mappings, save_path_mappings
 from ..core.media_library_search import search_library
 from ..core.media_library_types import PathMapping, default_media_library_db_path
-from ..core.paths import default_target_path_for_settings_key, get_tool_paths, normalize_user_path, path_compare_key
-from ..core.settings import (
-    DEFAULT_MEDIA_LIBRARY_ANALYZE_ON_IMPORT,
-    DEFAULT_MEDIA_LIBRARY_ENABLED,
-    DEFAULT_MEDIA_LIBRARY_PREFLIGHT_ENABLED,
-    SET_KEY_MEDIA_LIBRARY_ANALYZE_ON_IMPORT,
-    SET_KEY_MEDIA_LIBRARY_DB_PATH,
-    SET_KEY_MEDIA_LIBRARY_ENABLED,
-    SET_KEY_MEDIA_LIBRARY_LAST_JELLYFIN_DB,
-    SET_KEY_MEDIA_LIBRARY_PATH_MAPPINGS,
-    SET_KEY_MEDIA_LIBRARY_PREFLIGHT_ENABLED,
-    SET_KEY_PATH_ANIME,
-    SET_KEY_PATH_AV1_ANIME,
-    SET_KEY_PATH_AV1_FILME,
-    SET_KEY_PATH_AV1_TV,
-    SET_KEY_PATH_FILME,
-    SET_KEY_PATH_H264_ANIME,
-    SET_KEY_PATH_H264_FILME,
-    SET_KEY_PATH_H264_TV,
-    SET_KEY_PATH_H265_ANIME,
-    SET_KEY_PATH_H265_FILME,
-    SET_KEY_PATH_H265_TV,
-    SET_KEY_PATH_TV,
-)
+from ..core.path_defaults import default_target_path_for_settings_key
+from ..core.tool_paths import get_tool_paths
+from ..core.path_syntax import normalize_user_path, path_compare_key
+from ..core.settings_media_library import DEFAULT_MEDIA_LIBRARY_ANALYZE_ON_IMPORT, DEFAULT_MEDIA_LIBRARY_ENABLED, DEFAULT_MEDIA_LIBRARY_PREFLIGHT_ENABLED, SET_KEY_MEDIA_LIBRARY_ANALYZE_ON_IMPORT, SET_KEY_MEDIA_LIBRARY_DB_PATH, SET_KEY_MEDIA_LIBRARY_ENABLED, SET_KEY_MEDIA_LIBRARY_LAST_JELLYFIN_DB, SET_KEY_MEDIA_LIBRARY_PATH_MAPPINGS, SET_KEY_MEDIA_LIBRARY_PREFLIGHT_ENABLED
+from ..core.settings_storage import SET_KEY_PATH_ANIME, SET_KEY_PATH_AV1_ANIME, SET_KEY_PATH_AV1_FILME, SET_KEY_PATH_AV1_TV, SET_KEY_PATH_FILME, SET_KEY_PATH_H264_ANIME, SET_KEY_PATH_H264_FILME, SET_KEY_PATH_H264_TV, SET_KEY_PATH_H265_ANIME, SET_KEY_PATH_H265_FILME, SET_KEY_PATH_H265_TV, SET_KEY_PATH_TV
 
 
 @dataclass(frozen=True)

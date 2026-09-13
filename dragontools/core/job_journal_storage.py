@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from .json_io import atomic_write_json
-from .paths import app_documents_dir
+from .path_defaults import app_documents_dir
 
 ACTIVE_JOURNAL_NAME = "active_run.json"
 JOURNAL_FILE_PREFIX = "run_"

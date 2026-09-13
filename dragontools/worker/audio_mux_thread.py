@@ -18,7 +18,7 @@ from pathlib import Path
 from PyQt6.QtCore import QThread, pyqtSignal
 
 from ..core.media_analyzer import analyze_media
-from ..core.paths import get_tool_paths
+from ..core.tool_paths import get_tool_paths
 from ..core.timeout_settings import get_timeout
 from ..core.output_replace import commit_staged_output
 from ..rules.audio_plan import (

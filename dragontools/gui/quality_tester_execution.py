@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from PyQt6.QtWidgets import QMessageBox, QTableWidgetItem
 
-from ..core.paths import app_documents_dir
+from ..core.path_defaults import app_documents_dir
 from ..worker.quality_test_thread import QualityTestThread
 
 

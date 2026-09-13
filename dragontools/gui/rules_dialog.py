@@ -14,7 +14,7 @@ from .rules_renamer_tab import _RenamerTab
 from .rules_series_tab import _SeriesTab
 from .rules_subtitle_tab import _SubtitleTab
 from .ui_helpers import install_persistent_window_geometry
-from ..core.settings import APP_VERSION
+from ..core.version import APP_VERSION
 
 
 class RulesDialog(QDialog):

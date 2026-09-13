@@ -10,10 +10,16 @@ from pathlib import Path
 from ..core.process_runner import subprocess_no_window_kwargs as _no_window_kwargs
 
 
+def _tools(worker):
+    services = getattr(worker, "_services", None)
+    tools = getattr(services, "tools", None) if services is not None else None
+    return tools if tools is not None else getattr(worker, "tools")
+
+
 def probe_ms(worker, path) -> int | None:
     try:
         result = subprocess.run(
-            [worker.tools.ffprobe, "-v", "error", "-show_format", "-show_streams", "-of", "json", path],
+            [_tools(worker).ffprobe, "-v", "error", "-show_format", "-show_streams", "-of", "json", path],
             capture_output=True, text=True, encoding="utf-8", errors="replace",
             stdin=subprocess.DEVNULL, **_no_window_kwargs(), timeout=30,
         )
@@ -40,7 +46,7 @@ def probe_ms(worker, path) -> int | None:
 def probe_frames(worker, path) -> int | None:
     try:
         result = subprocess.run(
-            [worker.tools.ffprobe, "-v", "error", "-select_streams", "v:0",
+            [_tools(worker).ffprobe, "-v", "error", "-select_streams", "v:0",
              "-show_entries", "stream=nb_frames", "-of", "default=nokey=1:noprint_wrappers=1", path],
             capture_output=True, text=True, encoding="utf-8", errors="replace",
             stdin=subprocess.DEVNULL, **_no_window_kwargs(), timeout=15,

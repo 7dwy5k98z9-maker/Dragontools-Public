@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any
-from .paths import app_documents_dir
+from .path_defaults import app_documents_dir
 from .json_io import atomic_write_json as _atomic_write_json
 from .move_journal_contracts import ACTIVE_MOVE_JOURNAL_NAME, JOURNAL_FILE_PREFIX, ARCHIVE_DIR_NAME, CLOSED_MOVE_STATUSES
 from .move_journal_utils import _read_json_dict, _unique_archive_path, _now

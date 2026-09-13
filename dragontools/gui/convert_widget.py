@@ -19,14 +19,10 @@ from __future__ import annotations
 from PyQt6.QtCore import QSettings
 from PyQt6.QtWidgets import QWidget
 
-from ..core.paths import get_tool_paths
-from ..core.settings import (
-    APP_NAME,
-    APP_ORG,
-    DEFAULT_OUTPUT_CONTAINER_DV,
-    SET_KEY_OUTPUT_CONTAINER_DV,
-    settings_text,
-)
+from ..core.tool_paths import get_tool_paths
+from ..core.settings_app import APP_NAME, APP_ORG
+from ..core.settings_conversion import DEFAULT_OUTPUT_CONTAINER_DV, SET_KEY_OUTPUT_CONTAINER_DV
+from ..core.settings_access import settings_text
 from .conversion_session_state import ConversionSessionState
 from .convert_widget_composition import ConvertWidgetComposition
 from .convert_widget_file_queue import FileListWidget

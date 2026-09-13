@@ -40,15 +40,25 @@ def test_converter_thread_is_bounded_qthread_facade():
     assert len(init_self_attrs) <= 25
 
     source = path.read_text(encoding="utf-8")
-    assert "ConverterRuntimeBuilder" in source
-    assert "ConverterRunLoop" in source
-    assert "ConverterLifecycleService" in source
-    assert "ConverterFileExecutor" in source
-    assert "ConverterControlService" in source
-    assert "ConverterJobState" in source
-    assert "ConverterControlState" in source
-    assert "ConverterSessionState" in source
-    assert "build_static_converter_services" in source
+    bootstrap_source = (WORKER_DIR / "converter_thread_bootstrap.py").read_text(encoding="utf-8")
+    assert "bootstrap_converter_thread" in source
+    assert "NestedStateAlias" not in source
+    assert "ConverterThreadCompatibilityMixin" not in source
+    assert "converter_thread_compat" not in source
+    assert "def is_paused" in source
+    assert "def abort_requested" in source
+    assert "def abort_type" in source
+
+    assert "ConverterRuntimeBuilder" in bootstrap_source
+    assert "ConverterRunLoop" in bootstrap_source
+    assert "ConverterLifecycleService" in bootstrap_source
+    assert "ConverterFileExecutor" in bootstrap_source
+    assert "ConverterControlService" in bootstrap_source
+    assert "ConverterJobState" in bootstrap_source
+    assert "ConverterControlState" in bootstrap_source
+    assert "ConverterSessionState" in bootstrap_source
+    assert "build_static_converter_services" in bootstrap_source
+
     assert "settings_int(" not in source
     assert "settings_bool(" not in source
     assert "get_tool_paths(" not in source

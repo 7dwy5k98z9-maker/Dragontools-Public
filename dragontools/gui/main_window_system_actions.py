@@ -6,7 +6,7 @@ from pathlib import Path
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QApplication, QMessageBox
 
-from ..core.paths import get_tool_paths
+from ..core.tool_paths import get_tool_paths
 
 
 class MainWindowSystemActionsMixin:

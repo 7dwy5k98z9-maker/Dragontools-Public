@@ -188,7 +188,10 @@ def test_produktiver_p5_run_hat_keinen_legacy_remux_aufruf():
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
     }
     assert "_run_p5_remux" not in called_attrs
-    assert "_libplacebo_available" in called_attrs
+    assert "_preflight" in called_attrs
+
+    preflight_source = (PACKAGE_ROOT / "worker" / "dv_pipeline_runtime.py").read_text(encoding="utf-8")
+    assert "libplacebo" in preflight_source
 
 
 def test_legacy_p5_remux_kompatibilitaetspfad_ist_entfernt():

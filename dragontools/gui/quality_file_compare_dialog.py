@@ -24,7 +24,7 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
 )
 
-from ..core.paths import VIDEO_EXTENSIONS, is_video_file, path_compare_key
+from ..core.path_syntax import VIDEO_EXTENSIONS, is_video_file, path_compare_key
 from ..worker.quality_compare_thread import QualityCompareThread
 from .info_button import InfoButton
 from .ui_helpers import install_persistent_window_geometry

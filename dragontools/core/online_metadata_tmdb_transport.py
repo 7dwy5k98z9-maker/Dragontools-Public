@@ -10,7 +10,7 @@ from urllib.request import Request, urlopen
 
 from .online_metadata_cache import read_metadata_cache, write_metadata_cache
 from .online_metadata_common import TMDB_API_BASE, TMDB_TIMEOUT_S, OnlineMetadataError
-from .settings import APP_VERSION
+from .version import APP_VERSION
 
 
 class TmdbTransportMixin:

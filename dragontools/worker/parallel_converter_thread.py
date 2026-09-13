@@ -7,7 +7,7 @@ from PyQt6.QtCore import QObject, QSettings, pyqtSignal
 
 from ..core.logger import create_worker_logger
 from ..core.parallel_settings import clamp_parallel_jobs
-from ..core.settings import APP_NAME, APP_ORG
+from ..core.settings_app import APP_NAME, APP_ORG
 from .converter_config import ConverterConfig
 from .converter_thread import ConverterThread
 from .parallel_child_result_coordinator import ParallelChildResultCoordinator

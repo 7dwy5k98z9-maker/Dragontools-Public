@@ -30,14 +30,10 @@ from PyQt6.QtCore import QThread, pyqtSignal, QSettings
 
 from ..core.logger import create_worker_logger
 from ..core.media_analyzer import analyze_media
-from ..core.paths import get_tool_paths
-from ..core.settings import (
-    APP_ORG,
-    APP_NAME,
-    DEFAULT_OUTPUT_CONTAINER_DV,
-    SET_KEY_OUTPUT_CONTAINER_DV,
-    settings_text,
-)
+from ..core.tool_paths import get_tool_paths
+from ..core.settings_app import APP_ORG, APP_NAME
+from ..core.settings_conversion import DEFAULT_OUTPUT_CONTAINER_DV, SET_KEY_OUTPUT_CONTAINER_DV
+from ..core.settings_access import settings_text
 from ..rules.rule_loader import load_subtitle_rules
 from .worker_contracts import RemoveFileStatus, normalize_worker_path
 from .converter_utils import _fd, _fs

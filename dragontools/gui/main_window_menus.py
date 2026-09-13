@@ -3,7 +3,8 @@ from __future__ import annotations
 
 from PyQt6.QtGui import QAction, QKeySequence, QShortcut
 
-from ..core.settings import APP_ORG, APP_NAME, APP_VERSION
+from ..core.settings_app import APP_ORG, APP_NAME
+from ..core.version import APP_VERSION
 
 
 class MainWindowMenuMixin:

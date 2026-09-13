@@ -14,6 +14,7 @@ from dragontools.core.release_validation import (
     _check_test_environment,
 )
 from dragontools.tests import conftest as project_conftest
+from dragontools.tests import ci_requirements
 from dragontools.tests.ci_requirements import external_media_environment
 
 
@@ -120,3 +121,33 @@ def test_external_media_environment_accepts_explicit_tool_paths(tmp_path, monkey
     assert Path(env.dovi_tool) == paths["DRAGONTOOLS_DOVI_TOOL"]
     assert Path(env.hdr10plus_tool) == paths["DRAGONTOOLS_HDR10PLUS_TOOL"]
     assert Path(env.mp4box) == paths["DRAGONTOOLS_MP4BOX"]
+
+
+def test_external_media_environment_finds_bundled_tool_dirs(tmp_path, monkeypatch):
+    tool_dir = tmp_path / "third_party"
+    tool_dir.mkdir()
+    expected = {}
+    for filename in ("ffmpeg.exe", "ffprobe.exe", "dovi_tool.exe", "hdr10plus_tool.exe", "MP4Box.exe"):
+        path = tool_dir / filename
+        path.write_bytes(b"tool")
+        expected[filename] = path.resolve()
+
+    for env_name in (
+        "DRAGONTOOLS_FFMPEG",
+        "DRAGONTOOLS_FFPROBE",
+        "DRAGONTOOLS_DOVI_TOOL",
+        "DRAGONTOOLS_HDR10PLUS_TOOL",
+        "DRAGONTOOLS_MP4BOX",
+    ):
+        monkeypatch.delenv(env_name, raising=False)
+    monkeypatch.setattr(ci_requirements.shutil, "which", lambda _name: None)
+    monkeypatch.setattr(ci_requirements, "known_tool_dirs", lambda: [tool_dir])
+
+    env = external_media_environment()
+
+    assert env.missing == ()
+    assert Path(env.ffmpeg) == expected["ffmpeg.exe"]
+    assert Path(env.ffprobe) == expected["ffprobe.exe"]
+    assert Path(env.dovi_tool) == expected["dovi_tool.exe"]
+    assert Path(env.hdr10plus_tool) == expected["hdr10plus_tool.exe"]
+    assert Path(env.mp4box) == expected["MP4Box.exe"]

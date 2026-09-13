@@ -4,7 +4,7 @@ from pathlib import Path
 from PyQt6.QtCore import QDate
 from PyQt6.QtWidgets import QCheckBox, QDateEdit, QGridLayout, QGroupBox, QLabel, QLineEdit, QMessageBox, QPushButton
 from ...core import settings as cfg
-from ...core.paths import default_target_path_for_settings_key, ensure_default_storage_dirs
+from ...core.path_defaults import default_target_path_for_settings_key, ensure_default_storage_dirs
 from ..info_button import InfoButton
 from .base import SettingsSection
 

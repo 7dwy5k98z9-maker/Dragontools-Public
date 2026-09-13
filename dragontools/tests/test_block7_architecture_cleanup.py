@@ -28,10 +28,15 @@ def test_non_gui_layers_do_not_import_gui_modules():
 def test_gpu_detection_lives_in_core_only():
     assert (PACKAGE / "core" / "gpu_detection.py").is_file()
     assert not (PACKAGE / "gui" / "gpu_detector.py").exists()
-    for rel in ("worker/converter_thread.py", "worker/parallel_converter_thread.py"):
-        text = (PACKAGE / rel).read_text(encoding="utf-8")
-        assert "..core.gpu_detection" in text
-        assert "..gui.gpu_detector" not in text
+    converter_text = (PACKAGE / "worker" / "converter_thread.py").read_text(encoding="utf-8")
+    bootstrap_text = (PACKAGE / "worker" / "converter_thread_bootstrap.py").read_text(encoding="utf-8")
+    parallel_text = (PACKAGE / "worker" / "parallel_converter_thread.py").read_text(encoding="utf-8")
+
+    assert "..core.gpu_detection" in bootstrap_text
+    assert "..core.gpu_detection" in parallel_text
+    assert "..gui.gpu_detector" not in converter_text
+    assert "..gui.gpu_detector" not in bootstrap_text
+    assert "..gui.gpu_detector" not in parallel_text
 
 
 def test_private_methods_are_not_called_across_object_boundaries():

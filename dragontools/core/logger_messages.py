@@ -7,7 +7,7 @@ from pathlib import Path
 
 from .logger_paths import _fd, _fs, _ts
 from .move_report import format_move_target_summary_lines
-from .settings import APP_VERSION
+from .version import APP_VERSION
 
 
 class DragonLoggerMessageMixin:

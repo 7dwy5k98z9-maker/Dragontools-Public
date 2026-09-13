@@ -6,7 +6,7 @@ from pathlib import Path
 from PyQt6.QtCore import pyqtSignal
 
 from ..core.logger import create_worker_logger
-from ..core.paths import get_tool_paths
+from ..core.tool_paths import get_tool_paths
 from .base_worker import BaseWorker
 from .merge_analysis import MergeAnalysisMixin
 from .merge_common import (

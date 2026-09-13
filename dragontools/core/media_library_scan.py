@@ -16,7 +16,7 @@ from .media_library_repository import (
 from .media_library_types import DEFAULT_DB_FILENAME, AbortFn, LibraryScanResult, LogFn, PathMapping, ProgressFn, _now
 from .media_library_utils import _normalize_title
 from .models import MediaInfo
-from .paths import VIDEO_EXTENSIONS, normalize_user_path, path_compare_key
+from .path_syntax import VIDEO_EXTENSIONS, normalize_user_path, path_compare_key
 
 _SCAN_SKIP_DIRS = {
     "__temp_overwrite__", ".grab", ".sync", ".stfolder", ".stversions", "@eadir",

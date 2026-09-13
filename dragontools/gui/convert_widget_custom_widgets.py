@@ -22,7 +22,7 @@ from PyQt6.QtWidgets import (
     QProgressBar, QFileDialog, QSizePolicy, QStackedWidget,
 )
 
-from ..core.paths import EXE_DIR, BASE
+from ..core.resource_paths import EXE_DIR, BASE
 from .info_button import InfoButton
 
 

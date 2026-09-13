@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Callable
 
-from ..core.paths import get_tool_paths
+from ..core.tool_paths import get_tool_paths
 from ..core.process_runner import run_analysis_tool
 from ..core.timeout_settings import get_timeout
 from .tool_logging import log_tool_error as _log_tool_error

@@ -316,13 +316,17 @@ def wait_while_paused(worker, lock) -> bool:
     lock:
         ``threading.Lock`` der den Zugriff auf ``current_process`` schuetzt.
     """
-    if not getattr(worker, "_paused", False):
+    state = getattr(worker, "_control_state", None)
+    paused = bool(state.paused) if state is not None else bool(getattr(worker, "_paused", False))
+    if not paused:
         return True
 
-    # ConverterThread.current_process ist selbst gelockt. Deshalb lesen wir
-    # _current_process direkt unter Lock und verwenden die Property nur als
-    # Fallback für Worker, die kein privates Attribut besitzen.
-    if hasattr(worker, "_current_process"):
+    # ConverterThread hält Prozess/Pause explizit im Control-State. Für andere
+    # Worker bleibt der historische Worker-Protokoll-Fallback erhalten.
+    if state is not None:
+        with lock:
+            proc = state.current_process
+    elif hasattr(worker, "_current_process"):
         with lock:
             proc = getattr(worker, "_current_process", None)
     else:
@@ -334,10 +338,13 @@ def wait_while_paused(worker, lock) -> bool:
         # Kein falscher GUI-/Workerzustand: wenn der externe Prozess nicht
         # angehalten werden konnte, wird die Pause verworfen.
         try:
-            worker._paused = False
+            if state is not None:
+                state.paused = False
+            else:
+                worker._paused = False
         except (AttributeError, RuntimeError):
             pass
-        pause_ev = getattr(worker, "_pause_ev", None)
+        pause_ev = state.pause_event if state is not None else getattr(worker, "_pause_ev", None)
         if pause_ev is not None:
             pause_ev.set()
         _log_process_control(
@@ -348,7 +355,7 @@ def wait_while_paused(worker, lock) -> bool:
         return False
 
     # Blockieren bis resume() aufgerufen wird
-    pause_ev = getattr(worker, "_pause_ev", None)
+    pause_ev = state.pause_event if state is not None else getattr(worker, "_pause_ev", None)
     if pause_ev is not None:
         pause_ev.wait()
 

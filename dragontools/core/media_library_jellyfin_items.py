@@ -16,7 +16,7 @@ from .media_library_paths import _matches_any_mapping_prefix, apply_path_mapping
 from .media_library_repository import _item_from_media_info, _streams_from_media_info
 from .media_library_types import PathMapping
 from .media_library_utils import _int_or_none, _normalize_title, _safe_parent
-from .paths import VIDEO_EXTENSIONS, path_compare_key
+from .path_syntax import VIDEO_EXTENSIONS, path_compare_key
 
 
 def build_jellyfin_item(

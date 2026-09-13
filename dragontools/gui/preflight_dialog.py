@@ -13,12 +13,8 @@ from typing import Any
 from PyQt6.QtCore import QSettings, QTimer
 from PyQt6.QtWidgets import QDialog, QCheckBox, QMessageBox
 
-from ..core.settings import (
-    APP_ORG,
-    APP_NAME,
-    SET_KEY_PREFLIGHT_SAVE_REPORT,
-    SET_KEY_SERIES_DEFAULT_TYPE,
-)
+from ..core.settings_app import APP_ORG, APP_NAME
+from ..core.settings_storage import SET_KEY_PREFLIGHT_SAVE_REPORT, SET_KEY_SERIES_DEFAULT_TYPE
 from .ui_helpers import install_persistent_window_geometry, save_window_geometry
 from .preflight_widgets import (
     SeriesGroupWidget,

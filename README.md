@@ -5,7 +5,7 @@ DragonTools ist eine Windows-Anwendung zur Analyse, Konvertierung und Verwaltung
 
 ## Aktueller Entwicklungsstand – 13.09.2026
 
-Der aktuelle V9.8.2-Stand wurde nach den Datenbank-/Metadaten-Patches in zwölf größeren Refactoring- und Stabilitätsblöcken weiter zerlegt. Ziel war nicht, nur Dateien kleiner zu machen, sondern GUI, Orchestrierung, Datenbankzugriff, Dateisystem-I/O, externe Tools und reine Fachlogik klarer voneinander zu trennen. Bestehende Importpfade bleiben dort über schmale Kompatibilitätsfassaden erhalten, wo Worker, Tests oder andere Module darauf angewiesen sind.
+Der aktuelle V9.8.2-Stand wurde nach den Datenbank-/Metadaten-Patches in zwölf größeren Refactoring- und Stabilitätsblöcken und anschließend mit dem kumulativen Technical Review Patch v4 weiter zerlegt. Ziel war nicht, nur Dateien kleiner zu machen, sondern GUI, Orchestrierung, Datenbankzugriff, Dateisystem-I/O, externe Tools und reine Fachlogik klarer voneinander zu trennen. Bestehende Importpfade bleiben dort über schmale Kompatibilitätsfassaden erhalten, wo Worker, Tests oder andere Module darauf angewiesen sind.
 
 Wichtige Änderungen des aktuellen Stands:
 
@@ -16,8 +16,9 @@ Wichtige Änderungen des aktuellen Stands:
 - **Abschlussreview:** Move-Journal-Archivierungsfehler sind fail-closed, Journal-Finalisierungsfehler zählen im Move-Worker als Fehler, der Release-Smoke verlangt alle im Refactoring-Manifest neu eingeführten Produktivmodule und ein gescheiterter Episodenrefresh wird mit Ursache geloggt statt still auf `Folge XX` zurückzufallen.
 - **Quellbildprüfung:** mehrere Prüfpositionen werden gebündelt. Bei 10-%-Intervallen sinkt die Zahl der FFmpeg-Starts im Normalfall von 9 auf 3, bei 5 % von 19 auf 5; nur eine fehlgeschlagene Gruppe fällt auf Einzelproben zurück.
 - **Modulstruktur:** große Bereiche wie Mediathek, NFO-Scan, Trickplay, DV-Remux, Backup/Restore, Journal, Preflight, Merge, ISO, Parallel-Converter, MoveThread, Encoder-Override, Duration-Repair, HDR10+, MediaAnalyzer, Renamer-Kandidaten, Audio/Video-Matcher und Online-Metadaten-Dialog sind in fokussierte Fachmodule aufgeteilt.
+- **Technical Review Patch v4:** Release-Validierung, Timestamp-Kandidatenprüfung, Strip-Only, Audio-/Video-Time-Mapping, Qualitätsvergleich und -test, Streamargumente, finaler DV-Mux, Conversion-Fortschritt sowie ISO-Eingabeverarbeitung besitzen getrennte Fachservices. Die bisherigen Fassaden und Kompatibilitätshooks bleiben erhalten.
 
-Der aktuell vermessene Quellstand umfasst **729 Python-Dateien einschließlich `DragonToolsV9.py`**, rund **118.227 Gesamtzeilen** und **100.301 nichtleere/nicht reine Kommentarzeilen**. Im Testpaket liegen **167 Python-Dateien**, davon **164 `test_*.py`** mit **1.224 statisch erkennbaren Testfunktionen**. In einem Package-only-Archiv ohne Einstiegspunkt werden entsprechend 728 Python-Dateien gezählt.
+Der aktuell vermessene Quellstand umfasst **787 Python-Dateien einschließlich `DragonToolsV9.py`**, rund **119.402 Gesamtzeilen** und **101.135 nichtleere/nicht reine Kommentarzeilen**. Im Testpaket liegen **172 Python-Dateien**, davon **169 `test_*.py`** mit **1.245 statisch erkennbaren Testfunktionen**. In einem Package-only-Archiv ohne Einstiegspunkt werden entsprechend 786 Python-Dateien gezählt. Die lokale Abschlussprüfung am 13.09.2026 ergab **1.269 bestandene und 2 übersprungene Tests**; die beiden Skips benötigen reale DV/HDR-Testmedien und externe Werkzeuge.
 
 ## Voraussetzungen
 

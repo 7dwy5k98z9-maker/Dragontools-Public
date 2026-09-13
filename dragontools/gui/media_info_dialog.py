@@ -21,12 +21,9 @@ from PyQt6.QtWidgets import (
 )
 
 from ..core.media_analyzer import analyze_media
-from ..core.settings import (
-    APP_NAME, APP_ORG,
-    SET_KEY_PRESERVE_DV, SET_KEY_PRESERVE_HDRPLUS,
-    SET_KEY_AV1_PRESERVE_DV, SET_KEY_AV1_PRESERVE_HDRPLUS,
-    settings_bool,
-)
+from ..core.settings_app import APP_NAME, APP_ORG
+from ..core.settings_conversion import SET_KEY_PRESERVE_DV, SET_KEY_PRESERVE_HDRPLUS, SET_KEY_AV1_PRESERVE_DV, SET_KEY_AV1_PRESERVE_HDRPLUS
+from ..core.settings_access import settings_bool
 from ..core.mediainfo_details import (
     MediaInfoDisplayDetails,
     build_mediainfo_display_details,

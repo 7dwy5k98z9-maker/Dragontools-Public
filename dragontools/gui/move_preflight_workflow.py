@@ -7,7 +7,8 @@ from pathlib import Path
 from typing import Any
 from PyQt6.QtCore import QSettings
 from PyQt6.QtWidgets import QDialog
-from ..core.settings import APP_ORG, APP_NAME, SET_KEY_MOVE_CONFLICT
+from ..core.settings_app import APP_ORG, APP_NAME
+from ..core.settings_storage import SET_KEY_MOVE_CONFLICT
 
 
 class MovePreflightWorkflow:

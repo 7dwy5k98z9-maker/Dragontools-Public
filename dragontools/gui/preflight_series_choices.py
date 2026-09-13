@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from PyQt6.QtWidgets import QComboBox, QVBoxLayout
 
-from ..core.paths import user_path_name
+from ..core.path_syntax import user_path_name
 from .preflight_widget_common import _series_root_from_input
 
 NO_SERIES_FOLDER_CHOICE = object()

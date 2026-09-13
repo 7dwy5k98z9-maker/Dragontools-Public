@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from ..core.paths import path_compare_key
+from ..core.path_syntax import path_compare_key
 
 
 class ParallelWorkerLauncher:

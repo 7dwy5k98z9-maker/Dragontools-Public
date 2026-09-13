@@ -66,4 +66,22 @@ REFACTOR_SMOKE_MODULES = (
         "source_visual_check source_visual_models "
         "source_visual_settings source_visual_analysis source_visual_sampling",
     ),
+    *_module_paths(
+        "core",
+        "release_validation_app release_validation_build release_validation_source "
+        "audio_video_time_mapping_fit audio_video_time_mapping_edges",
+    ),
+    *_module_paths(
+        "gui",
+        "conversion_progress_focus conversion_progress_display",
+    ),
+    *_module_paths(
+        "worker",
+        "duration_timestamp_candidate_archive duration_timestamp_candidate_validation "
+        "converter_strip_runtime converter_strip_audio converter_strip_subtitles converter_strip_sidecars "
+        "converter_audio_args converter_subtitle_args converter_video_filter_args "
+        "quality_process_runner quality_metrics_service quality_compare_service quality_test_service "
+        "dv_track_preparation_service dv_final_output_service dv_final_metadata_verifier iso_input_processor iso_processor_host_mixin",
+    ),
+
 )

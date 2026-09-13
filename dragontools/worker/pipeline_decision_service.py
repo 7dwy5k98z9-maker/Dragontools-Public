@@ -5,15 +5,8 @@ from typing import Protocol
 
 from ..core.codec_utils import normalize_target_codec
 from ..core.models import TargetCodec
-from ..core.settings import (
-    SET_KEY_PRESERVE_DV,
-    SET_KEY_PRESERVE_HDRPLUS,
-    SET_KEY_AV1_PRESERVE_DV,
-    SET_KEY_AV1_PRESERVE_HDRPLUS,
-    SET_KEY_OUTPUT_CONTAINER_STANDARD, SET_KEY_OUTPUT_CONTAINER_DV,
-    DEFAULT_OUTPUT_CONTAINER_STANDARD, DEFAULT_OUTPUT_CONTAINER_DV,
-    settings_bool, settings_text,
-)
+from ..core.settings_conversion import SET_KEY_PRESERVE_DV, SET_KEY_PRESERVE_HDRPLUS, SET_KEY_AV1_PRESERVE_DV, SET_KEY_AV1_PRESERVE_HDRPLUS, SET_KEY_OUTPUT_CONTAINER_STANDARD, SET_KEY_OUTPUT_CONTAINER_DV, DEFAULT_OUTPUT_CONTAINER_STANDARD, DEFAULT_OUTPUT_CONTAINER_DV
+from ..core.settings_access import settings_bool, settings_text
 from ..core.type_utils import _safe_bool
 from ..rules.pipeline_selector import resolve_pipeline_context
 from .archive_service import ArchiveService

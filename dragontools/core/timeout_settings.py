@@ -323,7 +323,7 @@ def _read_qsettings_or_none():
         from PyQt6.QtCore import QSettings
     except ModuleNotFoundError:
         return None
-    from .settings import APP_ORG, APP_NAME
+    from .settings_app import APP_ORG, APP_NAME
     return QSettings(APP_ORG, APP_NAME)
 
 
@@ -391,7 +391,7 @@ def get_all_timeout_enabled() -> dict[str, bool]:
 def save_timeout(key: str, seconds: int) -> None:
     """Speichert einen einzelnen Timeout-Wert (Sekunden) in QSettings."""
     from PyQt6.QtCore import QSettings
-    from .settings import APP_ORG, APP_NAME
+    from .settings_app import APP_ORG, APP_NAME
 
     if key not in _BY_KEY:
         raise KeyError(f"Unbekannter Timeout-Key: '{key}'")
@@ -402,7 +402,7 @@ def save_timeout(key: str, seconds: int) -> None:
 def save_timeout_enabled(key: str, enabled: bool) -> None:
     """Speichert den Aktivstatus eines Timeouts in QSettings."""
     from PyQt6.QtCore import QSettings
-    from .settings import APP_ORG, APP_NAME
+    from .settings_app import APP_ORG, APP_NAME
 
     if key not in _BY_KEY:
         raise KeyError(f"Unbekannter Timeout-Key: '{key}'")
@@ -416,7 +416,7 @@ def save_all_timeouts(
 ) -> None:
     """Speichert mehrere Timeout-Werte auf einmal."""
     from PyQt6.QtCore import QSettings
-    from .settings import APP_ORG, APP_NAME
+    from .settings_app import APP_ORG, APP_NAME
 
     qs = QSettings(APP_ORG, APP_NAME)
     for key, seconds in values.items():
@@ -430,7 +430,7 @@ def save_all_timeouts(
 def reset_all_timeouts() -> None:
     """Setzt alle Timeouts auf ihre Standardwerte zurück."""
     from PyQt6.QtCore import QSettings
-    from .settings import APP_ORG, APP_NAME
+    from .settings_app import APP_ORG, APP_NAME
 
     qs = QSettings(APP_ORG, APP_NAME)
     for td in TIMEOUT_DEFS:
@@ -454,7 +454,7 @@ def migrate_v91_timeout_defaults() -> None:
     alte große Werte auf den neuen 5-Minuten-Standard gesetzt.
     """
     from PyQt6.QtCore import QSettings
-    from .settings import APP_ORG, APP_NAME
+    from .settings_app import APP_ORG, APP_NAME
 
     qs = QSettings(APP_ORG, APP_NAME)
     if qs.value(_V91_MIGRATION_KEY, False, type=bool):

@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from ..core.paths import join_user_path
+from ..core.path_syntax import join_user_path
 from .move_rule_config import _DEFAULT_MOVE_RULES, migrate_move_rules
 from .move_series_detection import (
     _SER_EP_RE, _MULTI_EP_E_RE, _MULTI_EP_X_RE, _SEP_BEFORE, _DOUBLE_BEFORE, _SEP_AFTER,

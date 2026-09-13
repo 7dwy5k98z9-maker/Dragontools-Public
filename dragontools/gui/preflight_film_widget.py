@@ -6,7 +6,7 @@ from typing import Any
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QComboBox, QLineEdit
 
 from ..rules.move_rules import default_film_series_name, normalize_relative_move_subpath, resolve_film_target_for_path
-from ..core.paths import user_path_name
+from ..core.path_syntax import user_path_name
 from .preflight_film_hints import (
     add_release_warning,
     existing_movie_hint,

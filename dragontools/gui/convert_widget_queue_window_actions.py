@@ -5,7 +5,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QListWidgetItem
 
 from .convert_queue_window import ConvertQueueWindow
-from ..core.paths import display_name
+from ..core.path_syntax import display_name
 
 
 class ConvertWidgetQueueWindowActionsMixin:

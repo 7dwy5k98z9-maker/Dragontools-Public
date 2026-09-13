@@ -37,7 +37,7 @@ from .movie_renamer_candidates import (
     _series_candidate_from_result as _candidate_series_from_result,
 )
 from .online_metadata_common import default_episode_title
-from .paths import path_compare_key
+from .path_syntax import path_compare_key
 from ..rules.renamer_rules import apply_title_exception
 from .movie_renamer_matching import candidate_status, select_score_stage, stage_warning
 

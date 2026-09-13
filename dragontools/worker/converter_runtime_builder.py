@@ -12,26 +12,13 @@ import inspect
 import json
 import sys
 
-from ..core.paths import get_tool_paths
-from ..core.settings import (
-    DEFAULT_OUTPUT_DURATION_MAX_EXTRA_S,
-    DEFAULT_OUTPUT_DURATION_MAX_PERCENT,
-    DEFAULT_OUTPUT_DURATION_MIN_PERCENT,
-    DEFAULT_OUTPUT_MIN_SIZE_KB,
-    DEFAULT_REPAIR_DURATION_REMUX_ENABLED,
-    DEFAULT_REPAIR_DURATION_TIMESTAMP_ENABLED,
-    SET_KEY_OUTPUT_DURATION_MAX_EXTRA_S,
-    SET_KEY_OUTPUT_DURATION_MAX_PERCENT,
-    SET_KEY_OUTPUT_DURATION_MIN_PERCENT,
-    SET_KEY_OUTPUT_MIN_SIZE_KB,
-    SET_KEY_REPAIR_DURATION_REMUX_ENABLED,
-    SET_KEY_REPAIR_DURATION_TIMESTAMP_ENABLED,
-    settings_bool,
-    settings_int,
-)
+from ..core.tool_paths import get_tool_paths
+from ..core.settings_conversion import DEFAULT_OUTPUT_DURATION_MAX_EXTRA_S, DEFAULT_OUTPUT_DURATION_MAX_PERCENT, DEFAULT_OUTPUT_DURATION_MIN_PERCENT, DEFAULT_OUTPUT_MIN_SIZE_KB, DEFAULT_REPAIR_DURATION_REMUX_ENABLED, DEFAULT_REPAIR_DURATION_TIMESTAMP_ENABLED, SET_KEY_OUTPUT_DURATION_MAX_EXTRA_S, SET_KEY_OUTPUT_DURATION_MAX_PERCENT, SET_KEY_OUTPUT_DURATION_MIN_PERCENT, SET_KEY_OUTPUT_MIN_SIZE_KB, SET_KEY_REPAIR_DURATION_REMUX_ENABLED, SET_KEY_REPAIR_DURATION_TIMESTAMP_ENABLED
+from ..core.settings_access import settings_bool, settings_int
 from .av1_metadata_pipeline import AV1DolbyVisionPipeline, AV1HDR10PlusPipeline
 from .duration_repair_service import DurationRepairService
 from .dv_processing_pipeline import DVProcessingPipeline
+from .dv_processing_components import build_dv_processing_components
 from .dv_runtime_models import DVEncoderConfig
 from .hdrplus_conversion import HDRPlusConversionHelper
 from .media_analysis_service import MediaAnalysisService
@@ -220,6 +207,13 @@ class ConverterRuntimeBuilder:
             ffmpeg_path=tools.ffmpeg,
             ffprobe_path=tools.ffprobe,
         )
+        dv_components = build_dv_processing_components(
+            tools=tools,
+            subtitle_rules=job.subtitle_rules,
+            log=worker.log,
+            verbose_logger=worker._verbose_logger,
+            worker=worker,
+        )
         services.dv_pipeline = DVProcessingPipeline(
             tools=tools,
             encoder_config=DVEncoderConfig(
@@ -234,6 +228,7 @@ class ConverterRuntimeBuilder:
             log=worker.log,
             verbose_logger=worker._verbose_logger,
             worker=worker,
+            components=dv_components,
         )
 
     def _build_workflow(self) -> None:

@@ -6,6 +6,8 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
+from dragontools.core.resource_paths import known_tool_dirs
+
 
 _TRUTHY = {"1", "true", "yes", "on"}
 
@@ -61,6 +63,14 @@ def _resolve_tool(env_name: str, *names: str) -> str | None:
         found = shutil.which(name)
         if found:
             return found
+    for directory in known_tool_dirs():
+        for name in names:
+            candidate = directory / name
+            try:
+                if candidate.is_file():
+                    return str(candidate.resolve())
+            except OSError:
+                continue
     return None
 
 

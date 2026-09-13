@@ -8,7 +8,7 @@ from PyQt6.QtWidgets import QMenu, QMessageBox
 
 from .media_info_dialog import MediaInfoDialog
 from ..core.models import normalize_override_dict
-from ..core.paths import display_name
+from ..core.path_syntax import display_name
 from ..rules.move_rules import planned_target_dir
 
 

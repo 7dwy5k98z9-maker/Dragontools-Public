@@ -206,3 +206,20 @@ def is_video_file(path: str | os.PathLike[str]) -> bool:
         return False
     suffix = Path(strip_long_path_prefix(value)).suffix.lower()
     return suffix in VIDEO_EXTENSIONS
+
+__all__ = [
+    "VIDEO_EXTENSIONS",
+    "strip_long_path_prefix",
+    "is_windows_style_path",
+    "normalize_user_path",
+    "to_long_path",
+    "path_compare_key",
+    "user_path_name",
+    "user_path_stem",
+    "user_path_parent",
+    "join_user_path",
+    "path_is_same_or_child",
+    "display_path",
+    "display_name",
+    "is_video_file",
+]

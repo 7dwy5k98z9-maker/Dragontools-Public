@@ -22,7 +22,7 @@ from .media_analyzer_streams import (
 from .media_hdr_detection import detect_hdr_from_mediainfo_track
 from .media_metadata import build_pix_fmt_from_mediainfo
 from .models import MediaInfo
-from .paths import ToolPaths, get_tool_paths
+from .tool_paths import ToolPaths, get_tool_paths
 
 
 @dataclass(frozen=True, slots=True)

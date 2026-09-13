@@ -6,7 +6,7 @@ from pathlib import Path
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QFileDialog, QTableWidgetItem
 
-from ..core.paths import VIDEO_EXTENSIONS, is_video_file, path_compare_key
+from ..core.path_syntax import VIDEO_EXTENSIONS, is_video_file, path_compare_key
 from .drop_path_extractor import _iter_video_files_in_folder
 
 

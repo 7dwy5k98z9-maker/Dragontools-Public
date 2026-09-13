@@ -151,6 +151,6 @@ class MergeExecutorMixin:
         for path in files:
             try:
                 total += Path(path).stat().st_size
-            except Exception:
+            except OSError:
                 pass
         return total

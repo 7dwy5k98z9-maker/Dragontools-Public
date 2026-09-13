@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from ..core.paths import join_user_path
+from ..core.path_syntax import join_user_path
 from .move_path_helpers import sanitize_win_segment, _dir_year_suffix, _normalize_for_dir_match, _strip_dir_year_suffix
 
 def find_series_dir_candidates(base: str | None, series_name: str, year: int | None = None) -> list[str]:

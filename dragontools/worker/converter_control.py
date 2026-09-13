@@ -5,7 +5,7 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-from ..core.paths import path_compare_key
+from ..core.path_syntax import path_compare_key
 from .process_control import terminate_process_tree, wait_while_paused
 
 

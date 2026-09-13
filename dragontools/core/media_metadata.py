@@ -126,7 +126,7 @@ def _parse_frame_rate_fraction(value: object | None) -> Fraction | None:
         if fps <= 0:
             return None
         return _nearest_common_frame_rate(float(fps)) or fps
-    except Exception:
+    except (TypeError, ValueError, ZeroDivisionError):
         return None
 
 
@@ -190,7 +190,7 @@ def build_pix_fmt_from_mediainfo(track: dict) -> str | None:
             return f"yuv{chroma_token}p"
         if bit_depth > 8:
             return f"yuv{chroma_token}p{bit_depth}le"
-    except Exception:
+    except (AttributeError, TypeError, ValueError):
         return None
     return None
 
@@ -206,7 +206,7 @@ def parse_bit_depth(mi_track: dict, fp_stream: dict) -> int | None:
             bd = int(bprs)
             if bd > 0:
                 return bd
-        except Exception:
+        except (TypeError, ValueError):
             pass
     pf = (fp_stream.get("pix_fmt") or "").lower()
     if "p12" in pf or "12le" in pf or "12be" in pf:

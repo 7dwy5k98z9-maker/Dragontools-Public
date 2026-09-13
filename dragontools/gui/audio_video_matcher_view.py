@@ -14,8 +14,8 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
 )
 
-from ..core.paths import app_documents_dir
-from ..core.settings import APP_VERSION
+from ..core.path_defaults import app_documents_dir
+from ..core.version import APP_VERSION
 from .info_button import InfoButton
 
 

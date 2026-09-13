@@ -18,16 +18,8 @@ from ..core.move_journal import MoveJournalWriteError
 from ..core.move_postprocess import record_media_library_move
 from ..core.move_routing import MoveRouter
 from ..core.move_sidecars import MoveSidecarService
-from ..core.settings import (
-    APP_NAME,
-    APP_ORG,
-    DEFAULT_NFO_MOVIE_TARGET_NAME,
-    DEFAULT_TRICKPLAY_CONFLICT_MODE,
-    DEFAULT_TRICKPLAY_ONLY_MISSING,
-    SET_KEY_NFO_MOVIE_TARGET_NAME,
-    SET_KEY_TRICKPLAY_CONFLICT_MODE,
-    SET_KEY_TRICKPLAY_ONLY_MISSING,
-)
+from ..core.settings_app import APP_NAME, APP_ORG
+from ..core.settings_postprocess import DEFAULT_NFO_MOVIE_TARGET_NAME, DEFAULT_TRICKPLAY_CONFLICT_MODE, DEFAULT_TRICKPLAY_ONLY_MISSING, SET_KEY_NFO_MOVIE_TARGET_NAME, SET_KEY_TRICKPLAY_CONFLICT_MODE, SET_KEY_TRICKPLAY_ONLY_MISSING
 from .move_completion_service import MoveCompletionService
 
 

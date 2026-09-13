@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path, PureWindowsPath
-from ..core.paths import user_path_stem
+from ..core.path_syntax import user_path_stem
 
 _WIN_FORBIDDEN_SEGMENT_CHARS = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 _WIN_RESERVED_NAMES = {
