@@ -69,7 +69,10 @@ def test_iso_series_duration_tolerance_is_configurable():
 
 def test_iso_thread_and_widget_keep_series_detection_as_explicit_option():
     thread_source = (PACKAGE / "worker" / "iso_thread.py").read_text(encoding="utf-8")
-    widget_source = (PACKAGE / "gui" / "iso_widget.py").read_text(encoding="utf-8")
+    widget_source = "\n".join(
+        (PACKAGE / "gui" / name).read_text(encoding="utf-8")
+        for name in ("iso_widget.py", "iso_widget_view.py", "iso_widget_runtime.py")
+    )
 
     assert "auto_series_disc: bool = True" in thread_source
     assert "detect_series_disc=self.auto_series_disc" in thread_source

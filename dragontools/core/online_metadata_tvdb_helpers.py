@@ -4,7 +4,12 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from .online_metadata_common import _int_or_none, _year_from_date, compare_metadata_text
+from .online_metadata_common import (
+    _int_or_none,
+    _year_from_date,
+    compare_metadata_text,
+    normalize_episode_metadata_title,
+)
 
 def _records_from_data(data: dict[str, Any]) -> list[dict[str, Any]]:
     records = data.get("data") if isinstance(data, dict) else []
@@ -260,3 +265,40 @@ def _year_from_tvdb_record(record: dict[str, Any]) -> int | None:
         if year:
             return year
     return None
+
+
+def _episode_title_is_fallback(
+    record: dict[str, Any] | None,
+    episode: int,
+    *,
+    source_path: Any = None,
+) -> bool:
+    if not isinstance(record, dict):
+        return True
+    _title, is_fallback = normalize_episode_metadata_title(
+        _tvdb_text(record, "name_translated", "name", "title"),
+        episode,
+        source_path=source_path,
+    )
+    return is_fallback
+
+
+def _merge_episode_language_fallback(
+    primary: dict[str, Any],
+    fallback: dict[str, Any],
+    episode: int,
+) -> dict[str, Any]:
+    """Keep localized primary metadata but take a real title from fallback."""
+    merged = dict(fallback or {})
+    for key, value in (primary or {}).items():
+        if value not in (None, "", [], {}):
+            merged[key] = value
+    fallback_title, fallback_is_generic = normalize_episode_metadata_title(
+        _tvdb_text(fallback or {}, "name_translated", "name", "title"),
+        episode,
+    )
+    if not fallback_is_generic:
+        merged["name_translated"] = fallback_title
+        merged["name"] = fallback_title
+        merged["title"] = fallback_title
+    return merged

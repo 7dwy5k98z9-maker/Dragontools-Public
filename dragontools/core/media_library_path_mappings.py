@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 from contextlib import closing
 from pathlib import Path
 from typing import Any, Iterable
@@ -71,14 +72,24 @@ def save_path_mappings(db_path: str | Path, mappings: Iterable[PathMapping]) -> 
             conn.execute("INSERT OR REPLACE INTO meta(key, value) VALUES('updated_at', ?)", (_now(),))
 
 
-def get_path_mappings(db_path: str | Path) -> list[PathMapping]:
+def get_path_mappings(
+    db_path: str | Path,
+    *,
+    connection: sqlite3.Connection | None = None,
+) -> list[PathMapping]:
     db = Path(db_path)
     if not db.exists():
         return []
-    with closing(_connect(db)) as conn:
-        rows = conn.execute(
+
+    if connection is not None:
+        rows = connection.execute(
             "SELECT label, external_prefix, local_prefix FROM path_mappings ORDER BY id"
         ).fetchall()
+    else:
+        with closing(_connect(db)) as conn:
+            rows = conn.execute(
+                "SELECT label, external_prefix, local_prefix FROM path_mappings ORDER BY id"
+            ).fetchall()
     return [PathMapping(row["label"], row["external_prefix"], row["local_prefix"]) for row in rows]
 
 

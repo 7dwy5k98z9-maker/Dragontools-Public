@@ -18,7 +18,6 @@ from .online_metadata_common import (
 )
 from .online_metadata_tvdb_candidates import resolve_episode_candidates as _resolve_episode_candidates
 from .online_metadata_tvdb_helpers import (
-    _episodes_from_tvdb_response,
     _records_from_data,
     _tvdb_language_code,
     _tvdb_record_id,
@@ -54,32 +53,6 @@ class TvdbResolverMixin:
     def movie_details(self, movie_id: int, *, include_translations: bool = False) -> dict[str, Any]:
         params = {"meta": "translations"} if include_translations else {}
         return self._request_json(f"/movies/{int(movie_id)}/extended", params)
-
-    def series_details(self, series_id: int, *, include_translations: bool = False) -> dict[str, Any]:
-        params = {"meta": "translations"} if include_translations else {}
-        return self._request_json(f"/series/{int(series_id)}/extended", params)
-
-    def series_episodes(
-        self,
-        series_id: int,
-        *,
-        season_type: str = "default",
-        language: str | None = None,
-    ) -> list[dict[str, Any]]:
-        lang = _tvdb_language_code(language or self.config.language)
-        endpoints = (
-            f"/series/{int(series_id)}/episodes/{season_type}/{lang}",
-            f"/series/{int(series_id)}/episodes/{season_type}",
-        )
-        last_error: OnlineMetadataError | None = None
-        for endpoint in endpoints:
-            try:
-                return _episodes_from_tvdb_response(self._request_json(endpoint, {}))
-            except OnlineMetadataError as exc:
-                last_error = exc
-        if last_error:
-            raise last_error
-        return []
 
     def resolve_series(self, query: str, *, year: int | None = None) -> SeriesMetadataSuggestion | None:
         for variant in german_umlaut_search_variants(query) or (query,):
@@ -121,7 +94,7 @@ class TvdbResolverMixin:
         season, episode = int(parsed.get("season") or 0), int(parsed.get("episode") or 0)
         if season < 0 or episode <= 0:
             return None
-        selected = self._resolve_episode_record(series.tmdb_id, season, episode)
+        selected = self.resolve_episode_record(series.tmdb_id, season, episode)
         if selected is None:
             return None
         episode_id = _int_or_none(selected.get("id") or selected.get("tvdb_id") or selected.get("tvdbId") or selected.get("episode_id")) or 0
@@ -149,22 +122,19 @@ class TvdbResolverMixin:
             title_is_fallback=title_is_fallback,
         )
 
-    def _resolve_episode_record(self, series_id: int, season: int, episode: int) -> dict[str, Any] | None:
-        episodes = self.series_episodes(series_id, language=self.config.language)
-        selected = self._find_episode(episodes, season, episode)
-        if selected is None and self.config.fallback_language != self.config.language:
-            episodes = self.series_episodes(series_id, language=self.config.fallback_language)
-            selected = self._find_episode(episodes, season, episode)
-        return selected
-
-    def resolve_episode_candidates(self, path: str | Path, *, limit: int = 6) -> tuple[EpisodeMetadataSuggestion, ...]:
+    def resolve_episode_candidates(self, path: str | Path, *, limit: int = 6, force_refresh: bool = False) -> tuple[EpisodeMetadataSuggestion, ...]:
         return _resolve_episode_candidates(
             self,
             path,
             limit=limit,
             series_builder=self._series_suggestion_from_record,
-            find_episode=self._find_episode,
+            force_refresh=force_refresh,
         )
+
+    def refresh_episode_candidates(
+        self, path: str | Path, *, limit: int = 6
+    ) -> tuple[EpisodeMetadataSuggestion, ...]:
+        return self.resolve_episode_candidates(path, limit=limit, force_refresh=True)
 
     def clear_cache(self) -> int:
         return _clear_cache_dir(self.cache_dir)

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from threading import RLock
 from typing import Any, Callable
 
 from .online_metadata_common import (
@@ -39,4 +40,7 @@ class TmdbClient(
             else default_metadata_cache_dir(provider="tmdb")
         )
         self._http_get = http_get or self._urllib_get
+        self._request_cache_lock = RLock()
+        self._request_session_cache: dict[str, dict[str, Any]] = {}
+        self._fresh_session_enabled = False
         self.provider_label = "TMDB"

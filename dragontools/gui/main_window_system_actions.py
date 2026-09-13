@@ -65,7 +65,7 @@ class MainWindowSystemActionsMixin:
         QMessageBox.information(
             self,
             "Release-/Build prüfen",
-            format_release_checks(checks),
+            format_release_checks(checks, plain=False),
         )
 
     def _launch_external(self, exe_name: str):

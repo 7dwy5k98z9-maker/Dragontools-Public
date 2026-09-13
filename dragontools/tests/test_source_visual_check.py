@@ -104,3 +104,54 @@ def test_source_visual_settings_reads_qsettings_values():
     assert settings.fps == 3
     assert settings.block_percent == 85
     assert settings.min_hits == 5
+
+
+def test_source_visual_batch_reader_groups_probe_processes(monkeypatch):
+    from dragontools.worker.source_visual_check import (
+        SourceVisualCheckService,
+        SourceVisualCheckSettings,
+    )
+
+    service = SourceVisualCheckService(ffmpeg_path="ffmpeg", ffprobe_path="ffprobe")
+    settings = SourceVisualCheckSettings(enabled=True)
+    calls = []
+
+    def fake_group(_path, starts, _settings):
+        calls.append(list(starts))
+        return [f"{start}".encode("ascii") for start in starts]
+
+    monkeypatch.setattr(service, "_read_probe_frame_group", fake_group)
+
+    result = service._read_probe_frames_batch(
+        __import__("pathlib").Path("film.mkv"),
+        [float(i) for i in range(9)],
+        settings,
+        batch_size=4,
+    )
+
+    assert [len(group) for group in calls] == [4, 4, 1]
+    assert len(result) == 9
+
+
+def test_source_visual_batch_reader_falls_back_per_probe(monkeypatch):
+    from pathlib import Path
+    from dragontools.worker.source_visual_check import (
+        SourceVisualCheckService,
+        SourceVisualCheckSettings,
+    )
+
+    service = SourceVisualCheckService(ffmpeg_path="ffmpeg", ffprobe_path="ffprobe")
+    settings = SourceVisualCheckSettings(enabled=True)
+    individual = []
+    monkeypatch.setattr(service, "_read_probe_frame_group", lambda *_args, **_kwargs: None)
+
+    def fake_single(_path, start, _settings):
+        individual.append(start)
+        return b"x"
+
+    monkeypatch.setattr(service, "_read_probe_frames", fake_single)
+
+    result = service._read_probe_frames_batch(Path("film.mkv"), [10.0, 20.0, 30.0], settings)
+
+    assert individual == [10.0, 20.0, 30.0]
+    assert result == [b"x", b"x", b"x"]

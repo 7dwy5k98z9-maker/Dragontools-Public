@@ -39,6 +39,7 @@ class TimestampRepairService:
         *,
         out: Path,
         container: str,
+        base_dir: Path | None = None,
         expected_duration_ms: int | None,
         expected_duration_s: float | None,
         source_has_audio: bool,
@@ -87,6 +88,7 @@ class TimestampRepairService:
         return self.repair_video_timestamps(
             out=out,
             container=container,
+            base_dir=base_dir,
             expected_duration_ms=expected_duration_ms,
             source_has_audio=source_has_audio,
             before=before,
@@ -106,6 +108,7 @@ class TimestampRepairService:
         *,
         out: Path,
         container: str,
+        base_dir: Path | None = None,
         expected_duration_ms: int | None,
         source_has_audio: bool,
         before: MediaTimingInfo,
@@ -145,17 +148,18 @@ class TimestampRepairService:
                 out, primary_tmp, ffmpeg_path=self._runtime.ffmpeg_path
             )
             self._runtime.log(
-                "ℹ️ FFmpeg-setts ist nicht verfügbar; starte direkt den verlustfreien +genpts-Fallback.",
+                "ℹ️ FFmpeg-setts ist nicht verfügbar; starte direkt den verlustfreien +genpts/+igndts-Fallback.",
                 "info",
             )
-            primary_label = "FFmpeg-+genpts-Timestamp-Reparatur"
-            primary_method = "FFmpeg +genpts"
+            primary_label = "FFmpeg-+genpts+igndts-Timestamp-Reparatur"
+            primary_method = "FFmpeg +genpts+igndts"
 
         fallback_tmp: Path | None = None
         try:
             result = self._attempt_candidate(
                 out=out,
                 tmp=primary_tmp,
+                base_dir=base_dir,
                 command=primary_command,
                 label=primary_label,
                 method=primary_method,
@@ -180,7 +184,7 @@ class TimestampRepairService:
 
             self._runtime.log(
                 "ℹ️ Erste Timestamp-Reparatur wurde nicht akzeptiert. "
-                "Starte verlustfreien FFmpeg-+genpts-Fallback.",
+                "Starte verlustfreien FFmpeg-+genpts/+igndts-Fallback.",
                 "info",
             )
             fallback_tmp = out.with_name(f"{out.stem}.timestamp_genpts_{uuid4().hex}{out.suffix}")
@@ -188,9 +192,10 @@ class TimestampRepairService:
             fallback = self._attempt_candidate(
                 out=out,
                 tmp=fallback_tmp,
+                base_dir=base_dir,
                 command=fallback_command,
-                label="FFmpeg-+genpts-Timestamp-Reparatur",
-                method="FFmpeg +genpts",
+                label="FFmpeg-+genpts+igndts-Timestamp-Reparatur",
+                method="FFmpeg +genpts+igndts",
                 container=container,
                 before=before,
                 before_ffprobe=before_ffprobe,

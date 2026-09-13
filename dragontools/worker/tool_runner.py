@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Callable, Iterable
 
 from ..core.process_runner import subprocess_no_window_kwargs as _no_window_kwargs
+from .log_dispatch import dispatch_log
 from .tool_process_lifecycle import (
     ProcessLifecycle,
     TimeoutMode,
@@ -90,8 +91,7 @@ def _dispatch_callbacks(
         try:
             callback(text)
         except Exception as exc:
-            if callable(log):
-                log(f"{label}: Ausgabe-Callback fehlgeschlagen: {exc}", "warn")
+            dispatch_log(log, f"{label}: Ausgabe-Callback fehlgeschlagen: {exc}", "warn")
 
 
 def _start_text_drain(
@@ -138,6 +138,7 @@ def run_tool(
     stderr_line: LineFn | None = None,
     timeout_mode: TimeoutMode = "absolute",
     merge_stderr: bool = False,
+    activity_file: str | os.PathLike | None = None,
 ) -> ToolRunResult:
     """Run a text-producing tool with shared timeout/abort/process semantics."""
     command = _normalize_command(cmd, function_name="run_tool")
@@ -149,6 +150,7 @@ def run_tool(
         log=log,
         abort_on_request=abort_on_request,
         timeout_mode=timeout_mode,
+        file_path=activity_file,
     )
     stdout_lines: list[str] = []
     stderr_lines: list[str] = []
@@ -237,6 +239,7 @@ def run_tool_bytes(
     log: LogFn | None = None,
     cwd: str | os.PathLike | None = None,
     abort_on_request: bool = False,
+    activity_file: str | os.PathLike | None = None,
 ) -> ToolBytesResult:
     """Run a binary-producing tool using the same process lifecycle as run_tool."""
     command = _normalize_command(cmd, function_name="run_tool_bytes")
@@ -247,6 +250,7 @@ def run_tool_bytes(
         worker=worker,
         log=log,
         abort_on_request=abort_on_request,
+        file_path=activity_file,
     )
     rc: int | None = None
     stdout = b""
@@ -311,17 +315,17 @@ def log_tool_failure(
     tool_name: str | None = None,
     lines: int = 5,
 ) -> None:
-    if not callable(log):
+    if log is None:
         return
     name = tool_name or (Path(result.command[0]).name if result.command else label)
     if result.timed_out:
-        log(f"❌ {label}: Timeout (rc={result.returncode})", "error")
+        dispatch_log(log, f"❌ {label}: Timeout (rc={result.returncode})", "error")
     elif result.aborted:
-        log(f"⏹️ {label}: durch Sofort-Abbruch beendet (rc={result.returncode})", "warn")
+        dispatch_log(log, f"⏹️ {label}: durch Sofort-Abbruch beendet (rc={result.returncode})", "warn")
     else:
-        log(f"❌ {label} fehlgeschlagen (rc={result.returncode})", "error")
+        dispatch_log(log, f"❌ {label} fehlgeschlagen (rc={result.returncode})", "error")
     tail = result.tail(lines)
     if tail:
         for line in tail.splitlines():
             if line.strip():
-                log(f"  {name}: {line}", "error")
+                dispatch_log(log, f"  {name}: {line}", "error")

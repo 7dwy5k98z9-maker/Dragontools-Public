@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from .duration_repair_archive import unique_archive_path
 from .duration_repair_models import MediaTimingInfo, TimestampRepairResult
 from .duration_repair_validation import validate_timestamp_repair
 from .duration_repair_stream_guard import RepairStreamGuard, StreamInventory
@@ -21,6 +22,7 @@ class TimestampCandidateService:
         *,
         out: Path,
         tmp: Path,
+        base_dir: Path | None = None,
         command: list[str],
         label: str,
         method: str,
@@ -40,12 +42,18 @@ class TimestampCandidateService:
         if run.returncode != 0:
             tail = (run.stderr or run.stdout or "").strip().splitlines()
             detail = tail[-1] if tail else f"Returncode {run.returncode}"
-            tolerated = method == "FFmpeg +genpts" and self._is_tolerated_genpts_returncode(
+            tolerated = method.startswith("FFmpeg +genpts") and self._is_tolerated_genpts_returncode(
                 run.returncode
             )
             if not candidate_exists or not tolerated:
                 self._runtime.log(f"❌ {label} fehlgeschlagen: {detail}", "error")
-                self._runtime.safe_unlink(tmp)
+                self._archive_rejected_candidate(
+                    tmp,
+                    out=out,
+                    base_dir=base_dir,
+                    label=label,
+                    reason=f"{label} fehlgeschlagen: {detail}",
+                )
                 return TimestampRepairResult(
                     attempted=True,
                     reason=f"{label} fehlgeschlagen: {detail}",
@@ -67,10 +75,16 @@ class TimestampCandidateService:
                     f"❌ Kandidat mit FFmpeg-EINVAL ist nicht vollständig lesbar: {exc}",
                     "error",
                 )
-                self._runtime.safe_unlink(tmp)
+                self._archive_rejected_candidate(
+                    tmp,
+                    out=out,
+                    base_dir=base_dir,
+                    label=label,
+                    reason="FFmpeg-EINVAL-Kandidat nicht vollständig lesbar",
+                )
                 return TimestampRepairResult(
                     attempted=True,
-                    reason="FFmpeg-+genpts-Kandidat war nach EINVAL nicht vollständig lesbar.",
+                    reason="FFmpeg-+genpts/+igndts-Kandidat war nach EINVAL nicht vollständig lesbar.",
                     command=command,
                     timing_summary=timing_summary,
                     retry_recommended=True,
@@ -79,7 +93,13 @@ class TimestampCandidateService:
                 )
 
         if not candidate_exists:
-            self._runtime.safe_unlink(tmp)
+            self._archive_rejected_candidate(
+                tmp,
+                out=out,
+                base_dir=base_dir,
+                label=label,
+                reason="Timestamp-Reparatur erzeugte keine plausible Ausgabedatei",
+            )
             return TimestampRepairResult(
                 attempted=True,
                 reason="Timestamp-Reparatur erzeugte keine plausible Ausgabedatei.",
@@ -130,7 +150,13 @@ class TimestampCandidateService:
             # als gültige Ausgabe erscheinen, selbst wenn einzelne ffprobe-Felder OK waren.
             verify_result.duration_ok = False
             duration_s = repaired_info.container_duration_s or verify_result.duration_s
-            self._runtime.safe_unlink(tmp)
+            self._archive_rejected_candidate(
+                tmp,
+                out=out,
+                base_dir=base_dir,
+                label=label,
+                reason="Timestamp-Reparatur wurde nach Validierung verworfen",
+            )
             return TimestampRepairResult(
                 attempted=True,
                 verify_result=verify_result,
@@ -159,6 +185,52 @@ class TimestampCandidateService:
             tool_returncode=run.returncode,
             method=method,
         )
+
+    def _archive_rejected_candidate(
+        self,
+        tmp: Path,
+        *,
+        out: Path,
+        base_dir: Path | None,
+        label: str,
+        reason: str,
+    ) -> str | None:
+        if not tmp.exists():
+            self._runtime.safe_unlink(tmp)
+            return None
+        try:
+            root = Path(base_dir) if base_dir is not None else self._archive_root_for(out)
+            archive_dir = root / "Archiv" / "Timestamp_Reparatur"
+            archive_dir.mkdir(parents=True, exist_ok=True)
+            target = unique_archive_path(
+                archive_dir,
+                f"{out.stem}.{self._safe_archive_label(label)}{out.suffix}",
+            )
+            self._runtime.replace_file(tmp, target)
+            self._runtime.log(
+                "📦 Verworfener Timestamp-Reparaturkandidat wurde zur Prüfung archiviert: "
+                f"{target} ({reason})",
+                "warn",
+            )
+            return str(target)
+        except Exception as exc:
+            self._runtime.log(
+                f"⚠️ Verworfener Timestamp-Reparaturkandidat konnte nicht archiviert werden: {exc}",
+                "warn",
+            )
+            self._runtime.safe_unlink(tmp)
+            return None
+
+    @staticmethod
+    def _archive_root_for(out: Path) -> Path:
+        if out.parent.name.lower() == "__temp_overwrite__" and out.parent.parent != out.parent:
+            return out.parent.parent
+        return out.parent
+
+    @staticmethod
+    def _safe_archive_label(label: str) -> str:
+        cleaned = "".join(ch if ch.isalnum() or ch in "._-" else "_" for ch in str(label))
+        return cleaned.strip("._-") or "Timestamp-Reparatur"
 
     @staticmethod
     def _candidate_plausible(out: Path, tmp: Path) -> bool:

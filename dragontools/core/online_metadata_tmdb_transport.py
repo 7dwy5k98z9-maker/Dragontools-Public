@@ -14,9 +14,21 @@ from .settings import APP_VERSION
 
 
 class TmdbTransportMixin:
+    def enable_fresh_session(self) -> None:
+        """Bypass the persistent cache once per request for this client session."""
+        with self._request_cache_lock:
+            self._fresh_session_enabled = True
+            self._request_session_cache.clear()
+
     """HTTP, authentication and cache plumbing for the TMDB client."""
 
-    def _request_json(self, endpoint: str, params: dict[str, Any]) -> dict[str, Any]:
+    def _request_json(
+        self,
+        endpoint: str,
+        params: dict[str, Any],
+        *,
+        force_refresh: bool = False,
+    ) -> dict[str, Any]:
         clean_params = {
             str(key): str(value)
             for key, value in params.items()
@@ -32,14 +44,25 @@ class TmdbTransportMixin:
             clean_params["api_key"] = self.config.tmdb_api_key
 
         cache_key = self._cache_key(endpoint, clean_params)
-        cached = read_metadata_cache(
-            self.cache_dir,
-            cache_key,
-            enabled=self.config.cache_enabled,
-            cache_days=self.config.cache_days,
-        )
-        if cached is not None:
-            return cached
+        with self._request_cache_lock:
+            session_value = self._request_session_cache.get(cache_key)
+            if session_value is not None and not force_refresh:
+                return session_value
+
+        # A final rename/NFO metadata session must see current provider data.
+        # It therefore ignores the persistent multi-day cache on the first
+        # request, while still reusing the live response within this batch.
+        if not force_refresh and not self._fresh_session_enabled:
+            cached = read_metadata_cache(
+                self.cache_dir,
+                cache_key,
+                enabled=self.config.cache_enabled,
+                cache_days=self.config.cache_days,
+            )
+            if cached is not None:
+                with self._request_cache_lock:
+                    self._request_session_cache[cache_key] = cached
+                return cached
 
         query = urlencode(clean_params)
         url = f"{TMDB_API_BASE}{endpoint}"
@@ -52,6 +75,8 @@ class TmdbTransportMixin:
             data,
             enabled=self.config.cache_enabled,
         )
+        with self._request_cache_lock:
+            self._request_session_cache[cache_key] = data
         return data
 
     def _cache_key(self, endpoint: str, params: dict[str, str]) -> str:

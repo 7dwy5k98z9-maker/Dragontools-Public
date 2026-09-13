@@ -25,6 +25,7 @@ from dragontools.core.media_library import (
     export_database,
     export_database_to_csv,
     export_search_results_to_csv,
+    find_movie_root,
     find_series_root,
     get_stats,
     import_jellyfin_database,
@@ -961,6 +962,69 @@ def test_series_root_prefilters_large_library_before_path_resolution(tmp_path: P
     assert inspected_roots == [str(target_dir)]
 
 
+def test_movie_root_prefilters_large_library_before_path_resolution(tmp_path: Path, monkeypatch) -> None:
+    from dragontools.core import media_library_movie_paths as movie_paths
+
+    db_path = initialize_database(tmp_path / "dragontools.sqlite3")
+    movie_root = tmp_path / "Filme"
+    target_dir = movie_root / "K" / "Der Kinderflüsterer (2026)"
+    target_dir.mkdir(parents=True)
+
+    with _db_connection(db_path) as conn:
+        noise_rows = [
+            (
+                "movie",
+                f"Noise Movie {index}",
+                str(movie_root / "N" / f"Noise Movie {index}" / f"Noise Movie {index}.mkv"),
+                str(movie_root / "N" / f"Noise Movie {index}"),
+                f"Noise Movie {index}.mkv",
+                f"noise movie {index}",
+                2026,
+            )
+            for index in range(1500)
+        ]
+        conn.executemany(
+            """
+            INSERT INTO media_items(
+                item_type, title, path, parent_path, filename, normalized_title, year,
+                analysis_status, exists_flag, active, created_at, updated_at
+            ) VALUES(?, ?, ?, ?, ?, ?, ?, 'storage_scan', 1, 1, '2026-09-12', '2026-09-12')
+            """,
+            noise_rows,
+        )
+        conn.execute(
+            """
+            INSERT INTO media_items(
+                item_type, title, path, parent_path, filename, normalized_title, year,
+                analysis_status, exists_flag, active, created_at, updated_at
+            ) VALUES('movie', 'Der Kinderflüsterer', ?, ?, ?, 'der kinderflusterer', 2026,
+                     'storage_scan', 1, 1, '2026-09-12', '2026-09-12')
+            """,
+            (str(target_dir / "Der Kinderflüsterer (2026).mkv"), str(target_dir), "Der Kinderflüsterer (2026).mkv"),
+        )
+
+    inspected_roots: list[str] = []
+    original = movie_paths._series_root_candidates_for_current_paths
+
+    def spy(root: str, **kwargs):
+        inspected_roots.append(root)
+        return original(root, **kwargs)
+
+    monkeypatch.setattr(movie_paths, "_series_root_candidates_for_current_paths", spy)
+
+    match = find_movie_root(
+        db_path,
+        "Der Kinderfluesterer",
+        [(str(movie_root), "Filme")],
+        require_existing=True,
+        year=2026,
+    )
+
+    assert match is not None
+    assert Path(match["movie_dir"]) == target_dir
+    assert inspected_roots == [str(target_dir)]
+
+
 def test_series_root_reapplies_mapping_and_can_require_existing_path(tmp_path: Path) -> None:
     db_path = initialize_database(tmp_path / "dragontools.sqlite3")
     external_root = "/video/Serien/TV"
@@ -1110,7 +1174,7 @@ def test_series_root_unusable_match_keeps_database_area_when_default_base_differ
     current_tv = tmp_path / "current" / "TV"
     current_anime.mkdir(parents=True)
     current_tv.mkdir(parents=True)
-    db_series_root = r"\\TestServer\video\Serien\TV\Watson (2025)"
+    db_series_root = r"\\Media-Share\video\Serien\TV\Watson (2025)"
 
     with _db_connection(db_path) as conn:
         conn.execute(
@@ -1124,7 +1188,7 @@ def test_series_root_unusable_match_keeps_database_area_when_default_base_differ
                 "Watson",
                 None,
                 db_series_root,
-                r"\\TestServer\video\Serien\TV",
+                r"\\Media-Share\video\Serien\TV",
                 "Watson (2025)",
                 "watson",
             ),
@@ -1576,17 +1640,17 @@ def test_search_finds_duplicate_active_sxxexx_and_cleanup_removes_inactive(tmp_p
 def test_tv_and_anime_path_mappings_use_the_same_unc_normalization() -> None:
     tv = apply_path_mappings(
         "/TVSerien/American Dad! (2005)",
-        [PathMapping("TV", "/TVSerien", "//testserver/video/Serien/TV")],
+        [PathMapping("TV", "/TVSerien", "//media-share/video/Serien/TV")],
     )
     anime = apply_path_mappings(
         "/Anime/Test Anime (2026)",
-        [PathMapping("Anime", "/Anime", r"\\TestServer\video\Serien\Anime")],
+        [PathMapping("Anime", "/Anime", r"\\Media-Share\video\Serien\Anime")],
     )
 
-    assert tv == r"\\testserver\video\Serien\TV\American Dad! (2005)"
-    assert anime == r"\\TestServer\video\Serien\Anime\Test Anime (2026)"
-    assert path_compare_key(tv).startswith(path_compare_key(r"\\TestServer\video\Serien\TV"))
-    assert path_compare_key(anime).startswith(path_compare_key(r"\\TestServer\video\Serien\Anime"))
+    assert tv == r"\\media-share\video\Serien\TV\American Dad! (2005)"
+    assert anime == r"\\Media-Share\video\Serien\Anime\Test Anime (2026)"
+    assert path_compare_key(tv).startswith(path_compare_key(r"\\Media-Share\video\Serien\TV"))
+    assert path_compare_key(anime).startswith(path_compare_key(r"\\Media-Share\video\Serien\Anime"))
 
 
 def test_backup_database_names_are_collision_safe(tmp_path: Path) -> None:
@@ -2489,3 +2553,94 @@ def test_nfo_lightscan_dotted_series_folder_stays_unreachable_not_missing(tmp_pa
         ).fetchone()
         assert row[0] == "unreachable"
         assert Path(row[1]) == nfo_path
+
+
+def test_database_schema_migrates_minimal_legacy_tables_before_creating_indexes(tmp_path: Path) -> None:
+    """Indexes must never reference columns before legacy migrations add them."""
+    db_path = tmp_path / "very-old.sqlite3"
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+        conn.execute("INSERT INTO meta(key, value) VALUES('schema_version', '1')")
+        conn.execute(
+            """
+            CREATE TABLE media_items(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                path TEXT NOT NULL UNIQUE,
+                title TEXT
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE media_streams(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                media_id INTEGER NOT NULL,
+                stream_index INTEGER
+            )
+            """
+        )
+
+    initialize_database(db_path)
+
+    with _db_connection(db_path) as conn:
+        item_columns = {row[1] for row in conn.execute("PRAGMA table_info(media_items)")}
+        stream_columns = {row[1] for row in conn.execute("PRAGMA table_info(media_streams)")}
+        indexes = {row[1] for row in conn.execute("PRAGMA index_list(media_items)")}
+        schema = conn.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()[0]
+
+    assert {"active", "exists_flag", "normalized_title", "video_codec", "width", "height"} <= item_columns
+    assert {"stream_type", "codec", "language"} <= stream_columns
+    assert "idx_media_items_series_lookup" in indexes
+    assert "idx_media_items_video" in indexes
+    assert schema == "6"
+
+
+def test_jellyfin_import_normalized_title_uses_series_id_when_series_name_is_empty(tmp_path: Path) -> None:
+    jellyfin_db = tmp_path / "jellyfin-series-id.db"
+    target_db = tmp_path / "dragontools.sqlite3"
+    with _db_connection(jellyfin_db) as conn:
+        conn.execute(
+            """
+            CREATE TABLE TypedBaseItems(
+                Guid TEXT,
+                Type TEXT,
+                Name TEXT,
+                Path TEXT,
+                SeriesName TEXT,
+                SeriesId TEXT,
+                ParentIndexNumber INTEGER,
+                IndexNumber INTEGER,
+                ProductionYear INTEGER
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO TypedBaseItems
+                (Guid, Type, Name, Path, SeriesName, SeriesId, ProductionYear)
+            VALUES
+                ('series-1', 'Series', 'Kaiju No. 8', '/Anime/Kaiju No. 8', '', '', 2024)
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO TypedBaseItems
+                (Guid, Type, Name, Path, SeriesName, SeriesId, ParentIndexNumber, IndexNumber, ProductionYear)
+            VALUES
+                ('episode-1', 'Episode', 'Narumis Woche', '/Anime/Kaiju No. 8/Staffel 00/Folge.mkv', '', 'series-1', 0, 5, 2024)
+            """
+        )
+
+    local_root = tmp_path / "Anime"
+    import_jellyfin_database(
+        jellyfin_db,
+        target_db,
+        [PathMapping("Anime", "/Anime", str(local_root))],
+    )
+
+    with _db_connection(target_db) as conn:
+        row = conn.execute(
+            "SELECT series_title, normalized_title FROM media_items WHERE source_id='episode-1'"
+        ).fetchone()
+
+    assert row == ("Kaiju No. 8", "kaiju no 8")

@@ -27,6 +27,7 @@ class TmdbSuggestionMixin:
         path: str | Path,
         *,
         limit: int = 6,
+        force_refresh: bool = False,
     ) -> tuple[EpisodeMetadataSuggestion, ...]:
         try:
             from ..rules.move_rules import parse_series_match_details
@@ -87,6 +88,7 @@ class TmdbSuggestionMixin:
                 query_year=series_query.year,
                 season=season,
                 episode=episode,
+                force_refresh=force_refresh,
             )
             if suggestion is None:
                 continue
@@ -165,6 +167,7 @@ class TmdbSuggestionMixin:
         query_year: int | None,
         season: int,
         episode: int,
+        force_refresh: bool = False,
     ) -> EpisodeMetadataSuggestion | None:
         tv_id = _int_or_none(record.get("id"))
         if tv_id is None:
@@ -175,6 +178,7 @@ class TmdbSuggestionMixin:
                 season,
                 episode,
                 append_to_response="credits,external_ids",
+                force_refresh=force_refresh,
             )
         except OnlineMetadataError:
             return None
@@ -192,6 +196,27 @@ class TmdbSuggestionMixin:
             episode,
             source_path=path,
         )
+        if title_is_fallback and not force_refresh:
+            # Generic/empty episode titles are incomplete metadata, not a valid
+            # multi-day cache hit. Refresh this concrete episode immediately.
+            try:
+                refreshed = self.tv_episode_details(
+                    tv_id,
+                    season,
+                    episode,
+                    append_to_response="credits,external_ids",
+                    force_refresh=True,
+                )
+            except OnlineMetadataError:
+                refreshed = None
+            if isinstance(refreshed, dict) and refreshed:
+                details = refreshed
+                episode_id = _int_or_none(details.get("id")) or episode_id
+                title, title_is_fallback = normalize_episode_metadata_title(
+                    details.get("name"),
+                    episode,
+                    source_path=path,
+                )
         credits = details.get("credits") or {}
 
         return EpisodeMetadataSuggestion(
@@ -219,3 +244,11 @@ class TmdbSuggestionMixin:
             episode_provider_id=episode_id,
             title_is_fallback=title_is_fallback,
         )
+
+    def refresh_episode_candidates(
+        self,
+        path: str | Path,
+        *,
+        limit: int = 6,
+    ) -> tuple[EpisodeMetadataSuggestion, ...]:
+        return self.resolve_episode_candidates(path, limit=limit, force_refresh=True)

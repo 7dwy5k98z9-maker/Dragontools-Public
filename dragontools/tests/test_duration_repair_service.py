@@ -993,7 +993,7 @@ def test_genpts_fallback_accepts_valid_candidate_even_with_ffmpeg_einval_returnc
         if exe == "ffmpeg.exe" and "-bsf:v:0" in cmd:
             # Erster CFR/setts-Versuch scheitert ohne brauchbaren Kandidaten.
             return SimpleNamespace(returncode=1, stdout="", stderr="setts failed")
-        if exe == "ffmpeg.exe" and "+genpts" in cmd:
+        if exe == "ffmpeg.exe" and _has_genpts_flag(cmd):
             target = Path(cmd[-1])
             target.write_bytes(b"fixed" * 500)
             fixed_paths.add(str(target))
@@ -1023,10 +1023,96 @@ def test_genpts_fallback_accepts_valid_candidate_even_with_ffmpeg_einval_returnc
     assert outcome.repaired is True
     assert outcome.timestamp_fixed is True
     assert out.read_bytes().startswith(b"fixed")
-    genpts = [cmd for cmd in commands if Path(cmd[0]).name.lower() == "ffmpeg.exe" and "+genpts" in cmd]
+    genpts = [cmd for cmd in commands if Path(cmd[0]).name.lower() == "ffmpeg.exe" and _has_genpts_flag(cmd)]
     assert genpts
+    assert "+genpts+igndts" in genpts[0]
     assert "-avoid_negative_ts" in genpts[0]
     assert "make_zero" in genpts[0]
+
+
+def test_rejected_timestamp_candidate_is_archived_for_manual_analysis(tmp_path):
+    from fractions import Fraction
+
+    from dragontools.worker.duration_repair_models import MediaTimingInfo
+    from dragontools.worker.duration_repair_stream_guard import StreamInventory
+    from dragontools.worker.duration_timestamp_candidate_service import TimestampCandidateService
+
+    out = tmp_path / "film.mkv"
+    tmp = tmp_path / "film.timestamp_fix.mkv"
+    out.write_bytes(b"source" * 500)
+    tmp.write_bytes(b"candidate" * 500)
+    logs: list[tuple[str, str]] = []
+
+    class Runtime:
+        output_verifier = _Verifier(_verify_result(duration_ok=True, duration_s=100.0))
+
+        @staticmethod
+        def run_tool(_command, *, label):
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+        @staticmethod
+        def replace_file(source, target):
+            Path(source).replace(target)
+
+        @staticmethod
+        def safe_unlink(path):
+            Path(path).unlink(missing_ok=True)
+
+        @staticmethod
+        def log(message, level="info"):
+            logs.append((level, message))
+
+    analyzer = SimpleNamespace(
+        get_media_timing_info=lambda _path: MediaTimingInfo(
+            path=str(tmp),
+            container_duration_s=100.0,
+            video_duration_s=100.0,
+            audio_duration_s=100.0,
+            video_frame_count=2400,
+            frame_rate=Fraction(24, 1),
+            frame_rate_mode="CFR",
+            video_stream_count=1,
+            audio_stream_count=1,
+        )
+    )
+    guard = SimpleNamespace(
+        validate=lambda **_kwargs: SimpleNamespace(
+            ok=False,
+            messages=["MediaInfo bestätigt fehlende Videostreams: erwartet 1, gefunden 0."],
+        )
+    )
+    service = TimestampCandidateService(Runtime(), analyzer, guard)
+    result = service.attempt(
+        out=out,
+        tmp=tmp,
+        base_dir=tmp_path,
+        command=["ffmpeg", "-fflags", "+genpts+igndts", str(tmp)],
+        label="FFmpeg-setts-Timestamp-Reparatur",
+        method="FFmpeg setts",
+        container="mkv",
+        before=MediaTimingInfo(
+            path=str(out),
+            container_duration_s=100.0,
+            video_duration_s=100.0,
+            audio_duration_s=100.0,
+            video_frame_count=2400,
+            frame_rate=Fraction(24, 1),
+            frame_rate_mode="CFR",
+            video_stream_count=1,
+            audio_stream_count=1,
+        ),
+        before_ffprobe=StreamInventory("ffprobe", True, video=1, audio=1),
+        before_mediainfo=StreamInventory("MediaInfo", True, video=1, audio=1),
+        expected_duration_ms=100_000,
+        source_has_audio=True,
+        timing_summary=[],
+    )
+
+    archived = tmp_path / "Archiv" / "Timestamp_Reparatur" / "film.FFmpeg-setts-Timestamp-Reparatur.mkv"
+    assert result.repaired is False
+    assert not tmp.exists()
+    assert archived.read_bytes().startswith(b"candidate")
+    assert any("Verworfener Timestamp-Reparaturkandidat" in message for _, message in logs)
 
 
 def test_genpts_candidate_with_unexpected_nonzero_returncode_is_rejected(tmp_path, monkeypatch):
@@ -1111,3 +1197,7 @@ def test_workflow_runner_never_replaces_or_finalizes_after_failed_verification(t
     runner = ConversionWorkflowRunner(Services(), replace_original=True)
     assert runner.run(str(tmp_path / "quelle.mkv"), {}) is False
     assert calls == ["analyze", "plan", "process", "verify", "fail", "cleanup"]
+
+
+def _has_genpts_flag(command: list[str]) -> bool:
+    return any("+genpts" in str(part) for part in command)

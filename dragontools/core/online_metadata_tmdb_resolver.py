@@ -101,6 +101,7 @@ class TmdbResolverMixin:
         *,
         language: str | None = None,
         append_to_response: str = "",
+        force_refresh: bool = False,
     ) -> dict[str, Any]:
         params: dict[str, Any] = {"language": language or self.config.language}
         if append_to_response:
@@ -108,6 +109,7 @@ class TmdbResolverMixin:
         return self._request_json(
             f"/tv/{int(tv_id)}/season/{int(season)}/episode/{int(episode)}",
             params,
+            force_refresh=force_refresh,
         )
 
     def collection_details(

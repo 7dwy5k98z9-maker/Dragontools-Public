@@ -1,5 +1,5 @@
 PyQt6-App: Dragon Tools – Legacy-Changelog V8
-Autor: DragonTools Team (GUI-Port)
+Autor: Dragon Developer (GUI-Port)
 
 Dragon Tools V8 war der vollständige modulare Neuaufbau von Dragon Tools.
 Diese Datei dokumentiert die Änderungen der V8-Generation und bleibt als

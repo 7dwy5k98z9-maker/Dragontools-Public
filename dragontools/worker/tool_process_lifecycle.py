@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from typing import Callable, Literal
 
 from ..core.crash_guard import mark_activity
+from .log_dispatch import dispatch_log
 from .process_control import terminate_process_tree, wait_while_paused
 
 
@@ -85,11 +86,11 @@ def terminate_plain(
             proc.wait(timeout=timeout)
             return
         except (subprocess.TimeoutExpired, OSError) as exc:
-            if callable(log):
-                log(
-                    f"{label}: SIGTERM-Prozessgruppe fehlgeschlagen/Timeout ({exc}); SIGKILL wird versucht.",
-                    "warn",
-                )
+            dispatch_log(
+                log,
+                f"{label}: SIGTERM-Prozessgruppe fehlgeschlagen/Timeout ({exc}); SIGKILL wird versucht.",
+                "warn",
+            )
         try:
             os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
             try:
@@ -97,8 +98,7 @@ def terminate_plain(
             except (subprocess.TimeoutExpired, OSError):
                 pass
         except OSError as exc:
-            if callable(log):
-                log(f"{label}: SIGKILL-Prozessgruppe fehlgeschlagen: {exc}", "error")
+            dispatch_log(log, f"{label}: SIGKILL-Prozessgruppe fehlgeschlagen: {exc}", "error")
         return
 
     try:
@@ -106,8 +106,7 @@ def terminate_plain(
         proc.wait(timeout=timeout)
         return
     except (subprocess.TimeoutExpired, OSError) as exc:
-        if callable(log):
-            log(f"{label}: terminate() fehlgeschlagen/Timeout ({exc}); kill() wird versucht.", "warn")
+        dispatch_log(log, f"{label}: terminate() fehlgeschlagen/Timeout ({exc}); kill() wird versucht.", "warn")
 
     try:
         proc.kill()
@@ -116,8 +115,7 @@ def terminate_plain(
         except (subprocess.TimeoutExpired, OSError):
             pass
     except OSError as exc:
-        if callable(log):
-            log(f"{label}: kill() fehlgeschlagen: {exc}", "error")
+        dispatch_log(log, f"{label}: kill() fehlgeschlagen: {exc}", "error")
 
 
 def close_process_streams(proc) -> None:
@@ -146,6 +144,7 @@ class ProcessLifecycle:
     log: LogFn | None = None
     abort_on_request: bool = False
     timeout_mode: TimeoutMode = "absolute"
+    file_path: str | os.PathLike | None = None
 
     def __post_init__(self) -> None:
         if self.timeout_mode not in {"absolute", "inactivity"}:
@@ -158,13 +157,13 @@ class ProcessLifecycle:
         self.aborted = False
 
     def mark_starting(self) -> None:
-        mark_activity(f"{self.label} wird gestartet", command=self.command)
+        mark_activity(f"{self.label} wird gestartet", file_path=self.file_path, command=self.command)
 
     def register(self, proc) -> None:
         self.proc = proc
         setattr(proc, "_dragontools_process_group", os.name != "nt")
         set_current_process(self.worker, self.lock, proc)
-        mark_activity(f"{self.label} läuft", command=self.command, extra={"pid": proc.pid})
+        mark_activity(f"{self.label} läuft", file_path=self.file_path, command=self.command, extra={"pid": proc.pid})
 
     def note_activity(self) -> None:
         self.last_activity = time.monotonic()
@@ -192,9 +191,8 @@ class ProcessLifecycle:
         if not self._abort_requested():
             return None
         self.aborted = True
-        if callable(self.log):
-            mode_text = "Abbruchanforderung" if self.abort_on_request else "Sofort-Abbruch"
-            self.log(f"{self.label}: {mode_text} - Prozess wird beendet.", "warn")
+        mode_text = "Abbruchanforderung" if self.abort_on_request else "Sofort-Abbruch"
+        dispatch_log(self.log, f"{self.label}: {mode_text} - Prozess wird beendet.", "warn")
         self._terminate()
         return 130
 
@@ -215,14 +213,13 @@ class ProcessLifecycle:
             return None
 
         self.timed_out = True
-        if callable(self.log):
-            if display == "seconds":
-                message = f"❌ {self.label}: Timeout nach {self.timeout_s}s - Prozess wird abgebrochen."
-            else:
-                minutes = max(1, int(round(float(self.timeout_s) / 60)))
-                kind = "Inaktivitäts-Timeout" if self.timeout_mode == "inactivity" else "Timeout"
-                message = f"❌ {self.label}: {kind} nach {minutes} Min - Prozess wird abgebrochen."
-            self.log(message, "error")
+        if display == "seconds":
+            message = f"❌ {self.label}: Timeout nach {self.timeout_s}s - Prozess wird abgebrochen."
+        else:
+            minutes = max(1, int(round(float(self.timeout_s) / 60)))
+            kind = "Inaktivitäts-Timeout" if self.timeout_mode == "inactivity" else "Timeout"
+            message = f"❌ {self.label}: {kind} nach {minutes} Min - Prozess wird abgebrochen."
+        dispatch_log(self.log, message, "error")
         self._terminate()
         return 124
 
@@ -231,6 +228,7 @@ class ProcessLifecycle:
             clear_current_process(self.worker, self.lock, self.proc)
         mark_activity(
             f"{self.label} beendet",
+            file_path=self.file_path,
             command=self.command,
             extra={
                 "returncode": returncode,

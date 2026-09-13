@@ -40,6 +40,8 @@ def test_media_library_facade_preserves_public_api() -> None:
         "import_jellyfin_database",
         "execute_sql",
         "search_library",
+        "find_movie_root",
+        "find_movie_dir_from_settings",
         "find_series_root",
         "find_series_dir_from_settings",
     }

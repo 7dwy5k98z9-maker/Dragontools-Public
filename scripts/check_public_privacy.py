@@ -60,7 +60,24 @@ def is_skipped(path: Path) -> bool:
 def scan_text(label: str, text: str, findings: list[str]) -> None:
     for description, pattern in PRIVATE_PATTERNS:
         if match := pattern.search(text):
+            if description == "möglicher Zugangsschlüssel" and _is_allowed_placeholder(match.group(0)):
+                continue
             findings.append(f"{label}: {description} ({match.group(0)[:60]!r})")
+
+
+def _is_allowed_placeholder(match_text: str) -> bool:
+    lowered = str(match_text or "").casefold()
+    return any(
+        marker in lowered
+        for marker in (
+            "metadata/tmdb/api_key",
+            "tmdb-api-secret",
+            "tmdb-key",
+            "dummy",
+            "placeholder",
+            "example",
+        )
+    )
 
 
 def main() -> int:

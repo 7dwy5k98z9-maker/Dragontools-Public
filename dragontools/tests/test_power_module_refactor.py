@@ -24,7 +24,12 @@ def test_refactored_power_modules_stay_bounded():
         "core/movie_renamer.py": 300,
         "core/movie_renamer_models.py": 180,
         "core/movie_renamer_parsing.py": 360,
-        "core/movie_renamer_candidates.py": 380,
+        "core/movie_renamer_candidates.py": 80,
+        "core/movie_renamer_candidate_resolvers.py": 130,
+        "core/movie_renamer_candidate_mapping.py": 190,
+        "core/movie_renamer_candidate_scoring.py": 120,
+        "core/movie_renamer_candidate_order.py": 80,
+        "core/movie_renamer_episode_refresh.py": 90,
         "core/release_validation.py": 320,
         "core/release_validation_common.py": 100,
         "core/release_validation_environment.py": 330,
@@ -69,7 +74,10 @@ def test_refactored_power_modules_stay_bounded():
         "rules/subtitle_rule_config.py": 230,
         "core/media_analyzer.py": 310,
         "core/media_analyzer_io.py": 140,
-        "core/media_analyzer_streams.py": 380,
+        "core/media_analyzer_streams.py": 60,
+        "core/media_analyzer_video_streams.py": 220,
+        "core/media_analyzer_audio_streams.py": 100,
+        "core/media_analyzer_subtitle_streams.py": 180,
         "core/move_journal.py": 430,
         "core/move_journal_contracts.py": 60,
         "core/move_journal_resume.py": 140,
@@ -131,6 +139,11 @@ def test_refactored_core_services_remain_qt_free():
         "core/movie_renamer_models.py",
         "core/movie_renamer_parsing.py",
         "core/movie_renamer_candidates.py",
+        "core/movie_renamer_candidate_resolvers.py",
+        "core/movie_renamer_candidate_mapping.py",
+        "core/movie_renamer_candidate_scoring.py",
+        "core/movie_renamer_candidate_order.py",
+        "core/movie_renamer_episode_refresh.py",
         "core/release_validation_common.py",
         "core/release_validation_environment.py",
         "core/release_validation_package.py",
@@ -145,6 +158,9 @@ def test_refactored_core_services_remain_qt_free():
         "core/media_analyzer.py",
         "core/media_analyzer_io.py",
         "core/media_analyzer_streams.py",
+        "core/media_analyzer_video_streams.py",
+        "core/media_analyzer_audio_streams.py",
+        "core/media_analyzer_subtitle_streams.py",
         "core/move_journal.py",
         "core/move_journal_contracts.py",
         "core/move_journal_resume.py",
@@ -272,6 +288,24 @@ def test_round3_compatibility_facades():
     assert analyzer._build_video_streams is _build_video_streams
     assert journal.build_move_resume_plan is build_move_resume_plan
     assert issubclass(TheTvdbClient, TvdbResolverMixin)
+
+
+def test_block11_candidate_and_stream_facades_reexport_split_helpers():
+    from dragontools.core import media_analyzer_streams as stream_facade
+    from dragontools.core import movie_renamer_candidates as candidate_facade
+    from dragontools.core.media_analyzer_video_streams import _build_video_streams
+    from dragontools.core.media_analyzer_audio_streams import _build_audio_streams
+    from dragontools.core.media_analyzer_subtitle_streams import _build_subtitle_streams
+    from dragontools.core.movie_renamer_candidate_resolvers import _resolve_series_results
+    from dragontools.core.movie_renamer_candidate_mapping import _series_candidate_from_result
+    from dragontools.core.movie_renamer_candidate_order import _limit_candidates_with_provider_coverage
+
+    assert stream_facade._build_video_streams is _build_video_streams
+    assert stream_facade._build_audio_streams is _build_audio_streams
+    assert stream_facade._build_subtitle_streams is _build_subtitle_streams
+    assert candidate_facade._resolve_series_results is _resolve_series_results
+    assert candidate_facade._series_candidate_from_result is _series_candidate_from_result
+    assert candidate_facade._limit_candidates_with_provider_coverage is _limit_candidates_with_provider_coverage
 
 
 def test_round3_gui_modules_are_composed_from_small_helpers():

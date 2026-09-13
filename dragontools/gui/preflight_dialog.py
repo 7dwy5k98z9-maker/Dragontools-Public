@@ -33,6 +33,7 @@ from .preflight_widgets import (
 )
 from .preflight_view import build_preflight_view
 from .preflight_metadata import (
+    media_library_preflight_enabled,
     online_metadata_enabled,
     run_metadata_lookup,
     apply_metadata_result,
@@ -101,6 +102,7 @@ class PreFlightDialog(QDialog):
             return
         self._metadata_started = True
         online_enabled = self._online_metadata_enabled()
+        library_enabled = media_library_preflight_enabled()
         jobs: list[tuple[str, str, Any]] = []
         targets: dict[tuple[str, str], SeriesGroupWidget | FilmWidget] = {}
 
@@ -109,7 +111,7 @@ class PreFlightDialog(QDialog):
             if job is None:
                 continue
             kind, key, _payload = job
-            if kind == "movie" and not online_enabled:
+            if kind == "movie" and not online_enabled and not library_enabled:
                 continue
             jobs.append(job)
             targets[(kind, key)] = widget
@@ -142,8 +144,9 @@ class PreFlightDialog(QDialog):
         if job is None:
             return
         online_enabled = self._online_metadata_enabled()
+        library_enabled = media_library_preflight_enabled()
         kind, _key, _payload = job
-        if kind == "movie" and not online_enabled:
+        if kind == "movie" and not online_enabled and not library_enabled:
             return
         if isinstance(widget, SeriesGroupWidget):
             widget.mark_metadata_lookup_started(online_enabled)

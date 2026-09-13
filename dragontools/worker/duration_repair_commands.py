@@ -62,7 +62,7 @@ def build_genpts_repair_command(
         "-hide_banner",
         "-y",
         "-fflags",
-        "+genpts",
+        "+genpts+igndts",
         "-i",
         str(source),
         "-map",

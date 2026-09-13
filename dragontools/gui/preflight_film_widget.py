@@ -7,17 +7,25 @@ from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QComboBox
 
 from ..rules.move_rules import default_film_series_name, normalize_relative_move_subpath, resolve_film_target_for_path
 from ..core.paths import user_path_name
-from .preflight_widget_common import _safe_stem, _fmt_path, _planned_target_entry
+from .preflight_film_hints import (
+    add_release_warning,
+    existing_movie_hint,
+    hidden_edit_row,
+    metadata_lookup_failed_text,
+    metadata_lookup_started_text,
+    metadata_movie_suggestion_text,
+)
+from .preflight_widget_common import _safe_stem, _fmt_path, _planned_target_entry, _base_path_key
 
 class FilmWidget(QWidget):
-    """Einzelner Film mit Einzelfilm/Filmreihe Auswahl."""
-
     def __init__(self, path: str, filme_path: str | None, parent=None, release_warnings=()):
         super().__init__(parent)
         self.path       = path
         self.filme_path = filme_path
         self._release_warnings = tuple(release_warnings or ())
         self._metadata_original_stem = _safe_stem(path)
+        self._resolved_movie_key: tuple[str, str] | None = None
+        self._resolved_movie_dir: str | None = None
         self._build()
 
     def _build(self):
@@ -28,15 +36,7 @@ class FilmWidget(QWidget):
         name_lbl = QLabel(f"🎬  <b>{user_path_name(self.path)}</b>")
         name_lbl.setWordWrap(True)
         v.addWidget(name_lbl)
-        if self._release_warnings:
-            warning = QLabel(
-                "  ⚠️ Nicht normalisierter/Release-Dateiname erkannt: "
-                + "; ".join(self._release_warnings)
-                + ". Die Online-Metadatensuche wird automatisch gestartet."
-            )
-            warning.setWordWrap(True)
-            warning.setStyleSheet("color:#b45309; font-size:11px;")
-            v.addWidget(warning)
+        add_release_warning(v, self._release_warnings)
 
         stem = self._metadata_original_stem
 
@@ -50,36 +50,21 @@ class FilmWidget(QWidget):
 
         row.addWidget(QLabel("Name:"))
         self._film_name = QLineEdit(stem)
-        self._film_name.textChanged.connect(self._update_preview)
+        self._film_name.textChanged.connect(self._film_text_changed)
         row.addWidget(self._film_name, 1)
         v.addLayout(row)
 
-        # Reihenname (nur bei Filmreihe sichtbar)
-        self._reihe_row = QHBoxLayout()
-        self._reihe_lbl  = QLabel("Reihe:")
         self._reihe_edit = QLineEdit(default_film_series_name(stem))
-        self._reihe_edit.textChanged.connect(self._update_preview)
-        self._reihe_row.addWidget(self._reihe_lbl)
-        self._reihe_row.addWidget(self._reihe_edit, 1)
-        reihe_w = QWidget()
-        reihe_w.setLayout(self._reihe_row)
-        self._reihe_widget = reihe_w
-        self._reihe_widget.setVisible(False)
+        self._reihe_widget = hidden_edit_row("Reihe:", self._reihe_edit, self._update_preview)
         v.addWidget(self._reihe_widget)
 
-        self._subpath_row = QHBoxLayout()
-        self._subpath_lbl = QLabel("Unterordner:")
         self._subpath_edit = QLineEdit()
-        self._subpath_edit.setPlaceholderText(
-            "optional, relativ, z. B. Trilogie oder Spider-Verse/Miles Morales"
+        self._subpath_widget = hidden_edit_row(
+            "Unterordner:",
+            self._subpath_edit,
+            self._update_preview,
+            "optional, relativ, z. B. Trilogie oder Spider-Verse/Miles Morales",
         )
-        self._subpath_edit.textChanged.connect(self._update_preview)
-        self._subpath_row.addWidget(self._subpath_lbl)
-        self._subpath_row.addWidget(self._subpath_edit, 1)
-        subpath_w = QWidget()
-        subpath_w.setLayout(self._subpath_row)
-        self._subpath_widget = subpath_w
-        self._subpath_widget.setVisible(False)
         v.addWidget(self._subpath_widget)
 
         self._preview = QLabel()
@@ -94,9 +79,21 @@ class FilmWidget(QWidget):
         v.addWidget(self._metadata_hint)
 
     def _on_type_changed(self, idx: int):
+        self._clear_resolved_movie_dir()
         self._reihe_widget.setVisible(idx == 1)
         self._subpath_widget.setVisible(idx == 1)
         self._update_preview()
+
+    def _film_text_changed(self) -> None:
+        self._clear_resolved_movie_dir()
+        self._update_preview()
+
+    def _clear_resolved_movie_dir(self) -> None:
+        self._resolved_movie_key = None
+        self._resolved_movie_dir = None
+
+    def _movie_key(self) -> tuple[str, str]:
+        return (_base_path_key(self.filme_path), self._film_name.text().strip())
 
     def _update_preview(self):
         try:
@@ -118,15 +115,14 @@ class FilmWidget(QWidget):
     def metadata_lookup_job(self) -> tuple[str, str, Any] | None:
         if not self.filme_path:
             return None
-        return ("movie", self.path, self.path)
+        return ("movie", self.path, {"path": self.path, "movie_base": self.filme_path})
 
     def mark_metadata_lookup_started(self) -> None:
-        self._metadata_hint.setText("  🌐 Online-Metadaten: Film-Metadaten werden im Hintergrund geladen …")
+        self._metadata_hint.setText(metadata_lookup_started_text())
         self._metadata_hint.setVisible(True)
 
     def mark_metadata_lookup_failed(self, message: str = "") -> None:
-        detail = f" – {message}" if message else ""
-        self._metadata_hint.setText(f"  🌐 Online-Metadaten: Film-Metadaten konnten nicht geladen werden{detail}")
+        self._metadata_hint.setText(metadata_lookup_failed_text(message))
         self._metadata_hint.setVisible(True)
 
     def apply_online_metadata_suggestion(self, suggestion) -> None:
@@ -143,16 +139,44 @@ class FilmWidget(QWidget):
         if suggestion.has_collection:
             self._film_type.setCurrentIndex(1)
             self._reihe_edit.setText(suggestion.collection_name)
-            part_info = (
-                f", {suggestion.collection_part_count} Teile"
-                if suggestion.collection_part_count else ""
-            )
-            self._metadata_hint.setText(
-                f"  🌐 Online-Metadaten: Filmreihe erkannt – {suggestion.collection_name}{part_info}"
-            )
         else:
             self._film_type.setCurrentIndex(0)
-            self._metadata_hint.setText("  🌐 Online-Metadaten: Einzelfilm erkannt")
+        self._metadata_hint.setText(metadata_movie_suggestion_text(suggestion))
+        self._metadata_hint.setVisible(True)
+        self._update_preview()
+
+    def apply_existing_movie_dir(
+        self,
+        movie_dir: str,
+        base: str,
+        movie_name: str,
+        source: str = "database",
+        notice: str = "",
+    ) -> None:
+        if base and self.filme_path and _base_path_key(base) != _base_path_key(self.filme_path):
+            return
+        if self._film_name.text().strip() != self._metadata_original_stem:
+            self._metadata_hint.setText(
+                "  🗄 Mediathek-Datenbank: Treffer nicht übernommen – Name wurde manuell geändert."
+            )
+            self._metadata_hint.setVisible(True)
+            return
+        self._film_type.setCurrentIndex(0)
+        shown_name = str(movie_name or "").strip() or user_path_name(movie_dir)
+        if shown_name:
+            self._film_name.setText(shown_name)
+        self._resolved_movie_key = self._movie_key()
+        self._resolved_movie_dir = movie_dir
+        self._metadata_hint.setText(existing_movie_hint(movie_dir, source, notice))
+        self._metadata_hint.setVisible(True)
+        self._update_preview()
+
+    def apply_unusable_movie_match(self, *, message: str, movie_name: str = "") -> None:
+        shown_name = str(movie_name or "").strip()
+        if shown_name and self._film_name.text().strip() == self._metadata_original_stem:
+            self._film_name.setText(shown_name)
+        self._metadata_hint.setText(f"  ⚠️ Mediathek-Datenbank: {message}")
+        self._metadata_hint.setStyleSheet("color:#b45309; font-size:11px;")
         self._metadata_hint.setVisible(True)
         self._update_preview()
 
@@ -162,6 +186,8 @@ class FilmWidget(QWidget):
         stem = self._film_name.text().strip()
         if not stem:
             return None
+        if self._film_type.currentIndex() == 0 and self._resolved_movie_key == self._movie_key() and self._resolved_movie_dir:
+            return self._resolved_movie_dir
         if self._film_type.currentIndex() == 0:
             return resolve_film_target_for_path(
                 self.path,

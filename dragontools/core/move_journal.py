@@ -383,10 +383,12 @@ class MoveJournal:
             archive = _unique_archive_path(archive_dir / f"{run_id}_{self.data.get('status', 'completed')}.json")
             _atomic_write_json(archive, self.data)
             self.path.unlink(missing_ok=True)
-        except OSError as exc:
-            _LOG.exception("Move-Journal konnte nicht archiviert werden: %s", exc)
+        except (OSError, TypeError, ValueError) as exc:
+            message = f"Move-Journal konnte nicht archiviert werden: {self.path} ({exc})"
+            _LOG.exception(message)
             if self._on_write_error:
                 try:
-                    self._on_write_error(f"Move-Journal konnte nicht archiviert werden: {exc}")
+                    self._on_write_error(message)
                 except Exception as callback_exc:
                     _LOG.warning("Move-Journal-Fehlercallback fehlgeschlagen: %s", callback_exc)
+            raise MoveJournalWriteError(message) from exc

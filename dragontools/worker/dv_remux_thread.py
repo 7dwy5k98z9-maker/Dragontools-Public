@@ -29,8 +29,6 @@ from pathlib import Path
 from PyQt6.QtCore import QThread, pyqtSignal, QSettings
 
 from ..core.logger import create_worker_logger
-from ..core.sidecar_transaction import SidecarCommitError, SidecarCommitTransaction
-from ..core.sidecar_journal import SidecarJournal
 from ..core.media_analyzer import analyze_media
 from ..core.paths import get_tool_paths
 from ..core.settings import (
@@ -41,7 +39,6 @@ from ..core.settings import (
     settings_text,
 )
 from ..rules.rule_loader import load_subtitle_rules
-from ..rules.subtitle_rules import any_sidecar_export_enabled
 from .worker_contracts import RemoveFileStatus, normalize_worker_path
 from .converter_utils import _fd, _fs
 from .converter_queue_state import ConverterQueueState
@@ -52,6 +49,7 @@ from .dv_remux_components import (
     DVOutputManager,
     DVRemuxProcessRunner,
 )
+from .dv_remux_job import DVRemuxJobRunner
 from .worker_events import log_event, progress_event, result_event
 
 
@@ -256,21 +254,27 @@ class DVRemuxThread(QThread):
         self.event.emit(log_event(str(msg), severity=level))
         getattr(self._logger, level, self._logger.info)(msg)
 
+
     # ==================================================================
-    # Remux-Logik
+    # Per-file remux transaction
     # ==================================================================
 
     def _prepare_remux_metadata(self, input_path: str):
         name = Path(input_path).name
-        mi = analyze_media(input_path, self.tools)
-        for warning in getattr(mi, "analysis_warnings", []) or []:
+        media_info = analyze_media(input_path, self.tools)
+        for warning in getattr(media_info, "analysis_warnings", []) or []:
             self.log(f"Analyse-Warnung: {warning}", "warn")
         dur_ms = self._process_runner.probe_ms(input_path)
-        file_override = self.file_overrides.get(input_path)
-        return name, mi, dur_ms, file_override
+        return name, media_info, dur_ms, self.file_overrides.get(input_path)
 
-    def _emit_remux_success(self, input_path: str, output_path: str, name: str,
-                            size_before: int, start_ts: float) -> None:
+    def _emit_remux_success(
+        self,
+        input_path: str,
+        output_path: str,
+        name: str,
+        size_before: int,
+        start_ts: float,
+    ) -> None:
         size_after = Path(output_path).stat().st_size if Path(output_path).exists() else 0
         duration = time.time() - start_ts
         self.log(
@@ -284,148 +288,21 @@ class DVRemuxThread(QThread):
         self.file_result.emit(input_path, output_path, "✅")
 
     def _remux_file_safe(self, input_path: str) -> bool:
-        output_path: str | None = None
-        remux_complete = False
-        fail_status = "\u274c"
-        try:
-            self.event.emit(result_event(input_path, input_path, "\u23f3"))
-            self.file_result.emit(input_path, input_path, "\u23f3")
-            self.event.emit(progress_event(input_path, 0, None))
-            self.file_progress.emit(input_path, 0, None)
-
-            name, mi, dur_ms, file_override = self._prepare_remux_metadata(input_path)
-            self.log(f"DV-Remux: {name}", "info")
-
-            output_path = self._output_manager.build_output_path(input_path)
-            size_before = Path(input_path).stat().st_size if Path(input_path).exists() else 0
-            start = time.time()
-
-            ok = self._mp4box_pipeline.run(
-                input_path=input_path,
-                output_path=output_path,
-                mi=mi,
-                dur_ms=dur_ms,
-                file_override=file_override,
-                name=name,
-            )
-            if not ok or self.abort_requested:
-                if not self.abort_requested:
-                    self.log(f"Remux fehlgeschlagen: {name}", "error")
-                self.event.emit(result_event(input_path, input_path, fail_status))
-                self.file_result.emit(input_path, input_path, fail_status)
-                return False
-
-            staged_sidecars: list[str] = []
-            if any_sidecar_export_enabled(self.subtitle_rules, container=self.container):
-                # MP4: globale Strategie. Bei aktivierter Option werden alle
-                # ausgewählten Subs extern gespeichert; sonst nur inkompatible
-                # Bitmap-Subs. Remux kann nicht burnen, daher Burn-Kandidat erhalten.
-                export_result = self._subtitle_service.export_sidecars_result(
-                    input_path=input_path,
-                    output_base=Path(output_path).with_suffix(""),
-                    media_info=mi,
-                    file_override=file_override,
-                    abort_check=lambda: self.abort_requested,
-                    preserve_burn_candidate=True,
-                    container=self.container,
-                )
-                staged_sidecars = list(export_result.exported_paths)
-                if not export_result.complete:
-                    self._cleanup_generated_sidecars(staged_sidecars)
-                    self.log(
-                        export_result.failure_summary() or "Sidecar-Export unvollständig.",
-                        "error",
-                    )
-                    self.event.emit(result_event(input_path, input_path, fail_status))
-                    self.file_result.emit(input_path, input_path, fail_status)
-                    return False
-            elif getattr(mi, "subtitle_streams", None):
-                self.log(
-                    "  💬 MKV-Ziel: ausgewählte Untertitel sind im Container gespeichert; "
-                    "kein externer Sidecar-Export.",
-                    "info",
-                )
-
-            anticipated_output = (
-                str(Path(input_path).with_suffix(f".{self.container}"))
-                if self.overwrite_original
-                else output_path
-            )
-            sidecar_tx: SidecarCommitTransaction | None = None
-            if staged_sidecars:
-                try:
-                    sidecar_tx = SidecarCommitTransaction(
-                        staged_sidecars,
-                        source_base=Path(output_path).with_suffix(""),
-                        destination_base=Path(anticipated_output).with_suffix(""),
-                    )
-                    journal = SidecarJournal.start(
-                        video_staging=output_path,
-                        video_destination=anticipated_output,
-                        records=sidecar_tx.prepare_records(),
-                        video_committed=(str(Path(output_path)) == str(Path(anticipated_output))),
-                    )
-                    setattr(sidecar_tx, "_dragontools_journal", journal)
-                    sidecar_tx.commit()
-                    journal.set_status("sidecars_committed")
-                except SidecarCommitError as exc:
-                    self._cleanup_generated_sidecars(staged_sidecars)
-                    self.log(f"Sidecar-Finalisierung fehlgeschlagen: {exc}", "error")
-                    self.event.emit(result_event(input_path, input_path, fail_status))
-                    self.file_result.emit(input_path, input_path, fail_status)
-                    return False
-
-            replace_ok, output_path = self._output_manager.replace_output_if_needed(input_path, output_path)
-            if not replace_ok or self.abort_requested:
-                if sidecar_tx is not None:
-                    try:
-                        sidecar_tx.rollback()
-                        journal = getattr(sidecar_tx, "_dragontools_journal", None)
-                        if journal is not None:
-                            journal.finish()
-                    except SidecarCommitError as exc:
-                        self.log(f"Sidecar-Rollback unvollständig: {exc}", "error")
-                self._cleanup_generated_sidecars(staged_sidecars)
-                self.event.emit(result_event(input_path, input_path, fail_status))
-                self.file_result.emit(input_path, input_path, fail_status)
-                return False
-
-            sidecar_paths = list(sidecar_tx.final_paths) if sidecar_tx is not None else []
-            if sidecar_tx is not None:
-                for destination, backup in sidecar_tx.backup_pairs:
-                    self.log(
-                        "Vorhandenes Sidecar wurde nicht gelöscht, sondern gesichert: "
-                        f"{destination.name} -> {backup.name}",
-                        "warn",
-                    )
-            self._sidecar_outputs[input_path] = sidecar_paths
-            if sidecar_tx is not None:
-                journal = getattr(sidecar_tx, "_dragontools_journal", None)
-                if journal is not None:
-                    journal.finish()
-
-            self._emit_remux_success(input_path, output_path, name, size_before, start)
-            remux_complete = True
-            return True
-        except Exception:
-            self.log(f"Unbehandelte Ausnahme in _remux_file_safe() bei {Path(input_path).name}", "error")
-            self.log(traceback.format_exc(), "error")
-            self.event.emit(result_event(input_path, input_path, fail_status))
-            self.file_result.emit(input_path, input_path, fail_status)
-            return False
-        finally:
-            if not remux_complete:
-                self._output_manager.cleanup_incomplete(input_path, output_path)
+        """Run one file through the extracted transaction service."""
+        job = DVRemuxJobRunner(
+            self,
+            process_runner=self._process_runner,
+            pipeline=self._mp4box_pipeline,
+            output_manager=self._output_manager,
+            subtitle_service=self._subtitle_service,
+            prepare_metadata=lambda path: self._prepare_remux_metadata(path),
+            emit_success=lambda *args: self._emit_remux_success(*args),
+        )
+        return job.run(input_path)
 
     @staticmethod
     def _cleanup_generated_sidecars(paths: list[str] | tuple[str, ...]) -> None:
-        for raw in paths:
-            path = Path(raw)
-            try:
-                if path.exists() or path.is_symlink():
-                    path.unlink()
-            except OSError:
-                pass
+        DVRemuxJobRunner.cleanup_generated_sidecars(paths)
 
     # ==================================================================
     # Run-Loop

@@ -25,6 +25,8 @@ from .media_library_nfo_scan import scan_nfo_inventory
 from .media_library_paths import (
     apply_path_mappings,
     dump_path_mappings,
+    find_movie_dir_from_settings,
+    find_movie_root,
     find_series_dir_from_settings,
     find_series_root,
     get_path_mappings,
@@ -86,4 +88,6 @@ __all__ = [
     "search_library",
     "find_series_root",
     "find_series_dir_from_settings",
+    "find_movie_root",
+    "find_movie_dir_from_settings",
 ]

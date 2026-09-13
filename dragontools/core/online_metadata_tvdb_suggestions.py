@@ -84,12 +84,16 @@ class TvdbSuggestionMixin:
         query: str,
         year: int | None,
         record: dict[str, Any],
+        *,
+        force_refresh: bool = False,
     ) -> SeriesMetadataSuggestion | None:
         series_id = _int_or_none(record.get("tvdb_id") or record.get("id") or record.get("seriesId"))
         if series_id is None:
             return None
         try:
-            details_payload = self.series_details(series_id, include_translations=True)
+            details_payload = self.series_details(
+                series_id, include_translations=True, force_refresh=force_refresh
+            )
             details = _single_record_from_data(details_payload) or record
         except OnlineMetadataError:
             details = record

@@ -14,9 +14,11 @@ from .media_library_series_paths import (
     _match_base, _series_root_candidates_for_current_paths, _series_root_from_db_row,
     find_series_dir_from_settings, find_series_root,
 )
+from .media_library_movie_paths import find_movie_dir_from_settings, find_movie_root
 
 __all__ = [
     "load_path_mappings", "dump_path_mappings", "save_path_mappings",
     "get_path_mappings", "apply_path_mappings", "find_series_root",
-    "find_series_dir_from_settings",
+    "find_series_dir_from_settings", "find_movie_root",
+    "find_movie_dir_from_settings",
 ]

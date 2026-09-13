@@ -24,11 +24,19 @@ def _path_prefix_condition(prefixes: Iterable[str], params: list[Any]) -> str:
     return "(" + " OR ".join(conditions) + ")" if conditions else ""
 
 
-def _mapping_prefixes_for_scope(db_path: Path, scope: str) -> list[str]:
-    try:
-        mappings = get_path_mappings(db_path)
-    except Exception:
-        mappings = []
+def _mapping_prefixes_for_scope(
+    db_path: Path,
+    scope: str,
+    *,
+    mappings: Iterable[PathMapping] | None = None,
+) -> list[str]:
+    if mappings is None:
+        try:
+            mappings = get_path_mappings(db_path)
+        except Exception:
+            mappings = []
+    else:
+        mappings = list(mappings)
     wanted = scope.casefold()
     if wanted in {"movies", "filme", "film"}:
         labels = {"filme", "film", "movies", "movie"}

@@ -6,12 +6,9 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Callable
 
-from ..core.process_runner import tool_available
 from .duration_remux_service import DurationRemuxService
-from .duration_repair_commands import (
-    _command_arg_after,
-    _setts_filter_for_fps,
-)
+from .duration_repair_archive import DurationRepairArchive, format_duration as _fmt_duration, unique_archive_path as _unique_archive_path
+from .duration_repair_commands import _command_arg_after, _setts_filter_for_fps
 from .duration_repair_models import (
     DurationRepairOutcome,
     MediaTimingInfo,
@@ -20,6 +17,8 @@ from .duration_repair_models import (
     detect_timestamp_problem,
     duration_close as _duration_close,
 )
+from .duration_repair_orchestrator import DurationRepairOrchestrator
+from .duration_repair_policy import can_repair_duration, mark_duration_repair_failed
 from .duration_repair_runtime import DurationRepairRuntime
 from .duration_repair_validation import validate_timestamp_repair as _validate_timestamp_repair
 from .duration_timing_analyzer import MediaTimingAnalyzer
@@ -28,36 +27,8 @@ from .tool_runner import ToolRunResult, run_tool
 from .workflow_engine import WorkflowVerifyResult
 
 
-def _fmt_duration(seconds: float | None) -> str:
-    if seconds is None:
-        return "unbekannt"
-    try:
-        return f"{float(seconds):.1f}s"
-    except (TypeError, ValueError):
-        return "unbekannt"
-
-
-def _unique_archive_path(archive_dir: Path, filename: str) -> Path:
-    candidate = archive_dir / filename
-    if not candidate.exists():
-        return candidate
-    stem = candidate.stem
-    suffix = candidate.suffix
-    counter = 1
-    while True:
-        numbered = archive_dir / f"{stem}_{counter}{suffix}"
-        if not numbered.exists():
-            return numbered
-        counter += 1
-
-
 class DurationRepairService:
-    """Coordinates lossless duration repair without owning stage internals.
-
-    Public and historically test-used private methods stay available as thin
-    compatibility wrappers while the actual remux/timestamp responsibilities
-    live in dedicated services.
-    """
+    """Compatibility facade for lossless duration repair services."""
 
     def __init__(
         self,
@@ -95,9 +66,15 @@ class DurationRepairService:
         )
         self._remux_service = DurationRemuxService(self._runtime)
         self._timestamp_service = TimestampRepairService(self._runtime, self._timing_analyzer)
+        self._archive_service = DurationRepairArchive(self._runtime)
+        self._orchestrator = DurationRepairOrchestrator(
+            remux_service=self._remux_service,
+            timestamp_service=self._timestamp_service,
+            archive=self._archive_service,
+            log=self._runtime.log,
+        )
 
-        # Compatibility attributes used by older internal code/tests. They are
-        # aliases only; no duplicated state or business logic lives here.
+        # Compatibility aliases used by older internal code/tests.
         self._mkvmerge_path = self._runtime.mkvmerge_path
         self._mp4box_path = self._runtime.mp4box_path
         self._output_verifier = self._runtime.output_verifier
@@ -108,35 +85,13 @@ class DurationRepairService:
         self._worker = self._runtime.worker
         self._run_tool = self._runtime.run_tool_fn
 
-    def can_repair(
-        self,
-        *,
-        output_path: str | None,
-        container: str,
-        verify_result: WorkflowVerifyResult,
-    ) -> bool:
-        if not output_path:
-            return False
-        if not (self._normal_remux_enabled or self._timestamp_repair_enabled):
-            return False
-        container_name = str(container or "").strip().lower().lstrip(".")
-        suffix = Path(output_path).suffix.lower()
-        if not (
-            (container_name == "mkv" and suffix == ".mkv")
-            or (container_name == "mp4" and suffix == ".mp4")
-        ):
-            return False
-        return (
-            bool(verify_result.exists)
-            and bool(verify_result.size_ok)
-            and bool(verify_result.container_ok)
-            and bool(verify_result.probe_ok)
-            and bool(verify_result.video_ok)
-            and bool(verify_result.audio_ok)
-            and bool(getattr(verify_result, "subtitle_ok", True))
-            and bool(getattr(verify_result, "contract_ok", True))
-            and bool(getattr(verify_result, "metadata_ok", True))
-            and not bool(verify_result.duration_ok)
+    def can_repair(self, *, output_path: str | None, container: str, verify_result: WorkflowVerifyResult) -> bool:
+        return can_repair_duration(
+            output_path=output_path,
+            container=container,
+            verify_result=verify_result,
+            normal_remux_enabled=self._normal_remux_enabled,
+            timestamp_repair_enabled=self._timestamp_repair_enabled,
         )
 
     def repair(
@@ -152,143 +107,27 @@ class DurationRepairService:
         verified_hdr10plus: bool = False,
         verified_dolby_vision: bool = False,
     ) -> DurationRepairOutcome:
-        if not self.can_repair(
-            output_path=output_path,
-            container=container,
-            verify_result=initial_result,
-        ):
+        if not self.can_repair(output_path=output_path, container=container, verify_result=initial_result):
             return DurationRepairOutcome(verify_result=initial_result)
-
-        out = Path(str(output_path))
-        expected_s = expected_duration_ms / 1000.0 if expected_duration_ms else None
-        ffmpeg_s = initial_result.duration_s
-        self._log(
-            f"⚠️ Ausgabedauer unplausibel - automatische {str(container).upper()}-Reparatur startet.",
-            "warn",
-        )
-        self._log(
-            f"   Quelle: {_fmt_duration(expected_s)} | nach FFmpeg: {_fmt_duration(ffmpeg_s)}",
-            "warn",
-        )
-
-        remux_result = initial_result
-        remux_s: float | None = None
-        remux_message = ""
-
-        remux_tool_path, remux_tool_label = self._normal_remux_tool(container)
-        if not self._normal_remux_enabled:
-            remux_message = "Normaler Container-Remux ist in den Einstellungen deaktiviert."
-            self._log(f"ℹ️ {remux_message}", "info")
-        elif remux_tool_path and tool_available(remux_tool_path):
-            remux_result, remux_s, remux_ok, remux_message = self.attempt_normal_remux(
-                out=out,
-                container=container,
-                expected_duration_ms=expected_duration_ms,
-                source_has_audio=source_has_audio,
-                initial_result=initial_result,
-                expected_contract=expected_contract,
-                verified_hdr10plus=verified_hdr10plus,
-                verified_dolby_vision=verified_dolby_vision,
-            )
-            if remux_ok:
-                return DurationRepairOutcome(
-                    attempted=True,
-                    repaired=True,
-                    verify_result=remux_result,
-                    remux_duration_s=remux_s,
-                    message="Laufzeit durch automatischen Remux korrigiert.",
-                )
-        else:
-            remux_message = f"{remux_tool_label} wurde nicht gefunden - normaler Remux wird übersprungen."
-            self._log(f"⚠️ {remux_message}", "warn")
-
-        if self._timestamp_repair_enabled:
-            timestamp_result = self._try_timestamp_repair(
-                out=out,
-                container=container,
-                expected_duration_ms=expected_duration_ms,
-                expected_duration_s=expected_s,
-                source_has_audio=source_has_audio,
-                reference_result=remux_result,
-                expected_contract=expected_contract,
-                verified_hdr10plus=verified_hdr10plus,
-                verified_dolby_vision=verified_dolby_vision,
-            )
-        else:
-            reason = "Timestamp-Reparatur ist in den Einstellungen deaktiviert."
-            self._log(f"ℹ️ {reason}", "info")
-            timestamp_result = TimestampRepairResult(verify_result=remux_result, reason=reason)
-
-        if timestamp_result.repaired:
-            return DurationRepairOutcome(
-                attempted=True,
-                repaired=True,
-                verify_result=timestamp_result.verify_result,
-                remux_duration_s=remux_s,
-                timestamp_fix_attempted=timestamp_result.attempted,
-                timestamp_fixed=True,
-                timestamp_duration_s=timestamp_result.duration_s,
-                timestamp_repair_reason=timestamp_result.reason,
-                timestamp_repair_cmd=timestamp_result.command,
-                timestamp_ffmpeg_cmd=timestamp_result.command,
-                timing_summary=timestamp_result.timing_summary,
-                message="Laufzeit durch automatische Timestamp-Reparatur korrigiert.",
-            )
-
-        final_result = timestamp_result.verify_result or remux_result or initial_result
-        messages = list(getattr(final_result, "messages", []) or [])
-        if remux_message and remux_message not in messages:
-            messages.append(remux_message)
-        if timestamp_result.reason and timestamp_result.reason not in messages:
-            messages.append(timestamp_result.reason)
-        if remux_s is not None:
-            messages.append("Laufzeit blieb auch nach automatischem Container-Remux unplausibel.")
-
-        self._log("❌ Laufzeit bleibt nach automatischer Reparatur unplausibel.", "error")
-        self._log(
-            f"   Quelle: {_fmt_duration(expected_s)} | nach FFmpeg: {_fmt_duration(ffmpeg_s)} | "
-            f"nach Remux: {_fmt_duration(remux_s)} | nach Timestamp-Fix: "
-            f"{_fmt_duration(timestamp_result.duration_s)}",
-            "error",
-        )
-        archived = self._archive_output(out, base_dir)
-        if archived:
-            messages.append(f"Fehlerhafte Ausgabedatei wurde archiviert: {archived}")
-
-        self._mark_failed_result(final_result, messages)
-        return DurationRepairOutcome(
-            attempted=True,
-            repaired=False,
-            verify_result=final_result,
-            archived_path=archived,
-            remux_duration_s=remux_s,
-            timestamp_fix_attempted=timestamp_result.attempted,
-            timestamp_fixed=False,
-            timestamp_duration_s=timestamp_result.duration_s,
-            timestamp_repair_reason=timestamp_result.reason,
-            timestamp_repair_cmd=timestamp_result.command,
-            timestamp_ffmpeg_cmd=timestamp_result.command,
-            timing_summary=timestamp_result.timing_summary,
-            keep_failed_output=True,
-            message="Laufzeit blieb auch nach automatischer Reparatur unplausibel.",
+        return self._orchestrator.repair(
+            output_path=str(output_path),
+            base_dir=base_dir,
+            container=container,
+            expected_duration_ms=expected_duration_ms,
+            source_has_audio=source_has_audio,
+            initial_result=initial_result,
+            expected_contract=expected_contract,
+            verified_hdr10plus=verified_hdr10plus,
+            verified_dolby_vision=verified_dolby_vision,
+            normal_remux_enabled=self._normal_remux_enabled,
+            timestamp_repair_enabled=self._timestamp_repair_enabled,
         )
 
     @staticmethod
     def _mark_failed_result(final_result, messages: list[str]) -> None:
-        """Haelt einen verworfenen Reparaturpfad fuer alle Aufrufer fail-closed."""
-        final_result.duration_ok = False
-        reject_message = (
-            "Automatische Reparatur endgueltig verworfen; die Datei darf nicht "
-            "als fertige Ausgabe uebernommen werden."
-        )
-        if reject_message not in messages:
-            messages.append(reject_message)
-        final_result.messages = messages
+        mark_duration_repair_failed(final_result, messages)
 
-    # --- Compatibility surface -------------------------------------------------
-    # Existing tests/internal callers historically reached these methods on the
-    # coordinator. Keep forwarding wrappers during the staged refactoring.
-
+    # Compatibility surface -------------------------------------------------
     def attempt_normal_remux(self, **kwargs):
         return self._remux_service.attempt(**kwargs)
 
@@ -329,12 +168,7 @@ class DurationRepairService:
         *,
         container: str | None = None,
     ) -> list[str]:
-        return self._timestamp_service.build_timestamp_repair_command(
-            source,
-            target,
-            fps,
-            container=container,
-        )
+        return self._timestamp_service.build_timestamp_repair_command(source, target, fps, container=container)
 
     def _run_ffprobe_json(self, path: str, *, count_frames: bool = False) -> dict:
         return self._timing_analyzer.run_ffprobe_json(path, count_frames=count_frames)
@@ -348,11 +182,7 @@ class DurationRepairService:
     def _apply_mediainfo_timing(self, info: MediaTimingInfo, data: dict) -> None:
         self._timing_analyzer.apply_mediainfo_timing(info, data)
 
-    def _derive_frame_rate_from_source_duration(
-        self,
-        info: MediaTimingInfo,
-        expected_duration_s: float | None,
-    ) -> None:
+    def _derive_frame_rate_from_source_duration(self, info: MediaTimingInfo, expected_duration_s: float | None) -> None:
         self._timing_analyzer.derive_frame_rate_from_source_duration(info, expected_duration_s)
 
     def _infer_frame_rate_mode(self, info: MediaTimingInfo) -> str:
@@ -365,23 +195,7 @@ class DurationRepairService:
         return self._timestamp_service.ffmpeg_supports_setts()
 
     def _archive_output(self, output_path: Path, base_dir: Path | None) -> str | None:
-        if not output_path.exists():
-            return None
-        root = Path(base_dir) if base_dir is not None else output_path.parent
-        archive_dir = root / "Archiv"
-        try:
-            archive_dir.mkdir(parents=True, exist_ok=True)
-            target = _unique_archive_path(archive_dir, output_path.name)
-            self._runtime.replace_file(output_path, target)
-            self._log(
-                "📦 Datei aufgrund weiterhin fehlerhafter Laufzeit in den Archiv-Ordner verschoben: "
-                f"{target}",
-                "warn",
-            )
-            return str(target)
-        except Exception as exc:
-            self._log(f"❌ Archivierung der fehlerhaften Ausgabedatei fehlgeschlagen: {exc}", "error")
-            return None
+        return self._archive_service.archive(output_path, base_dir)
 
     def _safe_unlink(self, path: Path) -> None:
         self._runtime.safe_unlink(path)

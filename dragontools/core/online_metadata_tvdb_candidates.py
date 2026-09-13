@@ -104,28 +104,29 @@ def _record_rank(client, record: dict[str, Any], *, query: str, year: int | None
     return title_score, year_score, float(record.get("score") or 0.0)
 
 
-def _find_episode_for_series(client, series_id: int, season: int, episode: int, *, find_episode) -> dict[str, Any] | None:
-    try:
-        episodes = client.series_episodes(series_id, language=client.config.language)
-        selected = find_episode(episodes, season, episode)
-        if selected is None and client.config.fallback_language != client.config.language:
-            episodes = client.series_episodes(series_id, language=client.config.fallback_language)
-            selected = find_episode(episodes, season, episode)
-        return selected
-    except OnlineMetadataError:
-        return None
-
-
-def _build_suggestion(client, *, path, request, record, series_builder, find_episode) -> EpisodeMetadataSuggestion | None:
+def _build_suggestion(
+    client,
+    *,
+    path,
+    request,
+    record,
+    series_builder,
+    force_refresh: bool = False,
+) -> EpisodeMetadataSuggestion | None:
     series_id = _int_or_none(record.get("tvdb_id") or record.get("id") or record.get("seriesId"))
     if series_id is None:
         return None
-    series = series_builder(request["query"], request["year"], record)
+    series = series_builder(
+        request["query"], request["year"], record, force_refresh=force_refresh
+    )
     if series is None:
         return None
-    selected = _find_episode_for_series(
-        client, series_id, request["season"], request["episode"], find_episode=find_episode
-    )
+    try:
+        selected = client.resolve_episode_record(
+            series_id, request["season"], request["episode"], force_refresh=force_refresh
+        )
+    except OnlineMetadataError:
+        selected = None
     if selected is None:
         return None
     episode_id = _int_or_none(
@@ -168,7 +169,7 @@ def resolve_episode_candidates(
     *,
     limit: int = 6,
     series_builder,
-    find_episode,
+    force_refresh: bool = False,
 ) -> tuple[EpisodeMetadataSuggestion, ...]:
     request = _candidate_request(path)
     if request is None:
@@ -193,7 +194,7 @@ def resolve_episode_candidates(
             request=request,
             record=record,
             series_builder=series_builder,
-            find_episode=find_episode,
+            force_refresh=force_refresh,
         )
         if suggestion is not None:
             suggestions.append(suggestion)

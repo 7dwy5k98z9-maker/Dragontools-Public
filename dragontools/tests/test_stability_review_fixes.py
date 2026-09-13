@@ -153,3 +153,25 @@ def test_production_code_contains_no_runtime_assert_statements():
 def test_converter_runtime_builder_has_no_converter_thread_import():
     source = (PACKAGE_ROOT / "worker" / "converter_runtime_builder.py").read_text(encoding="utf-8")
     assert "import dragontools.worker.converter_thread" not in source
+
+
+def test_process_lifecycle_crash_marker_includes_activity_file(monkeypatch):
+    from dragontools.worker import tool_process_lifecycle
+
+    calls = []
+    monkeypatch.setattr(
+        tool_process_lifecycle,
+        "mark_activity",
+        lambda stage, **kwargs: calls.append((stage, kwargs)) or True,
+    )
+
+    lifecycle = tool_process_lifecycle.ProcessLifecycle(
+        command=["ffmpeg", "-i", "episode.mkv"],
+        label="Trickplay ffmpeg",
+        timeout_s=10,
+        file_path=r"D:\\Media\\episode.mkv",
+    )
+    lifecycle.mark_starting()
+
+    assert calls
+    assert calls[0][1]["file_path"] == r"D:\\Media\\episode.mkv"

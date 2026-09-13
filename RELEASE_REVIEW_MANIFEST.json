@@ -1,0 +1,1875 @@
+{
+  "document_type": "dragontools-refactoring-release-review-manifest",
+  "schema_version": 1,
+  "generated_on": "2026-09-13",
+  "app_version": "9.8.2",
+  "baseline_archive": "dragontools(20260912-165602).zip",
+  "current_archive": "dragontools_20260913_postreview_hardening.zip",
+  "release_manifest_note": "This is a review/change manifest, not the application release_manifest.json build contract. The source-only uploaded archive does not include build_v9.bat and the other declared release artifacts, so creating the real build manifest here would make the release contract misleading.",
+  "validation": {
+    "compileall": "ok",
+    "targeted_regression": "101 passed, 1 host-only crashguard test deselected",
+    "baseline_reproduction": "CrashGuard Errno 5 reproduces unchanged on Block 11",
+    "metadata_settings_roundtrip": "identical",
+    "known_environment_limits": [
+      "PyQt6 unavailable on review host",
+      "durable/fsync temp-file host I/O errors"
+    ]
+  },
+  "line_reductions": [
+    {
+      "file": "dragontools/core/media_library_db.py",
+      "before_lines": 510,
+      "after_lines": 187
+    },
+    {
+      "file": "dragontools/core/media_library_jellyfin.py",
+      "before_lines": 573,
+      "after_lines": 189
+    },
+    {
+      "file": "dragontools/gui/preflight_metadata.py",
+      "before_lines": 353,
+      "after_lines": 108
+    },
+    {
+      "file": "dragontools/core/media_library_repository.py",
+      "before_lines": 599,
+      "after_lines": 29
+    },
+    {
+      "file": "dragontools/worker/postprocess_service.py",
+      "before_lines": 519,
+      "after_lines": 16
+    },
+    {
+      "file": "dragontools/core/media_library_nfo_scan.py",
+      "before_lines": 412,
+      "after_lines": 127
+    },
+    {
+      "file": "dragontools/core/media_library_query.py",
+      "before_lines": 414,
+      "after_lines": 53
+    },
+    {
+      "file": "dragontools/worker/trickplay_service.py",
+      "before_lines": 452,
+      "after_lines": 239
+    },
+    {
+      "file": "dragontools/worker/dv_remux_components.py",
+      "before_lines": 533,
+      "after_lines": 44
+    },
+    {
+      "file": "dragontools/worker/dv_remux_thread.py",
+      "before_lines": 480,
+      "after_lines": 357
+    },
+    {
+      "file": "dragontools/gui/media_library_dialog_view.py",
+      "before_lines": 520,
+      "after_lines": 99
+    },
+    {
+      "file": "dragontools/core/settings_backup.py",
+      "before_lines": 442,
+      "after_lines": 33,
+      "reduction": 409
+    },
+    {
+      "file": "dragontools/core/job_journal.py",
+      "before_lines": 463,
+      "after_lines": 208,
+      "reduction": 255
+    },
+    {
+      "file": "dragontools/gui/drop_path_extractor.py",
+      "before_lines": 468,
+      "after_lines": 307,
+      "reduction": 161
+    },
+    {
+      "file": "dragontools/core/rules_preview.py",
+      "before_lines": 417,
+      "after_lines": 94,
+      "reduction": 323
+    },
+    {
+      "file": "dragontools/gui/preflight_series_widget.py",
+      "before_lines": 430,
+      "after_lines": 41,
+      "reduction": 389
+    },
+    {
+      "file": "dragontools/gui/conversion_result_service.py",
+      "before_lines": 470,
+      "after_lines": 56,
+      "reduction": 414
+    },
+    {
+      "file": "dragontools/worker/merge_thread.py",
+      "before_lines": 448,
+      "after_lines": 130,
+      "reduction": 318
+    },
+    {
+      "file": "dragontools/gui/iso_widget.py",
+      "before_lines": 455,
+      "after_lines": 48
+    },
+    {
+      "file": "dragontools/worker/parallel_converter_thread.py",
+      "before_lines": 431,
+      "after_lines": 181
+    },
+    {
+      "file": "dragontools/worker/move_thread.py",
+      "before_lines": 415,
+      "after_lines": 145,
+      "reduction": 270
+    },
+    {
+      "file": "dragontools/gui/convert_widget_encoder_override.py",
+      "before_lines": 408,
+      "after_lines": 137,
+      "reduction": 271
+    },
+    {
+      "file": "dragontools/worker/duration_repair_service.py",
+      "before_lines": 387,
+      "after_lines": 201,
+      "reduction": 186
+    },
+    {
+      "file": "dragontools/worker/hdrplus_conversion.py",
+      "before_lines": 400,
+      "after_lines": 217,
+      "reduction": 183
+    },
+    {
+      "file": "dragontools/gui/move_lifecycle_coordinator.py",
+      "before_lines": 359,
+      "after_lines": 72,
+      "reduction": 287
+    },
+    {
+      "file": "dragontools/core/media_library_repository_items.py",
+      "before_lines": 373,
+      "after_lines": 41,
+      "reduction": 332
+    },
+    {
+      "file": "dragontools/worker/source_visual_check.py",
+      "before_lines": 379,
+      "after_lines": 225,
+      "reduction": 154
+    },
+    {
+      "file": "dragontools/core/media_analyzer_streams.py",
+      "before": 367,
+      "after": 21,
+      "block": 11
+    },
+    {
+      "file": "dragontools/core/movie_renamer_candidates.py",
+      "before": 367,
+      "after": 33,
+      "block": 11
+    },
+    {
+      "file": "dragontools/gui/audio_video_matcher_widget.py",
+      "before": 368,
+      "after": 32,
+      "block": 12
+    },
+    {
+      "file": "dragontools/gui/online_metadata_dialog.py",
+      "before": 367,
+      "after": 27,
+      "block": 12
+    }
+  ],
+  "change_sets": [
+    {
+      "id": "database-performance-stability",
+      "title": "Mediathek-Datenbank: Performance, Migrationen und Serien-Lookup",
+      "summary": "Indexfreundlicher Serien-Lookup, reduzierte DB-Verbindungen/Writes, saubere Schema-Migrationen, Jellyfin-Normalisierung, asynchrone Mediathek-Suche und kürzere NFO-Schreibtransaktionen.",
+      "files": [
+        {
+          "file": "dragontools/core/media_library_db.py",
+          "status_vs_20260912_165602": "modified",
+          "lines": 187,
+          "purpose": "Schmale DB-Fassade/öffentliche DB-API.",
+          "review_focus": "Kompatibilität der bisherigen Imports und Initialisierungsreihenfolge."
+        },
+        {
+          "file": "dragontools/core/media_library_sqlite.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 30,
+          "purpose": "SQLite-Verbindungsaufbau und Low-Level-Helfer.",
+          "review_focus": "Read/Write-Verbindungen, WAL-Konfiguration, Thread-Nutzung."
+        },
+        {
+          "file": "dragontools/core/media_library_schema.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 232,
+          "purpose": "Schema-Definitionen und Indexerstellung.",
+          "review_focus": "Indexreihenfolge, Spaltenabhängigkeiten, idempotente CREATE-Anweisungen."
+        },
+        {
+          "file": "dragontools/core/media_library_migrations.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 87,
+          "purpose": "Schema-Migrationen für bestehende Datenbanken.",
+          "review_focus": "Legacy-Schemata, Reihenfolge Spalten vor Indizes, Datenmigration."
+        },
+        {
+          "file": "dragontools/core/media_library_series_lookup.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 69,
+          "purpose": "Schneller indexierter Serien-Lookup.",
+          "review_focus": "normalized_title-Index, Legacy-Fallback, Query-Plan."
+        },
+        {
+          "file": "dragontools/core/media_library_series_paths.py",
+          "status_vs_20260912_165602": "modified",
+          "lines": 318,
+          "purpose": "Serienwurzel-Auflösung auf Basis DB/Pfadmapping.",
+          "review_focus": "Fast path vor Legacy-Fallback; Pfadsemantik unverändert."
+        },
+        {
+          "file": "dragontools/core/media_library_path_mappings.py",
+          "status_vs_20260912_165602": "modified",
+          "lines": 244,
+          "purpose": "Pfadmapping-Lesen mit optional wiederverwendeter Verbindung.",
+          "review_focus": "Keine unnötigen Connections; Mapping-Priorität unverändert."
+        },
+        {
+          "file": "dragontools/core/media_library_jellyfin.py",
+          "status_vs_20260912_165602": "modified",
+          "lines": 189,
+          "purpose": "Jellyfin-Import-Orchestrierung/Fassade.",
+          "review_focus": "Importtransaktion, Kompatibilität, Fehlerpfade."
+        },
+        {
+          "file": "dragontools/core/media_library_jellyfin_source.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 108,
+          "purpose": "Lesen/Abbilden der Jellyfin-Quelldaten.",
+          "review_focus": "Jellyfin-Schema-Varianten und ID-Auflösung."
+        },
+        {
+          "file": "dragontools/core/media_library_jellyfin_items.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 113,
+          "purpose": "Konvertierung Jellyfin-Items in DragonTools-Datensätze.",
+          "review_focus": "series_title -> normalized_title; Staffel/Episode/Typ."
+        },
+        {
+          "file": "dragontools/core/media_library_jellyfin_streams.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 151,
+          "purpose": "Stream-/HDR-Konvertierung aus Jellyfin.",
+          "review_focus": "Sprachen, Codecs, HDR/DV und Streamtypen."
+        },
+        {
+          "file": "dragontools/core/media_library_repository.py",
+          "status_vs_20260912_165602": "modified",
+          "lines": 29,
+          "purpose": "Kompatibilitätsfassade für Repository-Funktionen.",
+          "review_focus": "Öffentliche Imports bleiben stabil."
+        },
+        {
+          "file": "dragontools/core/media_library_repository_items.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 373,
+          "purpose": "Persistenz einzelner Medien/Streams.",
+          "review_focus": "Upsert-Semantik, active/exists_flag, Transaktionen."
+        },
+        {
+          "file": "dragontools/core/media_library_repository_moves.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 142,
+          "purpose": "Move-/Replace-DB-Aktualisierung.",
+          "review_focus": "Episode-Identität, active=0/1, Ersatzlogik."
+        },
+        {
+          "file": "dragontools/core/media_library_sidecars.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 87,
+          "purpose": "Sidecar-/NFO-Zustände.",
+          "review_focus": "Pfadauflösung und Statuskonsistenz."
+        },
+        {
+          "file": "dragontools/core/media_library_query.py",
+          "status_vs_20260912_165602": "modified",
+          "lines": 53,
+          "purpose": "Schmale Suchquery-Fassade.",
+          "review_focus": "Abwärtskompatible API."
+        },
+        {
+          "file": "dragontools/core/media_library_query_fragments.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 140,
+          "purpose": "Wiederverwendbare SQL-Fragmente.",
+          "review_focus": "JOIN/CTE-Aliase und Parameterbindung."
+        },
+        {
+          "file": "dragontools/core/media_library_query_scope_filters.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 61,
+          "purpose": "Scope-/Item-Type-Filter.",
+          "review_focus": "TV/Anime/Filme-Pfadfilter und SQL-Parameter."
+        },
+        {
+          "file": "dragontools/core/media_library_query_presets.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 221,
+          "purpose": "Presetfilter für Codec/HDR/Audio usw.",
+          "review_focus": "EXISTS/Aggregat-Semantik und NULL-Fälle."
+        },
+        {
+          "file": "dragontools/core/media_library_search_enrichment.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 129,
+          "purpose": "Gebündelte Stream-Anreicherung für Suchtreffer.",
+          "review_focus": "N+1-Vermeidung; Zuordnung media_id -> Streams."
+        },
+        {
+          "file": "dragontools/core/media_library_search_service.py",
+          "status_vs_20260912_165602": "modified",
+          "lines": 138,
+          "purpose": "Suchservice ohne unnötige Schema-Writes.",
+          "review_focus": "Read-only-Suche, Limits, Verbindungslifetime."
+        },
+        {
+          "file": "dragontools/core/media_library_scan.py",
+          "status_vs_20260912_165602": "modified",
+          "lines": 311,
+          "purpose": "Speicherpfad-Scan und DB-Aktualisierung.",
+          "review_focus": "Batchverhalten und Transaktionen."
+        },
+        {
+          "file": "dragontools/core/media_library_nfo_scan.py",
+          "status_vs_20260912_165602": "modified",
+          "lines": 127,
+          "purpose": "NFO-Scan-Orchestrierung.",
+          "review_focus": "Keine lange Writer-Transaktion während NAS-I/O."
+        },
+        {
+          "file": "dragontools/core/media_library_nfo_paths.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 65,
+          "purpose": "NFO-/Medienpfadlogik.",
+          "review_focus": "Erreichbarkeit und mapped paths."
+        },
+        {
+          "file": "dragontools/core/media_library_nfo_parser.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 76,
+          "purpose": "NFO-XML-Parsing.",
+          "review_focus": "Fehlerhafte/teilweise XML-Dateien."
+        },
+        {
+          "file": "dragontools/core/media_library_nfo_inventory.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 72,
+          "purpose": "Kandidaten/Filesystem-Inventur.",
+          "review_focus": "NAS-I/O außerhalb DB-Schreibphase."
+        },
+        {
+          "file": "dragontools/core/media_library_nfo_store.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 232,
+          "purpose": "Persistenz von NFO-Scan-Ergebnissen.",
+          "review_focus": "Batch-Commit und Issue-Ersetzung."
+        },
+        {
+          "file": "dragontools/gui/media_library_search_worker.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 34,
+          "purpose": "QThread-Worker für SQLite-Suche.",
+          "review_focus": "Threadgrenzen, Cancel/Stale-Request-Verhalten."
+        },
+        {
+          "file": "dragontools/gui/media_library_search_controller.py",
+          "status_vs_20260912_165602": "modified",
+          "lines": 319,
+          "purpose": "Steuert asynchrone Suchrequests und Ergebnisübergabe.",
+          "review_focus": "Keine DB-Arbeit im GUI-Thread; Request-Generation."
+        },
+        {
+          "file": "dragontools/tests/test_media_library_series_lookup_performance.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 188,
+          "purpose": "Regressionstest für Serien-Lookup/Query-Plan.",
+          "review_focus": "Repräsentativität der Legacy- und Fast-Path-Fälle."
+        },
+        {
+          "file": "dragontools/tests/test_media_library.py",
+          "status_vs_20260912_165602": "modified",
+          "lines": 2646,
+          "purpose": "Erweiterte DB-/Migrations-/Importtests.",
+          "review_focus": "Legacy-DB, normalized_title, NFO/Query."
+        }
+      ]
+    },
+    {
+      "id": "metadata-preflight-postprocess",
+      "title": "Metadaten, Preflight und NFO-Postprocessing",
+      "summary": "DB-first Preflight, frische Metadaten für finalen Rename/NFO-Lauf mit Batch-Wiederverwendung, Refresh generischer Episodentitel und verbesserter TVDB-Sprachfallback.",
+      "files": [
+        {
+          "file": "dragontools/gui/preflight_metadata.py",
+          "status_vs_20260912_165602": "modified",
+          "lines": 108,
+          "purpose": "Schmale Preflight-Orchestrierung.",
+          "review_focus": "Ablauf Movie/Series und Thread-Grenzen."
+        },
+        {
+          "file": "dragontools/gui/preflight_metadata_common.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 91,
+          "purpose": "Gemeinsame Preflight-Helfer/Sessiondaten.",
+          "review_focus": "Cache-Lifetime und gemeinsame Pfad-/DB-Daten."
+        },
+        {
+          "file": "dragontools/gui/preflight_metadata_movie.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 73,
+          "purpose": "Film-Metadatenauflösung.",
+          "review_focus": "Mehrdeutige Ergebnisse/Jahre und Fehlerpfade."
+        },
+        {
+          "file": "dragontools/gui/preflight_metadata_series.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 137,
+          "purpose": "Serien-Metadatenauflösung DB-first.",
+          "review_focus": "DB vor Directory-Scan; Jahr-Auflösung; Fallback."
+        },
+        {
+          "file": "dragontools/gui/preflight_metadata_apply.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 56,
+          "purpose": "Überträgt Ergebnisse auf GUI-Modelle.",
+          "review_focus": "Thread-sichere Ergebnisanwendung."
+        },
+        {
+          "file": "dragontools/core/online_metadata_service.py",
+          "status_vs_20260912_165602": "modified",
+          "lines": 247,
+          "purpose": "Metadatenservice und Session-/Cache-Modi.",
+          "review_focus": "Persistent cache vs fresh-once Batch."
+        },
+        {
+          "file": "dragontools/core/online_metadata_tvdb_transport.py",
+          "status_vs_20260912_165602": "modified",
+          "lines": 150,
+          "purpose": "TVDB HTTP/Cache/Auth.",
+          "review_focus": "Cache vor Auth; force_refresh; Session-Wiederverwendung."
+        },
+        {
+          "file": "dragontools/core/online_metadata_tvdb_episode_data.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 170,
+          "purpose": "Bewertung/Übernahme von Episodendaten.",
+          "review_focus": "Generische Titel erkennen; Sprachfallback-Merge."
+        },
+        {
+          "file": "dragontools/core/online_metadata_tvdb_candidates.py",
+          "status_vs_20260912_165602": "modified",
+          "lines": 206,
+          "purpose": "TVDB-Kandidatenauflösung.",
+          "review_focus": "Fallback auch bei leerem/generischem Titel."
+        },
+        {
+          "file": "dragontools/core/online_metadata_tvdb_resolver.py",
+          "status_vs_20260912_165602": "modified",
+          "lines": 140,
+          "purpose": "TVDB-Resolver.",
+          "review_focus": "DE->Fallback-Sprache, IDs, Episodentitel."
+        },
+        {
+          "file": "dragontools/core/online_metadata_tvdb_helpers.py",
+          "status_vs_20260912_165602": "modified",
+          "lines": 304,
+          "purpose": "TVDB-Helfer für lokalisierte Titel.",
+          "review_focus": "Generische Titel und Übersetzungspriorität."
+        },
+        {
+          "file": "dragontools/core/online_metadata_tvdb_suggestions.py",
+          "status_vs_20260912_165602": "modified",
+          "lines": 186,
+          "purpose": "TVDB-Suggestion-Pfade.",
+          "review_focus": "Cache/Refresh-Konsistenz."
+        },
+        {
+          "file": "dragontools/core/online_metadata_tmdb_transport.py",
+          "status_vs_20260912_165602": "modified",
+          "lines": 110,
+          "purpose": "TMDB Transport/Cache-Anpassungen.",
+          "review_focus": "Session-/force_refresh-Verhalten analog TVDB."
+        },
+        {
+          "file": "dragontools/core/online_metadata_tmdb.py",
+          "status_vs_20260912_165602": "modified",
+          "lines": 46,
+          "purpose": "TMDB Client-Anpassungen.",
+          "review_focus": "Kompatibilität der öffentlichen API."
+        },
+        {
+          "file": "dragontools/core/online_metadata_tmdb_suggestions.py",
+          "status_vs_20260912_165602": "modified",
+          "lines": 254,
+          "purpose": "TMDB Suggestions.",
+          "review_focus": "Batch-/Refresh-Semantik."
+        },
+        {
+          "file": "dragontools/core/online_metadata_parsing.py",
+          "status_vs_20260912_165602": "modified",
+          "lines": 146,
+          "purpose": "Metadaten-Parsing/Helfer.",
+          "review_focus": "Generische/fehlende Titel und Sprachwerte."
+        },
+        {
+          "file": "dragontools/worker/postprocess_service.py",
+          "status_vs_20260912_165602": "modified",
+          "lines": 16,
+          "purpose": "Kompatibilitätsfassade des Postprocessings.",
+          "review_focus": "Alte Importpfade."
+        },
+        {
+          "file": "dragontools/worker/postprocess_config.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 160,
+          "purpose": "Postprocess-Konfiguration.",
+          "review_focus": "Settings-Mapping und Defaults."
+        },
+        {
+          "file": "dragontools/worker/postprocess_models.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 39,
+          "purpose": "Postprocess-Datenmodelle.",
+          "review_focus": "Felder/immutability/Defaults."
+        },
+        {
+          "file": "dragontools/worker/postprocess_metadata.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 43,
+          "purpose": "Gemeinsame Metadaten-Batchsession.",
+          "review_focus": "Eine frische Providerabfrage pro Serie/Batch statt pro Datei."
+        },
+        {
+          "file": "dragontools/worker/postprocess_runner.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 195,
+          "purpose": "Einzeldatei-Postprocessing/NFO-Lauf.",
+          "review_focus": "Reihenfolge, Metadaten-IDs, Sidecars."
+        },
+        {
+          "file": "dragontools/worker/postprocess_async.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 149,
+          "purpose": "Async-Koordinator.",
+          "review_focus": "Threading, gemeinsamer Session-Lifetime, Shutdown."
+        },
+        {
+          "file": "dragontools/tests/test_online_metadata.py",
+          "status_vs_20260912_165602": "modified",
+          "lines": 830,
+          "purpose": "Regressionstests Metadata Cache/TVDB-Fallback.",
+          "review_focus": "Leer/generisch, force_refresh, Sprachen."
+        },
+        {
+          "file": "dragontools/tests/test_preflight_dialog_performance.py",
+          "status_vs_20260912_165602": "modified",
+          "lines": 555,
+          "purpose": "Preflight-Performance/DB-first Regression.",
+          "review_focus": "Keine unnötigen Directory-Scans."
+        }
+      ]
+    },
+    {
+      "id": "refactor-block-2",
+      "title": "Refactoring Block 2: NFO, Suchquery, Trickplay",
+      "summary": "Große Module nach Parsing, Storage, Query-Building und FFmpeg/Commit-Verantwortung zerlegt.",
+      "files": [
+        {
+          "file": "dragontools/core/media_library_nfo_scan.py",
+          "status_vs_20260912_165602": "modified",
+          "lines": 127,
+          "purpose": "NFO-Orchestrator (412 -> 127 Zeilen).",
+          "review_focus": "Orchestrierung darf keine Parser/Store-Details zurückholen."
+        },
+        {
+          "file": "dragontools/core/media_library_query.py",
+          "status_vs_20260912_165602": "modified",
+          "lines": 53,
+          "purpose": "Query-Fassade (414 -> 53 Zeilen).",
+          "review_focus": "Öffentliche Signaturen stabil halten."
+        },
+        {
+          "file": "dragontools/worker/trickplay_service.py",
+          "status_vs_20260912_165602": "modified",
+          "lines": 239,
+          "purpose": "Trickplay-Orchestrator (452 -> 239 Zeilen).",
+          "review_focus": "Generatorzustand und Ablauf."
+        },
+        {
+          "file": "dragontools/worker/trickplay_models.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 33,
+          "purpose": "Trickplay-Settings/Modelle.",
+          "review_focus": "Defaults und Datentypen."
+        },
+        {
+          "file": "dragontools/worker/trickplay_ffmpeg.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 125,
+          "purpose": "FFmpeg-Befehl/Hardware-Fallback.",
+          "review_focus": "Codec-/HW-Fallbacks und Argumente."
+        },
+        {
+          "file": "dragontools/worker/trickplay_commit.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 94,
+          "purpose": "Commit/Rollback/Backup.",
+          "review_focus": "Atomarität und Cleanup."
+        },
+        {
+          "file": "dragontools/worker/trickplay_concurrency.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 27,
+          "purpose": "Semaphore/Konkurrenzsteuerung.",
+          "review_focus": "Deadlocks und Freigabe bei Fehlern."
+        },
+        {
+          "file": "dragontools/worker/trickplay_paths.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 32,
+          "purpose": "Pfade/Conflict-Policy.",
+          "review_focus": "Zielpfade und Existenzkonflikte."
+        },
+        {
+          "file": "dragontools/tests/test_refactor_block2_architecture.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 62,
+          "purpose": "Architekturgrenzen Block 2.",
+          "review_focus": "Grenzwerte und Importstabilität."
+        }
+      ]
+    },
+    {
+      "id": "refactor-block-3",
+      "title": "Refactoring Block 3: DV-Remux und Mediathek-GUI",
+      "summary": "DV-Remux-Pipeline nach Prozess, Audio, Mux, Output und Job getrennt; Mediathek-Dialog in Tabs/Options/Contracts aufgeteilt.",
+      "files": [
+        {
+          "file": "dragontools/worker/dv_remux_components.py",
+          "status_vs_20260912_165602": "modified",
+          "lines": 44,
+          "purpose": "Kompatibilitätsfassade (533 -> 44 Zeilen).",
+          "review_focus": "Re-Exports und Monkeypatch-Kompatibilität."
+        },
+        {
+          "file": "dragontools/worker/dv_remux_process.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 156,
+          "purpose": "FFmpeg/ffprobe/Tool-Ausführung.",
+          "review_focus": "Timeout, ETA, Abbruch."
+        },
+        {
+          "file": "dragontools/worker/dv_remux_audio.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 80,
+          "purpose": "Audiojob-Planung.",
+          "review_focus": "Track-Mapping, Sprachen, Codecs."
+        },
+        {
+          "file": "dragontools/worker/dv_remux_muxers.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 130,
+          "purpose": "MP4Box/mkvmerge Wrapper.",
+          "review_focus": "Containerargumente und Fehlercodes."
+        },
+        {
+          "file": "dragontools/worker/dv_remux_pipeline.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 285,
+          "purpose": "Video/Audio/Sub/Mux-Ablauf.",
+          "review_focus": "Stage-Reihenfolge und Fehlerpropagation."
+        },
+        {
+          "file": "dragontools/worker/dv_remux_output.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 132,
+          "purpose": "Output/Größenprüfung/Commit/Cleanup.",
+          "review_focus": "Transaktionales Ersetzen und Rollback."
+        },
+        {
+          "file": "dragontools/worker/dv_remux_job.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 269,
+          "purpose": "Eine vollständige DV-Remux-Dateitransaktion.",
+          "review_focus": "Sidecar Commit/Rollback und Resultstatus."
+        },
+        {
+          "file": "dragontools/worker/dv_remux_thread.py",
+          "status_vs_20260912_165602": "modified",
+          "lines": 357,
+          "purpose": "QThread/Queue/Lifecycle (480 -> 357 Zeilen).",
+          "review_focus": "Pause/Abort/Signals und JobRunner-Delegation."
+        },
+        {
+          "file": "dragontools/gui/media_library_dialog_view.py",
+          "status_vs_20260912_165602": "modified",
+          "lines": 99,
+          "purpose": "Schmale View-Komposition (520 -> 99 Zeilen).",
+          "review_focus": "Attribute-Contract für Controller."
+        },
+        {
+          "file": "dragontools/gui/media_library_status_tab.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 148,
+          "purpose": "DB/Import/Export/NFO-Status-Tab.",
+          "review_focus": "Widget-Attribute und Signals."
+        },
+        {
+          "file": "dragontools/gui/media_library_mapping_tab.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 51,
+          "purpose": "Pfadmapping-Tab.",
+          "review_focus": "Mapping-Widgets und Tabellenstruktur."
+        },
+        {
+          "file": "dragontools/gui/media_library_search_tab.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 120,
+          "purpose": "Suchfilter/Ergebnistabelle.",
+          "review_focus": "Filterwerte, Tabellen-Spalten."
+        },
+        {
+          "file": "dragontools/gui/media_library_sql_tab.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 78,
+          "purpose": "SQL-Editor/gespeicherte Queries.",
+          "review_focus": "Read-only/unsafe SQL Policy."
+        },
+        {
+          "file": "dragontools/gui/media_library_dialog_options.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 114,
+          "purpose": "Suchoptionen/Scopes.",
+          "review_focus": "Werte müssen Controller/API entsprechen."
+        },
+        {
+          "file": "dragontools/gui/media_library_dialog_contracts.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 38,
+          "purpose": "Action-Protocol.",
+          "review_focus": "Controller/View-Vertrag."
+        },
+        {
+          "file": "dragontools/tests/test_refactor_block3_dv_media_view_architecture.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 82,
+          "purpose": "Architekturtests Block 3.",
+          "review_focus": "Fassaden-/Größengrenzen."
+        }
+      ]
+    },
+    {
+      "id": "refactor-block-4",
+      "title": "Refactoring Block 4: Backup, Job-Journal, Drag&Drop und Rules-Preview",
+      "summary": "Backup/Restore, Journal-Storage/Resume, Windows-Drag&Drop und Audio-/Subtitle-/Video-Preview in klar getrennte Verantwortlichkeiten zerlegt; öffentliche Importpfade bleiben kompatibel.",
+      "files": [
+        {
+          "file": "dragontools/core/settings_backup.py",
+          "status_vs_20260912_165602": "modified",
+          "lines": 33,
+          "purpose": "Öffentliche Backup-Fassade (442 -> 33 Zeilen).",
+          "review_focus": "Re-Exports und Kompatibilität privater Altimporte wie _iter_backup_files."
+        },
+        {
+          "file": "dragontools/core/settings_backup_common.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 149,
+          "purpose": "Backupformat, Serialisierung, Sensitivitätsprüfung und Pfadhelfer.",
+          "review_focus": "Sensitive-Key-Erkennung, QByteArray/Bytes-Roundtrip, Manifestvalidierung."
+        },
+        {
+          "file": "dragontools/core/settings_backup_crypto.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 90,
+          "purpose": "AES-GCM/Scrypt-Verschlüsselung für Secrets.",
+          "review_focus": "KDF-Grenzen, Passwortfehler, Importfehler cryptography."
+        },
+        {
+          "file": "dragontools/core/settings_backup_export.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 81,
+          "purpose": "Backup-Inspektion und ZIP-Export.",
+          "review_focus": "Secret-Modi, Manifestinhalt, keine Klartext-Secrets im Default."
+        },
+        {
+          "file": "dragontools/core/settings_backup_restore.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 176,
+          "purpose": "Transaktionaler Restore mit Settings-/Datei-Rollback.",
+          "review_focus": "Falsches Passwort bleibt zerstörungsfrei; atomische Dateien; Legacy-v1."
+        },
+        {
+          "file": "dragontools/core/job_journal.py",
+          "status_vs_20260912_165602": "modified",
+          "lines": 208,
+          "purpose": "Zustandsbehafteter JobJournal-Writer und öffentliche Fassade (463 -> 208 Zeilen).",
+          "review_focus": "Fail-closed Writes, Monkeypatch-Kompatibilität, Archivierung nach durable write."
+        },
+        {
+          "file": "dragontools/core/job_journal_storage.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 139,
+          "purpose": "Journalpfade, Lesen, Listing und manuelle Archivierung.",
+          "review_focus": "Legacy active_run, mehrere parallele Runs, defekte JSON-Dateien."
+        },
+        {
+          "file": "dragontools/core/job_journal_resume.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 111,
+          "purpose": "Statusnormalisierung, Resume-Plan und Benutzerzusammenfassung.",
+          "review_focus": "retry_running/retry_failed und Reihenfolge/Deduplizierung."
+        },
+        {
+          "file": "dragontools/gui/drop_path_extractor.py",
+          "status_vs_20260912_165602": "modified",
+          "lines": 307,
+          "purpose": "Drag&Drop-Orchestrator und Kompatibilitätsfassade (468 -> 307 Zeilen).",
+          "review_focus": "Qt MIME-Reihenfolge, Debug-Wrapper, lange Pfade und Fallbacks."
+        },
+        {
+          "file": "dragontools/gui/drop_path_files.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 25,
+          "purpose": "Rekursives Einsammeln von Videodateien aus Ordnern.",
+          "review_focus": "Long-path-Walk und Filtersemantik."
+        },
+        {
+          "file": "dragontools/gui/drop_path_decode.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 66,
+          "purpose": "URL-/Text-/FileNameW-Decoding.",
+          "review_focus": "UNC, file://, UTF-16 und Windows-Pfadregex."
+        },
+        {
+          "file": "dragontools/gui/drop_path_windows.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 81,
+          "purpose": "Windows Shell CIDA/PIDL-Auflösung.",
+          "review_focus": "ctypes pointer widths, ILFree, 32k Unicode-Puffer."
+        },
+        {
+          "file": "dragontools/core/rules_preview.py",
+          "status_vs_20260912_165602": "modified",
+          "lines": 94,
+          "purpose": "Preview-Orchestrator/Fassade (417 -> 94 Zeilen).",
+          "review_focus": "Pipeline-Kontext, stabile Preview-Struktur, Altimporte privater Builder."
+        },
+        {
+          "file": "dragontools/core/rules_preview_audio.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 44,
+          "purpose": "Audio-Preview über produktiven audio_plan-Kern.",
+          "review_focus": "Preview und Worker dürfen nicht auseinanderlaufen."
+        },
+        {
+          "file": "dragontools/core/rules_preview_subtitles.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 134,
+          "purpose": "Subtitle-/Sidecar-/Burn-in-Preview.",
+          "review_focus": "DV/MP4 Copy-vs-Sidecar, text-to-SRT, burn candidates."
+        },
+        {
+          "file": "dragontools/core/rules_preview_video.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 86,
+          "purpose": "Video-/Zielauflösungs-Preview.",
+          "review_focus": "Downscale-only, strip_only, gerade Breiten, HDR-Felder."
+        },
+        {
+          "file": "dragontools/core/rules_preview_common.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 12,
+          "purpose": "Kleine gemeinsame Preview-Normalisierer.",
+          "review_focus": "Keine Regelentscheidungen in Common-Helfern."
+        },
+        {
+          "file": "dragontools/tests/test_refactor_block4_architecture.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 58,
+          "purpose": "Architektur-/Smoke-/Kompatibilitätstests für Block 4.",
+          "review_focus": "Größengrenzen und Release-Smoke-Coverage."
+        }
+      ]
+    },
+    {
+      "id": "refactor-block-5",
+      "title": "Refactoring Block 5: Serien-Preflight, Conversion-Result und Merge-Worker",
+      "summary": "Drei verbleibende Orchestrierungsmonolithen wurden in UI/Pfad/Metadaten, Datei-Ergebnis/Run-Finish/Finalizer sowie Analyse/Plan/Ausführung zerlegt. Bestehende öffentliche Klassen und interne Merge-Helfernamen bleiben kompatibel.",
+      "files": [
+        {
+          "file": "dragontools/gui/preflight_series_widget.py",
+          "status_vs_20260912_165602": "modified",
+          "lines": 41,
+          "purpose": "Schmale QWidget-Fassade (430 -> 41 Zeilen).",
+          "review_focus": "Mixin-MRO mit QWidget, Init-State und unveränderte öffentliche Widgetmethoden."
+        },
+        {
+          "file": "dragontools/gui/preflight_series_view.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 162,
+          "purpose": "UI-Aufbau, manuelle Suche und Preview-Aktualisierung.",
+          "review_focus": "Signalverbindungen, Release-Warnungen, Preview-Refresh und Folder-Choice-Widget."
+        },
+        {
+          "file": "dragontools/gui/preflight_series_paths.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 124,
+          "purpose": "Bereichs-/Pfadauflösung und geplante Saisonziele.",
+          "review_focus": "Pfadmapping-Semantik bleibt unverändert; Auswahlreihenfolge TV/Anime und Folder-Choice."
+        },
+        {
+          "file": "dragontools/gui/preflight_series_metadata.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 179,
+          "purpose": "Metadata-Job, Statushinweise und Anwendung asynchroner Serienergebnisse.",
+          "review_focus": "DB-/Folder-/Online-Priorität, manuelle Namensänderungen, Library-Warnungen."
+        },
+        {
+          "file": "dragontools/gui/conversion_result_service.py",
+          "status_vs_20260912_165602": "modified",
+          "lines": 56,
+          "purpose": "DI-Fassade für Conversion-Result-Verarbeitung (470 -> 56 Zeilen).",
+          "review_focus": "Konstruktorvertrag und bestehende Controller-Verbindungen."
+        },
+        {
+          "file": "dragontools/gui/conversion_result_file_events.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 134,
+          "purpose": "file_result-State, Sidecars/Postprocess und Journal-Dateiergebnisse.",
+          "review_focus": "Terminalstatus, blocked_move_inputs, planned_targets/overrides und Pending-Postprocess."
+        },
+        {
+          "file": "dragontools/gui/conversion_result_finish.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 120,
+          "purpose": "Worker-Ende, Abort und Übergabe an Move/Finalizer.",
+          "review_focus": "Abbruch mit/ohne fertige Dateien, UI-Reenable und Postprocess-Wartezustand."
+        },
+        {
+          "file": "dragontools/gui/conversion_run_finalizer.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 192,
+          "purpose": "Run-Summary, JobJournal-Finalisierung, Retry und Shutdown.",
+          "review_focus": "summary_written-Guard, DV-Remux-Sonderfall, Retry-vor-Shutdown und Reminder."
+        },
+        {
+          "file": "dragontools/worker/merge_thread.py",
+          "status_vs_20260912_165602": "modified",
+          "lines": 130,
+          "purpose": "QThread-/Run-Lifecycle (448 -> 130 Zeilen).",
+          "review_focus": "Signals, Abort, Requestvalidierung und Legacy-Helper-Reexports."
+        },
+        {
+          "file": "dragontools/worker/merge_common.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 65,
+          "purpose": "Pure Container/FPS/Stream-Signatur-Helfer und Aborttyp.",
+          "review_focus": "Formatnamen, 0/0-FPS und Signaturstabilität."
+        },
+        {
+          "file": "dragontools/worker/merge_analysis.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 140,
+          "purpose": "ffprobe/MediaAnalyzer-Auswertung der Eingaben.",
+          "review_focus": "Abort/Timeout, Containerabweichung und Analysefortschritt."
+        },
+        {
+          "file": "dragontools/worker/merge_plan.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 71,
+          "purpose": "Lossless-Kompatibilitätsprüfung und Mergeplan.",
+          "review_focus": "Codec/Auflösung/FPS/Audio/Subtitle-Gleichheit und nur MKV-Ziel."
+        },
+        {
+          "file": "dragontools/worker/merge_executor.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 156,
+          "purpose": "mkvmerge-Ausführung und transaktionaler Output-Commit.",
+          "review_focus": "Temp-Cleanup, Zielüberschreibschutz, Timeout/Abort und Logger-Dateistatistik."
+        },
+        {
+          "file": "dragontools/tests/test_refactor_block5_runtime_architecture.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 108,
+          "purpose": "Architektur-/Smoke-/Kompatibilitätsgrenzen für Block 5.",
+          "review_focus": "Fassadengrößen, Splitmodule, Release-Smoke und Legacy-Namen."
+        }
+      ]
+    },
+    {
+      "id": "refactor-block-6",
+      "title": "Refactoring Block 6: ISO-Widget und paralleler Converter-Koordinator",
+      "summary": "ISO-GUI und Parallel-Converter wurden in kleine Verantwortungsbereiche zerlegt. Öffentliche Klassen und Laufzeitverträge bleiben erhalten; Child-Worker-Erzeugung und Logger bleiben in der Qt-Fassade, damit bestehende Monkeypatch-/Runtime-Verträge stabil bleiben.",
+      "files": [
+        {
+          "file": "dragontools/gui/iso_widget.py",
+          "status_vs_20260912_165602": "modified",
+          "lines": 48,
+          "purpose": "Schmale QWidget-Fassade und Shutdown-Vertrag.",
+          "review_focus": "Mixin-MRO, Widget-Initialzustand, explizites iter_shutdown_workers."
+        },
+        {
+          "file": "dragontools/gui/iso_widget_view.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 132,
+          "purpose": "Layout, Controls und Running/Disabled-State.",
+          "review_focus": "Signalverbindungen, Serien-Disc-Default, Fallback-/Handoff-Optionen."
+        },
+        {
+          "file": "dragontools/gui/iso_widget_inputs.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 102,
+          "purpose": "Eingabeliste, Zielordner und explizite Titelauswahl.",
+          "review_focus": "Pfadauflösung, Deduplizierung, Auswahlbindung an analysierte Quelle."
+        },
+        {
+          "file": "dragontools/gui/iso_widget_runtime.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 203,
+          "purpose": "ISOThread-Lifecycle, Analyse/Extraktion, Scan-Ergebnisdarstellung und Handoff.",
+          "review_focus": "Worker-Optionen, Signalverdrahtung, Auto-Titel, Abort/Finish."
+        },
+        {
+          "file": "dragontools/worker/parallel_converter_thread.py",
+          "status_vs_20260912_165602": "modified",
+          "lines": 181,
+          "purpose": "Qt-Fassade, Initialisierung, Child-Launcher und Child-Result-Slots.",
+          "review_focus": "Monkeypatch-Verträge, ConverterThread-Fabrik, Signals, Registry/Coordinator-Verkabelung."
+        },
+        {
+          "file": "dragontools/worker/parallel_converter_queue.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 93,
+          "purpose": "Queue-Mutationen, Reihenfolge, Overrides und Start wartender Worker.",
+          "review_focus": "Deduplizierung, RemoveFileStatus, Displaypositionen."
+        },
+        {
+          "file": "dragontools/worker/parallel_converter_control.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 70,
+          "purpose": "Pause/Resume/Abort, FFmpeg-Abbruch und DV-Crop-Entscheidung.",
+          "review_focus": "Abort-nach-Datei zurücknehmen, aktive Worker, Crop-Relay."
+        },
+        {
+          "file": "dragontools/worker/parallel_converter_lifecycle.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 122,
+          "purpose": "Run-Start/Finish, Aggregatfortschritt, Diagnose und Cleanup.",
+          "review_focus": "Finish-Bedingungen, Postprocessing-Wartezustand, Cleanup nur bei Overwrite."
+        },
+        {
+          "file": "dragontools/tests/test_refactor_block6_iso_parallel_architecture.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 77,
+          "purpose": "Architektur-, Größen-, Qt-Unabhängigkeits- und Smoke-Guards.",
+          "review_focus": "Grenzwerte und Fassade/Mixin-Verträge."
+        }
+      ]
+    },
+    {
+      "id": "refactor-block-7",
+      "title": "Refactoring Block 7: MoveThread Datenintegritäts-/Lifecycle-Split",
+      "summary": "Der MoveThread wurde ohne Änderung der Routing-/Pfadregeln in Runtime-Steuerung, Result/Commit-Verdrahtung und Batch-/Journal-Lifecycle zerlegt. Die bestehende transaktionale Transferlogik in core.move_file_service bleibt unangetastet; öffentliche MoveThread-Verträge und private Kompatibilitätsmethoden bleiben über Mixins erreichbar.",
+      "files": [
+        {
+          "file": "dragontools/worker/move_thread.py",
+          "status_vs_20260912_165602": "modified",
+          "lines": 145,
+          "purpose": "Schmale QThread-Fassade: Signals, Initialzustand und Run-Rahmen.",
+          "review_focus": "Mixin-MRO, Signalvertrag, Run-finally/Journalfinalisierung und Legacy os-Monkeypatch-Hook."
+        },
+        {
+          "file": "dragontools/worker/move_runtime_control.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 71,
+          "purpose": "Pause/Resume/Abort, geplante Ziele und Benutzerentscheidungen ohne Qt-Import.",
+          "review_focus": "Abort während Dialogwartezeit, Event-Aufräumen, Pause-Fortsetzung und Thread-Sicherheit der Zielqueue."
+        },
+        {
+          "file": "dragontools/worker/move_result_commit.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 166,
+          "purpose": "Verdrahtung von Transfer/Routing/Sidecars sowie Move-Report und Mediathek-Commit.",
+          "review_focus": "DB erst nach erfolgreichem Companion-Commit, MoveJournalWriteError propagieren, Replacement-/Sidecar-Resultate."
+        },
+        {
+          "file": "dragontools/worker/move_batch_lifecycle.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 98,
+          "purpose": "Move-Journal, BatchExecutor, Fortschritt/ETA, Retry-Archivierung und optionaler Shutdown.",
+          "review_focus": "Journalstatus completed/incomplete/aborted, Retry-Journal erst nach neuem Journalstart archivieren, Teilresultate bei Exceptions."
+        },
+        {
+          "file": "dragontools/core/release_validation_smoke_modules.py",
+          "status_vs_20260912_165602": "modified",
+          "purpose": "Neue Block-7-Module in den Python-Paket-Smoke-Test aufgenommen.",
+          "review_focus": "Alle Splitmodule müssen im gebauten Paket vorhanden sein."
+        },
+        {
+          "file": "dragontools/tests/test_refactor_block7_move_architecture.py",
+          "status_vs_20260912_165602": "added",
+          "purpose": "Architektur-, Größen-, Qt-Unabhängigkeits- und Smoke-Guards für den Move-Split.",
+          "review_focus": "MoveThread bleibt Fassade; destruktive Operationen wandern nicht zurück in den QThread."
+        }
+      ]
+    },
+    {
+      "id": "refactor-block-8",
+      "title": "Refactoring Block 8: Encoder-Override und Duration-Repair",
+      "summary": "Der per-Datei Encoder-Override wurde in Dialog-Fassade, Widget-Panels, UI-Dict-Binding, Snapshot/State und Queue-Anwendung getrennt. Die Duration-Reparatur wurde in Policy, Archivierung und Ablauf-Orchestrator zerlegt; die bestehende Serviceklasse bleibt als Kompatibilitätsfassade für bisherige Imports und testgenutzte private Wrapper erhalten.",
+      "files": [
+        {
+          "file": "dragontools/gui/convert_widget_encoder_override.py",
+          "status_vs_20260912_165602": "modified",
+          "lines": 137,
+          "purpose": "Schmale Dialog-Fassade für Build/Persist/Edit und Ergebnisdarstellung.",
+          "review_focus": "Dialogablauf, bestehende build_group/persist_group/edit_paths-Verträge und Owner-Interaktion."
+        },
+        {
+          "file": "dragontools/gui/convert_widget_encoder_panels.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 138,
+          "purpose": "Erzeugt CPU/NVENC/QSV/AMF-Controls und Presetlisten.",
+          "review_focus": "Wertebereiche, Backend-Presetlisten und Stack-Reihenfolge."
+        },
+        {
+          "file": "dragontools/gui/convert_widget_encoder_controls.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 123,
+          "purpose": "Bindet Snapshot-Dicts an Controls und sammelt den persistierbaren Override.",
+          "review_focus": "Backend-Optionen nicht vermischen; Typen für x265/NVENC/QSV/AMF."
+        },
+        {
+          "file": "dragontools/gui/convert_widget_encoder_state.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 85,
+          "purpose": "Qt-unabhängige Summary-, Global-Snapshot- und Common-Override-Logik.",
+          "review_focus": "Globalprofil-Snapshot, Skalierungs-Mapping und erlaubte Encoder-Optionen."
+        },
+        {
+          "file": "dragontools/gui/convert_widget_encoder_apply.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 31,
+          "purpose": "Wendet einen Encoder-Override transaktional auf Queue-Einträge an.",
+          "review_focus": "update_override-Ablehnung, State erst nach Worker-Akzeptanz, Preflight-Invalidierung."
+        },
+        {
+          "file": "dragontools/worker/duration_repair_service.py",
+          "status_vs_20260912_165602": "modified",
+          "lines": 201,
+          "purpose": "Kompatibilitätsfassade und Dependency-Wiring der Duration-Reparatur.",
+          "review_focus": "Historische Imports/Wrapper, subprocess.run Monkeypatch-Vertrag, kein Workflow-Code zurück in die Fassade."
+        },
+        {
+          "file": "dragontools/worker/duration_repair_orchestrator.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 198,
+          "purpose": "Orchestriert Normal-Remux, Timestamp-Reparatur, Fail-closed und Ergebnisaufbau.",
+          "review_focus": "Stage-Reihenfolge, deaktivierte Werkzeuge, Erfolgs-/Fehler-Outcomes und HDR/DV-Evidence-Weitergabe."
+        },
+        {
+          "file": "dragontools/worker/duration_repair_policy.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 49,
+          "purpose": "Zulässigkeitsprüfung und fail-closed Ergebnisstatus.",
+          "review_focus": "Nur MKV/MP4-Laufzeitfehler bei sonst gültigem Vertrag reparieren."
+        },
+        {
+          "file": "dragontools/worker/duration_repair_archive.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 56,
+          "purpose": "Archivziel, eindeutige Namen und finaler fehlerhafter Output-Transfer.",
+          "review_focus": "Archiv erst nach verworfener Reparatur; replace-Grenze bleibt im Runtime-Objekt."
+        },
+        {
+          "file": "dragontools/core/release_validation_smoke_modules.py",
+          "status_vs_20260912_165602": "modified",
+          "purpose": "Neue Block-8-Splitmodule in Release-Smoke aufgenommen.",
+          "review_focus": "Gebautes Paket muss alle neuen Module enthalten."
+        },
+        {
+          "file": "dragontools/tests/test_refactor_block8_encoder_duration_architecture.py",
+          "status_vs_20260912_165602": "added",
+          "purpose": "Größen-, Verantwortungs-, Qt-Unabhängigkeits- und Smoke-Guards.",
+          "review_focus": "Fassaden bleiben klein; Businesslogik wandert nicht zurück."
+        }
+      ]
+    },
+    {
+      "id": "refactor-block-9",
+      "title": "Refactoring Block 9: HDR10+-Fassade, Move-GUI-Lifecycle und Mediathek-Repository-Items",
+      "summary": "HDR10+-Service-Wiring/Kompatibilitaetswrapper, regulaerer vs. inkrementeller Move-GUI-Lifecycle sowie SQL-Upsert vs. MediaInfo-Mapping wurden getrennt. Bestehende Controller-/Repository-/HDR10+-Import- und Monkeypatch-Vertraege bleiben erhalten.",
+      "files": [
+        {
+          "file": "dragontools/worker/hdrplus_conversion.py",
+          "status_vs_20260912_165602": "modified",
+          "lines": 217,
+          "purpose": "HDR10+-Fassade fuer Defaultzustand, execute/run und Pipeline-Hooks.",
+          "review_focus": "Jobstate reset, dynamische Hooks, execute/run-Vertrag."
+        },
+        {
+          "file": "dragontools/worker/hdrplus_helper_services.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 102,
+          "purpose": "Zentrale langlebige Service-Verdrahtung.",
+          "review_focus": "Toolcallbacks und keine jobbezogene Mutation."
+        },
+        {
+          "file": "dragontools/worker/hdrplus_helper_compat.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 160,
+          "purpose": "Legacy-/Testwrapper fuer Tool, Encode, Mux und Cleanup.",
+          "review_focus": "Nur Delegation; keine Pipeline-Policy."
+        },
+        {
+          "file": "dragontools/gui/move_lifecycle_coordinator.py",
+          "status_vs_20260912_165602": "modified",
+          "lines": 72,
+          "purpose": "Schmale Fassade fuer regulaeren und inkrementellen Move-Lifecycle.",
+          "review_focus": "Oeffentliche API und Delegation."
+        },
+        {
+          "file": "dragontools/gui/move_regular_lifecycle.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 171,
+          "purpose": "Abschliessender Move-Lauf inklusive Finalize/Shutdown.",
+          "review_focus": "Restore-Kontext, Signale, Finish-Semantik."
+        },
+        {
+          "file": "dragontools/gui/move_incremental_lifecycle.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 182,
+          "purpose": "Zwischenverschieben waehrend laufender Konvertierung.",
+          "review_focus": "Queue-State, Replacement-Thread, moved output cleanup."
+        },
+        {
+          "file": "dragontools/gui/move_lifecycle_helpers.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 63,
+          "purpose": "Pure ETA-/Report-/Output-Mapping-Helfer.",
+          "review_focus": "Qt-frei und stabile Video-Semantik."
+        },
+        {
+          "file": "dragontools/core/media_library_repository_items.py",
+          "status_vs_20260912_165602": "modified",
+          "lines": 41,
+          "purpose": "Repository-Fassade und record_media_file.",
+          "review_focus": "Private Re-Exports und Transaktionsgrenze."
+        },
+        {
+          "file": "dragontools/core/media_library_item_sql.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 129,
+          "purpose": "Item-Upsert und Stream-Snapshot-Persistenz.",
+          "review_focus": "ON CONFLICT, Defaults, Streamtypnormalisierung."
+        },
+        {
+          "file": "dragontools/core/media_library_media_info_mapper.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 261,
+          "purpose": "MediaInfo/Path zu Item-/Streamzeilen.",
+          "review_focus": "Serienerkennung, HDR/DV, Fallback und Sidecars."
+        },
+        {
+          "file": "dragontools/core/release_validation_smoke_modules.py",
+          "status_vs_20260912_165602": "modified",
+          "purpose": "Block-9-Module im Paket-Smoke.",
+          "review_focus": "Alle Splitmodule im Build enthalten."
+        },
+        {
+          "file": "dragontools/tests/test_refactor_block9_hdr_move_library_architecture.py",
+          "status_vs_20260912_165602": "added",
+          "purpose": "Architektur- und In-Memory-Regressionsguards.",
+          "review_focus": "Fassaden, Splitgrenzen, Mapper und SQL-Upsert."
+        }
+      ]
+    },
+    {
+      "id": "stability-performance-block-10",
+      "title": "Stability/Performance Block 10: Qt-Signal-Logging, Async-Postprocess und Source-Visual-Batching",
+      "summary": "Behebt den Trickplay/Postprocess-Crashpfad mit nativen Qt-Signalen, verhindert doppelte synchrone Nacharbeit nach bereits geplantem Async-Job, garantiert den Abschluss-Callback best-effort und reduziert die FFmpeg-Prozessstarts der Quellbildprüfung durch gruppiertes Sampling. CrashGuard-Aktivitätsmarker erhalten zusätzlich den konkreten Eingabepfad.",
+      "files": [
+        {
+          "file": "dragontools/worker/log_dispatch.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 104,
+          "purpose": "Zentraler fail-soft Adapter für Logger, worker.log, Callables und Qt-Signale.",
+          "review_focus": "Qt-Signal ausschließlich via emit(); Level-Semantik; Logging darf Medienverarbeitung nie abbrechen."
+        },
+        {
+          "file": "dragontools/worker/trickplay_service.py",
+          "status_vs_20260912_165602": "modified",
+          "lines": 249,
+          "purpose": "Trickplay verwendet sicheren Log-Adapter und übergibt Eingabedatei an Tool-Lifecycle.",
+          "review_focus": "Keine direkte Signal-Invo­kation; bestehende _run-Schnittstelle bleibt kompatibel."
+        },
+        {
+          "file": "dragontools/worker/postprocess_runner.py",
+          "status_vs_20260912_165602": "modified",
+          "lines": 196,
+          "purpose": "NFO/Trickplay-Postprocess verwendet zentralen Log-Adapter.",
+          "review_focus": "Loggingfehler dürfen NFO/Trickplay-Ergebnis nicht ändern."
+        },
+        {
+          "file": "dragontools/worker/postprocess_async.py",
+          "status_vs_20260912_165602": "modified",
+          "lines": 217,
+          "purpose": "Exactly-once Async-Scheduling/Completion für Postprocessing.",
+          "review_focus": "Nach executor.submit niemals sync fallback wegen Logging; Completion in finally; Shutdown/Lock."
+        },
+        {
+          "file": "dragontools/worker/tool_process_lifecycle.py",
+          "status_vs_20260912_165602": "modified",
+          "lines": 238,
+          "purpose": "Sicheres Lifecycle-Logging und activity_file im CrashGuard-State.",
+          "review_focus": "Timeout/Abort weiterhin identisch; file_path diagnostisch, nicht steuernd."
+        },
+        {
+          "file": "dragontools/worker/tool_runner.py",
+          "status_vs_20260912_165602": "modified",
+          "lines": 331,
+          "purpose": "Toolrunner akzeptiert activity_file und nutzt sicheren Logger an Callback-/Fehlergrenzen.",
+          "review_focus": "Public defaults unverändert; result/timing semantics erhalten."
+        },
+        {
+          "file": "dragontools/worker/source_visual_check.py",
+          "status_vs_20260912_165602": "modified",
+          "lines": 225,
+          "purpose": "Schmale Orchestrierung/Kompatibilitätsfassade für Quellbildprüfung.",
+          "review_focus": "Blockierungsheuristik unverändert; Batch-Fallback auf Einzelprobes; alte private Testseams erhalten."
+        },
+        {
+          "file": "dragontools/worker/source_visual_sampling.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 158,
+          "purpose": "ffprobe/FFmpeg-I/O und gruppiertes, unabhängig seekendes Frame-Sampling.",
+          "review_focus": "Batchgröße/Timeouts, Temp-Cleanup, FFmpeg-Output-Mapping, NAS-Verhalten."
+        },
+        {
+          "file": "dragontools/worker/source_visual_models.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 97,
+          "purpose": "Settings/Result-/Probe-Datenmodelle.",
+          "review_focus": "Defaults und Serialisierungs-/Anzeigeverträge."
+        },
+        {
+          "file": "dragontools/worker/source_visual_settings.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 68,
+          "purpose": "QSettings -> SourceVisualCheckSettings.",
+          "review_focus": "Bounds/defaults unverändert."
+        },
+        {
+          "file": "dragontools/worker/source_visual_analysis.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 66,
+          "purpose": "Pure Frame-Heuristiken.",
+          "review_focus": "Schwarzbild/Einfarbigkeit/Neighbor-Diff identisch zum bisherigen Verhalten."
+        },
+        {
+          "file": "dragontools/core/release_validation_smoke_modules.py",
+          "status_vs_20260912_165602": "modified",
+          "lines": 53,
+          "purpose": "Block-10-Module im Release-Smoke.",
+          "review_focus": "Neue Module müssen im Paket enthalten sein."
+        },
+        {
+          "file": "dragontools/tests/test_postprocess_signal_logging.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 210,
+          "purpose": "Regression für native Qt-Signal-Semantik und exactly-once Postprocess.",
+          "review_focus": "Direkter Signalaufruf muss absichtlich TypeError auslösen; emit-Pfad und kein Sync-Fallback."
+        },
+        {
+          "file": "dragontools/tests/test_source_visual_check.py",
+          "status_vs_20260912_165602": "modified",
+          "lines": 157,
+          "purpose": "Batch-Gruppierung und sicherer Einzelprobe-Fallback.",
+          "review_focus": "4/4/1-Gruppierung bei 9 Samples; identische Policy."
+        },
+        {
+          "file": "dragontools/tests/test_refactor_block10_architecture.py",
+          "status_vs_20260912_165602": "added",
+          "lines": 28,
+          "purpose": "Architektur-/Größengrenzen für Logging und SourceVisual.",
+          "review_focus": "Keine Rückkehr zu direkten self.log-Aufrufen im Postprocess/Trickplay."
+        },
+        {
+          "file": "dragontools/tests/test_stability_review_fixes.py",
+          "status_vs_20260912_165602": "modified",
+          "lines": 177,
+          "purpose": "CrashGuard activity_file Regression.",
+          "review_focus": "Inputpfad wird im letzten Toolzustand mitgeführt."
+        }
+      ]
+    },
+    {
+      "block": 11,
+      "title": "MediaAnalyzer streams and renamer candidates responsibility split",
+      "files": [
+        "dragontools/core/media_analyzer_streams.py",
+        "dragontools/core/media_analyzer_video_streams.py",
+        "dragontools/core/media_analyzer_audio_streams.py",
+        "dragontools/core/media_analyzer_subtitle_streams.py",
+        "dragontools/core/movie_renamer_candidates.py",
+        "dragontools/core/movie_renamer_candidate_resolvers.py",
+        "dragontools/core/movie_renamer_candidate_mapping.py",
+        "dragontools/core/movie_renamer_candidate_scoring.py",
+        "dragontools/core/movie_renamer_candidate_order.py",
+        "dragontools/core/release_validation_smoke_modules.py",
+        "dragontools/tests/test_power_module_refactor.py",
+        "dragontools/tests/test_refactor_block11_analyzer_renamer_architecture.py"
+      ],
+      "validation": "88 targeted tests passed; differential behavior identical to Block 10"
+    },
+    {
+      "block": 12,
+      "title": "Audio/video matcher GUI and online metadata dialog responsibility split",
+      "files": [
+        "dragontools/gui/audio_video_matcher_widget.py",
+        "dragontools/gui/audio_video_matcher_view.py",
+        "dragontools/gui/audio_video_matcher_paths.py",
+        "dragontools/gui/audio_video_matcher_runtime.py",
+        "dragontools/gui/audio_video_matcher_results.py",
+        "dragontools/gui/online_metadata_dialog.py",
+        "dragontools/gui/online_metadata_dialog_view.py",
+        "dragontools/gui/online_metadata_dialog_state.py",
+        "dragontools/gui/online_metadata_settings_state.py",
+        "dragontools/core/release_validation_smoke_modules.py",
+        "dragontools/tests/test_refactor_block12_matcher_metadata_architecture.py"
+      ],
+      "validation": "101 targeted tests passed; host CrashGuard I/O failure reproduces on Block 11"
+    },
+    {
+      "id": "post-review-hardening-2026-09-13",
+      "title": "Post-Review-Härtung: Move-Journal, Release-Smoke, Renamer-Refresh und Formatbereinigung",
+      "summary": "Setzt die vier Befunde des anschließenden Kontrollreviews um: fail-closed Move-Journal-Archivierung inklusive Worker-Fehlerstatus, vollständige Smoke-Abdeckung aller im Review-Manifest neu eingeführten Produktivmodule, sichtbares Logging bei fehlgeschlagenem Episodenrefresh und Whitespace-Bereinigung der ISO-Fassade.",
+      "files": [
+        {
+          "file": "dragontools/core/move_journal.py",
+          "status_vs_20260912_165602": "modified",
+          "purpose": "Archivierungsfehler nach Callback als MoveJournalWriteError weitergeben.",
+          "review_focus": "Fail-closed; Fehlerkette/callback; kein stiller Abschluss."
+        },
+        {
+          "file": "dragontools/worker/move_batch_lifecycle.py",
+          "status_vs_20260912_165602": "modified",
+          "purpose": "Journal-Finalisierungsfehler als Move-Fehler zählen.",
+          "review_focus": "error_count/journal_finalize_failed; Worker bleibt sauber terminierbar."
+        },
+        {
+          "file": "dragontools/gui/move_regular_lifecycle.py",
+          "status_vs_20260912_165602": "modified",
+          "purpose": "Kein pauschaler Erfolgslog bei vorhandenen Move-Fehlern.",
+          "review_focus": "GUI-Abschluss spiegelt error_count."
+        },
+        {
+          "file": "dragontools/core/release_validation_smoke_modules.py",
+          "status_vs_20260912_165602": "modified",
+          "purpose": "32 fehlende Splitmodule in den Release-Smoke aufnehmen.",
+          "review_focus": "111/111 als added markierte Produktivmodule abgedeckt."
+        },
+        {
+          "file": "dragontools/core/movie_renamer_episode_refresh.py",
+          "status_vs_20260912_165602": "modified",
+          "purpose": "Providerfehler beim erzwungenen Episodenrefresh sichtbar loggen.",
+          "review_focus": "Fallback bleibt stabil; Fehlerursache nicht mehr still."
+        },
+        {
+          "file": "dragontools/gui/iso_widget.py",
+          "status_vs_20260912_165602": "modified",
+          "purpose": "EOF-Whitespace bereinigt.",
+          "review_focus": "Shutdown-Hook unverändert."
+        },
+        {
+          "file": "dragontools/tests/test_move_journal.py",
+          "status_vs_20260912_165602": "modified",
+          "purpose": "Regression für fatalen Archivfehler und Worker-Fehlerzählung.",
+          "review_focus": "Host-fsync-unabhängiger Archivtest."
+        },
+        {
+          "file": "dragontools/tests/test_movie_renamer.py",
+          "status_vs_20260912_165602": "modified",
+          "purpose": "Regression für sichtbaren Refreshfehler bei weiterverwendetem Fallback.",
+          "review_focus": "caplog + sicherer Zielname."
+        },
+        {
+          "file": "dragontools/tests/test_release_validation.py",
+          "status_vs_20260912_165602": "modified",
+          "purpose": "Regression für vollständige Refactoring-Smoke-Abdeckung.",
+          "review_focus": "Fehlende Splitmodule dürfen nicht wieder aus der Pflichtliste fallen."
+        }
+      ]
+    }
+  ],
+  "objective_module_metrics_top_40": [
+    {
+      "file": "dragontools/core/timeout_settings.py",
+      "lines": 475,
+      "max_function": 27,
+      "max_branches": 7,
+      "max_class": 6,
+      "methods": 0
+    },
+    {
+      "file": "dragontools/core/settings.py",
+      "lines": 406,
+      "max_function": 20,
+      "max_branches": 6,
+      "max_class": 0,
+      "methods": 0
+    },
+    {
+      "file": "dragontools/core/mediainfo_details.py",
+      "lines": 394,
+      "max_function": 70,
+      "max_branches": 18,
+      "max_class": 8,
+      "methods": 0
+    },
+    {
+      "file": "dragontools/core/move_journal.py",
+      "lines": 392,
+      "max_function": 117,
+      "max_branches": 39,
+      "max_class": 217,
+      "methods": 16
+    },
+    {
+      "file": "dragontools/core/tool_diagnostics.py",
+      "lines": 391,
+      "max_function": 158,
+      "max_branches": 32,
+      "max_class": 0,
+      "methods": 0
+    },
+    {
+      "file": "dragontools/core/paths.py",
+      "lines": 391,
+      "max_function": 37,
+      "max_branches": 10,
+      "max_class": 129,
+      "methods": 19
+    },
+    {
+      "file": "dragontools/gui/media_info_text_builder.py",
+      "lines": 382,
+      "max_function": 85,
+      "max_branches": 27,
+      "max_class": 0,
+      "methods": 0
+    },
+    {
+      "file": "dragontools/worker/audio_video_match_thread.py",
+      "lines": 382,
+      "max_function": 65,
+      "max_branches": 11,
+      "max_class": 353,
+      "methods": 17
+    },
+    {
+      "file": "dragontools/core/release_validation_package.py",
+      "lines": 380,
+      "max_function": 34,
+      "max_branches": 9,
+      "max_class": 0,
+      "methods": 0
+    },
+    {
+      "file": "dragontools/worker/converter_thread.py",
+      "lines": 374,
+      "max_function": 50,
+      "max_branches": 8,
+      "max_class": 311,
+      "methods": 31
+    },
+    {
+      "file": "dragontools/gui/media_library_dialog.py",
+      "lines": 368,
+      "max_function": 43,
+      "max_branches": 5,
+      "max_class": 332,
+      "methods": 51
+    },
+    {
+      "file": "dragontools/worker/duration_timing_analyzer.py",
+      "lines": 366,
+      "max_function": 42,
+      "max_branches": 24,
+      "max_class": 235,
+      "methods": 8
+    },
+    {
+      "file": "dragontools/worker/converter_stream_args.py",
+      "lines": 365,
+      "max_function": 106,
+      "max_branches": 21,
+      "max_class": 332,
+      "methods": 8
+    },
+    {
+      "file": "dragontools/gui/conversion_progress_presenter.py",
+      "lines": 364,
+      "max_function": 47,
+      "max_branches": 15,
+      "max_class": 337,
+      "methods": 20
+    },
+    {
+      "file": "dragontools/worker/process_control.py",
+      "lines": 362,
+      "max_function": 97,
+      "max_branches": 31,
+      "max_class": 0,
+      "methods": 0
+    },
+    {
+      "file": "dragontools/core/codec_profile_assistant.py",
+      "lines": 361,
+      "max_function": 169,
+      "max_branches": 3,
+      "max_class": 5,
+      "methods": 0
+    },
+    {
+      "file": "dragontools/core/online_metadata_tmdb_resolver.py",
+      "lines": 360,
+      "max_function": 82,
+      "max_branches": 17,
+      "max_class": 332,
+      "methods": 14
+    },
+    {
+      "file": "dragontools/worker/dv_remux_thread.py",
+      "lines": 357,
+      "max_function": 67,
+      "max_branches": 9,
+      "max_class": 301,
+      "methods": 17
+    },
+    {
+      "file": "dragontools/core/audio_video_frame_analysis.py",
+      "lines": 356,
+      "max_function": 56,
+      "max_branches": 10,
+      "max_class": 75,
+      "methods": 6
+    },
+    {
+      "file": "dragontools/gui/convert_widget_custom_widgets.py",
+      "lines": 356,
+      "max_function": 117,
+      "max_branches": 4,
+      "max_class": 135,
+      "methods": 15
+    },
+    {
+      "file": "dragontools/core/error_report.py",
+      "lines": 354,
+      "max_function": 58,
+      "max_branches": 19,
+      "max_class": 0,
+      "methods": 0
+    },
+    {
+      "file": "dragontools/worker/subtitle_sidecar_service.py",
+      "lines": 351,
+      "max_function": 88,
+      "max_branches": 18,
+      "max_class": 192,
+      "methods": 11
+    },
+    {
+      "file": "dragontools/gui/merge_widget.py",
+      "lines": 347,
+      "max_function": 72,
+      "max_branches": 8,
+      "max_class": 322,
+      "methods": 19
+    },
+    {
+      "file": "dragontools/worker/dv_final_mux_service.py",
+      "lines": 343,
+      "max_function": 91,
+      "max_branches": 17,
+      "max_class": 325,
+      "methods": 6
+    },
+    {
+      "file": "dragontools/gui/encoder_settings_ui.py",
+      "lines": 343,
+      "max_function": 99,
+      "max_branches": 1,
+      "max_class": 290,
+      "methods": 6
+    },
+    {
+      "file": "dragontools/core/logger_messages.py",
+      "lines": 342,
+      "max_function": 74,
+      "max_branches": 31,
+      "max_class": 330,
+      "methods": 15
+    },
+    {
+      "file": "dragontools/gui/settings_sections/media.py",
+      "lines": 341,
+      "max_function": 231,
+      "max_branches": 8,
+      "max_class": 332,
+      "methods": 5
+    },
+    {
+      "file": "dragontools/gui/movie_renamer_table_controller.py",
+      "lines": 340,
+      "max_function": 80,
+      "max_branches": 26,
+      "max_class": 299,
+      "methods": 25
+    },
+    {
+      "file": "dragontools/core/crash_guard.py",
+      "lines": 340,
+      "max_function": 40,
+      "max_branches": 8,
+      "max_class": 0,
+      "methods": 0
+    },
+    {
+      "file": "dragontools/gui/main_window_tabs.py",
+      "lines": 338,
+      "max_function": 47,
+      "max_branches": 11,
+      "max_class": 319,
+      "methods": 21
+    },
+    {
+      "file": "dragontools/worker/iso_thread.py",
+      "lines": 336,
+      "max_function": 104,
+      "max_branches": 22,
+      "max_class": 307,
+      "methods": 21
+    },
+    {
+      "file": "dragontools/worker/quality_test_thread.py",
+      "lines": 335,
+      "max_function": 62,
+      "max_branches": 21,
+      "max_class": 307,
+      "methods": 13
+    },
+    {
+      "file": "dragontools/core/movie_renamer_parsing.py",
+      "lines": 335,
+      "max_function": 65,
+      "max_branches": 17,
+      "max_class": 0,
+      "methods": 0
+    },
+    {
+      "file": "dragontools/core/config_migration.py",
+      "lines": 333,
+      "max_function": 70,
+      "max_branches": 22,
+      "max_class": 6,
+      "methods": 0
+    },
+    {
+      "file": "dragontools/worker/quality_compare_thread.py",
+      "lines": 331,
+      "max_function": 131,
+      "max_branches": 30,
+      "max_class": 303,
+      "methods": 12
+    },
+    {
+      "file": "dragontools/worker/tool_runner.py",
+      "lines": 331,
+      "max_function": 103,
+      "max_branches": 16,
+      "max_class": 23,
+      "methods": 4
+    },
+    {
+      "file": "dragontools/rules/subtitle_selection.py",
+      "lines": 330,
+      "max_function": 72,
+      "max_branches": 15,
+      "max_class": 0,
+      "methods": 0
+    },
+    {
+      "file": "dragontools/worker/dv_processing_pipeline.py",
+      "lines": 330,
+      "max_function": 103,
+      "max_branches": 7,
+      "max_class": 307,
+      "methods": 15
+    },
+    {
+      "file": "dragontools/worker/dv_pipeline_stages.py",
+      "lines": 328,
+      "max_function": 70,
+      "max_branches": 16,
+      "max_class": 264,
+      "methods": 23
+    },
+    {
+      "file": "dragontools/worker/hdrplus_pipeline_coordinator.py",
+      "lines": 320,
+      "max_function": 58,
+      "max_branches": 11,
+      "max_class": 262,
+      "methods": 14
+    }
+  ],
+  "next_refactor_candidates": [
+    {
+      "priority": 1,
+      "file": "dragontools/worker/process_control.py",
+      "lines": 362,
+      "reason": "Abort/Wait/Terminate logic has 31 branches; safety review before split."
+    },
+    {
+      "priority": 2,
+      "file": "dragontools/worker/audio_video_match_thread.py",
+      "lines": 382,
+      "reason": "Large QThread combines analysis/refine/create, FFmpeg command construction, mux, validation and logging."
+    },
+    {
+      "priority": 3,
+      "file": "dragontools/core/tool_diagnostics.py",
+      "lines": 391,
+      "reason": "158-line function and 32 branches mix tool probing, interpretation and reporting."
+    },
+    {
+      "priority": 4,
+      "file": "dragontools/core/move_journal.py",
+      "lines": 392,
+      "reason": "High branch density and long recovery logic; refactor only after durability/recovery review."
+    }
+  ]
+}

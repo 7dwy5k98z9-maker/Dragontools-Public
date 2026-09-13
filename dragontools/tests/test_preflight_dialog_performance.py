@@ -225,6 +225,108 @@ def test_background_lookup_uses_fallback_before_tmdb(monkeypatch):
     assert result["base_type"] == "TV"
 
 
+def test_background_movie_lookup_uses_library_before_online(monkeypatch):
+    from dragontools.tests.test_incremental_move_queue_edit import _install_pyqt_stubs
+
+    _install_pyqt_stubs(monkeypatch)
+
+    from dragontools.core import media_library, online_metadata
+    from dragontools.gui.preflight_dialog import PreFlightDialog
+
+    calls: list[tuple[str, int | None]] = []
+
+    def fake_movie_lookup(_settings, movie_title, _bases, *, year=None, dir_exists=None):
+        calls.append((movie_title, year))
+        return {
+            "movie_dir": r"D:\Filme\K\Der Kinderflüsterer (2026)",
+            "base": r"D:\Filme",
+            "base_type": "Filme",
+            "source": "database",
+            "suggested_movie_name": "Der Kinderflüsterer (2026)",
+        }
+
+    def fail_online(*_args, **_kwargs):
+        raise AssertionError("Online-Suche darf bei Mediathek-Filmtreffer nicht laufen")
+
+    monkeypatch.setattr(media_library, "find_movie_dir_from_settings", fake_movie_lookup)
+    monkeypatch.setattr(online_metadata, "suggest_movie_metadata_for_file", fail_online)
+
+    dlg = PreFlightDialog.__new__(PreFlightDialog)
+    dlg._metadata_cancelled = False
+    result_queue = queue.Queue()
+    dlg._run_online_metadata_lookup(
+        [(
+            "movie",
+            "movie-1",
+            {
+                "path": r"D:\Input\Der.Kinderfluesterer.2026.GERMAN.mkv",
+                "movie_base": r"D:\Filme",
+            },
+        )],
+        result_queue,
+        online_enabled=True,
+    )
+
+    kind, key, result = result_queue.get_nowait()
+
+    assert (kind, key) == ("movie", "movie-1")
+    assert calls == [("Der Kinderfluesterer", 2026)]
+    assert result["__existing_movie_dir__"] == r"D:\Filme\K\Der Kinderflüsterer (2026)"
+    assert result["movie_name"] == "Der Kinderflüsterer (2026)"
+
+
+def test_background_lookup_caches_duplicate_series_jobs(monkeypatch):
+    from dragontools.tests.test_incremental_move_queue_edit import _install_pyqt_stubs
+
+    _install_pyqt_stubs(monkeypatch)
+
+    from dragontools.core import media_library, online_metadata
+    from dragontools.rules import move_rules
+    from dragontools.gui.preflight_dialog import PreFlightDialog
+
+    calls: list[str] = []
+
+    def fake_library(_settings, series_name, _bases, *, year=None, dir_exists=None):
+        calls.append(series_name)
+        return {
+            "series_dir": r"D:\Anime\Watson (2025)",
+            "base": r"D:\Anime",
+            "base_type": "Anime",
+            "source": "database",
+        }
+
+    monkeypatch.setattr(media_library, "find_series_dir_from_settings", fake_library)
+    monkeypatch.setattr(move_rules, "find_series_dir_candidates", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(
+        online_metadata,
+        "suggest_series_metadata_for_name",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("Online-Suche darf bei DB-Treffer nicht laufen")
+        ),
+    )
+
+    payload = {
+        "series_name": "Watson",
+        "search_bases": [{"type": "Anime", "base": r"D:\Anime"}],
+        "year": 2025,
+    }
+    dlg = PreFlightDialog.__new__(PreFlightDialog)
+    dlg._metadata_cancelled = False
+    result_queue = queue.Queue()
+    dlg._run_online_metadata_lookup(
+        [("series", "job-1", payload), ("series", "job-2", dict(payload))],
+        result_queue,
+        online_enabled=True,
+    )
+
+    first = result_queue.get_nowait()
+    second = result_queue.get_nowait()
+
+    assert calls == ["Watson"]
+    assert first[2]["__existing_series_dir__"] == r"D:\Anime\Watson (2025)"
+    assert second[2]["__existing_series_dir__"] == r"D:\Anime\Watson (2025)"
+
+
 def test_background_lookup_searches_local_folders_without_tmdb(monkeypatch):
     from dragontools.tests.test_incremental_move_queue_edit import _install_pyqt_stubs
 
@@ -380,8 +482,14 @@ def test_background_lookup_passes_online_year_to_library_search(monkeypatch):
         lambda *_args, **_kwargs: SimpleNamespace(first_air_year=2024, folder_name="Ranma ½ (2024)"),
     )
 
-    def fake_library(_settings, _series_name, _bases, *, year=None):
+    def fake_library(_settings, _series_name, _bases, *, year=None, dir_exists=None):
         years.append(year)
+        if year is None:
+            return {
+                "series_dir": "",
+                "source": "database",
+                "ambiguous_years": "1989,2024",
+            }
         return {
             "series_dir": r"D:\Anime\Ranma ½ (2024)",
             "base": r"D:\Anime",
@@ -401,7 +509,7 @@ def test_background_lookup_passes_online_year_to_library_search(monkeypatch):
     )
 
     _kind, _key, result = result_queue.get_nowait()
-    assert years == [2024]
+    assert years == [None, 2024]
     assert result["source"] == "database"
     assert result["__existing_series_dir__"] == r"D:\Anime\Ranma ½ (2024)"
 

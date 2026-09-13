@@ -37,3 +37,6 @@ def test_about_html_contains_current_stability_summary(tmp_path):
     assert "direkten 5-Schritt-Pfad" in html
     assert "Per-Datei-Overrides" in html
     assert "Projektumfang" in html
+    assert "Qt-sicheres Async-Postprocessing" in html
+    assert "indexierter Serien-Lookup" in html
+    assert "Zwölf Refactoring-/Stabilitätsblöcke" in html

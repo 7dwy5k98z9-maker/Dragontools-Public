@@ -150,6 +150,16 @@ class MediaLibraryDialog(QDialog):
             )
             event.ignore()
             return
+        # A SQLite search runs in a QThread. Ensure the worker is not destroyed
+        # together with the dialog while it still owns a live connection.
+        if not self._search.shutdown():
+            QMessageBox.information(
+                self,
+                "Mediathek-Suche läuft",
+                "Die laufende Mediathek-Suche wird noch beendet. Bitte das Fenster gleich erneut schließen.",
+            )
+            event.ignore()
+            return
         self._save_without_popup()
         save_window_geometry(self, "media_library_dialog", self.settings)
         super().closeEvent(event)

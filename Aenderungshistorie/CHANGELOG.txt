@@ -1,5 +1,5 @@
 Dragon Tools V9.8.2 – Änderungshistorie
-Version: 9.8.2 | Stand: 2026-09-11
+Version: 9.8.2 | Stand: 2026-09-13
 
 === 📋 Überblick ===
 
@@ -13,7 +13,7 @@ HDR/DV-Korrektheit, Fehlerdiagnose, wartbarer Modulstruktur sowie einer
 SQLite-Mediathek mit NFO-Prüfung und einem flexibel steuerbaren TMDB/TheTVDB-Renamer.
 
 Version: 9.8.2 (Release-Build)
-Stand: 2026-09-11
+Stand: 2026-09-13
 Plattform: Windows 10/11 (64-bit)
 
 Diese Datei dokumentiert alle Änderungen der V9-Entwicklung in einer
@@ -33,7 +33,68 @@ Dragon Tools V8 ist in CHANGELOGV8.txt dokumentiert.
 Ältere Versionen (V1–V7) sind in CHANGELOGV7.txt dokumentiert.
 Menü: Hilfe → Änderungshistorie Legacy V8 / Legacy V7
 
-=== 🚀 V9.8.2 – AKTUELLER STAND 11.09.2026 ===
+=== 🚀 V9.8.2 – AKTUELLER STAND 13.09.2026 ===
+
+[13.09.2026] V9.8.2: Timestamp-Reparatur an Batch-Fallback angeglichen
+- Der verlustfreie FFmpeg-Fallback nutzt jetzt +genpts+igndts, damit defekte PTS/DTS-Timelines wie im bewährten externen Reparaturskript robuster neu aufgebaut werden.
+- Verworfene Timestamp-Reparaturkandidaten werden, soweit möglich, unter Archiv\Timestamp_Reparatur abgelegt. Dadurch bleiben fehlerhafte Kandidaten für spätere Analyse erhalten, statt lautlos aus dem Temp-Ordner zu verschwinden.
+- Auch EINVAL-/Timeout-Kandidaten werden vor dem Verwerfen vollständig gegengeprüft und anschließend archiviert, wenn sie nicht sicher genug für einen Ersatz der Quelldatei sind.
+- Neue Regressionstests sichern den +genpts/+igndts-Aufruf und das Kandidatenarchiv für verworfene Reparaturen ab.
+- Aktuelle Vermessung: 729 Python-Dateien einschließlich DragonToolsV9.py, 118.227 Gesamtzeilen, 100.301 nichtleere/nicht reine Kommentarzeilen und 1.224 statisch erkennbare Tests.
+
+[13.09.2026] V9.8.2: Abschlussreview – Move-Journal, Release-Smoke und Renamer-Refresh nachgehärtet
+- Ein Fehler beim Archivieren eines abgeschlossenen Move-Journals wird nach dem Fehlercallback nicht mehr nur protokolliert, sondern als MoveJournalWriteError fail-closed weitergegeben.
+- Der Move-Worker zählt eine fehlgeschlagene Journal-Finalisierung als echten Fehler. Der Abschluss darf dadurch nicht mehr pauschal „Verschoben“ melden, wenn die Dateioperation erfolgreich war, das Journal aber nicht sauber finalisiert werden konnte.
+- Der Release-Smoke deckt jetzt sämtliche 111 im Refactoring-Review-Manifest als neu hinzugekommen markierten Produktivmodule ab. Zuvor fehlten 32 Splitmodule aus Mediathek, Preflight, Postprocessing und Trickplay in der Pflichtliste.
+- Scheitert der erzwungene Episoden-Metadatenrefresh bei einem Platzhaltertitel wie „Folge 10“, bleibt der sichere Fallback erhalten, der Grund wird aber mit Datei/Exception im Log sichtbar statt still verschluckt.
+- Die Release-/Build-Prüfung behält in der GUI ihre Statussymbole, kann in alten Windows-Terminals aber automatisch auf [OK], [WARN] und [FEHLER] ausweichen, damit die Ausgabe nicht an der Codepage scheitert.
+- Die überzählige Leerzeile am Ende von gui/iso_widget.py wurde entfernt; der explizite iter_shutdown_workers-Hook bleibt unverändert erhalten.
+- Neue Regressionstests sichern fatalen Move-Journal-Archivfehler, Worker-Fehlerzählung, sichtbaren Renamer-Refreshfehler, terminalfeste Release-Ausgabe und die erweiterte Release-Smoke-Abdeckung ab.
+- Aktuelle Vermessung nach dem Nachreview: 729 Python-Dateien einschließlich DragonToolsV9.py, 118.227 Gesamtzeilen, 100.301 nichtleere/nicht reine Kommentarzeilen und 1.224 statisch erkennbare Tests.
+
+[12.09.2026] V9.8.2: Datenbank-, Metadaten- und GUI-Performance nach Abschlussreview gehärtet
+- SQLite-Schema-Migrationen ergänzen fehlende Spalten jetzt vor davon abhängigen Indizes; ältere Datenbanken scheitern dadurch nicht mehr an Indizes auf noch nicht vorhandenen Spalten.
+- Der Serien-Lookup verwendet zuerst einen indexfreundlichen Fast Path über normalized_title. Langsame lower/trim-Vergleiche auf series_title/title bleiben nur als Legacy-Fallback für alte oder inkonsistente Bestände.
+- Der Jellyfin-Import bildet normalized_title aus dem tatsächlich aufgelösten Seriennamen. Damit landen Episoden ohne direktes SeriesName-Feld nicht unnötig im langsamen Legacy-Lookup.
+- Preflight fragt bei aktivierter Mediathek zuerst SQLite und nutzt den Dateisystem-/NAS-Scan erst als Fallback. Pfadmapping und konfigurierte Speicherpfade bleiben fachlich unverändert.
+- Die normale Mediathek-Suche läuft in einem QThread; Streamdaten werden für Treffer gebündelt angereichert. Reine Suchvorgänge führen keine unnötigen Schema-Writes/updated_at-Änderungen mehr aus.
+- NFO-Lightscan trennt Dateisystem-/XML-I/O von den kurzen SQLite-Schreibphasen und hält keine lange Writer-Transaktion während NAS-Zugriffen offen.
+
+[12.09.2026] V9.8.2: Metadaten-Cache für finale Verarbeitung und TheTVDB-Fallback korrigiert
+- Persistenter Such-/Preflight-Cache und frische Batch-Metadaten sind getrennt. Finale Rename-/NFO-Läufe können aktuelle Providerdaten einmal pro Serie/Batch laden und anschließend für weitere Folgen wiederverwenden.
+- Leere/generische Episodentitel wie Folge 10, Episode 10 oder SxxExx gelten nicht als vollständige Metadaten und können eine frische Providerabfrage erzwingen.
+- Bei TheTVDB blockiert eine bereits vorhandene Episode ohne brauchbaren Titel den Sprachfallback nicht mehr; eine konfigurierte Fallback-Sprache kann den Episodentitel ergänzen.
+- Der TheTVDB-Transport prüft einen gültigen Cache vor einer unnötigen Authentifizierung.
+- NFO-Postprocessing verwendet eine gemeinsame Metadaten-Batchsession, sodass mehrere Folgen derselben Serie nicht jeweils einen neuen Provider-Client bzw. dieselbe Episodenliste laden müssen.
+
+[12.09.2026] V9.8.2: Trickplay-/Postprocessing-Absturz durch native Qt-Signale behoben
+- Der gemeldete Fehler TypeError: native Qt signal is not callable wurde an einer Logging-Grenze reproduziert. Native PyQt-Signale werden jetzt zentral über .emit(...) angesprochen; Logger und normale Callables bleiben unterstützt.
+- Sobald ein Async-Postprocess erfolgreich an den Executor übergeben wurde, besitzt der Hintergrundlauf den Job eindeutig. Ein nachfolgender Loggingfehler kann deshalb keinen zweiten synchronen NFO-/Trickplay-Lauf derselben Datei mehr starten.
+- Completion und Dateiresultat sind fail-soft gegen Loggingfehler abgesichert, damit erfolgreich erzeugtes Trickplay nicht nachträglich als fehlgeschlagen erscheint.
+- ToolProcessLifecycle schreibt bei überwachten Tool-Läufen nach Möglichkeit die konkrete Eingabedatei in crash_state.json. Die Datei bleibt ein Aktivitätsmarker und ist allein kein Beweis für einen FFmpeg-Absturz.
+- Quellbildprüfung bündelt mehrere Prüfpositionen: bei 10-%-Intervallen im Normalfall 9 -> 3 FFmpeg-Starts, bei 5 % 19 -> 5; nur fehlgeschlagene Gruppen fallen auf Einzelproben zurück.
+
+[12.09.2026] V9.8.2: Refactoring-Blöcke 1-12 – Verantwortlichkeiten im gesamten Projekt weiter getrennt
+- Große Mediathek-, NFO-, Postprocess-, Trickplay-, DV-Remux-, Backup-, Journal-, Preflight-, Merge-, ISO-, Parallel-Converter-, Move-, Encoder-Override-, Duration-Repair-, HDR10+-, MediaAnalyzer-, Renamer- und GUI-Module wurden in fokussierte Fachmodule zerlegt.
+- Öffentliche Klassen und bisherige Importpfade bleiben über schmale Fassaden/gezielte Re-Exports kompatibel; Architekturtests verhindern ein erneutes Anwachsen zentraler Fassaden.
+- MediaAnalyzer trennt Video-, Audio- und Untertitelstream-Mapping. Der Renamer trennt Providerauflösung, Candidate-Mapping, Scoring und Sortierung. Audio/Video-Matcher sowie Online-Metadaten-Dialog trennen UI, State, Pfade und Worker-Lifecycle.
+- Aktuelle Vermessung des vollständigen Quellstands: 729 Python-Dateien einschließlich DragonToolsV9.py, 118.227 Gesamtzeilen und 100.301 nichtleere/nicht reine Kommentarzeilen. Das Testpaket enthält 167 Python-Dateien, 164 test_*.py und 1.224 statisch erkennbare Testfunktionen.
+- Die einzelnen Blöcke wurden mit gezielten Regressionstests, compileall, Release-Smoke und Architekturgrenzen validiert. Bekannte Review-Host-Probleme wie fehlendes PyQt6 bzw. fsync/SQLite-Datei-I/O werden getrennt von fachlichen Regressionen dokumentiert.
+
+[12.09.2026] V9.8.2: README, Hilfe, Changelog und Hilfe -> Über auf den aktuellen Quellstand synchronisiert
+- README dokumentiert den aktuellen Datenbank-/Metadaten-/Trickplay-/Performance-Stand und die neue Fassaden-/Fachmodul-Architektur.
+- help.html beschreibt asynchrone Mediathek-Suche, DB-Fast-Path, frische Batch-Metadaten, TheTVDB-Sprachfallback, Qt-sicheres Trickplay-Logging, Quellbild-Batching und die Bedeutung von crash_state.json sowie den +genpts/+igndts-Timestamp-Fallback mit Kandidatenarchiv.
+- Hilfe -> Über verwendet aktualisierte Release-Fallbackwerte und weist 729 Python-Dateien, 118.227 Gesamtzeilen, 100.301 Codezeilen sowie 1.224 statisch erkennbare Tests aus.
+- CHANGELOG.json und CHANGELOG.txt bleiben inhaltlich synchron; ältere Zahlen bleiben ausschließlich als historisch datierte Entwicklungsstände erhalten.
+
+[12.09.2026] V9.8.2: Renamer-Umlautsuche, Cache-Erneuerung und Preflight-Mediathekpfade nachgezogen
+- Film- und Serienrenamer verwenden jetzt dieselbe vorsichtige deutsche Umlaut-Fallbacksuche. Release-Schreibweisen wie „Kinderfluesterer“ oder „Muenchner“ werden zuerst unverändert gesucht und danach zusätzlich als „Kinderflüsterer“ bzw. „Münchner“ probiert.
+- Der Serien-Episodenresolver und der Online-Client nutzen diese Varianten auch bei SxxExx-Folgen. Der finale Zielname kommt weiter aus dem Provider-Treffer oder der bewussten Benutzerauswahl, nicht blind aus der Suchvariante.
+- Der Preflight initialisiert die Mediathek-Datenbank nur einmal pro Dialog, nutzt einen lokalen Lookup-Cache und fragt Film- sowie Serienpfade zuerst in der Mediathek ab. Unbrauchbare oder nicht erreichbare DB-Pfade werden mit Bereich und Zielquelle sichtbar gemeldet.
+- Die Pfadauflösung für große Mediatheken filtert vor der Ordnerprüfung nach Titel, Jahr und Medientyp. Dadurch müssen Bestände mit vielen Serienzeilen nicht mehr vollständig durchlaufen werden, nur um einen Zielordner zu finden.
+- Enthält der Metadatencache für eine Serienfolge nur einen generischen Episodentitel wie „Folge 10“, fragt der Renamer TMDB/TheTVDB einmal frisch am Cache vorbei ab. Liefert der Provider inzwischen einen echten Titel, wird der Cache erneuert und der neue Zielname verwendet; bleibt der Titel offen, bleibt der sichere Platzhalter erhalten.
+- Release-Smoke-Prüfung und Architekturtest kennen die neuen Hilfsmodule für Film-Pfade und Film-Preflight-Hinweise.
+- Gezielte Abschlussprüfung am 12.09.2026: 156/156 relevante Tests für Renamer, Online-Metadaten, Preflight-Performance, Mediathek und Architektur bestanden; die geänderten Module wurden zusätzlich ohne Syntax-/Bytecodefehler kompiliert.
 
 [11.09.2026] V9.8.2: Renamer-Fallbacksuche, Provideranzeige und manuelle Suche erweitert
 - Die automatische Kandidatenbewertung arbeitet jetzt stufenweise. Standardmäßig wird zuerst die normale Mindestübereinstimmung von 60 % geprüft, danach automatisch Fallback 1 mit 45 % und zuletzt Fallback 2 mit 30 %.
@@ -70,13 +131,13 @@ Menü: Hilfe → Änderungshistorie Legacy V8 / Legacy V7
 - Regressionstests decken Schema-Migration, MP4-Verhalten, MKV-Text-zu-SRT, mov_text-zu-SRT, Simulator-Anzeige, Kurzlog-Ausgabe und Pipeline-Sidecar-Pfade ab.
 
 [11.09.2026] V9.8.2: Release-, Projektinfo- und Dokumentationsabgleich nachgezogen
-- Hilfe -> Über verwendet aktualisierte Release-Fallbackwerte: 601 Python-Dateien, 111.339 Gesamtzeilen, 94.633 Codezeilen, 154 Testpaket-Dateien, 151 test_*.py und 1.142 statisch erkennbare Tests. Die Funktionsbeschreibung nennt jetzt unter anderem DV-/HDR10+-Erhalt, direkten HDR10+-5-Schritt-Pfad, MP4Box/mkvmerge, Per-Datei-Overrides sowie Mediathek-Schema 6 mit NFO-Lightscan und SQL-Hilfe.
+- Hilfe -> Über verwendet aktualisierte Release-Fallbackwerte: 605 Python-Dateien, 113.005 Gesamtzeilen, 96.051 Codezeilen, 154 Testpaket-Dateien, 151 test_*.py und 1.151 statisch erkennbare Tests. Die Funktionsbeschreibung nennt jetzt unter anderem DV-/HDR10+-Erhalt, direkten HDR10+-5-Schritt-Pfad, MP4Box/mkvmerge, Per-Datei-Overrides sowie Mediathek-Schema 6 mit NFO-Lightscan und SQL-Hilfe.
 - Der NFO-Lightscan klassifiziert Datei-/Ordnerpfade nicht mehr anhand von Path.suffix. Dadurch bleiben Ordner mit Punkten im Namen wie 'Mr. Robot' auch bei nicht erreichbarem NAS korrekt Verzeichnisse und werden als unreachable statt fälschlich als missing bewertet.
 - Die Release-/Build-Prüfung vergleicht bei vorhandenem dist-Build Help, PDF-Handbuch sowie JSON-/TXT-Changelog bytegenau mit den Quelldateien. Veraltete Dokumente im Build werden damit als Fehler erkannt statt nur auf Existenz geprüft zu werden.
 - README, vollständige DOCX-Dokumentation, PDF-Handbuch und CHANGELOG.txt wurden auf Schema 6, Provider-/Genre-/Collection-/Personenimport, NFO-Lightscan/-Konsistenzprüfung, gespeicherte GUI-/SQL-Suchen und SQL-Schemahilfe synchronisiert.
 - CHANGELOG.txt wird aus der strukturierten CHANGELOG.json erzeugt und bleibt als inhaltlich synchroner Fallback im Build erhalten.
 - Die Untertitel-Sidecar-Zielplanung wurde in ein eigenes Modul ausgelagert und in die Release-Smoke-Prüfung aufgenommen.
-- Gezielte Abschlussprüfung des finalen Renamer-/Regelsimulator-Stands am 11.09.2026: 78/78 relevante Tests bestanden; zusätzlich wurde das vollständige dragontools-Paket ohne Syntax-/Bytecodefehler kompiliert. Bereits bekannte, themenfremde Architektur-/Umgebungsprüfungen bleiben davon getrennt.
+- Gezielte Abschlussprüfung des finalen Renamer-/Preflight-/Mediathek-Stands am 12.09.2026: 156/156 relevante Tests bestanden; zusätzlich wurde das vollständige dragontools-Paket ohne Syntax-/Bytecodefehler kompiliert. Bereits bekannte, themenfremde Architektur-/Umgebungsprüfungen bleiben davon getrennt.
 
 [11.09.2026] V9.8.2: NFO-Lightscan, NFO-Konsistenzprüfung und SQL-Hilfe ergänzt
 - Der NFO-Lightscan arbeitet ausschließlich auf bereits bekannten Mediathek-Pfaden und startet weder MediaInfo noch ffprobe noch einen vollständigen rekursiven NAS-Scan.
@@ -114,9 +175,9 @@ Menü: Hilfe → Änderungshistorie Legacy V8 / Legacy V7
 [10.09.2026] V9.8.2: Timestamp-Reparatur fail-closed gehärtet
 - Eine fehlgeschlagene Laufzeit-, Vertrags- oder Streamprüfung verhindert Ersetzen, Postprocessing und Verschieben.
 - FFprobe und MediaInfo vergleichen Video-, Audio- und Untertitelanzahl unabhängig; widersprüchliche Angaben oder mögliche Streamverluste verwerfen den Kandidaten.
-- Der FFmpeg-EINVAL-Rückgabecode -22 beziehungsweise 4294967274 wird ausschließlich beim +genpts-Fallback toleriert und nur nach einem vollständigen Lesetest bis zum Dateiende.
-- Ist der setts-Bitstreamfilter nicht verfügbar oder scheitert dessen Kandidat, kann DragonTools direkt den verlustfreien +genpts-Fallback verwenden.
-- Temporäre Reparaturdateien werden auf allen Fehlerpfaden entfernt.
+- Der FFmpeg-EINVAL-Rückgabecode -22 beziehungsweise 4294967274 wird ausschließlich beim +genpts/+igndts-Fallback toleriert und nur nach einem vollständigen Lesetest bis zum Dateiende.
+- Ist der setts-Bitstreamfilter nicht verfügbar oder scheitert dessen Kandidat, kann DragonTools direkt den verlustfreien +genpts/+igndts-Fallback verwenden.
+- Temporäre Reparaturdateien werden auf Fehlerpfaden bereinigt; verworfene Timestamp-Kandidaten können für die Analyse unter Archiv\Timestamp_Reparatur gesichert werden.
 
 [10.09.2026] V9.8.2: technische Mediathekfelder erweitert
 - Zusätzlich gespeichert werden Dateigröße, Video-Profil, Streamdauer, Frameanzahl, Bildrate/-modus, Pixelformat, Bittiefe sowie Farbraum, Transferfunktion und Farbprimärwerte.

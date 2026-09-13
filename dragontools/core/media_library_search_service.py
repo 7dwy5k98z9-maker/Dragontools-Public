@@ -6,13 +6,14 @@ from pathlib import Path
 from typing import Any
 
 from .media_library_classification import _find_deviations
-from .media_library_db import _connect, initialize_database
+from .media_library_db import _connect, initialize_database_once
 from .media_library_paths import get_path_mappings
 from .media_library_query import (
     _append_media_type_filter, _append_preset_filter, _append_scope_filter,
     _append_text_filter, _build_search_query, _build_search_sql_fragments,
 )
 from .media_library_scope import _area_for_path
+from .media_library_search_enrichment import enrich_search_rows_with_streams
 from .media_library_utils import _int_or_none
 from .paths import path_compare_key
 
@@ -88,7 +89,7 @@ def search_library(
     db = Path(db_path)
     if not db.exists():
         return []
-    initialize_database(db)
+    initialize_database_once(db)
 
     preset_key = (preset or "all").casefold()
     scope_key = (scope or "all").casefold()
@@ -109,24 +110,25 @@ def search_library(
         where.append("mi.item_type IN ('episode', 'movie', 'video')")
 
     _append_media_type_filter(where, media_type_key)
-    _append_scope_filter(db, scope_key, where, params)
-    sql = _build_search_sql_fragments()
-    _append_preset_filter(preset_key, deviation_criterion, where, params, sql)
-    _append_text_filter(where, params, text)
-
-    query = _build_search_query(
-        where,
-        deviation_criterion=deviation_criterion,
-        sql=sql,
-        apply_limit=limit is not None,
-    )
-    if not deviation_criterion and limit is not None:
-        params.append(max(1, int(limit)))
-
     with closing(_connect(db)) as conn:
-        rows = [dict(row) for row in conn.execute(query, params).fetchall()]
+        # Scope mapping and the actual SELECT share one read connection.
+        mappings = get_path_mappings(db, connection=conn)
+        _append_scope_filter(db, scope_key, where, params, mappings=mappings)
+        sql = _build_search_sql_fragments()
+        _append_preset_filter(preset_key, deviation_criterion, where, params, sql)
+        _append_text_filter(where, params, text)
 
-    mappings = get_path_mappings(db)
+        query = _build_search_query(
+            where,
+            deviation_criterion=deviation_criterion,
+            sql=sql,
+            apply_limit=limit is not None,
+        )
+        if not deviation_criterion and limit is not None:
+            params.append(max(1, int(limit)))
+        rows = [dict(row) for row in conn.execute(query, params).fetchall()]
+        enrich_search_rows_with_streams(conn, rows)
+
     for row in rows:
         row.setdefault("deviation_reason", "")
         row["area"] = _area_for_path(row.get("path"), mappings)

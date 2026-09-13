@@ -292,20 +292,26 @@ def validate_app_bundle(app_root: str | Path | None = None) -> list[ReleaseCheck
     return checks
 
 
-def format_release_checks(checks: list[ReleaseCheck]) -> str:
-    icons = {"ok": "✅", "warn": "⚠️", "error": "❌"}
+def _stdout_supports_status_icons() -> bool:
+    try:
+        "✅⚠️❌ℹ️".encode(getattr(sys.stdout, "encoding", None) or "utf-8")
+    except (LookupError, UnicodeError):
+        return False
+    return True
+
+
+def format_release_checks(checks: list[ReleaseCheck], *, plain: bool | None = None) -> str:
+    use_plain = not _stdout_supports_status_icons() if plain is None else plain
+    icons = {"ok": "[OK]", "warn": "[WARN]", "error": "[FEHLER]"} if use_plain else {"ok": "✅", "warn": "⚠️", "error": "❌"}
     lines = ["Release-/Build-Prüfung – Dragon Tools", ""]
     for check in checks:
-        icon = icons.get(check.status, "ℹ️")
+        icon = icons.get(check.status, "[INFO]" if use_plain else "ℹ️")
         lines.append(f"{icon} {check.title}")
         if check.detail:
             lines.append(f"   {check.detail}")
     errors = sum(1 for item in checks if item.status == "error")
     warnings = sum(1 for item in checks if item.status == "warn")
-    lines.extend([
-        "",
-        f"Ergebnis: {errors} Fehler, {warnings} Warnungen",
-    ])
+    lines.extend(["", f"Ergebnis: {errors} Fehler, {warnings} Warnungen"])
     return "\n".join(lines)
 
 

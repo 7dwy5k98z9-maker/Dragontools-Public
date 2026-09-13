@@ -19,6 +19,7 @@ from .online_metadata_common import (
 from .online_metadata_tmdb import TmdbClient
 from .online_metadata_tvdb import TheTvdbClient
 
+
 class CompositeMetadataClient(ParsedMetadataResolverMixin):
     def __init__(self, clients: tuple[Any, ...]) -> None:
         self.clients = tuple(clients)
@@ -27,7 +28,16 @@ class CompositeMetadataClient(ParsedMetadataResolverMixin):
             "thetvdb" if isinstance(client, TheTvdbClient) else "tmdb"
             for client in self.clients
         )
-        self.provider_label = " + ".join(getattr(client, "provider_label", "Metadaten") for client in self.clients)
+        self.provider_label = " + ".join(
+            getattr(client, "provider_label", "Metadaten") for client in self.clients
+        )
+
+    def enable_fresh_session(self) -> None:
+        """Make all child providers bypass persistent cache once per request."""
+        for client in self.clients:
+            enable = getattr(client, "enable_fresh_session", None)
+            if callable(enable):
+                enable()
 
     def test_connection(self) -> dict[str, Any]:
         data: dict[str, Any] = {"providers": []}
@@ -36,7 +46,13 @@ class CompositeMetadataClient(ParsedMetadataResolverMixin):
             data["providers"].append(getattr(client, "provider_label", "Metadaten"))
         return data
 
-    def search_movies(self, query: str, *, year: int | None = None, language: str | None = None) -> list[dict[str, Any]]:
+    def search_movies(
+        self,
+        query: str,
+        *,
+        year: int | None = None,
+        language: str | None = None,
+    ) -> list[dict[str, Any]]:
         results: list[dict[str, Any]] = []
         for client in self.clients:
             if not hasattr(client, "search_movies"):
@@ -49,7 +65,10 @@ class CompositeMetadataClient(ParsedMetadataResolverMixin):
             for item in provider_results:
                 record = dict(item)
                 record.setdefault("provider", provider)
-                record.setdefault("provider_id", record.get("provider_id") or record.get("id") or record.get("tmdb_id"))
+                record.setdefault(
+                    "provider_id",
+                    record.get("provider_id") or record.get("id") or record.get("tmdb_id"),
+                )
                 results.append(record)
         return results
 
@@ -90,17 +109,40 @@ class CompositeMetadataClient(ParsedMetadataResolverMixin):
         *,
         limit: int = 6,
     ) -> tuple[EpisodeMetadataSuggestion, ...]:
-        # DragonTools patch: per-provider composite episode candidates v2
-        # "limit" gilt JE Provider. Bei zwei Providern sind bis zu
-        # 2 * limit Ergebnisse moeglich.
+        return self._episode_candidates(path, limit=limit, force_refresh=False)
+
+    def refresh_episode_candidates(
+        self,
+        path: str | Path,
+        *,
+        limit: int = 6,
+    ) -> tuple[EpisodeMetadataSuggestion, ...]:
+        return self._episode_candidates(path, limit=limit, force_refresh=True)
+
+    def clear_cache(self) -> int:
+        return sum(
+            int(getattr(client, "clear_cache")())
+            for client in self.clients
+            if hasattr(client, "clear_cache")
+        )
+
+    def _episode_candidates(
+        self,
+        path: str | Path,
+        *,
+        limit: int,
+        force_refresh: bool,
+    ) -> tuple[EpisodeMetadataSuggestion, ...]:
         per_provider_cap = max(1, int(limit))
         results: list[EpisodeMetadataSuggestion] = []
-
-        # self.clients steht bereits in der gewaehlten Provider-Prioritaet.
         for client in self.clients:
             bucket: list[EpisodeMetadataSuggestion] = []
             try:
-                if hasattr(client, "resolve_episode_candidates"):
+                if force_refresh and hasattr(client, "refresh_episode_candidates"):
+                    bucket.extend(
+                        client.refresh_episode_candidates(path, limit=per_provider_cap)
+                    )
+                elif hasattr(client, "resolve_episode_candidates"):
                     bucket.extend(
                         client.resolve_episode_candidates(path, limit=per_provider_cap)
                     )
@@ -110,13 +152,8 @@ class CompositeMetadataClient(ParsedMetadataResolverMixin):
                         bucket.append(suggestion)
             except OnlineMetadataError:
                 continue
-
             results.extend(bucket[:per_provider_cap])
-
         return tuple(results)
-
-    def clear_cache(self) -> int:
-        return sum(int(getattr(client, "clear_cache")()) for client in self.clients if hasattr(client, "clear_cache"))
 
 
 def client_from_settings(settings, *, require_enabled: bool = False):

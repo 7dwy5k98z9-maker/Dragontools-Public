@@ -1034,7 +1034,8 @@ So kannst du z.B. AV1-Dateien in einen anderen Ordner als H.265 ablegen.</p>
 <li><strong>Zugangsdaten anzeigen (TMDB + TheTVDB):</strong> eine gemeinsame Checkbox im separaten Bereich „Zugangsdaten“. Sie schaltet alle fünf geheimen Felder beider Provider gemeinsam zwischen Passwort- und Klartextanzeige um.</li>
 <li><strong>Sprache / Fallback:</strong> Standard <code>de-DE</code>, Fallback <code>en-US</code>.</li>
 <li><strong>Cache:</strong> standardmäßig aktiv; Erneuerung nach 30 Tagen. Der Zeitraum ist von 1 bis 365 Tagen einstellbar.</li>
-<li><strong>Deutsche ASCII-Umlaute:</strong> Suchbegriffe wie <code>Kinderfluesterer</code> werden zunächst unverändert gesucht und bei Bedarf zusätzlich vorsichtig als Umlautvariante wie <code>Kinderflüsterer</code> probiert. Die Originalschreibweise bleibt immer die erste Anfrage.</li>
+<li><strong>Cache-Erneuerung im Renamer:</strong> Wenn ein vorhandener Cache-Treffer für eine Serienfolge nur einen generischen Titel wie <code>Folge 10</code> enthält, fragt Dragon Tools den Provider einmal frisch am Cache vorbei ab und überschreibt den Cache nur bei einer neuen Antwort.</li>
+<li><strong>Deutsche ASCII-Umlaute:</strong> Suchbegriffe wie <code>Kinderfluesterer</code>, <code>Muenchner</code> oder <code>Fuenf</code> werden zunächst unverändert gesucht und bei Bedarf zusätzlich vorsichtig als Umlautvariante wie <code>Kinderflüsterer</code>, <code>Münchner</code> oder <code>Fünf</code> probiert. Das gilt für Film- und Serienabfragen einschließlich Renamer; die Originalschreibweise bleibt immer die erste Anfrage.</li>
 <li><strong>Renamer:</strong> eigener Tab für manuelle Umbenennungsvorschläge. Dragon Tools entfernt technische Release-Tags aus der Suche, zeigt Editionen wie Director's Cut als Hinweis und schreibt standardmäßig nur saubere Titel mit Jahr bzw. SxxEyy-Folgenstruktur.</li>
 </ul>
 <p>Im Menü <strong>Online-Metadaten</strong> kannst du die Umbenennung öffnen, Metadaten-Verbindungen testen, einen Titel manuell suchen und den lokalen Metadaten-Cache leeren.</p>
@@ -1075,6 +1076,8 @@ So kannst du z.B. AV1-Dateien in einen anderen Ordner als H.265 ablegen.</p>
 <li><strong>Trickplay:</strong> erstellt Jellyfin-kompatible Kachelbilder unter <code>Filmname.trickplay\320 - 10x10\0.jpg</code>, <code>1.jpg</code> usw.</li>
 <li><strong>Trickplay-Konflikt:</strong> vorhandene Trickplaybilder können wie NFOs behalten, ersetzt oder vorher als Backup-Ordner gesichert werden. Beim Erzeugen erfolgt Overwrite/Backup transaktional: der Altbestand wird erst gesichert, die neue Partial-Struktur committed und ein temporäres Overwrite-Backup erst nach erfolgreichem Commit entfernt. Bei Commitfehler wird zurückgerollt; bei Rollbackfehler bleibt das Backup erhalten.</li>
 <li><strong>Trickplay-Quelle:</strong> wahlweise aus der konvertierten Ausgabedatei oder aus dem Ausgangsmaterial. Der erzeugte Ordner wird immer passend zur fertigen Ausgabedatei benannt. FFmpeg läuft über den zentralen ToolRunner; stderr/stdout werden laufend konsumiert, Abbruch/Pause werden unterstützt und ein Runtime-Timeout von 6 Stunden verhindert dauerhaft hängende Trickplay-Prozesse.</li>
+<li><strong>Async-Sicherheit:</strong> Sobald NFO/Trickplay erfolgreich an den Hintergrund-Executor übergeben wurde, gilt der Auftrag als gestartet. Ein späterer Logging- oder GUI-Signalfehler darf keinen zweiten synchronen Postprocess derselben Datei auslösen.</li>
+<li><strong>Qt-Signal-Logging:</strong> native PyQt-Signale werden zentral über <code>.emit(...)</code> angesprochen. Damit kann ein erfolgreich erzeugtes Trickplay nicht mehr nachträglich durch <code>TypeError: native Qt signal is not callable</code> als fehlgeschlagen erscheinen.</li>
 <li><strong>Jellyfin-Defaults:</strong> 320 px Breite, 10x10 Kacheln, 10 Sekunden Intervall, qscale 4 und JPEG-Qualität 90.</li>
 <li><strong>Hardwarepfad:</strong> CUDA kann für das Decoding genutzt werden. Falls das bei einer Datei nicht klappt, versucht Dragon Tools automatisch den CPU-Fallback.</li>
 <li><strong>Abschlussbericht:</strong> Zusatzdaten werden getrennt ausgewiesen. Der Bericht zeigt, ob NFO und Trickplay erstellt, beibehalten, ergänzt, ersetzt, gesichert oder mit Fehler übersprungen wurden.</li>
@@ -1304,7 +1307,7 @@ FFmpeg/ffprobe <code>2026-09-02-git-9fc8c785e2</code> · MediaInfo 26.05 · MKVT
 <tr><th>Stufe</th><th>Aktion</th><th>Ergebnis</th></tr>
 <tr><td>1</td><td>Laufzeitvergleich mit ffprobe</td><td>Quelle und Ausgabe dürfen nur innerhalb einer kleinen Toleranz abweichen</td></tr>
 <tr><td>2</td><td>Automatischer Container-Remux</td><td>MKV wird mit mkvmerge, MP4 mit MP4Box ohne Re-Encoding neu aufgebaut</td></tr>
-<tr><td>3</td><td>Timestamp-Reparatur</td><td>Nur bei eindeutigem Timingfehler: MP4 wird mit MP4Box neu getaktet; MKV nutzt den sicheren FFmpeg-setts-Pfad</td></tr>
+<tr><td>3</td><td>Timestamp-Reparatur</td><td>Nur bei eindeutigem Timingfehler: MP4 wird mit MP4Box neu getaktet; MKV nutzt zuerst den sicheren FFmpeg-setts-Pfad und danach den verlustfreien +genpts/+igndts-Fallback</td></tr>
 <tr><td>4</td><td>Archivierung</td><td>Bleibt die Laufzeit falsch, wird die Datei erhalten und in den Unterordner <code>Archiv</code> verschoben</td></tr>
 </table>
 <div class="callout ok">
@@ -1383,25 +1386,28 @@ Sobald DRC oder Lautheitsnormalisierung aktiv eingreift, ist Stream-Copy für di
 <p>Die Quellbildprüfung untersucht vor dem Encode mehrere kurze Ausschnitte über die Laufzeit verteilt. Ziel ist, offensichtlich defektes Bildmaterial zu erkennen, bevor eine Datei unnötig konvertiert wird.</p>
 <ul>
 <li>Standardmäßig wird in prozentualen Intervallen geprüft, damit kurze Folgen und lange Filme ähnlich sinnvoll abgedeckt werden.</li>
-<li>Auffälligkeiten wie extrem geringe Bildvarianz, stark einfarbige Flächen oder dauerhaft kaputte Pixelmuster werden gesammelt bewertet.</li>
+<li>Mehrere Prüfpositionen werden gebündelt. Standardmäßig verarbeitet ein FFmpeg-Prozess bis zu vier unabhängig angesprungene Prüffenster. Bei 10-%-Intervallen sinkt der Normalfall dadurch von 9 auf 3 FFmpeg-Starts; bei 5 % von 19 auf 5.</li>
+<li>Schlägt eine Gruppe technisch fehl, wird nur diese Gruppe über den bewährten Einzelprobe-Pfad erneut geprüft. Ein einzelner Batchfehler verwirft damit nicht die gesamte Quellbildprüfung.</li>
+<li>Auffälligkeiten wie extrem geringe Bildvarianz, stark einfarbige Flächen oder dauerhaft kaputte Pixelmuster werden weiterhin mit derselben konservativen Heuristik bewertet.</li>
 <li>Bei verdächtigem Material blockiert Dragon Tools nicht blind, sondern zeigt eine Warnung und lässt eine bewusste Entscheidung zu.</li>
 <li>Die Prüfung ist unabhängig von Auto-Crop, IMAX-Erkennung und Output-Validierung.</li>
 </ul>
-<div class="callout">
-Die Funktion ist ein Schutznetz, kein Qualitätsurteil. Einzelne dunkle Szenen oder kurze Schwarzbilder sollen nicht reichen, um eine ansonsten brauchbare Datei zu blockieren.
+<div class="callout ok"><strong>Performance:</strong> Das Batching reduziert vor allem Prozessstarts und wiederholtes Öffnen derselben Quelle. Auf NAS-Pfaden kann der Gewinn zusätzlich durch weniger Start-/Seek-Overhead spürbar sein.</div>
+<div class="callout">Die Funktion ist ein Schutznetz, kein Qualitätsurteil. Einzelne dunkle Szenen oder kurze Schwarzbilder sollen nicht reichen, um eine ansonsten brauchbare Datei zu blockieren.</div>
 </div>
-</div>
+
 <a name="filmumbenennung"></a><h2 id="filmumbenennung"><span style="color:#64748b;font-size:.85em;margin-right:6px;">37.</span>🎞️ Renamer</h2>
 <div class="panel">
 <p>Der Renamer verarbeitet Filme und Serienfolgen in mehreren bewusst getrennten Stufen. Für Serien bleiben <strong>erkannter Originaltitel</strong>, <strong>Online-Suchbegriff</strong>, <strong>Online-Treffer</strong> und <strong>angezeigte Sicherheit</strong> getrennte Daten. Das verhindert, dass ein Fuzzy- oder Alias-Suchbegriff den eigentlichen Match-Score verfälscht.</p>
 <ul>
 <li>Release-Dateinamen werden vor der Suche normalisiert. Beispiel: <code>tvs-watson-eac3-51-ded-dl-18p-azhd-avc-s01e01</code> wird zu <code>Watson</code>, Staffel 1, Episode 1.</li>
 <li>Technische Tags wie DED, DL, EAC3, DD51, 18p, AZHD, AVC/HEVC, x264/x265, WEB-DL, BluRay, HDR und DoVi werden aus dem Serientitel entfernt.</li>
+<li>ASCII-Umschreibungen deutscher Umlaute werden auch bei Serienfolgen vorsichtig nachgezogen. Beispiel: <code>Die.Muenchner.Freiheit.S01E02</code> kann nach einem erfolglosen Originalversuch zusätzlich mit <code>Die Münchner Freiheit</code> gesucht werden.</li>
 <li>Eine Release-Gruppe wird nur noch an einer plausiblen Position hinter dem SxxExx-Marker interpretiert; technische Ketten wie <code>51-ded-dl-18p-azhd-avc</code> werden nicht fälschlich als Gruppe übernommen.</li>
 <li>Neue Dateien starten die Vorschlagssuche automatisch und inkrementell. Bereits analysierte Zeilen werden dabei nicht erneut abgefragt. <strong>Vorschläge suchen</strong> bleibt der vollständige manuelle Refresh.</li>
 <li>Das Vorschlagsfeld bleibt in der Tabelle schmal. Das geöffnete Dropdown verbreitert sich passend zum längsten Eintrag und wird auf die verfügbare Bildschirmbreite begrenzt.</li>
 <li>Konflikte werden vor dem Umbenennen erkannt; Dragon Tools überschreibt keine vorhandene Zieldatei still.</li>
-<li><strong>Unbekannter Episodentitel:</strong> Liefert TMDB/TheTVDB noch keinen echten Titel, verwendet Dragon Tools <code>Folge XX</code>. Der technische Quell-/Release-Dateiname wird niemals als Episodentitel übernommen.</li>
+<li><strong>Unbekannter Episodentitel:</strong> Liefert TMDB/TheTVDB noch keinen echten Titel, verwendet Dragon Tools <code>Folge XX</code>. Stößt der Renamer später im Cache auf so einen Platzhalter, startet er einmalig eine frische Abfrage und übernimmt einen inzwischen vorhandenen echten Episodentitel. Der technische Quell-/Release-Dateiname wird niemals als Episodentitel übernommen.</li>
 </ul>
 <div class="callout">Die detaillierten Regeln, Alias-/Fuzzy-Logik und Providerbewertung stehen in den folgenden Kapiteln. Genau diese Trennung macht die Prozentwerte nachvollziehbar.</div>
 </div>
@@ -1435,6 +1441,7 @@ Die Funktion ist ein Schutznetz, kein Qualitätsurteil. Einzelne dunkle Szenen o
 <li><strong>Suchbegriff bearbeiten:</strong> Der erkannte Suchname kann für markierte Zeilen manuell ersetzt und erneut abgefragt werden.</li>
 <li><strong>Alle Treffer anzeigen:</strong> Bei schwierigen Fällen lassen sich die Provider-Rohkandidaten ohne Fuzzy-Untergrenze anzeigen. Die manuelle Auswahl bleibt anschließend ausdrücklich prüfbedürftig.</li>
 <li><strong>Provider sichtbar:</strong> Eine eigene Tabellenspalte zeigt für den ausgewählten Vorschlag <strong>TMDB</strong> oder <strong>TheTVDB</strong>.</li>
+<li><strong>Umlaut-Fallback:</strong> Film- und Serienkandidaten probieren bei Bedarf deutsche Umlautvarianten. Dadurch werden Release-Schreibweisen wie <code>Kinderfluesterer</code> oder <code>Muenchner</code> besser mit offiziellen Provider-Titeln abgeglichen.</li>
 </ul>
 <div class="callout ok">Score zuerst, Provider nur als Tie-Breaker: Ein perfekter TMDB-Kandidat darf vor einem schwächeren TheTVDB-Kandidaten stehen, auch wenn TheTVDB bevorzugt ist.</div>
 </div><a name="mediathekdb"></a><h2 id="mediathekdb"><span style="color:#64748b;font-size:.85em;margin-right:6px;">40.</span>🗄️ Mediathek-Datenbank &amp; Jellyfin-Import</h2><div class="panel">
@@ -1460,6 +1467,7 @@ Die Funktion ist ein Schutznetz, kein Qualitätsurteil. Einzelne dunkle Szenen o
 <li>Manuelle schreibende SQL-Befehle sichern vor der Änderung die eigene DragonTools-Datenbank. Sicherheitsbackup und DB-Export verwenden die SQLite Online Backup API.</li>
 </ul>
 <div class="callout ok"><strong>WAL-sicherer Jellyfin-Import:</strong> Das Jellyfin-Original bleibt read-only. Dragon Tools liest einen konsistenten SQLite-Snapshot einschließlich bereits commiteter WAL-Daten und ersetzt die eigene Mediathek erst nach erfolgreicher Prüfung.</div>
+<div class="callout ok"><strong>DB-Performance im aktuellen Stand:</strong> Schema-Migrationen legen fehlende Spalten vor davon abhängigen Indizes an. Serien werden zuerst über den indexierten <code>normalized_title</code> gesucht; die langsameren Titelvergleiche bleiben nur als Legacy-Fallback. Beim Jellyfin-Import wird <code>normalized_title</code> aus dem tatsächlich aufgelösten Seriennamen gebildet.</div>
 <div class="callout"><strong>Wichtig für NFOs:</strong> Die Mediathek-Datenbank ist <em>nicht</em> die Quelle für neu erzeugte NFO-Dateien. Der bestehende NFO-Writer verwendet weiterhin die konfigurierte Online-Metadatenabfrage. Aus vorhandenen NFOs gelesene Werte dienen nur der Bestandsaufnahme und Konsistenzprüfung. Dadurch werden veraltete oder früher falsch erkannte NFO-Daten nicht automatisch erneut geschrieben.</div>
 <h3>NFO-Lightscan</h3>
 <p>Der Lightscan prüft nur die bereits in der Mediathek bekannten Medienpfade. Er startet weder MediaInfo noch ffprobe und läuft nicht rekursiv über den gesamten NAS-Bestand. Unbekannte, fehlende, nicht erreichbare oder geänderte NFO-Zustände können dadurch gezielt nachgezogen werden, ohne die komplette Mediathek neu aufzubauen.</p>
@@ -1480,6 +1488,7 @@ Die Funktion ist ein Schutznetz, kein Qualitätsurteil. Einzelne dunkle Szenen o
 </div>
 <a name="mediatheksuche"></a><h2 id="mediatheksuche"><span style="color:#64748b;font-size:.85em;margin-right:6px;">41.</span>🔎 Mediathek-Suche, SQL &amp; Abweichungen</h2><div class="panel">
 <p>Die normale Mediathek-Suche arbeitet in mehreren Stufen. <strong>Abfrage</strong> wählt die Funktionsgruppe, <strong>Kriterium</strong> den konkreten Filter. <strong>Bereich</strong>, <strong>Typ</strong> und Freitext grenzen den Bestand weiter ein. Häufig benötigte normale Suchen und eigene SQL-Abfragen können gespeichert und später erneut geladen werden.</p>
+<div class="callout ok"><strong>Große Datenbanken:</strong> Die SQLite-Suche läuft in einem eigenen QThread und blockiert den GUI-Thread nicht mehr. Streaminformationen für die Treffer werden gebündelt geladen statt pro Zeile über viele wiederholte Unterabfragen nachgezogen. Alte Suchrequests werden verworfen, wenn bereits eine neuere Filteranfrage wartet.</div>
 <table class="table"><tr><th>Abfrage</th><th>Beispiele</th></tr>
 <tr><td>Audio</td><td>Deutsch vorhanden/fehlend, mehrere Spuren, Stereo, 5.1, 7.1, AAC, AC3, EAC3, TrueHD, DTS, FLAC</td></tr>
 <tr><td>HDR / Dynamikumfang</td><td>SDR, HDR, HDR10+, Dolby Vision, unbekannt</td></tr>
@@ -1531,8 +1540,9 @@ WHERE upper(ni.severity) = 'ERROR';</code></pre>
 <tr><td>Sortierung</td><td>1. Match-Qualität, 2. bei Gleichstand bevorzugter Provider, 3. stabiler Titelvergleich.</td></tr>
 <tr><td>Serienjahr</td><td>Das Providerjahr wird mitgeführt und trennt gleichnamige Serien bei Kandidatenbewertung, Mediathek-Suche und Preflight-Ordnerwahl.</td></tr>
 <tr><td>SxxExx</td><td>Dient als Existenz-/Plausibilitätsprüfung. Eine richtige Episode erzeugt keinen künstlichen Bonus auf 100 %.</td></tr>
-<tr><td>Cache</td><td>Reduziert wiederholte Online-Abfragen; die inkrementelle Renamer-Suche fragt vorhandene Ergebnisse nicht erneut ab.</td></tr>
+<tr><td>Cache</td><td>Preflight/Suche können den persistenten Cache verwenden. Finale Rename-/NFO-Läufe verwenden bei Bedarf eine frische Batch-Sitzung: einmal aktuell laden, danach innerhalb desselben Batches wiederverwenden. Generische Titel wie <code>Folge XX</code>, <code>Episode XX</code> oder leere Titel erzwingen eine Aktualisierung.</td></tr>
 </table>
+<div class="callout ok"><strong>TheTVDB-Sprachfallback:</strong> Existiert SxxExx in der bevorzugten Sprache, besitzt dort aber noch keinen brauchbaren Episodentitel, darf Dragon Tools die konfigurierte Fallback-Sprache ergänzend abfragen. Die Episode wird also nicht allein deshalb als vollständig betrachtet, weil ihre ID bereits existiert.</div>
 <div class="callout warn">API-Schlüssel, Read-Access-Token, TheTVDB-PIN und Bearer-Token sind sensible Einstellungen und dürfen nicht in frei weitergegebenen Diagnosepaketen im Klartext landen.</div>
 </div>
 <a name="forcedsubtitlecheck"></a><h2 id="forcedsubtitlecheck"><span style="color:#64748b;font-size:.85em;margin-right:6px;">43.</span>💬 Forced-Subtitle-Prüfung</h2>
@@ -1635,7 +1645,7 @@ Das Log dokumentiert jetzt besonders wichtige technische Entscheidungen:
 <tr><td>VerboseLogs</td><td>technische Befehlsmitschnitte für tiefe Diagnose</td><td>aktiv</td></tr>
 </table>
 <div class="callout ok">
-<strong>Schutz:</strong> Der aktive Crash-Marker <code>crash_state.json</code> wird nicht gelöscht, damit ein laufender oder gerade überwachter Programmzustand nicht verloren geht.
+<strong>Schutz:</strong> <code>crash_state.json</code> ist in erster Linie ein Aktivitätsmarker für den zuletzt überwachten Toolzustand. <code>active: true</code> allein beweist keinen FFmpeg-Absturz. Der Marker wird während eines Laufs absichtlich nicht bereinigt; aktuelle Tool-Läufe tragen zusätzlich nach Möglichkeit die konkrete Mediendatei ein. Für echte unbehandelte Ausnahmen sind Crash-/ErrorReports maßgeblich.
 </div>
 </div>
 <!-- DIAGNOSEPAKET -->
@@ -1801,7 +1811,7 @@ in das Testfeld ein. Klicke "🔍 Testen".</p>
 <li><strong>V9.6 → V9.7:</strong> zentrale Versionsquelle und reproduzierbarer Build, quellenabhängige DV-/HDR10+-Erhaltungslogik, robuste Config-Typnormalisierung, vollständige Encoder-/Skalierungs-Overrides pro Datei und Mehrfachauswahl, wählbare MKV-/MP4-Zielcontainer, DV-MKV über mkvmerge, DV-Level-5-/AutoCrop-Abgleich, freie Seriensuche im Renamer und Preflight sowie der direkte HDR10+-5-Schritt-Pfad ohne große source.hevc-/encoded.mkv-Zwischenstufen. Refactoring</li>
 <li><strong>V9.7 → V9.8:</strong> Windows-Neustartschutz für laufende Jobs, Benutzerabfrage im Leerlauf, 15-Minuten-Aufschub, Freigabe eigener DragonTools-Shutdowns, Release-Smoke-Erweiterung und finale Refactoring-/Versionsnacharbeit.</li>
 <li><strong>V9.8 → V9.8.1:</strong> optionale GitHub-Updateprüfung und öffentliche Bereitstellung; Updates werden nur gemeldet und nach Zustimmung im Browser geöffnet, nicht automatisch installiert.</li>
-<li><strong>V9.8.1 → V9.8.2:</strong> Dolby-Vision-Crop abgesichert, Timestamp-Reparatur fail-closed gehärtet, Untertitel-Sidecars erweitert, Jellyfin-Import an die aktuelle Datenbankstruktur angepasst und die Mediathek auf Schema 6 mit Provider-IDs, Originaltitel, Genres/Tags/Studios, Collections, Personenbeziehungen, NFO-Lightscan, NFO-Konsistenzprüfung, gespeicherten Suchen und SQL-Hilfe erweitert. Der Renamer besitzt zusätzlich konfigurierbare mehrstufige Fuzzy-Grenzen, manuelle Film-/Seriensuche, Provideranzeige und Rohkandidaten; der Regel-/Profil-Simulator zeigt die berechnete Endauflösung.</li>
+<li><strong>V9.8.1 → V9.8.2:</strong> Dolby-Vision-Crop abgesichert, Timestamp-Reparatur fail-closed gehärtet, +genpts/+igndts-Fallback ergänzt, verworfene Reparaturkandidaten für die Fehleranalyse archiviert, Untertitel-Sidecars erweitert, Jellyfin-Import an die aktuelle Datenbankstruktur angepasst und die Mediathek auf Schema 6 mit Provider-IDs, Originaltitel, Genres/Tags/Studios, Collections, Personenbeziehungen, NFO-Lightscan, NFO-Konsistenzprüfung, gespeicherten Suchen und SQL-Hilfe erweitert. Der Renamer besitzt zusätzlich konfigurierbare mehrstufige Fuzzy-Grenzen, manuelle Film-/Seriensuche, Provideranzeige, Rohkandidaten, Umlaut-Fallbacks für Film- und Serientitel sowie eine gezielte Cache-Erneuerung bei generischen Episodentiteln. Preflight-Zielpfade werden schneller über die Mediathek vorgefiltert und unbrauchbare DB-Pfade klarer gemeldet; der Regel-/Profil-Simulator zeigt die berechnete Endauflösung.</li>
 </ul>
 </div>
 <!-- CHANGELOG -->
@@ -1942,7 +1952,7 @@ Profile und Logs bleiben erhalten.</p>
 <a name="lizenzen"></a><h2 id="lizenzen"><span style="color:#64748b;font-size:.85em;margin-right:6px;">57.</span>📄 Lizenzen &amp; Danksagung</h2>
 <div class="panel">
 <h3>Dragon Tools V9.8.2</h3>
-<p>Entwickelt vom DragonTools-Team · Entwicklungszeitraum: 2025–2026</p>
+<p>Entwickelt von Dragon Developer · Entwicklungszeitraum: 2025–2026</p>
 <h3>Verwendete Drittanbieter-Bibliotheken</h3>
 <table class="table" style="border-collapse:collapse;">
 <tr><th>Bibliothek / Tool</th><th>Lizenz</th><th>Zweck</th></tr>
@@ -1993,14 +2003,14 @@ und der gesamten Open-Source-Community im Video-Encoding-Bereich.</p>
 <tr><td><strong>Dokument-Aktualität</strong></td><td>Im Quellmodus werden <code>help.html</code>, <code>Handbuch\Handbuch.pdf</code>, <code>Aenderungshistorie\CHANGELOG.json</code> und – falls vorhanden – <code>CHANGELOG.txt</code> bytegenau mit den Dateien im gefundenen <code>dist\DragonToolsV9.8.2</code>-Build verglichen. Ein älterer Build mit nur formal vorhandenen, aber veralteten Dokumenten gilt als Release-Fehler.</td></tr>
 <tr><td><strong>Optionale Abhängigkeiten</strong></td><td>OpenCV/NumPy verbessern den Audio-Video-Matcher. Fehlen sie, bleibt der FFmpeg/dHash-Fallback nutzbar.</td></tr>
 <tr><td><strong>Testumgebung</strong></td><td><code>pytest.ini</code> setzt PyQt6 und registriert <code>media_integration</code> sowie <code>dv_hdr_integration</code>. Reale DV/HDR-Tests brauchen zusätzlich die externen Tools und passende Fixtures.</td></tr>
-<tr><td><strong>Test-/Quellstand · 11.09.2026</strong></td><td>Der aktuelle Paketstand <code>dragontools</code> enthält 601 Python-Dateien. Zusammen mit <code>DragonToolsV9.py</code> sind es 602 Python-Dateien. Im Testpaket liegen 154 Python-Dateien, davon 151 <code>test_*.py</code> mit 1.142 statisch erkennbaren Testfunktionen. Der vollständige Kontrolllauf des Gesamtprojekts endet mit <strong>1.165 bestandenen Tests</strong>, 2 gezielten realen DV/HDR-Skips und 0 Fehlern.</td></tr>
+<tr><td><strong>Test-/Quellstand · 13.09.2026</strong></td><td>Der aktuelle Paketstand enthält 728 Python-Dateien im Paket <code>dragontools</code>; zusammen mit <code>DragonToolsV9.py</code> sind es 729. Der Quellstand umfasst rund 118.227 Gesamtzeilen und 100.301 nichtleere/nicht reine Kommentarzeilen. Im Testpaket liegen 167 Python-Dateien, davon 164 <code>test_*.py</code> mit 1.224 statisch erkennbaren Testfunktionen. Die Refactoring-/Stabilitätsblöcke 10 bis 12 wurden mit gezielten Regressionstests, <code>compileall</code>, Architekturgrenzen und Paket-Smoke-Tests gegengeprüft.</td></tr>
 </table>
-<div class="callout"><strong>Anzeige:</strong> Jede Einzelprüfung wird mit <strong>✅ OK</strong>, <strong>⚠️ Warnung</strong> oder <strong>❌ Fehler</strong> ausgegeben. Am Ende werden Fehler und Warnungen zusammengezählt.</div>
+<div class="callout"><strong>Anzeige:</strong> Im Programm zeigt die Prüfung Statussymbole für OK, Warnung und Fehler. In alten Windows-Terminals kann Dragon Tools automatisch auf <code>[OK]</code>, <code>[WARN]</code> und <code>[FEHLER]</code> ausweichen, damit der Build nicht an der Codepage scheitert. Am Ende werden Fehler und Warnungen zusammengezählt.</div>
 <div class="callout ok"><strong>So ist der V9.8.2-Build aufgebaut:</strong> Die App-Version kommt aus <code>dragontools\core\version.py</code>. Mein Builder liest sie zur Laufzeit, prüft den Quellstand vor PyInstaller und kontrolliert danach das fertige Onedir-Bundle. Eine zweite, manuell gepflegte Versionsnummer im Buildskript brauche ich dadurch nicht mehr.</div>
 <div class="callout ok"><strong>Was ich für V9.8/V9.8.2 zusätzlich abgesichert habe:</strong> Converter, DV-Remux, MP4-Remux und Audio-Mux verwenden denselben transaktionalen Output-Commit mit Journal, Backup und Rollback. Regel- und Profildateien werden atomar gespeichert; beschädigte Benutzerdateien sichere ich vor dem Fallback als <code>*.corrupt_&lt;Zeitstempel&gt;.json</code>. Beim HDR10+-Pfad sind ToolRunner, MuxService und Bitstream-Metadaten getrennt. Kann ein vorhandener Audio-Donor nicht zuverlässig analysiert werden, bricht der Lauf fail-closed ab, statt unbemerkt eine MP4 ohne Audio zu erzeugen.</div>
-<div class="callout ok"><strong>Letzte technische Korrekturen bis V9.8.2:</strong> Der Failure-Cleanup löscht nur Sidecars, die zum aktuellen Job gehören; bereits vorhandene gleichnamige Untertitel bleiben unangetastet. Vor jedem DV-Job setze ich den Sidecar-Ergebniszustand zurück, damit nach einem Fehler keine alten Pfade gemeldet werden. Das Move-Journal trennt Video-, Companion- und Cleanup-Phasen und kann nach einem Crash mit bereits verschobenem Video fortsetzen. Die Mediathek wird erst nach erfolgreichem Companion-Commit aktualisiert. <code>mkvpropedit</code> nutzt den konfigurierten Pfad, ordinales <code>track:n</code> und behandelt Returncode 1 als Warnung. Lange FFmpeg-Hilfsprozesse laufen über die zentrale Abort-/Timeout-Logik; die Rules-Preview bleibt dabei Qt-unabhängig.</div>
-<div class="callout ok"><strong>Refactoring-Abnahme vom 09.09.2026:</strong> ToolRunner-Prozesssteuerung, Move-Batch-Ausführung, Pipeline-Capabilities/-Policy, Audioplan-Policy, TMDB-Resolver/-Vorschläge/-Transport, TheTVDB-Kandidaten, Sidecar-Planung, Move-Transaktionen, Mediathek-Pfade, Converter-Fortschritt, Override-Normalisierung, Medienanalyse sowie Medienvertrag und Output-Prüfung sind fachlich getrennt. Ein verlorener Legacy-Hook für <code>move_thread.os.replace</code> wurde wiederhergestellt. Die Release-Smoke-Prüfung umfasst nun 37 beteiligte Refactoring-Module und erkennt fehlende Paketdateien vor der Auslieferung.</div>
-<div class="callout warn"><strong>Build-Hinweis:</strong> Der nächste verwendbare Build muss als <code>dist\DragonToolsV9.8.2</code> neu erzeugt und anschließend mit der Release-/Build-Prüfung kontrolliert werden. Ältere dist-Ordner gehören nicht zum aktuellen V9.8.2-Quellstand.</div>
+<div class="callout ok"><strong>Letzte technische Korrekturen bis V9.8.2:</strong> Der Failure-Cleanup löscht nur Sidecars, die zum aktuellen Job gehören; bereits vorhandene gleichnamige Untertitel bleiben unangetastet. Vor jedem DV-Job setze ich den Sidecar-Ergebniszustand zurück, damit nach einem Fehler keine alten Pfade gemeldet werden. Das Move-Journal trennt Video-, Companion- und Cleanup-Phasen und kann nach einem Crash mit bereits verschobenem Video fortsetzen. Die Mediathek wird erst nach erfolgreichem Companion-Commit aktualisiert. <code>mkvpropedit</code> nutzt den konfigurierten Pfad, ordinales <code>track:n</code> und behandelt Returncode 1 als Warnung. Lange FFmpeg-Hilfsprozesse laufen über die zentrale Abort-/Timeout-Logik; die Rules-Preview bleibt dabei Qt-unabhängig. Der Timestamp-Fallback nutzt jetzt <code>+genpts+igndts</code>; verworfene Kandidaten werden, soweit möglich, unter <code>Archiv\Timestamp_Reparatur</code> gesichert.</div>
+<div class="callout ok"><strong>Refactoring-Abnahme vom 09.09.2026:</strong> ToolRunner-Prozesssteuerung, Move-Batch-Ausführung, Pipeline-Capabilities/-Policy, Audioplan-Policy, TMDB-Resolver/-Vorschläge/-Transport, TheTVDB-Kandidaten, Sidecar-Planung, Move-Transaktionen, Mediathek-Pfade, Converter-Fortschritt, Override-Normalisierung, Medienanalyse sowie Medienvertrag und Output-Prüfung sind fachlich getrennt. Ein verlorener Legacy-Hook für <code>move_thread.os.replace</code> wurde wiederhergestellt. Die Release-Smoke-Prüfung umfasste damals 37 beteiligte Refactoring-Module und wurde bis V9.8.2 auf alle im Review-Manifest neu eingeführten Produktivmodule erweitert.</div>
+<div class="callout warn"><strong>Build-Hinweis:</strong> Ein verwendbarer Release-Build muss aus dem aktuellen Quellstand erzeugt und anschließend mit der Release-/Build-Prüfung kontrolliert werden. Ältere dist-Ordner gehören nicht zum aktuellen V9.8.2-Quellstand.</div>
 <div class="callout warn"><strong>Grenze der Release-Prüfung:</strong> Sie kontrolliert die Struktur und die grundlegende Paketkonsistenz, testet aber nicht jede Funktion der externen Programme. FFmpeg, MediaInfo, MKVToolNix, dovi_tool usw. prüfst du zusätzlich mit <kbd>F9</kbd> bzw. dem erweiterten Systemtest.</div>
 </div>
 
@@ -2009,51 +2019,43 @@ und der gesamten Open-Source-Community im Video-Encoding-Bereich.</p>
 <div class="panel">
 <table class="info-table"><colgroup><col style="width:290px;"/><col/></colgroup>
 <tr><td><strong>Version</strong></td><td>V9.8.2</td></tr>
-<tr><td><strong>Autor</strong></td><td>DragonTools Team</td></tr>
+<tr><td><strong>Autor</strong></td><td>Dragon Developer</td></tr>
 <tr><td><strong>Plattform</strong></td><td>Windows 10/11 64-bit</td></tr>
-<tr><td><strong>Architektur</strong></td><td>Eigenständige V9-Architektur – produktive Altpfade entfernt; gezielte Kompatibilitätsfassaden bleiben erhalten</td></tr>
+<tr><td><strong>Architektur</strong></td><td>Modulare V9-Architektur mit schmalen GUI-/Worker-/Core-Fassaden und fokussierten Fachmodulen; Kompatibilitätsfassaden bleiben nur an stabilen Importgrenzen erhalten</td></tr>
 <tr><td><strong>Codecs</strong></td><td>H.264 · H.265/HEVC · AV1 · Dolby Vision · HDR10+</td></tr>
-<tr><td><strong>Encoder</strong></td><td>CPU (libx265) · NVIDIA NVENC · Intel QSV · AMD AMF</td></tr>
-<tr><td><strong>Python-Dateien</strong></td><td>602 insgesamt: 601 im Paket <code>dragontools</code> + <code>DragonToolsV9.py</code></td></tr>
-<tr><td><strong>Gesamtzeilen</strong></td><td>111.783 Zeilen</td></tr>
-<tr><td><strong>Davon Codezeilen</strong></td><td>94.965 Zeilen</td></tr>
+<tr><td><strong>Encoder</strong></td><td>CPU (libx265/SVT-AV1) · NVIDIA NVENC · Intel QSV · AMD AMF</td></tr>
+<tr><td><strong>Python-Dateien</strong></td><td>729 insgesamt: 728 im Paket <code>dragontools</code> + <code>DragonToolsV9.py</code></td></tr>
+<tr><td><strong>Gesamtzeilen</strong></td><td>118.227 Zeilen</td></tr>
+<tr><td><strong>Davon Codezeilen</strong></td><td>100.301 nichtleere/nicht reine Kommentarzeilen</td></tr>
 </table>
-<h3>Aufschlüsselung</h3>
+<h3>Aufschlüsselung des aktuellen Quellstands</h3>
 <table class="info-table"><colgroup><col style="width:290px;"/><col/></colgroup>
 <tr><th style="text-align:left;">Bereich</th><th style="text-align:left;">Anzahl Dateien</th><th style="text-align:left;">Gesamtzeilen</th><th style="text-align:left;">Codezeilen</th></tr>
 <tr><td>Einstiegspunkt</td><td>1</td><td>444</td><td>331</td></tr>
-<tr><td>GUI</td><td>147</td><td>25.687</td><td>22.252</td></tr>
-<tr><td>Core</td><td>138</td><td>26.911</td><td>23.190</td></tr>
-<tr><td>Worker</td><td>124</td><td>23.457</td><td>20.434</td></tr>
-<tr><td>Rules</td><td>26</td><td>4.062</td><td>3.440</td></tr>
+<tr><td>GUI</td><td>188</td><td>27.069</td><td>23.379</td></tr>
+<tr><td>Core</td><td>179</td><td>28.656</td><td>24.693</td></tr>
+<tr><td>Worker</td><td>161</td><td>25.026</td><td>21.755</td></tr>
+<tr><td>Rules</td><td>26</td><td>4.119</td><td>3.488</td></tr>
 <tr><td>Subtitle</td><td>6</td><td>488</td><td>429</td></tr>
-<tr><td>Tests (inkl. Paketdateien)</td><td>153</td><td>29.779</td><td>24.069</td></tr>
+<tr><td>Tests (inkl. Paketdateien)</td><td>167</td><td>32.418</td><td>26.222</td></tr>
 <tr><td>Sonstige Paketdateien</td><td>1</td><td>7</td><td>4</td></tr>
 </table>
-<div class="callout ok">
-<strong>Was ich bis V9.8.2 strukturell geändert habe:</strong> Die großen Abläufe sind in kleinere Controller und Services aufgeteilt. Audio-/Video-Matching, Renamer, Release-Prüfung, Audio- und Untertitelregeln, Batch-Preflight, Mediathek-Suche, Logging, Medienanalyse, Move-Journal, Online-Metadaten sowie die Convert-, Preflight- und Regeloberflächen haben eigene Fachmodule. Hinzu kommen getrennte Module für Tool-Prozesssteuerung, Move-Batches, Pipeline-Capabilities und -Policies, Audioplanung, TMDB/TheTVDB, Sidecar-Planung, Dateiübertragung, Medienvertrag und Output-Prüfung. Schlanke Fassaden halten die bisherigen Importpfade stabil.
-</div>
-<div class="callout ok">
-<strong>DV/HDR10+:</strong> Die Erhaltungsoptionen greifen nur, wenn die jeweiligen Metadaten in der Quelle wirklich vorhanden sind. Für DV-MKV nutze ich mkvmerge. Den HDR10+-Pfad habe ich auf fünf direkte Schritte umgebaut, sodass die früheren großen Zwischenstreams entfallen. Prozessausführung, finaler Mux und Bitstream-Metadaten sind in getrennten Services gekapselt; den mkvmerge-Returncode 1 behandle ich als Warnung statt als harten Fehler.
-</div>
-<div class="callout">
-<strong>Direkt im Programm:</strong> Unter <strong>Hilfe → Über</strong> zeige ich dieselbe Versions- und Projektübersicht auch in Dragon Tools selbst. In Entwicklungs- und Onedir-Builds werden Programmzahl, Gesamtzeilen, Codezeilen und Testbestand direkt aus dem vorhandenen Quellstand berechnet. Sind keine Quellen enthalten, verwendet der Dialog die im Release hinterlegten Fallbackwerte.
-</div>
-<div class="callout">
-<strong>Testbestand V9.8.2:</strong> Im Paket liegen 154 Python-Dateien im Testbereich, davon 151 <code>test_*.py</code>. Statisch sind 1.142 Testfunktionen erkennbar. Der vollständige Kontrolllauf endet mit <strong>1.165 bestandenen Tests</strong>, 2 gezielten realen DV/HDR-Skips und 0 Fehlern.
-</div>
-<div class="callout ok">
-<strong>Was Dragon Tools inzwischen ist:</strong> Aus dem ursprünglichen Konverter ist ein großes, modulares Medienwerkzeug geworden. Ich trenne GUI, Core, Worker, Rules und Subtitle klar voneinander und habe viele Spezialfälle eingebaut, die aus meinen eigenen Medien-Workflows entstanden sind. Der Ursprüngliche Konverter läuft mit 60% des vorher benötigten Codes, durch massive Funktionserweiterungen ist der Codebedarf um 400% gestiegen.
-</div>
+<div class="callout ok"><strong>Abschlussreview 13.09.2026:</strong> Move-Journal-Archivierungsfehler werden fail-closed als <code>MoveJournalWriteError</code> behandelt und als Move-Fehler gezählt. Der Release-Smoke umfasst jetzt alle im Refactoring-Manifest neu hinzugekommenen Produktivmodule. Scheitert ein erzwungener Episoden-Metadatenrefresh, bleibt der sichere Platzhalter erhalten, die konkrete Ursache wird aber im Log sichtbar.</div>
+<div class="callout ok"><strong>Architekturstand nach zwölf Refactoring-/Stabilitätsblöcken:</strong> Mediathek, NFO-Scan, Trickplay/Postprocessing, DV-Remux, Backup/Restore, Job-/Move-Journal, Preflight, Merge, ISO, Parallel-Converter, MoveThread, Encoder-Override, Duration-Repair, HDR10+, MediaAnalyzer, Renamer-Kandidaten, Audio/Video-Matcher und Online-Metadaten-Dialog sind nach klareren Verantwortlichkeiten getrennt. Große öffentliche Klassen dienen überwiegend als Orchestrierungs- oder Kompatibilitätsfassaden.</div>
+<div class="callout ok"><strong>Mediathek &amp; Metadaten:</strong> Schema-6-Migrationen legen Spalten vor Indizes an; Serien-Lookups nutzen den indexierten <code>normalized_title</code>; die GUI-Suche läuft asynchron. Preflight arbeitet DB-first. Persistenter Suchcache und frische Batch-Metadaten sind getrennt, damit finale Rename-/NFO-Läufe aktuelle Providerdaten laden können, ohne dieselbe Serie pro Folge erneut abzufragen.</div>
+<div class="callout ok"><strong>Renamer:</strong> mehrstufige Fuzzy-Suche, Provideranzeige, manuelle Film-/Seriensuche, Umlautvarianten und Aliasregeln bleiben erhalten. Leere oder generische Episodentitel gelten nicht als endgültig; sie können einen Refresh auslösen. Bei TheTVDB darf eine vorhandene Episode ohne brauchbaren Titel über die Fallback-Sprache ergänzt werden.</div>
+<div class="callout ok"><strong>Trickplay/Postprocessing:</strong> native Qt-Signale werden beim Logging über <code>.emit(...)</code> angesprochen. Ein bereits erfolgreich geplanter Async-Postprocess wird nach einem Loggingfehler nicht zusätzlich synchron gestartet. Trickplay selbst bleibt transaktional mit Partial-Struktur, Backup und Rollback.</div>
+<div class="callout ok"><strong>Quellbildprüfung:</strong> mehrere Prüfpositionen werden pro FFmpeg-Prozess gebündelt. Bei 10-%-Intervallen reduziert sich der Normalfall von 9 auf 3 Prozessstarts; bei 5 % von 19 auf 5. Die Bildheuristik bleibt unverändert und ein Batchfehler fällt nur für die betroffene Gruppe auf Einzelproben zurück.</div>
+<div class="callout"><strong>Direkt im Programm:</strong> Unter <strong>Hilfe → Über</strong> werden Projektzahlen im Entwicklungs-/Onedir-Stand live aus den vorhandenen Python-Quellen berechnet. Sind keine Quellen vorhanden, verwendet Dragon Tools die zuletzt verifizierten Release-Fallbackwerte.</div>
+<div class="callout"><strong>Testbestand V9.8.2:</strong> Im Paket liegen 167 Python-Dateien im Testbereich, davon 164 <code>test_*.py</code>. Statisch sind 1.224 Testfunktionen erkennbar. Die Refactoring-/Stabilitätsblöcke wurden jeweils mit gezielten Regressionstests, Architekturgrenzen, Paket-Smoke und <code>compileall</code> abgesichert; bekannte Review-Host-Probleme mit PyQt6 bzw. <code>fsync</code>/SQLite-Datei-I/O werden getrennt von fachlichen Regressionen dokumentiert.</div>
 <table class="info-table"><colgroup><col style="width:290px;"/><col/></colgroup>
 <tr><td><strong>Entwicklungszeit</strong></td><td>In Dragon Tools stecken inzwischen rund 6.000 Stunden Entwicklungszeit. Davon entfallen etwa 2.000 Stunden auf den Schritt von V9 auf V9.8, 2.000 Stunden auf den Schritt V8 zu V9 und rund 1.600 Stunden auf den früheren Umbau von V7 zu V8.</td></tr>
-<tr><td><strong>Testzeit</strong></td><td>Für V1–V7 kamen knapp 150 Stunden Praxistests zusammen, für V8 rund 400 Stunden. V9 habe ich bisher etwa 140 Stunden getestet; die Version läuft weiterhin als Beta in meiner Felderprobung.</td></tr>
+<tr><td><strong>Testzeit</strong></td><td>Für V1–V7 kamen knapp 150 Stunden Praxistests zusammen, für V8 rund 400 Stunden. V9 wurde bisher etwa 140 Stunden praktisch getestet; zusätzlich wächst die automatisierte Regression laufend mit.</td></tr>
 <tr><td><strong>Vorherige Version (V8)</strong></td><td>111 Programme · 25.800 Zeilen · davon 21.200 Codezeilen</td></tr>
 <tr><td><strong>Vorherige Version (V7)</strong></td><td>6 Programme · 26.568 Zeilen · davon 19.880 Codezeilen</td></tr>
 </table>
-<div class="callout ok"><strong>Bereinigung älterer Strukturen:</strong> Ich habe nicht mehr erreichbare DV-Altpfade entfernt, gemeinsame Journal-/Metadata-/Subtitle-Helfer zusammengeführt und Qt-unabhängige Worker-Verträge aus <code>base_worker.py</code> herausgelöst. Den produktiven DV5-Sonderpfad habe ich dabei nicht verändert. Kompatibilitätsfassaden bleiben nur dort bestehen, wo vorhandene interne oder externe Aufrufer einen stabilen Importpfad brauchen.</div>
-<div class="callout ok"><strong>Stabilität in V9.8.2:</strong> Dafür habe ich inzwischen unter anderem WAL-konsistente SQLite-Sicherungen, DB-Exporte und Jellyfin-Imports, eine mehrphasige MoveJournal-Crash-Recovery mit Companion-Resume, fail-closed JobJournal-Start/Archivierung, einen transaktionalen Trickplay-Commit sowie einen gemeinsamen transaktionalen Output-Commit für Converter, DV-Remux, MP4-Remux und Audio-Mux eingebaut. Dazu kommen ownership-basierter Failure-Cleanup, atomare Regel-/Profilpersistenz mit Corrupt-Backup, zentrales Timeout-/Abort-Prozesshandling auch für lange Subtitle-Hilfsprozesse, persistente Mediathek-Pfad-Mappings und Preflight-Warnungen, sichtbare Worker-Crashfehler, gespeicherte UI-Zustände, <code>analysis_failed</code>-Platzhalter, Profil-Schema 3, Untertitel-Schema 6, Mediathek-Schema 6, NFO-Lightscan/-Konsistenzprüfung, gespeicherte SQL-/GUI-Suchen, der zuverlässige Reset mit CPU-H.265 CRF 22 und der Windows-Neustartschutz während laufender Jobs.</div>
-<p>Mit V9.8 bis V9.8.2 habe ich den modularen Aufbau von V9 weiter ausgebaut. Das <code>dragontools/</code>-Paket ist in GUI · Core · Worker · Rules · Subtitle und Tests gegliedert. Durch Lazy Loading werden Registerkarten und Teilfunktionen erst beim Öffnen geladen. Dadurch startet Dragon Tools schneller und Fehler lassen sich leichter einem Bereich zuordnen. Dauerhafte Änderungen an einer ausgelieferten EXE benötigen weiterhin einen neuen Build.</p></div>
+<p>Dragon Tools ist inzwischen nicht mehr nur ein Konverter, sondern ein lokales Medienwerkzeug für Analyse, Encoding/Remux, HDR/DV, Regeln, Metadaten, Mediathek, NFO/Trickplay, Validierung, Reparatur, Verschieben und Diagnose. Die aktuelle Struktur trennt GUI, Core, Worker, Rules, Subtitle und Tests deutlich stärker als die frühen V9-Stände.</p>
+</div>
 
 <div class="panel" style="text-align:center;margin-top:32px;">
 <span class="muted">© 2026 – Dragon Tools V9.8.2 · Eigenständiger Neuaufbau · bereinigte V9-Architektur</span>

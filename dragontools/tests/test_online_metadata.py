@@ -562,6 +562,63 @@ def test_tmdb_missing_episode_title_uses_folge_fallback_not_source_filename(tmp_
     assert "american.dad.s22e10" not in suggestions[0].title.lower()
 
 
+def test_tmdb_refresh_episode_candidates_replaces_cached_fallback_title(tmp_path):
+    from dragontools.core.online_metadata import OnlineMetadataConfig, TmdbClient
+
+    episode_calls = 0
+
+    def fake_get(url: str, headers: dict[str, str], timeout: int):
+        nonlocal episode_calls
+        parsed = urlparse(url)
+        if parsed.path.endswith("/search/tv"):
+            return {
+                "results": [
+                    {
+                        "id": 1433,
+                        "name": "American Dad!",
+                        "original_name": "American Dad!",
+                        "first_air_date": "2005-02-06",
+                        "popularity": 100,
+                    }
+                ]
+            }
+        if parsed.path.endswith("/tv/1433/season/22/episode/10"):
+            episode_calls += 1
+            title = "" if episode_calls == 1 else "A Roger Story"
+            return {
+                "id": 999999,
+                "name": title,
+                "overview": "",
+                "air_date": "",
+                "credits": {},
+                "external_ids": {},
+            }
+        raise AssertionError(url)
+
+    client = TmdbClient(
+        OnlineMetadataConfig(tmdb_enabled=True, tmdb_read_token="token", cache_enabled=True),
+        cache_dir=tmp_path,
+        http_get=fake_get,
+    )
+
+    cached = client.resolve_episode_candidates(
+        "american.dad.s22e10.german.dl.1080p.web.h264-wayne.mkv"
+    )
+    refreshed = client.refresh_episode_candidates(
+        "american.dad.s22e10.german.dl.1080p.web.h264-wayne.mkv"
+    )
+    reused = client.resolve_episode_candidates(
+        "american.dad.s22e10.german.dl.1080p.web.h264-wayne.mkv"
+    )
+
+    # Generic cached/provider titles are incomplete metadata and therefore
+    # trigger an immediate live retry even on the ordinary lookup path.
+    assert cached[0].title == "A Roger Story"
+    assert refreshed[0].title == "A Roger Story"
+    assert reused[0].title == "A Roger Story"
+    assert episode_calls == 3
+
+
 def test_tvdb_missing_episode_title_uses_folge_fallback_not_source_filename(tmp_path):
     from dragontools.core.online_metadata import OnlineMetadataConfig, TheTvdbClient
 
@@ -626,6 +683,83 @@ def test_tvdb_missing_episode_title_uses_folge_fallback_not_source_filename(tmp_
     assert "american.dad.s22e10" not in suggestions[0].title.lower()
 
 
+def test_tvdb_refresh_episode_candidates_replaces_cached_fallback_title(tmp_path):
+    from dragontools.core.online_metadata import OnlineMetadataConfig, TheTvdbClient
+
+    episode_calls = 0
+
+    def fake_post(url: str, headers: dict[str, str], payload: dict, timeout: int):
+        return {"data": {"token": "tvdb-token"}}
+
+    def fake_get(url: str, headers: dict[str, str], timeout: int):
+        nonlocal episode_calls
+        parsed = urlparse(url)
+        if parsed.path.endswith("/search"):
+            return {
+                "data": [
+                    {
+                        "id": 73141,
+                        "name": "American Dad!",
+                        "year": "2005",
+                        "score": 100,
+                    }
+                ]
+            }
+        if parsed.path.endswith("/series/73141/extended"):
+            return {
+                "data": {
+                    "id": 73141,
+                    "name": "American Dad!",
+                    "firstAired": "2005-02-06",
+                }
+            }
+        if "/series/73141/episodes/default/" in parsed.path:
+            episode_calls += 1
+            title = "" if episode_calls == 1 else "A Roger Story"
+            return {
+                "data": {
+                    "episodes": [
+                        {
+                            "id": 999999,
+                            "seasonNumber": 22,
+                            "number": 10,
+                            "name": title,
+                        }
+                    ]
+                }
+            }
+        raise AssertionError(url)
+
+    client = TheTvdbClient(
+        OnlineMetadataConfig(
+            series_provider="thetvdb",
+            tvdb_enabled=True,
+            tvdb_api_key="api",
+            cache_enabled=True,
+        ),
+        cache_dir=tmp_path,
+        http_get=fake_get,
+        http_post=fake_post,
+    )
+
+    cached = client.resolve_episode_candidates(
+        "american.dad.s22e10.german.dl.1080p.web.h264-wayne.mkv"
+    )
+    refreshed = client.refresh_episode_candidates(
+        "american.dad.s22e10.german.dl.1080p.web.h264-wayne.mkv"
+    )
+    reused = client.resolve_episode_candidates(
+        "american.dad.s22e10.german.dl.1080p.web.h264-wayne.mkv"
+    )
+
+    # TheTVDB refreshes a generic title automatically and its series-level
+    # batch cache reuses that live episode list for the rest of this session.
+    assert cached[0].title == "A Roger Story"
+    assert refreshed[0].title == "A Roger Story"
+    assert reused[0].title == "A Roger Story"
+    assert episode_calls == 2
+
+
 def test_generic_provider_episode_titles_are_normalized_to_german_fallback():
     from dragontools.core.online_metadata import normalize_episode_metadata_title
 
@@ -637,3 +771,60 @@ def test_generic_provider_episode_titles_are_normalized_to_german_fallback():
     title, is_fallback = normalize_episode_metadata_title("A Roger Story", 10)
     assert title == "A Roger Story"
     assert is_fallback is False
+
+
+def test_tvdb_disk_cache_is_checked_before_login(tmp_path):
+    from dragontools.core.online_metadata import OnlineMetadataConfig, TheTvdbClient
+
+    login_calls = 0
+    get_calls = 0
+
+    def fake_post(_url: str, _headers: dict[str, str], _payload: dict, _timeout: int):
+        nonlocal login_calls
+        login_calls += 1
+        return {"data": {"token": "tvdb-token"}}
+
+    def fake_get(_url: str, _headers: dict[str, str], _timeout: int):
+        nonlocal get_calls
+        get_calls += 1
+        return {"data": [{"id": 1, "name": "Cache Test", "year": "2026"}]}
+
+    cfg = OnlineMetadataConfig(tvdb_enabled=True, tvdb_api_key="api", cache_enabled=True)
+    first = TheTvdbClient(cfg, cache_dir=tmp_path, http_get=fake_get, http_post=fake_post)
+    assert first.search_series("Cache Test")
+    assert (login_calls, get_calls) == (1, 1)
+
+    def fail_post(*_args, **_kwargs):
+        raise AssertionError("Ein gültiger Disk-Cache darf keinen TheTVDB-Login auslösen")
+
+    def fail_get(*_args, **_kwargs):
+        raise AssertionError("Ein gültiger Disk-Cache darf keinen TheTVDB-GET auslösen")
+
+    second = TheTvdbClient(cfg, cache_dir=tmp_path, http_get=fail_get, http_post=fail_post)
+    assert second.search_series("Cache Test")[0]["name"] == "Cache Test"
+
+
+def test_tmdb_fresh_session_bypasses_disk_cache_once_then_reuses_live_response(tmp_path):
+    from dragontools.core.online_metadata import OnlineMetadataConfig, TmdbClient
+
+    cfg = OnlineMetadataConfig(tmdb_enabled=True, tmdb_read_token="token", cache_enabled=True)
+
+    stale = TmdbClient(
+        cfg,
+        cache_dir=tmp_path,
+        http_get=lambda *_args: {"results": [{"id": 1, "name": "Alter Titel"}]},
+    )
+    assert stale.search_tv("Test")[0]["name"] == "Alter Titel"
+
+    live_calls = 0
+
+    def live_get(*_args):
+        nonlocal live_calls
+        live_calls += 1
+        return {"results": [{"id": 1, "name": "Aktueller Titel"}]}
+
+    fresh = TmdbClient(cfg, cache_dir=tmp_path, http_get=live_get)
+    fresh.enable_fresh_session()
+    assert fresh.search_tv("Test")[0]["name"] == "Aktueller Titel"
+    assert fresh.search_tv("Test")[0]["name"] == "Aktueller Titel"
+    assert live_calls == 1

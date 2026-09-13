@@ -1,0 +1,50 @@
+Dragon Tools V9.8.2 - Renamer/Fuzzy/Regelsimulator Abschlussprüfung
+Stand: 11.09.2026
+
+Umgesetzt
+=========
+- Automatische Renamer-Mindestgrenzen in konfigurierbaren Stufen.
+  Standard: 60 % -> 45 % -> 30 %.
+- Alle drei Grenzen sind unter Regeln -> Renamer-Regeln separat einstellbar.
+- Niedrige Fallback-Treffer werden sichtbar als prüfbedürftig markiert.
+- Mehrere ähnlich schwache Treffer der niedrigsten Stufe werden nicht blind als eindeutig behandelt.
+- Manuelle Suche als Serie oder als Film unabhängig vom automatisch erkannten Typ.
+- Suchbegriff für markierte Renamer-Zeilen manuell änderbar.
+- Alle Provider-Kandidaten können auf Wunsch ohne Fuzzy-Untergrenze angezeigt werden.
+- Eigene Provider-Spalte in der Renamer-Tabelle (TMDB/TheTVDB).
+- Regel-/Profil-Simulator zeigt die berechnete Endauflösung.
+- Bei noch nicht bestimmtem Auto-Crop wird die Auflösung als "vor Auto-Crop" gekennzeichnet.
+
+Gezielte Abnahme
+================
+78/78 Tests bestanden:
+- test_renamer_fallback_and_simulator.py
+- test_fix_20260906_iso_renamer.py
+- test_movie_renamer.py
+- test_movie_renamer_widget_architecture.py
+- test_config_migration.py
+- test_media_info_text_builder.py
+- test_batch_preflight.py
+- test_release_validation.py
+- test_project_info.py
+
+Zusätzlich:
+- python -m compileall -q dragontools: OK
+- Help: HTML-Struktur/60 Inhaltsverzeichnis-Anker geprüft: OK
+- DOCX auf PDF gerendert: 419 Seiten
+- geänderte Schlüsselseiten (1, 37, 38, 42, 327, 341) visuell geprüft: OK
+
+Breiter Testlauf des reduzierten Uploads
+========================================
+Die Renamer-/Simulator-Änderungen erzeugen keine neue bekannte Regression.
+Verbleibende Fehler sind außerhalb dieses Patches:
+1) Zwei Queue-Architekturtests erwarten 39 statt der bereits im unveränderten Upload vorhandenen 40 Aktionen.
+   Diese beiden Fehler wurden identisch gegen den unveränderten Ausgangsstand reproduziert.
+2) Ein Runtime-Verbindungstest benötigt PyQt6, das in der Container-Testumgebung nicht installiert ist.
+3) Zwei Version-Contract-Tests benötigen release_manifest.json und build_v9.bat; beide Dateien waren im bewusst nur als Hauptordner hochgeladenen Projekt nicht enthalten.
+
+Hinweis
+=======
+Die ZIP ist als Overlay für das vollständige Projekt gedacht. Sie enthält den kompletten aktualisierten
+'dragontools'-Hauptordner sowie die aktualisierten Dokumente. Nicht hochgeladene Root-/Builddateien und
+Drittanbieterabhängigkeiten werden nicht ergänzt oder ersetzt.

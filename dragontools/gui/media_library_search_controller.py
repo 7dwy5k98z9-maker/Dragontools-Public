@@ -6,6 +6,8 @@ from pathlib import Path
 from typing import Any, Callable
 
 from PyQt6.QtCore import Qt
+
+from .media_library_search_worker import MediaLibrarySearchThread
 from PyQt6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
@@ -37,6 +39,8 @@ class MediaLibrarySearchController:
         self._refresh_stats = refresh_stats
         self._last_rows: list[dict[str, Any]] = []
         self._last_search_request: dict[str, str] | None = None
+        self._search_thread: MediaLibrarySearchThread | None = None
+        self._pending_search: tuple[str, dict[str, str]] | None = None
 
     @property
     def last_rows(self) -> list[dict[str, Any]]:
@@ -45,6 +49,19 @@ class MediaLibrarySearchController:
     @last_rows.setter
     def last_rows(self, rows: list[dict[str, Any]]) -> None:
         self._last_rows = rows
+
+    @property
+    def is_running(self) -> bool:
+        return bool(self._search_thread is not None and self._search_thread.isRunning())
+
+    def shutdown(self, timeout_ms: int = 1500) -> bool:
+        """Stop queuing searches and give the active worker time to finish."""
+        self._pending_search = None
+        thread = self._search_thread
+        if thread is None or not thread.isRunning():
+            return True
+        thread.requestInterruption()
+        return bool(thread.wait(max(0, int(timeout_ms))))
 
     def refresh_saved_queries(self) -> None:
         data = self._service.load_saved_queries(self._get_db_path())
@@ -71,22 +88,56 @@ class MediaLibrarySearchController:
             "scope": str(self._view.search_scope_combo.currentData() or "all"),
             "media_type": str(self._view.search_type_combo.currentData() or "all"),
         }
-        rows = self._service.search(
-            self._get_db_path(),
-            request["preset"],
-            request["text"],
-            scope=request["scope"],
-            media_type=request["media_type"],
-            limit=500,
+        # Keep only the newest request while a search is running. This prevents
+        # repeated filter changes from queueing several expensive DB scans.
+        self._pending_search = (self._get_db_path(), request)
+        self._view.search_result_label.setText("Suche läuft …")
+        if self._search_thread is None or not self._search_thread.isRunning():
+            self._start_pending_search()
+
+    def _start_pending_search(self) -> None:
+        if self._pending_search is None:
+            return
+        db_path, request = self._pending_search
+        self._pending_search = None
+        thread = MediaLibrarySearchThread(
+            service=self._service,
+            db_path=db_path,
+            request=request,
+            parent=self._parent,
         )
-        self._last_search_request = request
-        self._last_rows = rows
+        self._search_thread = thread
+        thread.completed.connect(self._on_search_completed)
+        thread.finished.connect(self._on_search_thread_finished)
+        thread.start()
+
+    def _on_search_completed(self, request, rows, error) -> None:
+        # If the user changed filters while this request was running, do not
+        # spend GUI time rendering an already obsolete result.
+        if self._pending_search is not None:
+            return
+        if error is not None:
+            self._view.search_result_label.setText("Suche fehlgeschlagen")
+            QMessageBox.critical(self._parent, "Mediathek-Suche", str(error))
+            return
+        self._last_search_request = dict(request)
+        self._last_rows = list(rows or [])
+        self._render_search_rows(self._last_rows, self._last_search_request)
+
+    def _on_search_thread_finished(self) -> None:
+        thread = self._search_thread
+        self._search_thread = None
+        if thread is not None:
+            thread.deleteLater()
+        if self._pending_search is not None:
+            self._start_pending_search()
+
+    def _render_search_rows(self, rows: list[dict[str, Any]], request: dict[str, str]) -> None:
         table = self._view.search_table
         table.setSortingEnabled(False)
         table.setRowCount(0)
-        for row in rows:
-            idx = table.rowCount()
-            table.insertRow(idx)
+        table.setRowCount(len(rows))
+        for idx, row in enumerate(rows):
             for col, value in enumerate(self._presenter.search_row_values(row, request["preset"])):
                 item = QTableWidgetItem("" if value is None else str(value))
                 if col in {3, 4, 5} and value is not None:

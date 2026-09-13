@@ -41,6 +41,45 @@ def test_current_refactor_modules_are_release_smoke_checked():
         "worker/media_contract_types.py",
         "worker/output_probe.py",
         "worker/output_contract_verifier.py",
+        "core/media_analyzer_video_streams.py",
+        "core/media_analyzer_audio_streams.py",
+        "core/media_analyzer_subtitle_streams.py",
+        "core/movie_renamer_candidate_resolvers.py",
+        "core/movie_renamer_candidate_mapping.py",
+        "core/movie_renamer_candidate_scoring.py",
+        "core/movie_renamer_candidate_order.py",
+        "core/media_library_sqlite.py",
+        "core/media_library_schema.py",
+        "core/media_library_migrations.py",
+        "core/media_library_series_lookup.py",
+        "core/media_library_jellyfin_source.py",
+        "core/media_library_jellyfin_items.py",
+        "core/media_library_jellyfin_streams.py",
+        "core/media_library_repository_items.py",
+        "core/media_library_repository_moves.py",
+        "core/media_library_sidecars.py",
+        "core/media_library_query_fragments.py",
+        "core/media_library_query_scope_filters.py",
+        "core/media_library_query_presets.py",
+        "core/media_library_search_enrichment.py",
+        "core/media_library_nfo_paths.py",
+        "core/media_library_nfo_parser.py",
+        "core/media_library_nfo_inventory.py",
+        "core/media_library_nfo_store.py",
+        "core/online_metadata_tvdb_episode_data.py",
+        "gui/media_library_search_worker.py",
+        "gui/preflight_metadata_common.py",
+        "gui/preflight_metadata_movie.py",
+        "gui/preflight_metadata_series.py",
+        "gui/preflight_metadata_apply.py",
+        "worker/postprocess_config.py",
+        "worker/postprocess_models.py",
+        "worker/postprocess_metadata.py",
+        "worker/trickplay_models.py",
+        "worker/trickplay_ffmpeg.py",
+        "worker/trickplay_commit.py",
+        "worker/trickplay_concurrency.py",
+        "worker/trickplay_paths.py",
     }
     assert expected <= checked
 
@@ -77,6 +116,7 @@ def _write_package_smoke_files(root):
         "core/movie_renamer_models.py",
         "core/movie_renamer_parsing.py",
         "core/movie_renamer_candidates.py",
+        "core/movie_renamer_episode_refresh.py",
         "core/online_metadata.py",
         "core/online_metadata_common.py",
         "core/online_metadata_types.py",
@@ -324,7 +364,7 @@ def test_release_validation_warns_about_private_paths(tmp_path):
     from dragontools.core.release_validation import validate_release
 
     root = tmp_path
-    (root / "help.html").write_text(r"C:\Users\Mar" + "ku\\Documents\\DragonTools", encoding="utf-8")
+    (root / "help.html").write_text(r"C:\Users\Dev\Documents\DragonTools", encoding="utf-8")
 
     checks = validate_release(root)
 
@@ -340,7 +380,7 @@ def test_app_bundle_validation_checks_exe_not_source_files(tmp_path):
     (app_dir / f"DragonToolsV{APP_VERSION}.exe").parent.mkdir(parents=True)
     (app_dir / f"DragonToolsV{APP_VERSION}.exe").write_bytes(b"exe")
     (data_dir / "help.html").parent.mkdir(parents=True)
-    (data_dir / "help.html").write_text("<html>" + "Mar" + "ku" + "</html>", encoding="utf-8")
+    (data_dir / "help.html").write_text("<html>Dev</html>", encoding="utf-8")
     (data_dir / "Handbuch").mkdir()
     (data_dir / "Handbuch" / "Handbuch.pdf").write_bytes(b"%PDF")
     (data_dir / "Aenderungshistorie").mkdir()
@@ -376,9 +416,14 @@ def test_format_release_checks_summarizes_errors_and_warnings():
         ReleaseCheck("ok", "OK"),
         ReleaseCheck("warn", "Warnung"),
         ReleaseCheck("error", "Fehler"),
-    ])
+    ], plain=True)
 
     assert "1 Fehler, 1 Warnungen" in text
+    text.encode("cp1252")
+    assert "[OK] OK" in text
+
+    gui_text = format_release_checks([ReleaseCheck("ok", "OK")], plain=False)
+    assert "✅ OK" in gui_text
 
 def test_source_only_manifest_makes_source_archive_self_consistent(tmp_path):
     from dragontools.core.release_validation import validate_release

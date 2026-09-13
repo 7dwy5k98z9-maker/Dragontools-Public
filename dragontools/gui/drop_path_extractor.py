@@ -2,20 +2,25 @@
 from __future__ import annotations
 
 import os
-import re
-from urllib.parse import unquote, urlparse
+
+from .drop_path_files import iter_video_files_in_folder as _iter_video_files_in_folder
+from .drop_path_decode import (
+    decode_windows_filename_payload as _decode_windows_filename_payload,
+    extract_candidate_paths_from_text as _extract_candidate_paths_from_text,
+    reconstruct_local_path_from_url_string as _reconstruct_local_path_from_url_string,
+)
+from .drop_path_windows import (
+    extract_itemidlist_bytes as _extract_itemidlist_bytes,
+    resolve_shell_idlist_to_paths as _resolve_shell_idlist_to_paths_impl,
+)
 
 from ..core.paths import (
     display_name,
-    is_video_file,
     normalize_user_path,
     strip_long_path_prefix,
     to_long_path,
 )
 
-_WINDOWS_PATH_RE = re.compile(
-    r"(\\\\\?\\UNC\\[^\x00\r\n]+|\\\\\?\\[A-Za-z]:\\[^\x00\r\n]+|\\\\[^\x00\r\n]+|[A-Za-z]:\\[^\x00\r\n]+)"
-)
 DND_DEBUG = False
 _WARNED_DROP_MESSAGES: set[tuple[int, str]] = set()
 
@@ -30,23 +35,6 @@ def _warn_non_video_file(log_fn, path: str) -> None:
     _log_drop_message(log_fn, f"Keine Videodatei: {visible}")
 
 
-def _iter_video_files_in_folder(folder_path: str) -> tuple[list[str], int]:
-    folder = normalize_user_path(folder_path)
-    if not folder:
-        return [], 0
-
-    walk_root = to_long_path(folder) if os.name == "nt" else folder
-    video_paths: list[str] = []
-    ignored_count = 0
-    for current_root, _dirs, files in os.walk(walk_root):
-        visible_root = strip_long_path_prefix(current_root)
-        for name in files:
-            path = normalize_user_path(os.path.join(visible_root, name))
-            if is_video_file(path):
-                video_paths.append(path)
-            else:
-                ignored_count += 1
-    return sorted(video_paths), ignored_count
 
 
 def _mime_has_file_payload(mime) -> bool:
@@ -109,23 +97,6 @@ def _reconstruct_local_path_from_url(url) -> str:
     return _reconstruct_local_path_from_url_string(raw_url)
 
 
-def _reconstruct_local_path_from_url_string(raw_url: str) -> str:
-    if not raw_url:
-        return ""
-    parsed = urlparse(raw_url)
-    if parsed.scheme.lower() != "file":
-        return ""
-
-    path = unquote(parsed.path or "")
-    if os.name == "nt":
-        if parsed.netloc:
-            win_path = path.replace("/", "\\")
-            return "\\\\" + parsed.netloc + win_path
-        path = path.replace("/", "\\")
-        if len(path) >= 3 and path[0] == "\\" and path[2] == ":":
-            path = path[1:]
-        return path
-    return unquote((parsed.netloc or "") + path)
 
 
 def _extract_dropped_local_path(url, log_fn=None) -> str:
@@ -143,44 +114,8 @@ def _extract_dropped_local_path(url, log_fn=None) -> str:
     return ""
 
 
-def _extract_candidate_paths_from_text(text: str) -> list[str]:
-    candidates: list[str] = []
-    for part in text.replace("\x00", "\n").splitlines():
-        part = part.strip().strip('"')
-        if not part:
-            continue
-        for match in _WINDOWS_PATH_RE.findall(part):
-            candidate = match.strip().strip('"')
-            if candidate:
-                candidates.append(candidate)
-        if not candidates and (
-            part.startswith("\\\\")
-            or part.startswith("\\\\?\\")
-            or re.match(r"^[A-Za-z]:\\", part)
-        ):
-            candidates.append(part)
-    return candidates
 
 
-def _decode_windows_filename_payload(data: bytes, *, utf16: bool) -> list[str]:
-    decoded_variants: list[str] = []
-    try:
-        decoded = data.decode("utf-16-le", errors="ignore") if utf16 else data.decode(errors="ignore")
-        decoded_variants.append(decoded.replace("\x00", "\n"))
-    except Exception:
-        pass
-    if utf16:
-        try:
-            decoded_variants.append(data.decode(errors="ignore").replace("\x00", "\n"))
-        except Exception:
-            pass
-
-    paths: list[str] = []
-    for decoded in decoded_variants:
-        for candidate in _extract_candidate_paths_from_text(decoded):
-            if candidate:
-                paths.append(candidate)
-    return paths
 
 
 def _extract_paths_from_mime_data(mime, log_fn=None) -> list[str]:
@@ -260,109 +195,13 @@ def _extract_paths_from_mime_data(mime, log_fn=None) -> list[str]:
     return paths
 
 
-def _extract_itemidlist_bytes(data: bytes, offset: int) -> bytes:
-    """
-    Liest eine vollständige ITEMIDLIST (PIDL) aus dem Byte-Array.
-    Eine ITEMIDLIST besteht aus SHITEMID-Einträgen {cb (2 Bytes), abID[cb-2]},
-    abgeschlossen durch einen 2-Byte-Nullterminator.
-    """
-    result = bytearray()
-    pos = offset
-    while pos + 2 <= len(data):
-        cb = int.from_bytes(data[pos : pos + 2], "little")
-        if cb == 0:
-            result.extend(b"\x00\x00")  # Null-Terminator mitschreiben
-            break
-        if pos + cb > len(data):
-            break
-        result.extend(data[pos : pos + cb])
-        pos += cb
-    return bytes(result)
+
+
 
 
 def _resolve_shell_idlist_to_paths(data: bytes, log_fn=None) -> list[str]:
-    """
-    Parst eine CIDA-Struktur (Shell IDList Array) und loest die enthaltenen
-    PIDLs über die Windows Shell API zu Dateipfaden auf.
-
-    CIDA-Aufbau:
-        UINT  cidl          – Anzahl Items (ohne Parent)
-        UINT  aoffset[0]    – Offset zum Parent-Ordner-PIDL
-        UINT  aoffset[1..n] – Offsets zu den Item-PIDLs
-    """
-    import ctypes
-
-    shell32 = ctypes.windll.shell32
-
-    # KRITISCH: restype muss c_void_p sein, sonst wird der 64-bit-Pointer
-    # auf Windows x64 auf 32 bit abgeschnitten → Absturz oder Garbage-Adresse.
-    shell32.ILCombine.restype = ctypes.c_void_p
-    shell32.ILCombine.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-    shell32.ILFree.restype = None
-    shell32.ILFree.argtypes = [ctypes.c_void_p]
-    shell32.SHGetPathFromIDListW.restype = ctypes.c_bool
-    shell32.SHGetPathFromIDListW.argtypes = [ctypes.c_void_p, ctypes.c_wchar_p]
-
-    cidl = int.from_bytes(data[0:4], "little")
-    if cidl == 0 or len(data) < 4 + (cidl + 1) * 4:
-        return []
-
-    offsets = [int.from_bytes(data[4 + i * 4 : 8 + i * 4], "little") for i in range(cidl + 1)]
-
-    parent_pidl_bytes = _extract_itemidlist_bytes(data, offsets[0])
-    if not parent_pidl_bytes:
-        return []
-
-    paths: list[str] = []
-    MAX_PATH_BUF = 32767  # Windows UNICODE_STRING Limit
-
-    for i in range(1, cidl + 1):
-        item_pidl_bytes = _extract_itemidlist_bytes(data, offsets[i])
-        if not item_pidl_bytes:
-            continue
-
-        # Puffer für ILCombine anlegen (kopiert intern, kein Shell-Heap nötig)
-        parent_buf = ctypes.create_string_buffer(parent_pidl_bytes)
-        item_buf = ctypes.create_string_buffer(item_pidl_bytes)
-
-        combined = shell32.ILCombine(parent_buf, item_buf)
-        if not combined:
-            if DND_DEBUG:
-                _log_drop_message(log_fn, f"Drag&Drop: ILCombine returned NULL für Item {i}")
-            continue
-
-        try:
-            path_buf = ctypes.create_unicode_buffer(MAX_PATH_BUF)
-
-            # SHGetPathFromIDListEx (Vista+) unterstützt große Puffer;
-            # ebenfalls restype setzen um 64-bit-Pointer-Truncation zu vermeiden.
-            ok = False
-            try:
-                shell32.SHGetPathFromIDListEx.restype = ctypes.c_bool
-                shell32.SHGetPathFromIDListEx.argtypes = [
-                    ctypes.c_void_p, ctypes.c_wchar_p, ctypes.c_int, ctypes.c_uint
-                ]
-                ok = bool(shell32.SHGetPathFromIDListEx(combined, path_buf, MAX_PATH_BUF, 0))
-            except (AttributeError, OSError):
-                pass
-
-            # Fallback auf SHGetPathFromIDListW für ältere Windows-Versionen
-            if not ok:
-                ok = bool(shell32.SHGetPathFromIDListW(combined, path_buf))
-
-            if ok and path_buf.value:
-                normalized = normalize_user_path(path_buf.value)
-                if normalized:
-                    if DND_DEBUG:
-                        _log_drop_message(log_fn, f"Drag&Drop: Shell IDList → {normalized}")
-                    paths.append(normalized)
-            else:
-                if DND_DEBUG:
-                    _log_drop_message(log_fn, f"Drag&Drop: Shell IDList Item {i} – SHGetPath schlug fehl")
-        finally:
-            shell32.ILFree(combined)
-
-    return paths
+    """Kompatibilitätswrapper; Debug-Status bleibt im öffentlichen Modul steuerbar."""
+    return _resolve_shell_idlist_to_paths_impl(data, log_fn=log_fn, debug=DND_DEBUG)
 
 
 def _extract_paths_from_shell_idlist(mime, log_fn=None) -> list[str]:

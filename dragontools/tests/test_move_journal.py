@@ -439,3 +439,69 @@ def test_resume_plan_uses_committed_video_for_companion_only_recovery(tmp_path):
     assert plan["companion_resume_sources"] == {str(dest): str(source)}
     assert plan["sidecar_outputs_by_video"][str(dest)] == [str(sidecar)]
     assert plan["planned_targets"][str(dest)]["target_dir"] == str(dest.parent)
+
+
+def test_move_journal_archive_failure_is_fatal_and_notifies_callback(tmp_path, monkeypatch):
+    import json
+
+    from dragontools.core import move_journal as journal_module
+
+    messages: list[str] = []
+
+    def controlled_write(path, data):
+        if path.parent.name == journal_module.ARCHIVE_DIR_NAME:
+            raise OSError("archive disk full")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(data), encoding="utf-8")
+
+    # Der Test isoliert die Archivierungssemantik und ist dadurch unabhängig
+    # von der fsync-Unterstützung des jeweiligen CI-/Review-Dateisystems.
+    monkeypatch.setattr(journal_module, "_atomic_write_json", controlled_write)
+    journal = journal_module.MoveJournal.start(
+        files=[str(tmp_path / "source.mkv")],
+        root=tmp_path,
+        on_write_error=messages.append,
+    )
+
+    with pytest.raises(journal_module.MoveJournalWriteError, match="archive disk full"):
+        journal.finish_run(status="completed", keep_active=False)
+
+    assert journal.path.exists()
+    assert messages
+    assert "Move-Journal konnte nicht archiviert werden" in messages[-1]
+    assert not list((tmp_path / "MoveJournal" / "Abgeschlossen").glob("*.json"))
+
+
+def test_move_batch_lifecycle_counts_journal_finalization_failure_as_error():
+    from dragontools.core.move_journal import MoveJournalWriteError
+    from dragontools.worker.move_batch_lifecycle import MoveBatchLifecycleMixin
+
+    class BrokenJournal:
+        @staticmethod
+        def has_retryable_files() -> bool:
+            return False
+
+        @staticmethod
+        def finish_run(*, status: str, keep_active: bool) -> None:
+            assert status == "completed"
+            assert keep_active is False
+            raise MoveJournalWriteError("archive failed")
+
+    class Owner(MoveBatchLifecycleMixin):
+        def __init__(self) -> None:
+            self._move_journal = BrokenJournal()
+            self.abort_requested = False
+            self.error_count = 0
+            self.journal_finalize_failed = False
+            self.messages: list[tuple[str, str]] = []
+
+        def _log(self, message: str, level: str = "info") -> None:
+            self.messages.append((message, level))
+
+    owner = Owner()
+
+    assert owner._finalize_journal() is False
+    assert owner.error_count == 1
+    assert owner.journal_finalize_failed is True
+    assert owner.messages[-1][1] == "error"
+    assert "Move-Journal konnte nicht finalisiert werden" in owner.messages[-1][0]

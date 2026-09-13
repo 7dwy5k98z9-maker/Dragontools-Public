@@ -234,7 +234,7 @@ def scan_storage_paths_to_database(
         work_db = tmp_dir / DEFAULT_DB_FILENAME
     else:
         tmp_context = None
-        work_db = initialize_database(target)
+        work_db = target
 
     try:
         initialize_database(work_db)
@@ -242,7 +242,6 @@ def scan_storage_paths_to_database(
             save_path_mappings(work_db, roots)
         with closing(_connect(work_db)) as conn:
             with conn:
-                _create_schema(conn)
                 for index, (path_obj, area_label) in enumerate(files, start=1):
                     if should_abort and should_abort():
                         aborted = True

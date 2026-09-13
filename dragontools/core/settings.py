@@ -10,7 +10,7 @@ from typing import Any, Iterable
 from .type_utils import _safe_bool, _safe_float, _safe_int
 from .version import APP_VERSION
  
-APP_ORG  = "DragonDeveloper"
+APP_ORG  = "DragonTools"
 APP_NAME = "Dragon Tools"
 
 SET_KEY_UI_SECTION_PREFIX = "ui/sections"
@@ -305,10 +305,10 @@ SET_KEY_METADATA_SERIES_PROVIDER = "metadata/provider/series"
 SET_KEY_METADATA_MOVIE_PREFERRED_PROVIDER = "metadata/provider/movie_preferred"
 SET_KEY_METADATA_SERIES_PREFERRED_PROVIDER = "metadata/provider/series_preferred"
 SET_KEY_METADATA_TMDB_ENABLED = "metadata/tmdb/enabled"
-SET_KEY_METADATA_TMDB_API_KEY = str("metadata/tmdb/api_key")
+SET_KEY_METADATA_TMDB_API_KEY = "metadata/tmdb/api_key"
 SET_KEY_METADATA_TMDB_READ_TOKEN = "metadata/tmdb/read_access_token"
 SET_KEY_METADATA_TVDB_ENABLED = "metadata/thetvdb/enabled"
-SET_KEY_METADATA_TVDB_API_KEY = str("metadata/thetvdb/api_key")
+SET_KEY_METADATA_TVDB_API_KEY = "metadata/thetvdb/api_key"
 SET_KEY_METADATA_TVDB_PIN = "metadata/thetvdb/pin"
 SET_KEY_METADATA_TVDB_BEARER_TOKEN = "metadata/thetvdb/bearer_token"
 SET_KEY_METADATA_LANGUAGE = "metadata/language"

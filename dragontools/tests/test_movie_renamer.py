@@ -122,6 +122,79 @@ def test_build_series_rename_proposal_uses_episode_metadata_without_trailing_das
     assert proposal.selected.provider == "thetvdb"
 
 
+def test_build_series_rename_proposal_retries_german_umlaut_variant_with_resolver(tmp_path):
+    from dragontools.core.movie_renamer import build_series_rename_proposal
+
+    source = tmp_path / "Die.Muenchner.Freiheit.S01E02.German.1080p.WEB.H264-GRP.mkv"
+    source.write_text("video", encoding="utf-8")
+    calls: list[str] = []
+
+    def resolver(series: str, season: int, episode: int, year: int | None):
+        calls.append(series)
+        assert season == 1
+        assert episode == 2
+        if series == "Die Münchner Freiheit":
+            return [
+                {
+                    "series": "Die Münchner Freiheit",
+                    "season": 1,
+                    "episode": 2,
+                    "episode_title": "Ankunft",
+                    "provider": "tmdb",
+                    "provider_id": 123,
+                    "episode_id": 456,
+                }
+            ]
+        return []
+
+    proposal = build_series_rename_proposal(source, resolver=resolver)
+
+    assert calls == ["Die Muenchner Freiheit", "Die Münchner Freiheit"]
+    assert proposal.status == "ok"
+    assert proposal.target_name == "Die Münchner Freiheit - S01E02 - Ankunft.mkv"
+    assert proposal.selected is not None
+    assert proposal.selected.score == 1.0
+
+
+def test_build_series_rename_proposal_retries_german_umlaut_variant_with_client(tmp_path):
+    from dragontools.core.movie_renamer import build_series_rename_proposal
+
+    source = tmp_path / "Die.Muenchner.Freiheit.S01E02.German.1080p.WEB.H264-GRP.mkv"
+    source.write_text("video", encoding="utf-8")
+
+    class FakeClient:
+        provider_order = ("tmdb",)
+
+        def __init__(self) -> None:
+            self.calls: list[str] = []
+
+        def resolve_episode_candidates(self, path, *, limit=6):
+            self.calls.append(path.name)
+            if path.name.startswith("Die Münchner Freiheit"):
+                return (
+                    {
+                        "series": "Die Münchner Freiheit",
+                        "season": 1,
+                        "episode": 2,
+                        "episode_title": "Ankunft",
+                        "provider": "tmdb",
+                        "provider_id": 123,
+                        "episode_id": 456,
+                    },
+                )
+            return ()
+
+    client = FakeClient()
+    proposal = build_series_rename_proposal(source, client=client)
+
+    assert client.calls == [
+        "Die Muenchner Freiheit - S01E02.mkv",
+        "Die Münchner Freiheit - S01E02.mkv",
+    ]
+    assert proposal.status == "ok"
+    assert proposal.target_name == "Die Münchner Freiheit - S01E02 - Ankunft.mkv"
+
+
 def test_parse_series_release_name_preserves_episode_number_dot():
     from dragontools.core.movie_renamer import parse_series_release_name
 
@@ -418,3 +491,110 @@ def test_series_generic_provider_episode_title_is_normalized_and_confidence_capp
     assert proposal.selected is not None
     assert proposal.selected.match_reason == "Episodentitel offen"
     assert proposal.confidence == 0.92
+
+
+def test_series_renamer_refreshes_cached_fallback_episode_title(tmp_path):
+    from dragontools.core.movie_renamer import build_series_rename_proposal
+    from dragontools.core.online_metadata import EpisodeMetadataSuggestion
+
+    source = tmp_path / "Example.Show.S01E02.German.1080p.WEB.H264-GRP.mkv"
+    source.write_text("video", encoding="utf-8")
+
+    class FakeClient:
+        def __init__(self) -> None:
+            self.calls: list[str] = []
+
+        def resolve_episode_candidates(self, path, *, limit=6):
+            self.calls.append(f"cached:{path.name}")
+            return (
+                EpisodeMetadataSuggestion(
+                    query_series="Example Show",
+                    series_tmdb_id=1,
+                    episode_tmdb_id=2,
+                    show_name="Example Show",
+                    original_show_name="Example Show",
+                    season_number=1,
+                    episode_number=2,
+                    title="Folge 02",
+                    first_air_year=2026,
+                    provider="tmdb",
+                    series_provider_id=1,
+                    episode_provider_id=2,
+                    title_is_fallback=True,
+                ),
+            )
+
+        def refresh_episode_candidates(self, path, *, limit=6):
+            self.calls.append(f"refresh:{path.name}")
+            return (
+                EpisodeMetadataSuggestion(
+                    query_series="Example Show",
+                    series_tmdb_id=1,
+                    episode_tmdb_id=2,
+                    show_name="Example Show",
+                    original_show_name="Example Show",
+                    season_number=1,
+                    episode_number=2,
+                    title="Real Title",
+                    first_air_year=2026,
+                    provider="tmdb",
+                    series_provider_id=1,
+                    episode_provider_id=2,
+                ),
+            )
+
+    client = FakeClient()
+    proposal = build_series_rename_proposal(source, client=client)
+
+    assert proposal.selected is not None
+    assert proposal.target_name == "Example Show - S01E02 - Real Title.mkv"
+    assert client.calls == [
+        "cached:Example Show - S01E02.mkv",
+        "refresh:Example Show - S01E02.mkv",
+    ]
+
+
+def test_episode_refresh_failure_logs_reason_and_keeps_fallback(tmp_path, caplog):
+    import logging
+
+    from dragontools.core.movie_renamer import build_series_rename_proposal
+    from dragontools.core.online_metadata_types import EpisodeMetadataSuggestion
+
+    source = tmp_path / "Example.Show.S01E02.German.1080p.WEB.H264-GRP.mkv"
+    source.write_text("video", encoding="utf-8")
+
+    class FakeClient:
+        @staticmethod
+        def resolve_episode_candidates(path, *, limit=6):
+            return (
+                EpisodeMetadataSuggestion(
+                    query_series="Example Show",
+                    series_tmdb_id=1,
+                    episode_tmdb_id=2,
+                    show_name="Example Show",
+                    original_show_name="Example Show",
+                    season_number=1,
+                    episode_number=2,
+                    title="Folge 02",
+                    first_air_year=2026,
+                    provider="tmdb",
+                    series_provider_id=1,
+                    episode_provider_id=2,
+                    title_is_fallback=True,
+                ),
+            )
+
+        @staticmethod
+        def refresh_episode_candidates(path, *, limit=6):
+            raise RuntimeError("Provider vorübergehend nicht erreichbar")
+
+    with caplog.at_level(
+        logging.WARNING,
+        logger="dragontools.core.movie_renamer_episode_refresh",
+    ):
+        proposal = build_series_rename_proposal(source, client=FakeClient())
+
+    assert proposal.selected is not None
+    assert proposal.target_name == "Example Show - S01E02 - Folge 02.mkv"
+    assert "Episoden-Metadaten konnten" in caplog.text
+    assert "Provider vorübergehend nicht erreichbar" in caplog.text

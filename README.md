@@ -2,6 +2,23 @@
 
 DragonTools ist eine Windows-Anwendung zur Analyse, Konvertierung und Verwaltung von Video-, Audio- und Untertiteldateien. Das Projekt bündelt die benötigten Drittanbieterprogramme nicht im Git-Repository. Sie müssen separat von den jeweiligen Projektseiten heruntergeladen werden.
 
+
+## Aktueller Entwicklungsstand – 13.09.2026
+
+Der aktuelle V9.8.2-Stand wurde nach den Datenbank-/Metadaten-Patches in zwölf größeren Refactoring- und Stabilitätsblöcken weiter zerlegt. Ziel war nicht, nur Dateien kleiner zu machen, sondern GUI, Orchestrierung, Datenbankzugriff, Dateisystem-I/O, externe Tools und reine Fachlogik klarer voneinander zu trennen. Bestehende Importpfade bleiben dort über schmale Kompatibilitätsfassaden erhalten, wo Worker, Tests oder andere Module darauf angewiesen sind.
+
+Wichtige Änderungen des aktuellen Stands:
+
+- **Mediathek:** migrationssichere Schema-Reihenfolge, indexfreundlicher Serien-Lookup über `normalized_title`, korrigierte Jellyfin-Normalisierung, weniger unnötige SQLite-Verbindungen/Writes und eine asynchrone Mediathek-Suche außerhalb des GUI-Threads.
+- **Preflight und Metadaten:** Film-/Serienpfade werden bei aktivierter Mediathek zuerst über SQLite aufgelöst. Persistenter Suchcache und frische Batch-Metadaten sind getrennt; finale Renamer-/NFO-Läufe können aktuelle Providerdaten einmal pro Serie/Batch laden und anschließend wiederverwenden.
+- **Renamer:** generische Episodentitel wie `Folge 10` oder `Episode 10` gelten nicht als endgültige Metadaten. Sie lösen bei Bedarf eine frische Abfrage aus; TheTVDB kann bei vorhandener Episode ohne brauchbaren deutschen Titel auf die Fallback-Sprache zurückgreifen.
+- **Trickplay/Postprocessing:** Logging akzeptiert normale Logger, Callables und native Qt-Signale. Ein bereits gestarteter Async-Postprocess wird nach einem Loggingfehler nicht noch einmal synchron gestartet; NFO/Trickplay bleiben damit exactly-once geplant.
+- **Abschlussreview:** Move-Journal-Archivierungsfehler sind fail-closed, Journal-Finalisierungsfehler zählen im Move-Worker als Fehler, der Release-Smoke verlangt alle im Refactoring-Manifest neu eingeführten Produktivmodule und ein gescheiterter Episodenrefresh wird mit Ursache geloggt statt still auf `Folge XX` zurückzufallen.
+- **Quellbildprüfung:** mehrere Prüfpositionen werden gebündelt. Bei 10-%-Intervallen sinkt die Zahl der FFmpeg-Starts im Normalfall von 9 auf 3, bei 5 % von 19 auf 5; nur eine fehlgeschlagene Gruppe fällt auf Einzelproben zurück.
+- **Modulstruktur:** große Bereiche wie Mediathek, NFO-Scan, Trickplay, DV-Remux, Backup/Restore, Journal, Preflight, Merge, ISO, Parallel-Converter, MoveThread, Encoder-Override, Duration-Repair, HDR10+, MediaAnalyzer, Renamer-Kandidaten, Audio/Video-Matcher und Online-Metadaten-Dialog sind in fokussierte Fachmodule aufgeteilt.
+
+Der aktuell vermessene Quellstand umfasst **729 Python-Dateien einschließlich `DragonToolsV9.py`**, rund **118.227 Gesamtzeilen** und **100.301 nichtleere/nicht reine Kommentarzeilen**. Im Testpaket liegen **167 Python-Dateien**, davon **164 `test_*.py`** mit **1.224 statisch erkennbaren Testfunktionen**. In einem Package-only-Archiv ohne Einstiegspunkt werden entsprechend 728 Python-Dateien gezählt.
+
 ## Voraussetzungen
 
 - Windows 10 oder neuer
@@ -101,11 +118,32 @@ python -m pytest -m "not dv_hdr_integration"
 
 Die echten Dolby-Vision-/HDR10+-Integrationstests benötigen zusätzlich `dovi_tool`, `hdr10plus_tool` und MP4Box sowie geeignete Testmedien.
 
+
+## Architektur und Laufzeitverhalten
+
+DragonTools folgt im aktuellen Stand einer Fassaden-/Fachmodul-Struktur. Öffentliche Widgets, Worker und Core-Einstiegspunkte bleiben klein und delegieren an Module mit klarer Verantwortung. Das ist insbesondere bei sicherheitskritischen Bereichen wie Move/Replace, Output-Commit, Backup/Restore und Duration-Repair wichtig, weil Dateisystemoperationen und Datenbankänderungen dadurch separat geprüft werden können.
+
+Einige Laufzeitregeln sind bewusst festgelegt:
+
+- SQLite-Suchen laufen ohne unnötige Schema-Writes; die GUI-Suche wird in einem Worker ausgeführt und übergibt nur die Ergebnisse an den GUI-Thread.
+- Serien-Lookups nutzen zuerst den indexierten `normalized_title`; langsame Legacy-Vergleiche sind nur Fallback für alte oder inkonsistente Datenbanken.
+- NFO-Scans führen NAS-/XML-I/O außerhalb langer SQLite-Schreibtransaktionen aus und committen Ergebnisse in kurzen Batches.
+- Online-Metadaten unterscheiden zwischen längerlebigem Suchcache und einem frischen Batch-Cache für finale Verarbeitung. Mehrere Folgen derselben Serie können dadurch eine frisch geladene Episodenliste gemeinsam verwenden.
+- Externe Tool-Prozesse laufen über zentrale Timeout-/Abort-/Lifecycle-Grenzen. Diagnosemarker enthalten nach Möglichkeit die konkrete Mediendatei statt nur den Prozessnamen.
+
+## Trickplay und asynchrones Postprocessing
+
+Jellyfin-NFO und Trickplay laufen nach erfolgreicher Medienverarbeitung als Postprocessing. Trickplay wird transaktional über eine Partial-Struktur erzeugt und erst nach erfolgreichem Abschluss committed; bei Problemen bleibt ein vorhandener Bestand geschützt bzw. wird zurückgerollt.
+
+Der aktuelle Async-Koordinator behandelt einen erfolgreich an den ThreadPool übergebenen Auftrag als eindeutig gestartet. Ein Fehler in Logging oder GUI-Signalweitergabe darf deshalb keinen zweiten synchronen NFO-/Trickplay-Lauf derselben Datei auslösen. Native PyQt-Signale werden über `.emit(...)` angesprochen; der frühere Fehler `TypeError: native Qt signal is not callable` wird damit an der zentralen Logging-Grenze verhindert.
+
+`crash_state.json` ist primär ein **Aktivitätsmarker** für den zuletzt überwachten Toolzustand. Eine vorhandene Datei mit `active: true` beweist für sich allein keinen FFmpeg-Absturz. Für echte unbehandelte Ausnahmen sind die Crash-/ErrorReports maßgeblich.
+
 ## Sichere Timestamp-Reparatur
 
-Bei einer unplausiblen Ausgabelaufzeit versucht DragonTools zuerst einen verlustfreien Container-Remux. Für eindeutig erkannte MKV-Timestampfehler folgt eine Reparatur mit dem FFmpeg-`setts`-Bitstreamfilter; steht dieser Filter nicht zur Verfügung oder scheitert der Versuch, kann DragonTools auf einen ebenfalls verlustfreien `+genpts`-Remux ausweichen.
+Bei einer unplausiblen Ausgabelaufzeit versucht DragonTools zuerst einen verlustfreien Container-Remux. Für eindeutig erkannte MKV-Timestampfehler folgt eine Reparatur mit dem FFmpeg-`setts`-Bitstreamfilter; steht dieser Filter nicht zur Verfügung oder scheitert der Versuch, kann DragonTools auf einen ebenfalls verlustfreien `+genpts+igndts`-Remux ausweichen.
 
-Jeder Reparaturkandidat wird vor dem Ersetzen erneut auf Laufzeit, Lesbarkeit, Video-, Audio- und Untertitelspuren sowie Attachments geprüft. FFprobe und MediaInfo dienen dabei als voneinander unabhängige Gegenprüfung. Ein Werkzeugfehler, ein Streamverlust oder widersprüchliche Ergebnisse verwerfen den Kandidaten. Die Quelldatei wird in diesem Fall weder ersetzt noch anschließend verschoben.
+Jeder Reparaturkandidat wird vor dem Ersetzen erneut auf Laufzeit, Lesbarkeit, Video-, Audio- und Untertitelspuren sowie Attachments geprüft. FFprobe und MediaInfo dienen dabei als voneinander unabhängige Gegenprüfung. Ein Werkzeugfehler, ein Streamverlust oder widersprüchliche Ergebnisse verwerfen den Kandidaten. Die Quelldatei wird in diesem Fall weder ersetzt noch anschließend verschoben. Verworfene Timestamp-Kandidaten werden, soweit möglich, unter `Archiv\Timestamp_Reparatur` abgelegt, damit fehlerhafte Reparaturversuche später nachvollzogen werden können.
 
 ## Jellyfin-Mediathek importieren
 
@@ -113,13 +151,15 @@ DragonTools liest aktuelle Jellyfin-Datenbanken mit `BaseItems` und `MediaStream
 
 Vor dem Import wird ein konsistenter Read-only-Snapshot einschließlich vorhandener WAL-Daten erzeugt und mit SQLite geprüft. Eine beschädigte oder unvollständig kopierte Jellyfin-Datenbank ersetzt die vorhandene DragonTools-Mediathek nicht. Gleichwertige Windows-/UNC-Pfade werden beim Neuaufbau nur einmal übernommen.
 
-Neue und bestehende DragonTools-Mediatheken werden kompatibel auf Schema 6 gebracht. Zusätzlich zum vollständigen Speicherpfad-Scan gibt es einen leichten NFO-Scan, der ausschließlich bereits bekannte Mediathek-Pfade prüft und weder MediaInfo noch ffprobe noch einen rekursiven NAS-Scan startet. Er speichert NFO-Status, Pfad, Typ und Zeitstempel und unterscheidet unter anderem `present`, `missing`, `unreachable`, `invalid` und `unreadable`. Ein offline gegangener NAS-/Share-Pfad wird als `unreachable` behandelt; vorhandene NFO-Prüfdaten bleiben erhalten. Aus NFOs gelesene Titel, Staffel/Folge, Jahr und Provider-IDs werden getrennt gespeichert und mit der Mediathek verglichen, ohne deren Metadaten zu überschreiben. Die NFO-Erstellung selbst verwendet weiterhin die Online-Metadatenabfrage und nicht die Mediathek-DB. Die Suche unterstützt gespeicherte GUI-/SQL-Abfragen; eine eingebaute SQL-Hilfe zeigt Tabellen, Spalten, Datentypen und Beispielabfragen. Trefferlisten bleiben in der GUI aus Performancegründen begrenzt; der CSV-Export führt dieselbe zuletzt ausgeführte Suche ohne Anzeigelimit aus und exportiert alle passenden Datensätze. CSV-Exporte enthalten die erweiterten technischen und NFO-bezogenen Felder.
+Neue und bestehende DragonTools-Mediatheken werden kompatibel auf Schema 6 gebracht. Migrationen ergänzen fehlende Spalten vor davon abhängigen Indizes. Der Serien-Lookup nutzt zuerst den indexierten normalisierten Serientitel; ältere `series_title`-/`title`-Vergleiche bleiben nur als Legacy-Fallback. Die GUI-Suche läuft asynchron und reichert Streamdaten gebündelt an, damit große Bestände die Oberfläche nicht durch wiederholte Einzelabfragen blockieren. Zusätzlich zum vollständigen Speicherpfad-Scan gibt es einen leichten NFO-Scan, der ausschließlich bereits bekannte Mediathek-Pfade prüft und weder MediaInfo noch ffprobe noch einen rekursiven NAS-Scan startet. Er speichert NFO-Status, Pfad, Typ und Zeitstempel und unterscheidet unter anderem `present`, `missing`, `unreachable`, `invalid` und `unreadable`. Ein offline gegangener NAS-/Share-Pfad wird als `unreachable` behandelt; vorhandene NFO-Prüfdaten bleiben erhalten. Aus NFOs gelesene Titel, Staffel/Folge, Jahr und Provider-IDs werden getrennt gespeichert und mit der Mediathek verglichen, ohne deren Metadaten zu überschreiben. Die NFO-Erstellung selbst verwendet weiterhin die Online-Metadatenabfrage und nicht die Mediathek-DB. Die Suche unterstützt gespeicherte GUI-/SQL-Abfragen; eine eingebaute SQL-Hilfe zeigt Tabellen, Spalten, Datentypen und Beispielabfragen. Trefferlisten bleiben in der GUI aus Performancegründen begrenzt; der CSV-Export führt dieselbe zuletzt ausgeführte Suche ohne Anzeigelimit aus und exportiert alle passenden Datensätze. CSV-Exporte enthalten die erweiterten technischen und NFO-bezogenen Felder.
 
 ## Renamer: mehrstufige Suche und manuelle Korrektur
 
 Der Film-/Serien-Renamer bewertet Metadatenkandidaten in konfigurierbaren Stufen. Standardmäßig wird zuerst die normale Mindestübereinstimmung von **60 %** verwendet. Gibt es dort keinen Kandidaten, folgen automatisch die Fallback-Stufen **45 %** und **30 %**. Alle drei Grenzwerte sind unter **Regeln → Renamer-Regeln** separat einstellbar. Treffer aus reduzierten Stufen werden sichtbar als Fallback markiert und bleiben prüfbedürftig; die letzte Stufe behandelt mehrere ähnlich schwache Kandidaten bewusst als mehrdeutig statt blind zu raten.
 
 Wenn die automatische Typ-Erkennung falsch liegt, kann eine markierte Zeile gezielt **als Serie** oder **als Film** gesucht werden. Der Suchbegriff kann manuell geändert werden; außerdem lassen sich auf Wunsch alle Provider-Kandidaten ohne Fuzzy-Grenze anzeigen. Die Ergebnistabelle zeigt den tatsächlich gewählten Provider (**TMDB** oder **TheTVDB**) in einer eigenen Spalte.
+
+Wenn der Metadatencache für eine Serienfolge nur einen generischen Platzhalter wie **Folge 10** enthält, fragt der Renamer den Provider einmal frisch am Cache vorbei ab. Liefert TMDB oder TheTVDB inzwischen einen echten Episodentitel, wird der Cache erneuert und der neue Zielname verwendet. Bei TheTVDB kann eine vorhandene Episode ohne brauchbaren Titel zusätzlich über die konfigurierte Fallback-Sprache ergänzt werden. Für finale Rename-/NFO-Läufe kann eine frisch geladene Serien-/Episodenliste innerhalb desselben Batches wiederverwendet werden, sodass zwanzig Folgen nicht zwanzig identische Providerabfragen auslösen. Serienfolgen bleiben dabei im Standard **Serienname - SXXEXX - Episodenname.ext**.
 
 ## Regel-/Profil-Simulator
 

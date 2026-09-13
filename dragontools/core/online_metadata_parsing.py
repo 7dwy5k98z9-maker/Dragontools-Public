@@ -9,11 +9,19 @@ from .online_metadata_types import (
     MovieMetadataSuggestion, ParsedMovieQuery, ParsedSeriesQuery, SeriesMetadataSuggestion,
 )
 
-def parse_movie_query(value: str | Path) -> ParsedMovieQuery:
+_VIDEO_EXTENSIONS = {".mkv", ".mp4", ".avi", ".m4v", ".mov", ".ts", ".m2ts", ".wmv"}
+
+
+def _metadata_input_stem(value: str | Path) -> tuple[str, str]:
+    """Return (raw, stem/text) independent of the host OS path syntax."""
     raw = str(value)
-    path = Path(raw)
-    video_exts = {".mkv", ".mp4", ".avi", ".m4v", ".mov", ".ts", ".m2ts", ".wmv"}
-    text = path.stem if path.suffix.lower() in video_exts else raw
+    leaf = raw.replace("\\", "/").rsplit("/", 1)[-1]
+    leaf_path = Path(leaf)
+    text = leaf_path.stem if leaf_path.suffix.lower() in _VIDEO_EXTENSIONS else raw
+    return raw, text
+
+def parse_movie_query(value: str | Path) -> ParsedMovieQuery:
+    raw, text = _metadata_input_stem(value)
     text = re.sub(r"[_\s]?(H264|H265|AV1|HEVC|x265|x264)$", "", text, flags=re.I).strip()
     text = text.replace("_", " ").replace(".", " ")
     text = re.sub(r"\s+", " ", text).strip()
@@ -33,15 +41,12 @@ def parse_movie_query(value: str | Path) -> ParsedMovieQuery:
     )
     text = re.sub(cleanup_patterns, "", text, flags=re.I).strip(" -._")
     text = re.sub(r"\s+", " ", text).strip()
-    return ParsedMovieQuery(title=text or Path(str(value)).stem, year=year)
+    return ParsedMovieQuery(title=text or _metadata_input_stem(value)[1], year=year)
 
 
 def parse_series_query(value: str | Path) -> ParsedSeriesQuery:
     # DragonTools patch: series release normalization v1
-    raw = str(value)
-    path = Path(raw)
-    video_exts = {".mkv", ".mp4", ".avi", ".m4v", ".mov", ".ts", ".m2ts", ".wmv"}
-    text = path.stem if path.suffix.lower() in video_exts else raw
+    raw, text = _metadata_input_stem(value)
 
     # Normale Trenner vereinheitlichen. Bindestriche bleiben zunaechst erhalten,
     # damit Scene-/Release-Schemata wie "tvs-watson-eac3-..." erkennbar bleiben.
@@ -100,7 +105,7 @@ def parse_series_query(value: str | Path) -> ParsedSeriesQuery:
     text = re.sub(r"[-_.]+", " ", text)
     text = re.sub(r"\s+", " ", text).strip()
 
-    return ParsedSeriesQuery(title=text or Path(str(value)).stem, year=year)
+    return ParsedSeriesQuery(title=text or _metadata_input_stem(value)[1], year=year)
 
 
 def clean_tmdb_collection_name(value: str) -> str:
