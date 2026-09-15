@@ -9,6 +9,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable
 
+from .callback_dispatch import invoke_callback
 from .logger_messages import DragonLoggerMessageMixin
 from .logger_paths import (
     _fd, _fs, _ts, log_base_from_settings, log_settings_from_qsettings,
@@ -154,7 +155,7 @@ class DragonLogger(DragonLoggerMessageMixin):
                     print(f"[DragonLogger] Schreibfehler in Kurzlog '{self.log_file}': {exc}", file=sys.stderr)
         if to_gui and self.gui_callback:
             try:
-                self.gui_callback(line)
+                invoke_callback(self.gui_callback, line)
             except Exception as exc:
                 self._gui_callback_failures += 1
                 if not self._gui_failure_reported:

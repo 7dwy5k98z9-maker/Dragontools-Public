@@ -1,8 +1,19 @@
 from __future__ import annotations
 
-import xml.etree.ElementTree as ET
+import xml.etree.ElementTree as StdET
 from pathlib import Path
 from typing import Any
+
+from defusedxml import ElementTree as SafeET
+from defusedxml.common import DefusedXmlException
+
+# NFO files are metadata and should be small. A hard upper bound prevents a
+# malformed or hostile file from making the light scan consume unbounded RAM.
+MAX_NFO_BYTES = 8 * 1024 * 1024
+
+
+class NfoParseError(ValueError):
+    """Raised when an NFO cannot be parsed safely."""
 
 
 def _int_text(value: str | None) -> int | None:
@@ -22,7 +33,7 @@ def _nfo_type_for_root(tag: str) -> str:
     }.get(local, local or "unknown")
 
 
-def _child_text(root: ET.Element, *tags: str) -> str | None:
+def _child_text(root: StdET.Element, *tags: str) -> str | None:
     wanted = {tag.casefold() for tag in tags}
     for child in root:
         local = child.tag.rsplit("}", 1)[-1].casefold()
@@ -33,7 +44,7 @@ def _child_text(root: ET.Element, *tags: str) -> str | None:
     return None
 
 
-def _provider_ids(root: ET.Element) -> dict[str, str]:
+def _provider_ids(root: StdET.Element) -> dict[str, str]:
     result: dict[str, str] = {}
     ignored_generic_ids = {
         "musicbrainzalbum",
@@ -61,8 +72,30 @@ def _provider_ids(root: ET.Element) -> dict[str, str]:
     return result
 
 
+def _read_bounded_nfo(path: Path) -> bytes:
+    """Read at most MAX_NFO_BYTES + 1 so the memory bound is race-safe."""
+    with path.open("rb") as handle:
+        payload = handle.read(MAX_NFO_BYTES + 1)
+    if len(payload) > MAX_NFO_BYTES:
+        raise NfoParseError(
+            f"NFO ist zu groß ({len(payload)} Byte gelesen; Limit {MAX_NFO_BYTES} Byte): {path}"
+        )
+    return payload
+
+
 def parse_nfo(path: str | Path) -> dict[str, Any]:
-    root = ET.parse(Path(path)).getroot()
+    nfo_path = Path(path)
+    payload = _read_bounded_nfo(nfo_path)
+    try:
+        root = SafeET.fromstring(
+            payload,
+            forbid_dtd=True,
+            forbid_entities=True,
+            forbid_external=True,
+        )
+    except (StdET.ParseError, DefusedXmlException, ValueError) as exc:
+        raise NfoParseError(f"NFO-XML konnte nicht sicher geparst werden: {nfo_path}: {exc}") from exc
+
     return {
         "nfo_type": _nfo_type_for_root(root.tag),
         "title": _child_text(root, "title"),
@@ -74,3 +107,6 @@ def parse_nfo(path: str | Path) -> dict[str, Any]:
         "runtime_minutes": _int_text(_child_text(root, "runtime")),
         "provider_ids": _provider_ids(root),
     }
+
+
+__all__ = ["MAX_NFO_BYTES", "NfoParseError", "parse_nfo"]

@@ -16,6 +16,8 @@ from .media_library_utils import _normalize_stream_type
 _INITIALIZED_DATABASE_KEYS: set[str] = set()
 _INITIALIZED_DATABASE_LOCK = Lock()
 
+from .media_library_sql_safety import sql_is_read_only as _sql_is_read_only
+
 
 def _online_backup_database(
     source: Path,
@@ -145,14 +147,8 @@ def cleanup_inactive_media_items(db_path: str | Path, *, backup: bool = True) ->
 
 
 def sql_is_read_only(sql: str) -> bool:
-    """Nur reine SELECT-Anweisungen gelten konservativ als read-only."""
-    statement = (sql or "").lstrip()
-    while statement.startswith("--"):
-        newline = statement.find("\n")
-        if newline < 0:
-            return True
-        statement = statement[newline + 1 :].lstrip()
-    return statement.casefold().startswith("select")
+    """Konservative Read-only-Klassifikation für die SQL-Konsole."""
+    return _sql_is_read_only(sql)
 
 
 def execute_sql(

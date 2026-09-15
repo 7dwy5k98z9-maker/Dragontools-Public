@@ -38,7 +38,7 @@ class MoveThread(
 
     progress = pyqtSignal(int)
     move_eta = pyqtSignal(float)
-    finished = pyqtSignal(bool, bool)
+    batch_finished = pyqtSignal(bool, bool)
     request_user = pyqtSignal(str, dict)
     log_line = pyqtSignal(str)
     file_counted = pyqtSignal(int, int)
@@ -143,4 +143,4 @@ class MoveThread(
             self._log(traceback.format_exc(), "error")
         finally:
             self._finalize_journal()
-            self.finished.emit(moved_any, did_shut)
+            self.batch_finished.emit(moved_any, did_shut)

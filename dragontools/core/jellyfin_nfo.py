@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
+import uuid
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
@@ -248,13 +250,44 @@ def _frame_rate(value: Any) -> str:
 
 
 def _write_xml(path: Path, root: ET.Element) -> None:
+    """Write one NFO atomically in the destination directory.
+
+    A partially written XML must never replace a previously valid NFO.  The
+    temporary file deliberately lives beside the destination so ``os.replace``
+    stays atomic on the same filesystem/share.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
     _indent(root)
     body = ET.tostring(root, encoding="unicode", short_empty_elements=False)
-    path.write_text(
-        '<?xml version="1.0" encoding="utf-8" standalone="yes"?>\n' + body + "\n",
-        encoding="utf-8",
-    )
+    payload = '<?xml version="1.0" encoding="utf-8" standalone="yes"?>\n' + body + "\n"
+    temp = path.with_name(f".{path.name}.__dragontools_nfo__{uuid.uuid4().hex}.tmp")
+    try:
+        with temp.open("w", encoding="utf-8", newline="\n") as handle:
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(str(temp), str(path))
+        _fsync_parent_best_effort(path.parent)
+    finally:
+        try:
+            temp.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
+def _fsync_parent_best_effort(parent: Path) -> None:
+    """Persist the directory entry where supported without breaking Windows/SMB."""
+    if os.name == "nt":
+        return
+    fd = None
+    try:
+        fd = os.open(str(parent), os.O_RDONLY)
+        os.fsync(fd)
+    except OSError:
+        pass
+    finally:
+        if fd is not None:
+            os.close(fd)
 
 
 def _indent(elem: ET.Element, level: int = 0) -> None:

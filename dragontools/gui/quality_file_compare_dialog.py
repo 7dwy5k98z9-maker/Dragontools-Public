@@ -219,9 +219,16 @@ class QualityFileCompareDialog(QDialog):
             self._worker.cancel()
 
     def _finished(self) -> None:
+        worker = self._worker
+        outcome = str(getattr(worker, "outcome", "error") or "error")
         self._set_running(False)
         self._worker = None
-        self.log.appendPlainText("✅ Dateivergleich beendet.")
+        if outcome == "success":
+            self.log.appendPlainText("✅ Dateivergleich erfolgreich beendet.")
+        elif outcome == "cancelled":
+            self.log.appendPlainText("⏹ Dateivergleich abgebrochen.")
+        else:
+            self.log.appendPlainText("❌ Dateivergleich mit Fehler beendet.")
 
     def _set_running(self, running: bool) -> None:
         self.start_btn.setEnabled(not running)

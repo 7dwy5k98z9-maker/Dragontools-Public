@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Callable
 
+from ..core.callback_dispatch import invoke_callback
 from ..core.path_syntax import path_compare_key
 
 
@@ -130,11 +131,11 @@ class ConversionWorkerLifecycle:
         self._refresh_queue()
 
     def connect_worker_signals(self, worker, total_progress_slot) -> None:
-        worker.log_line.connect(self._log)
+        worker.log_line.connect(lambda message: invoke_callback(self._log, message))
         worker.file_progress.connect(self._result_service.on_file_progress)
         worker.file_result.connect(self._progress.on_file_result_cleanup)
         worker.file_result.connect(self._result_service.on_file_result)
-        worker.progress.connect(total_progress_slot)
+        worker.progress.connect(lambda value: invoke_callback(total_progress_slot, value))
         if hasattr(worker, "dv_crop_decision_requested"):
             from .dv_crop_dialog import show_dv_crop_decision
             worker.dv_crop_decision_requested.connect(

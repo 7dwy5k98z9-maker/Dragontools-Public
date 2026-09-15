@@ -22,7 +22,6 @@ class QualityCompareThread(QThread):
     progress = pyqtSignal(int)
     result_ready = pyqtSignal(object)
     summary_ready = pyqtSignal(object)
-    finished = pyqtSignal()
 
     def __init__(self, file_a: str, file_b: str, *, sample_count: int = 3, sample_duration_s: int = 20,
                  manual_ranges: str = "", offset_b_s: float = 0.0, parent=None) -> None:
@@ -39,6 +38,7 @@ class QualityCompareThread(QThread):
         self._abort = False
         self.abort_requested = False
         self.abort_type: str | None = None
+        self.outcome: str = "pending"
         self._process_runner = QualityProcessRunner(worker=self, log=self.log_line.emit, prefix="Qualitätsvergleich")
         self._metrics = QualityMetricsService(ffmpeg=self.tools.ffmpeg, process_runner=self._process_runner)
         self._service = QualityCompareService(
@@ -64,13 +64,14 @@ class QualityCompareThread(QThread):
     def run(self) -> None:
         try:
             self._run()
+            self.outcome = "cancelled" if self.abort_requested else "success"
         except Exception:
+            self.outcome = "error"
             self.log_line.emit("❌ Unbehandelte Ausnahme im Dateivergleich:")
             self.log_line.emit(traceback.format_exc())
         finally:
             with self._process_lock:
                 self.current_process = None
-            self.finished.emit()
 
     def _run(self) -> None:
         self._service.run(

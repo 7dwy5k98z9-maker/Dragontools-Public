@@ -66,8 +66,12 @@ def validate_output_size_policy(
     """
     input_path_obj = Path(input_path)
     output_path_obj = Path(output_path)
-    if not input_path_obj.exists() or not output_path_obj.exists():
-        return True, None
+    if not output_path_obj.exists():
+        _log_warn(logger, "[WARN] Ausgabedatei fehlt; Ersetzen wird verweigert.")
+        return False, None
+    if not input_path_obj.exists():
+        _log_warn(logger, "[WARN] Quelldatei fehlt; Größenprüfung und Ersetzen werden verweigert.")
+        return False, None
 
     input_size = input_path_obj.stat().st_size
     output_size = output_path_obj.stat().st_size

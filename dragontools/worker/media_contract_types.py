@@ -27,9 +27,12 @@ class ExpectedMediaContract:
     min_video_bit_depth: int | None = None
     require_hdr: bool = False
     require_dolby_vision: bool = False
+    expected_dolby_vision_profile: int | None = None
     require_hdr10plus: bool = False
     expected_width: int | None = None
     expected_height: int | None = None
+    attachment_stream_count: int | None = None
+    data_stream_count: int | None = None
 
     @property
     def audio_stream_count(self) -> int:

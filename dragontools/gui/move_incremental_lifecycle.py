@@ -7,6 +7,7 @@ from pathlib import Path
 from PyQt6.QtCore import QSettings
 from PyQt6.QtWidgets import QMessageBox
 
+from ..core.callback_dispatch import invoke_callback
 from ..core.settings_app import APP_NAME, APP_ORG
 from ..core.settings_storage import SET_KEY_MOVE_CONFLICT
 from .move_lifecycle_helpers import (
@@ -117,17 +118,20 @@ class IncrementalMoveLifecycle:
             all_video_files=list(getattr(ui.file_list, "get_paths", lambda: [])()),
             conflict_mode=conflict_mode,
             log_file_path=log_file_path,
-            sidecar_outputs_by_video=dict(state.sidecar_outputs_by_video),
+            sidecar_outputs_by_video=state.sidecars_for_move(),
         )
         state.move_thread = move_thread
-        move_thread.log_line.connect(self._log)
-        move_thread.request_user.connect(self._on_move_req)
+        move_thread.log_line.connect(lambda message: invoke_callback(self._log, message))
+        move_thread.request_user.connect(
+            lambda request_id, payload: invoke_callback(self._on_move_req, request_id, payload)
+        )
         move_thread.file_counted.connect(
             lambda done, total: self._log(f"📦 Zwischenverschieben: {done}/{total}", "info")
         )
         ui.move_finished_btn.setEnabled(False)
         self._refresh_queue()
-        move_thread.finished.connect(lambda *_args, thread=move_thread: self.finish(thread))
+        result_signal = getattr(move_thread, "batch_finished", None) or move_thread.finished
+        result_signal.connect(lambda *_args, thread=move_thread: self.finish(thread))
         move_thread.start()
 
     def finish(self, move_thread=None) -> None:
@@ -170,10 +174,9 @@ class IncrementalMoveLifecycle:
     def _consume_moved_outputs(self, move_log: list) -> None:
         state = self._state
         for output_path in successful_video_sources(move_log):
-            state.fertig.discard(output_path)
-            state.sidecar_outputs_by_video.pop(output_path, None)
-            state.planned_targets.pop(output_path, None)
-            for input_path in input_paths_for_output(state.run_results, output_path):
+            result_inputs = input_paths_for_output(state.run_results, output_path)
+            consumed_inputs = state.consume_moved_output(output_path)
+            for input_path in dict.fromkeys([*result_inputs, *consumed_inputs]):
                 self._set_file_text(input_path, f"📦 Verschoben  {Path(input_path).name}")
 
     def _log_finish(self, move_ok: int, move_errors: int) -> None:

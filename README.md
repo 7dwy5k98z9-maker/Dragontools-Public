@@ -1,9 +1,19 @@
-# DragonTools V9.8.2
+# DragonTools V9.8.3
 
 DragonTools ist eine Windows-Anwendung zur Analyse, Konvertierung und Verwaltung von Video-, Audio- und Untertiteldateien. Das Projekt bündelt die benötigten Drittanbieterprogramme nicht im Git-Repository. Sie müssen separat von den jeweiligen Projektseiten heruntergeladen werden.
 
 
-## Aktueller Entwicklungsstand – 13.09.2026
+## Stabilitätsstand 9.8.3 – 14.09.2026
+
+- Cleanup-Warnungen und Fehler bleiben terminal erhalten. Hintergrund-Nachbearbeitung darf daraus keinen Erfolg machen; Auto-Move bleibt für solche Ergebnisse gesperrt.
+- Nachbearbeitungsaufträge besitzen eigene Prozess-Slots. Timeout, Abbruch und Pause verwenden die konkrete Prozessinstanz; ein lokaler Auftrag darf keinen parallelen Auftrag beenden. Ein ausdrücklich angeforderter Batch-Abbruch gilt weiterhin für den gesamten Batch.
+- Normaler MP4-Remux prüft Abbruch erneut nach Sidecar-Arbeit und unmittelbar in der finalen Dateitransaktion. Vor dem Commit eingegangene Abbrüche erhalten das Original und rollen Sidecars zurück. Ein unvollständiger Rollback bewahrt Staging und Journal zur Recovery.
+
+Abbruch ist kooperativ: Ein bereits abgeschlossenes atomares Dateisystem-Replace kann nicht rückwirkend verhindert werden. Die Prüfung liegt unmittelbar vor dem Commit und beim Containerwechsel nochmals vor dem Original-Cleanup; bei einem dort erkannten Abbruch wird die Installation zurückgerollt. Bereits sicher installierte Ausgaben werden nicht blind gelöscht.
+
+Die nachfolgende Bestandsbeschreibung und deren damalige Testzahlen dokumentieren den historischen Stand 9.8.2. Aktuelle Validierungsergebnisse stehen in PATCH_MANIFEST.json und patch.md.
+
+## Historischer Entwicklungsstand 9.8.2 – 13.09.2026
 
 Der aktuelle V9.8.2-Stand wurde nach den Datenbank-/Metadaten-Patches in zwölf größeren Refactoring- und Stabilitätsblöcken und anschließend mit dem kumulativen Technical Review Patch v4 weiter zerlegt. Ziel war nicht, nur Dateien kleiner zu machen, sondern GUI, Orchestrierung, Datenbankzugriff, Dateisystem-I/O, externe Tools und reine Fachlogik klarer voneinander zu trennen. Bestehende Importpfade bleiben dort über schmale Kompatibilitätsfassaden erhalten, wo Worker, Tests oder andere Module darauf angewiesen sind.
 
@@ -180,7 +190,7 @@ Kontrolliere anschließend, dass alle externen Werkzeuge unter `third_party` vor
 build_v9.bat
 ```
 
-Der fertige Build wird unter `dist/DragonToolsV9.8.2/` abgelegt. `build/` und `dist/` sind lokale Ausgaben und werden nicht in Git gespeichert.
+Der fertige Build wird unter `dist/DragonToolsV9.8.3/` abgelegt. `build/` und `dist/` sind lokale Ausgaben und werden nicht in Git gespeichert.
 
 ## Programm-Updates über GitHub
 

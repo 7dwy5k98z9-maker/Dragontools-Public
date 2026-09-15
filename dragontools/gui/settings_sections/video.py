@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
-from PyQt6.QtWidgets import QComboBox, QGridLayout, QGroupBox, QLabel, QSpinBox
+from PyQt6.QtWidgets import QCheckBox, QComboBox, QGridLayout, QGroupBox, QLabel, QSpinBox
 from ...core import settings as cfg
 from ..info_button import InfoButton
 from .base import SettingsSection
@@ -38,8 +38,25 @@ class VideoAnalysisSection(SettingsSection):
         cg.addWidget(InfoButton(
             "Gilt für Dolby Vision, DV+HDR10+ und den separaten DV-Remux-Button. "
             "MP4 wird streamingoptimiert mit MP4Box gemuxt; MKV über mkvmerge. "
-            "Der Videostream bleibt beim DV-Remux unverändert."
+            "Beim DV-Remux kann Profil 7 abhängig von der Remux-Policy verlustfrei "
+            "beibehalten oder zu Profil 8.1 normalisiert werden."
         ), 2, 2)
+
+        d.dv_remux_keep_dv7_mkv_cb = QCheckBox("DV7 bei MKV-Remux beibehalten")
+        cg.addWidget(d.dv_remux_keep_dv7_mkv_cb, 3, 0, 1, 2)
+        cg.addWidget(InfoButton(
+            "Nur für DV-Remux nach MKV. Aktiv: Profil 7 bleibt als Profil 7 erhalten. "
+            "Aus (Standard): Profil 7 wird mit dovi_tool Mode 2 nach DV 8.1 normalisiert. "
+            "Bei MP4 wird Profil 7 unabhängig von dieser Option immer nach DV 8.1 normalisiert."
+        ), 3, 2)
+
+        d.dv_remux_encode_dv5_cb = QCheckBox("DV5 bei Remux automatisch encodieren")
+        cg.addWidget(d.dv_remux_encode_dv5_cb, 4, 0, 1, 2)
+        cg.addWidget(InfoButton(
+            "Profil 5 kann nicht als einfacher HDR10/DV8.1-Remux behandelt werden. "
+            "Aktiv (Standard): DragonTools übergibt die Datei automatisch an den normalen "
+            "H.265-Dolby-Vision-Encodingpfad. Aus: die Datei wird im DV-Remux übersprungen."
+        ), 4, 2)
         vl.addWidget(container_grp)
 
         # ── Auto-Crop ─────────────────────────────────────────────────────
@@ -156,6 +173,20 @@ class VideoAnalysisSection(SettingsSection):
         )
         idx = d.dv_container_combo.findData(dv_container)
         d.dv_container_combo.setCurrentIndex(idx if idx >= 0 else 0)
+        d.dv_remux_keep_dv7_mkv_cb.setChecked(
+            bool(s.value(
+                cfg.SET_KEY_DV_REMUX_KEEP_DV7_MKV,
+                cfg.DEFAULT_DV_REMUX_KEEP_DV7_MKV,
+                type=bool,
+            ))
+        )
+        d.dv_remux_encode_dv5_cb.setChecked(
+            bool(s.value(
+                cfg.SET_KEY_DV_REMUX_ENCODE_DV5,
+                cfg.DEFAULT_DV_REMUX_ENCODE_DV5,
+                type=bool,
+            ))
+        )
         autocrop_mode = s.value(cfg.SET_KEY_AUTOCROP_MODE, cfg.DEFAULT_AUTOCROP_MODE, type=str)
         idx = d.autocrop_mode_combo.findData(autocrop_mode)
         d.autocrop_mode_combo.setCurrentIndex(idx if idx >= 0 else 0)
@@ -172,6 +203,8 @@ class VideoAnalysisSection(SettingsSection):
         d, s = self.dialog, self.settings
         s.setValue(cfg.SET_KEY_OUTPUT_CONTAINER_STANDARD, d.standard_container_combo.currentData() or cfg.DEFAULT_OUTPUT_CONTAINER_STANDARD)
         s.setValue(cfg.SET_KEY_OUTPUT_CONTAINER_DV, d.dv_container_combo.currentData() or cfg.DEFAULT_OUTPUT_CONTAINER_DV)
+        s.setValue(cfg.SET_KEY_DV_REMUX_KEEP_DV7_MKV, d.dv_remux_keep_dv7_mkv_cb.isChecked())
+        s.setValue(cfg.SET_KEY_DV_REMUX_ENCODE_DV5, d.dv_remux_encode_dv5_cb.isChecked())
         s.setValue(cfg.SET_KEY_AUTOCROP_MODE, d.autocrop_mode_combo.currentData() or cfg.DEFAULT_AUTOCROP_MODE)
         s.setValue(cfg.SET_KEY_AUTOCROP_PROBE_START, d.autocrop_start_spin.value())
         s.setValue(cfg.SET_KEY_AUTOCROP_PROBE_DURATION, d.autocrop_duration_spin.value())

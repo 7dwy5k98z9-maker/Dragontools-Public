@@ -109,11 +109,15 @@ class OutputVerifier:
         verified_dolby_vision: bool,
     ) -> None:
         videos, audios, subtitles = probe.video_streams, probe.audio_streams, probe.subtitle_streams
+        attachments = [stream for stream in probe.streams if stream.get("codec_type") == "attachment"]
+        data_streams = [stream for stream in probe.streams if stream.get("codec_type") == "data"]
         result.format_name = probe.format_name
         result.duration_s = probe.duration_s
         result.video_stream_count = len(videos)
         result.audio_stream_count = len(audios)
         result.subtitle_stream_count = len(subtitles)
+        result.attachment_stream_count = len(attachments)
+        result.data_stream_count = len(data_streams)
         result.probe_ok = probe.usable
         result.video_ok = bool(videos)
         result.audio_ok = True if expected_contract is not None else ((not source_has_audio) or bool(audios))
@@ -142,7 +146,10 @@ class OutputVerifier:
         if not result.duration_ok:
             result.messages.append("Ausgabedauer ist nicht plausibel.")
         if expected_contract is not None:
-            apply_contract(result, expected_contract, video_streams=videos, audio_streams=audios, subtitle_streams=subtitles)
+            apply_contract(
+                result, expected_contract, video_streams=videos, audio_streams=audios,
+                subtitle_streams=subtitles, attachment_streams=attachments, data_streams=data_streams,
+            )
 
     @staticmethod
     def _mark_unprobeable(result, source_has_audio, expected_contract) -> None:

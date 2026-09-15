@@ -100,11 +100,27 @@ class ConversionConfigBuilder:
 
     def dv_remux_options(self) -> dict:
         """Liefert die fachlichen Parameter für den DVRemuxThread."""
+        fallback = self.build_converter_config()
+        fallback.codec = "h265"
+        fallback.strip_only = False
+        if self._default_codec != "h265":
+            # The DV5 fallback must always enter the HEVC/DV pipeline.  Values
+            # from an AV1/H.264 tab (e.g. AV1 preset "6") are not valid x265
+            # defaults, therefore use the established H.265 baseline here.
+            fallback.crf = 22
+            fallback.preset = "medium"
+        fallback.encoder_options = dict(fallback.encoder_options or {})
+        fallback.encoder_options["preserve_dv"] = True
+        fallback.encoder_options["preserve_hdrplus"] = False
+        fallback.tv_path = None
+        fallback.anime_path = None
+        fallback.filme_path = None
         return {
             "overwrite_original": bool(self._ui.over_cb.isChecked()),
             "encoder_options": self._collect_encoder_options(),
             "file_overrides": dict(self._state.file_overrides),
             "subtitle_rules": self.subtitle_rules(),
+            "dv5_fallback_config": fallback,
         }
 
 

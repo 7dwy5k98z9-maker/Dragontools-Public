@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Iterable
 
+from ..core.callback_dispatch import invoke_callback
 from .move_completion_service import MoveCompletionService
 
 
@@ -47,12 +48,12 @@ class MoveProgressTracker:
 
     def update(self, chunk_size: int) -> None:
         self._bytes_done += int(chunk_size)
-        self._emit_progress(min(int(self._bytes_done / self._total * 100), 99))
+        invoke_callback(self._emit_progress, min(int(self._bytes_done / self._total * 100), 99))
         elapsed = time.time() - self._started
         if elapsed <= 0 or self._bytes_done <= 0:
             return
         eta = elapsed / self._bytes_done * (self._total - self._bytes_done)
-        self._emit_eta(max(0.0, eta))
+        invoke_callback(self._emit_eta, max(0.0, eta))
 
 
 @dataclass
@@ -132,7 +133,7 @@ class MoveBatchExecutor:
                 self._mark_file_error(path, "Quelldatei nicht gefunden", "Nicht gefunden")
                 result.error_count += 1
                 files_done += 1
-                self._file_counted(files_done, total_files)
+                invoke_callback(self._file_counted, files_done, total_files)
                 continue
 
             target = self._router.route(path)
@@ -140,7 +141,7 @@ class MoveBatchExecutor:
                 self._mark_file_error(path, "Kein gültiges Verschiebeziel ermittelt", "übersprungen")
                 result.error_count += 1
                 files_done += 1
-                self._file_counted(files_done, total_files)
+                invoke_callback(self._file_counted, files_done, total_files)
                 continue
 
             self._log(f"Move: {Path(path).name}\n   -> {str(target).replace('/', chr(92))}", "info")
@@ -184,7 +185,7 @@ class MoveBatchExecutor:
                 result.error_count += 1
                 self._finish_failed_move(path, move_result)
 
-            self._file_counted(files_done, total_files)
+            invoke_callback(self._file_counted, files_done, total_files)
             if self._abort_type() == "nach_datei":
                 break
 

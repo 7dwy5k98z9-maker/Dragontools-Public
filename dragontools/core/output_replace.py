@@ -48,6 +48,7 @@ def commit_staged_output(
     journal_root: str | Path | None = None,
     min_size: int = 1,
     remove_source: RemoveFn | None = None,
+    abort_check: Callable[[], bool] | None = None,
 ) -> OutputCommitResult:
     """Installiert ``staging`` als ``destination`` und schuetzt ``source``.
 
@@ -87,6 +88,7 @@ def commit_staged_output(
             destination=destination_path,
             log=log,
             journal_root=journal_root,
+            abort_check=abort_check,
         )
 
     return _commit_container_change(
@@ -96,6 +98,7 @@ def commit_staged_output(
         log=log,
         journal_root=journal_root,
         remove_source=remove_source or os.remove,
+        abort_check=abort_check,
     )
 
 
@@ -106,6 +109,7 @@ def _commit_same_path(
     destination: Path,
     log: LogFn,
     journal_root: str | Path | None,
+    abort_check: Callable[[], bool] | None = None,
 ) -> OutputCommitResult:
     backup = unique_backup_path(destination)
     transaction = PathSwapTransaction(
@@ -125,8 +129,17 @@ def _commit_same_path(
     )
 
     try:
-        transaction.commit()
+        _check_commit_abort(abort_check)
+        transaction.commit(on_backup=lambda *_: _check_commit_abort(abort_check))
         journal.set_status("committed")
+        if abort_check is not None and abort_check():
+            aborted = RuntimeError("Abgebrochen vor Replace-Backup-Cleanup")
+            try:
+                os.replace(str(destination), str(staging))
+                transaction.rollback()
+            except OSError as exc:
+                raise PathTransactionRollbackError(aborted, exc, backup) from exc
+            raise aborted
     except PathTransactionRollbackError as exc:
         journal.set_status("rollback_failed", message=str(exc))
         log(
@@ -170,6 +183,7 @@ def _commit_container_change(
     log: LogFn,
     journal_root: str | Path | None,
     remove_source: RemoveFn,
+    abort_check: Callable[[], bool] | None = None,
 ) -> OutputCommitResult:
     journal = ReplaceJournal.start(
         source=source,
@@ -181,6 +195,7 @@ def _commit_container_change(
     )
 
     try:
+        _check_commit_abort(abort_check)
         os.replace(str(staging), str(destination))
     except Exception:
         # Wenn der Commit sichtbar wurde, muss das Journal fuer Recovery aktiv
@@ -191,6 +206,14 @@ def _commit_container_change(
         raise
 
     journal.set_status("committed")
+
+    if abort_check is not None and abort_check():
+        # The original still exists. Undo the install before cleanup can remove
+        # it; the caller owns staging cleanup and sidecar rollback.
+        os.replace(str(destination), str(staging))
+        journal.set_status("rolled_back")
+        journal.finish()
+        raise RuntimeError("Abgebrochen vor Original-Cleanup")
 
     if source.resolve() != destination.resolve():
         try:
@@ -213,6 +236,11 @@ def _commit_container_change(
 
     journal.finish()
     return OutputCommitResult(destination=destination)
+
+
+def _check_commit_abort(abort_check) -> None:
+    if abort_check is not None and abort_check():
+        raise RuntimeError("Abgebrochen vor destruktivem Video-Commit")
 
 
 __all__ = ["OutputCommitResult", "commit_staged_output", "unique_backup_path"]

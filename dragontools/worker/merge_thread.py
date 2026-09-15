@@ -38,7 +38,6 @@ class MergeThread(MergeAnalysisMixin, MergePlanMixin, MergeExecutorMixin, BaseWo
     progress = pyqtSignal(int)
     file_progress = pyqtSignal(str, int, object)
     file_result = pyqtSignal(str, bool, str)
-    finished = pyqtSignal()
 
     def __init__(
         self,
@@ -113,7 +112,6 @@ class MergeThread(MergeAnalysisMixin, MergePlanMixin, MergeExecutorMixin, BaseWo
             self.file_result.emit(self.output_path or "", False, str(exc))
         finally:
             self.current_process = None
-            self.finished.emit()
 
     def _validate_request(self) -> str:
         if self.mode not in self.SUPPORTED_MODES:

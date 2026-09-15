@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import inspect
 from pathlib import Path
 from typing import Callable
 
@@ -22,7 +23,7 @@ class MoveCompletionService:
         self,
         *,
         journal,
-        move_sidecars: Callable[[str, str], dict],
+        move_sidecars: Callable[..., dict],
         record_media_library_move: Callable[[str, dict | None], None],
         append_move_report: Callable[[dict | None], None],
         log: Callable[[str, str], None],
@@ -60,6 +61,38 @@ class MoveCompletionService:
             )
         return ok, result
 
+    def _call_move_sidecars(
+        self,
+        sidecar_key: str,
+        target_dir: str,
+        dest_path: str,
+        source_video_path: str,
+    ) -> dict:
+        """Call the companion contract while preserving legacy adapters.
+
+        ``sidecar_key`` identifies the map entry that contains the companion paths.
+        ``source_video_path`` preserves the original video stem for rename+recovery
+        so ``Film.de.srt`` can still be rebased to a committed ``Film_01.mkv``.
+        """
+        try:
+            signature = inspect.signature(self._move_sidecars)
+            params = list(signature.parameters.values())
+            accepts_varargs = any(p.kind == inspect.Parameter.VAR_POSITIONAL for p in params)
+            positional = [
+                p for p in params
+                if p.kind in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
+            ]
+        except (TypeError, ValueError):
+            accepts_varargs = True
+            positional = []
+        if accepts_varargs or len(positional) >= 4:
+            return self._move_sidecars(
+                sidecar_key, target_dir, dest_path, source_video_path
+            )
+        if len(positional) >= 3:
+            return self._move_sidecars(sidecar_key, target_dir, dest_path)
+        return self._move_sidecars(sidecar_key, target_dir)
+
     def complete(
         self,
         *,
@@ -80,7 +113,9 @@ class MoveCompletionService:
             message=str(move_result.get("cleanup_message") or "") if cleanup_pending else "",
         )
 
-        sidecar_result = self._move_sidecars(sidecar_key, target_dir)
+        sidecar_result = self._call_move_sidecars(
+            sidecar_key, target_dir, dest_path, str(original_source or sidecar_key)
+        )
         if not bool(sidecar_result.get("ok", True)):
             failed_count = int(sidecar_result.get("failed", 0) or 0)
             message = f"{failed_count} Companion-Datei(en) konnten nicht abgeschlossen werden"

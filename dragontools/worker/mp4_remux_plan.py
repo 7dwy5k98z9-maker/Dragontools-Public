@@ -23,6 +23,8 @@ class MP4RemuxPlan:
     command: tuple[str, ...]
     duration_s: float
     audio_plan: tuple[Any, ...]
+    expected_audio_tracks: int
+    expected_subtitle_tracks: int
 
 
 class MP4RemuxPlanner:
@@ -150,9 +152,9 @@ class MP4RemuxPlanner:
             args += [f"-metadata:s:a:{out_idx}", f"title={title}"]
         return args
 
-    def build_subtitle_args(self, media_info) -> list[str]:
+    def build_subtitle_args_with_count(self, media_info) -> tuple[list[str], int]:
         if not self.export_subtitles or self.ignore_subtitles:
-            return ["-sn"]
+            return ["-sn"], 0
         subtitle_plan = compute_subtitle_plan(
             list(getattr(media_info, "subtitle_streams", []) or []),
             audio_streams=list(getattr(media_info, "audio_streams", []) or []),
@@ -166,10 +168,11 @@ class MP4RemuxPlanner:
             subtitle_rules=self.subtitle_rules,
             preserve_burn_candidate=True,
         )
-        if not storage.internal_streams:
-            return ["-sn"]
+        internal = list(storage.internal_streams or [])
+        if not internal:
+            return ["-sn"], 0
         args: list[str] = []
-        for out_idx, stream in enumerate(storage.internal_streams):
+        for out_idx, stream in enumerate(internal):
             args += ["-map", f"0:{stream.index}", f"-c:s:{out_idx}", "mov_text"]
             if getattr(stream, "language", None):
                 args += [
@@ -183,7 +186,11 @@ class MP4RemuxPlanner:
                 f"-disposition:s:{out_idx}",
                 "forced" if bool(getattr(stream, "forced", False)) else "0",
             ]
-        return args
+        return args, len(internal)
+
+    def build_subtitle_args(self, media_info) -> list[str]:
+        # Kompatibilitätsfassade für bestehende Tests/Plugins.
+        return self.build_subtitle_args_with_count(media_info)[0]
 
     def build(self, input_path: str, output_path: str, media_info) -> MP4RemuxPlan:
         source = Path(input_path)
@@ -194,6 +201,7 @@ class MP4RemuxPlanner:
             staging = destination.with_name(f"{destination.stem}.__mp4_remux_tmp__.mp4")
 
         audio_plan = self.build_audio_plan(media_info)
+        subtitle_args, expected_subtitle_tracks = self.build_subtitle_args_with_count(media_info)
         command: list[str] = [
             self.ffmpeg_path,
             "-y",
@@ -211,7 +219,7 @@ class MP4RemuxPlanner:
             "-c:v",
             "copy",
             *self.build_audio_args(audio_plan),
-            *self.build_subtitle_args(media_info),
+            *subtitle_args,
         ]
         if self.faststart:
             command += ["-movflags", "+faststart"]
@@ -223,6 +231,8 @@ class MP4RemuxPlanner:
             command=tuple(command),
             duration_s=float(getattr(media_info, "duration_s", 0.0) or 0.0),
             audio_plan=tuple(audio_plan or ()),
+            expected_audio_tracks=len(tuple(audio_plan or ())),
+            expected_subtitle_tracks=expected_subtitle_tracks,
         )
 
 

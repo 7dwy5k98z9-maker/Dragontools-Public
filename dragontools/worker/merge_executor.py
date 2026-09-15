@@ -8,6 +8,7 @@ from typing import Any
 
 from ..core.timeout_settings import get_timeout
 from .merge_common import MergeUserAbortError
+from .merge_output_verifier import MergeOutputVerifier
 from .tool_runner import run_tool
 
 
@@ -33,12 +34,12 @@ class MergeExecutorMixin:
         self.file_progress.emit(output_path, 50, "Merge läuft")
 
         if container == "mkv":
-            return self._merge_mkv_lossless(files, output_path)
+            return self._merge_mkv_lossless(files, output_path, infos=list(plan.get("infos") or []))
 
         self._log(f"Kein lossless Merge-Pfad für '.{container}' vorhanden.", "error")
         return False
 
-    def _merge_mkv_lossless(self, files: list[str], output_path: str) -> bool:
+    def _merge_mkv_lossless(self, files: list[str], output_path: str, *, infos: list[dict[str, Any]] | None = None) -> bool:
         output = Path(output_path)
         temp_output = output.with_name(f"{output.name}.__merge_tmp__")
         output.parent.mkdir(parents=True, exist_ok=True)
@@ -88,6 +89,9 @@ class MergeExecutorMixin:
                 self._log("mkvmerge lieferte keine gültige Ausgabedatei.", "error")
                 self._cleanup_partial_output(temp_output)
                 return False
+            if not self._verify_merge_output(temp_output, infos or []):
+                self._cleanup_partial_output(temp_output)
+                return False
             if output.exists() and output.resolve() != temp_output.resolve():
                 self._log(
                     f"Zieldatei existiert bereits und wird nicht überschrieben: {output.name}",
@@ -116,6 +120,26 @@ class MergeExecutorMixin:
         except MergeUserAbortError:
             self._cleanup_partial_output(temp_output)
             raise
+
+    def _verify_merge_output(self, output: Path, infos: list[dict[str, Any]]) -> bool:
+        if not infos:
+            # Direkte Legacy-Aufrufe ohne Analyseplan bleiben kompatibel; der
+            # normale Produktivpfad liefert immer infos und wird fail-closed geprüft.
+            return True
+        first = infos[0]
+        expected_duration_s = sum(max(0.0, float(info.get("duration_s") or 0.0)) for info in infos)
+        verifier = MergeOutputVerifier(ffprobe_path=str(self.tools.ffprobe))
+        result = verifier.verify(
+            output_path=str(output),
+            expected_duration_ms=(int(expected_duration_s * 1000) if expected_duration_s > 0 else None),
+            expected_audio_tracks=len(list(first.get("audio_structure") or [])),
+            expected_subtitle_tracks=len(list(first.get("subtitle_structure") or [])),
+        )
+        if result.ok:
+            return True
+        details = "; ".join(result.messages) or "unbekannter Verifikationsfehler"
+        self._log(f"Merge-Ausgabevalidierung fehlgeschlagen: {details}", "error")
+        return False
 
     def _remove_stale_temp(self, temp_output: Path) -> bool:
         try:

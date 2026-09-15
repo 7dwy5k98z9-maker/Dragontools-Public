@@ -31,7 +31,7 @@ def _check_runtime_environment(root: Path) -> ReleaseCheck:
             "requirements-runtime.txt fehlt; das Quellpaket ist nicht reproduzierbar installierbar.",
         )
     declared = _requirement_names(requirements)
-    required = {"pyqt6", "cryptography"}
+    required = {"pyqt6", "cryptography", "defusedxml"}
     missing = sorted(required - declared)
     if missing:
         return ReleaseCheck(
@@ -42,7 +42,7 @@ def _check_runtime_environment(root: Path) -> ReleaseCheck:
     return ReleaseCheck(
         "ok",
         "Runtime-Abhängigkeiten",
-        "PyQt6 und cryptography sind als zwingende Runtime-Abhängigkeiten deklariert.",
+        "PyQt6, cryptography und defusedxml sind als zwingende Runtime-Abhängigkeiten deklariert.",
     )
 
 
@@ -75,9 +75,10 @@ def _check_build_environment(root: Path) -> ReleaseCheck:
     runtime_requirements = root / "requirements-runtime.txt"
     optional_requirements = root / "requirements-optional.txt"
     requirements = root / "requirements-build.txt"
+    build_script = root / "build_v9.bat"
     missing_files = [
         path.name
-        for path in (runtime_requirements, optional_requirements, requirements)
+        for path in (runtime_requirements, optional_requirements, requirements, build_script)
         if not path.is_file()
     ]
     if missing_files:
@@ -110,6 +111,14 @@ def _check_build_environment(root: Path) -> ReleaseCheck:
             "error",
             "Build-Umgebung",
             "requirements-build.txt bindet nicht ein: " + ", ".join(missing_includes),
+        )
+
+    build_text = build_script.read_text(encoding="utf-8", errors="replace").casefold()
+    if "defusedxml" not in build_text:
+        return ReleaseCheck(
+            "error",
+            "Build-Umgebung",
+            "build_v9.bat prueft die zwingende Runtime-Abhaengigkeit defusedxml nicht fail-fast.",
         )
 
     return ReleaseCheck(
@@ -193,7 +202,15 @@ def _check_ci_workflow(root: Path) -> ReleaseCheck:
         "DRAGONTOOLS_REQUIRE_QT_TESTS",
         "QT_QPA_PLATFORM",
         "requirements-test.txt",
+        "cache-dependency-path:",
+        "requirements-runtime.txt",
+        "requirements-optional.txt",
         "not dv_hdr_integration",
+        "ruff check",
+        "--select E9,F821,F822,F823",
+        "DRAGONTOOLS_REQUIRE_DV_HDR_INTEGRATION",
+        "self-hosted",
+        "dragontools-media",
     )
     missing = [token for token in required_tokens if token not in text]
     if missing:
@@ -205,7 +222,7 @@ def _check_ci_workflow(root: Path) -> ReleaseCheck:
     return ReleaseCheck(
         "ok",
         "CI-Workflow",
-        "Linux-/Windows-CI erzwingt Qt; reale DV/HDR-Tests sind als kontrollierter separater Job definiert.",
+        "Linux-/Windows-CI erzwingt Qt und Ruff-F821/E9 mit explizitem pip-Cache-Vertrag; reale DV/HDR-Tests laufen strikt auf dem gelabelten self-hosted Windows-Runner.",
     )
 
 

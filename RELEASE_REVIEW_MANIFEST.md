@@ -1,3 +1,7 @@
+# DragonTools 9.8.3 Review-Stand
+
+Stand: 14.09.2026. Stabilitäts-Patch: siehe patch.md und PATCH_MANIFEST.json. Kein EXE-Build erstellt. Die folgenden Angaben sind ein historisches Reviewprotokoll, keine aktuelle Abnahme.
+
 # DragonTools – Release-/Refactoring-Review-Manifest
 
 **Stand:** 2026-09-13

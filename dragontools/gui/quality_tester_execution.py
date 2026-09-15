@@ -46,9 +46,16 @@ class QualityTesterExecutionMixin:
             self._worker.cancel()
 
     def _finished(self) -> None:
+        worker = self._worker
+        outcome = str(getattr(worker, "outcome", "error") or "error")
         self._set_running(False)
         self._worker = None
-        self._log("✅ Qualitätstest beendet.")
+        if outcome == "success":
+            self._log("✅ Qualitätstest erfolgreich beendet.")
+        elif outcome == "cancelled":
+            self._log("⏹ Qualitätstest abgebrochen.")
+        else:
+            self._log("❌ Qualitätstest mit Fehler beendet.")
 
     def _set_running(self, running: bool) -> None:
         self.start_btn.setEnabled(not running)

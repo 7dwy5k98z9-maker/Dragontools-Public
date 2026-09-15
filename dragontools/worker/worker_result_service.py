@@ -2,9 +2,12 @@
 from __future__ import annotations
 
 import time
+import threading
 from pathlib import Path
 from typing import Callable
 
+from ..core.callback_dispatch import invoke_callback
+from ..core.result_status import accepts_result
 from .worker_events import progress_event, result_event
 
 
@@ -44,15 +47,24 @@ class WorkerConversionResultService:
         self._file_result_emit = file_result_emit
         self._log = log
         self._failure_details = failure_details
+        self._result_lock = threading.RLock()
+        self._terminal_status: dict[str, str] = {}
 
     def emit_file_progress(self, path, pct, eta=None) -> None:
         event = progress_event(path, pct, eta)
-        self._event_emit(event)
-        self._file_progress_emit(path, event.percent or 0, eta)
+        invoke_callback(self._event_emit, event)
+        invoke_callback(self._file_progress_emit, path, event.percent or 0, eta)
 
     def emit_file_result(self, input_path: str, output_path: str, status: str) -> None:
-        self._event_emit(result_event(input_path, output_path, status))
-        self._file_result_emit(input_path, output_path, status)
+        # Serialize the decision AND signal delivery; concurrent Future callbacks
+        # must not enqueue an older success after a warning/error.
+        with self._result_lock:
+            if not accepts_result(self._terminal_status.get(input_path), status):
+                return
+            self._terminal_status[input_path] = status
+            invoke_callback(self._event_emit, result_event(input_path, output_path, status))
+            if self._terminal_status[input_path] == status:
+                invoke_callback(self._file_result_emit, input_path, output_path, status)
 
     def finalize_success(self, ctx) -> None:
         self.record_success(ctx)
@@ -60,7 +72,12 @@ class WorkerConversionResultService:
 
     def finalize_success_pending_postprocess(self, ctx) -> None:
         self.record_success(ctx)
-        self.emit_file_result(ctx.input_path, ctx.final_output_path or ctx.output_path, "🧩")
+        # AsyncPostProcessCoordinator announces the pending state before it
+        # attaches a completion callback. That ordering prevents a very fast
+        # postprocess from emitting ✅ before 🧩. Keep the legacy emission for
+        # coordinators/extensions that do not provide that guarantee.
+        if not bool(getattr(ctx, "postprocess_pending_announced", False)):
+            self.emit_file_result(ctx.input_path, ctx.final_output_path or ctx.output_path, "🧩")
 
     def record_success(self, ctx) -> None:
         final_output = ctx.final_output_path or ctx.output_path

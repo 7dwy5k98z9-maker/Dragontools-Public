@@ -5,10 +5,33 @@ from __future__ import annotations
 import json
 import os
 import threading
+import time
 import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+
+_TRANSIENT_WINDOWS_REPLACE_ERRORS = {5, 32, 33}
+_REPLACE_RETRY_DELAYS = (0.01, 0.025, 0.05, 0.10)
+
+
+def _replace_with_retry(source: Path, target: Path) -> None:
+    """Replace a file atomically, retrying transient Windows file locks.
+
+    Antivirus/indexer activity can briefly hold ``target`` open and make
+    ``os.replace`` fail with access denied/sharing/lock violations. Persistent
+    permission errors are still raised after the short bounded retry sequence.
+    """
+    for attempt in range(len(_REPLACE_RETRY_DELAYS) + 1):
+        try:
+            os.replace(str(source), str(target))
+            return
+        except OSError as exc:
+            winerror = getattr(exc, "winerror", None)
+            if winerror not in _TRANSIENT_WINDOWS_REPLACE_ERRORS or attempt >= len(_REPLACE_RETRY_DELAYS):
+                raise
+            time.sleep(_REPLACE_RETRY_DELAYS[attempt])
 
 
 def quarantine_corrupt_file(path: Path, *, tag: str = "corrupt") -> Path | None:
@@ -32,7 +55,7 @@ def quarantine_corrupt_file(path: Path, *, tag: str = "corrupt") -> Path | None:
         candidate = path.with_name(f"{stem}.{tag}_{stamp}_{counter}{suffix}")
         counter += 1
 
-    os.replace(str(path), str(candidate))
+    _replace_with_retry(path, candidate)
     return candidate
 
 
@@ -50,7 +73,7 @@ def atomic_write_json(path: Path, data: dict[str, Any]) -> None:
             handle.write(payload)
             handle.flush()
             os.fsync(handle.fileno())
-        os.replace(str(tmp), str(path))
+        _replace_with_retry(tmp, path)
     finally:
         try:
             tmp.unlink(missing_ok=True)

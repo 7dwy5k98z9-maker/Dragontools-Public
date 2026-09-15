@@ -196,10 +196,21 @@ def suggest_movie_metadata_for_file(path: str | Path, settings) -> MovieMetadata
         return None
 
 
-def suggest_series_metadata_for_name(value: str | Path, settings) -> SeriesMetadataSuggestion | None:
+def suggest_series_metadata_for_name(
+    value: str | Path,
+    settings,
+    *,
+    year: int | None = None,
+) -> SeriesMetadataSuggestion | None:
     try:
         client = client_from_settings_for(settings, "series", require_enabled=True)
-        return client.resolve_series_name(value)
+        if year is None:
+            return client.resolve_series_name(value)
+        from .online_metadata_parsing import parse_series_query
+        parsed = parse_series_query(value)
+        if not parsed.title:
+            return None
+        return client.resolve_series(parsed.title, year=int(year))
     except OnlineMetadataError:
         return None
 

@@ -116,6 +116,7 @@ class MergeAnalysisMixin:
                 "width": int(primary.width or 0),
                 "height": int(primary.height or 0),
                 "fps": fps,
+                "duration_s": float(getattr(media_info, "duration_s", 0.0) or 0.0),
                 "audio_structure": audio_signature(list(media_info.audio_streams or [])),
                 "subtitle_structure": subtitle_signature(
                     list(media_info.subtitle_streams or [])

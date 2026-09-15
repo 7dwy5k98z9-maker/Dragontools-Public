@@ -64,7 +64,7 @@ def test_runtime_dependency_check_rejects_missing_cryptography(tmp_path):
 
 def test_test_environment_must_include_runtime_requirements(tmp_path):
     (tmp_path / "requirements-runtime.txt").write_text(
-        "PyQt6>=6.4,<7\ncryptography>=42,<51\n", encoding="utf-8"
+        "PyQt6>=6.4,<7\ncryptography>=42,<51\ndefusedxml>=0.7.1,<1\n", encoding="utf-8"
     )
     (tmp_path / "requirements-test.txt").write_text(
         "pytest>=8\npytest-qt>=4.4\n", encoding="utf-8"

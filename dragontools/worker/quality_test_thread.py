@@ -20,7 +20,6 @@ class QualityTestThread(QThread):
     log_line = pyqtSignal(str)
     progress = pyqtSignal(int)
     result_ready = pyqtSignal(object)
-    finished = pyqtSignal()
 
     def __init__(self, files: list[str], output_dir: str, runs: list[dict], *, sample_count: int = 3,
                  sample_duration_s: int = 20, manual_ranges: str = "", parent=None) -> None:
@@ -37,6 +36,7 @@ class QualityTestThread(QThread):
         self._abort = False
         self.abort_requested = False
         self.abort_type: str | None = None
+        self.outcome: str = "pending"
         self._process_runner = QualityProcessRunner(worker=self, log=self.log_line.emit, prefix="Qualitätstest")
         self._metrics = QualityMetricsService(ffmpeg=self.tools.ffmpeg, process_runner=self._process_runner)
         self._service = QualityTestService(
@@ -55,13 +55,14 @@ class QualityTestThread(QThread):
     def run(self) -> None:
         try:
             self._run()
+            self.outcome = "cancelled" if self.abort_requested else "success"
         except Exception:
+            self.outcome = "error"
             self.log_line.emit("❌ Unbehandelte Ausnahme im Qualitätstester:")
             self.log_line.emit(traceback.format_exc())
         finally:
             with self._process_lock:
                 self.current_process = None
-            self.finished.emit()
 
     def _run(self) -> None:
         self._service.run(files=self.files, output_dir=self.output_dir, runs=self.runs, sample_count=self.sample_count,

@@ -30,6 +30,7 @@ class MP4RemuxFileService:
         emit_file_progress: Callable[[str, int, object], None],
         export_subtitles: bool,
         ignore_subtitles: bool,
+        output_verifier=None,
     ) -> None:
         self._planner = planner
         self._logger = logger
@@ -43,6 +44,7 @@ class MP4RemuxFileService:
         self._emit_file_progress = emit_file_progress
         self._export_subtitles_enabled = bool(export_subtitles)
         self._ignore_subtitles = bool(ignore_subtitles)
+        self._output_verifier = output_verifier
 
     def remux(
         self,
@@ -77,6 +79,7 @@ class MP4RemuxFileService:
         start_ts = time.time()
         size_before = plan.source.stat().st_size if plan.source.exists() else 0
         remux_complete = False
+        preserve_for_recovery = False
         exported_sidecars: list[str] = []
         sidecar_tx: SidecarCommitTransaction | None = None
         try:
@@ -96,6 +99,17 @@ class MP4RemuxFileService:
                 return self._fail(input_path, "Abgebrochen", log_error=False)
             if not plan.staging.exists() or plan.staging.stat().st_size <= 0:
                 return self._fail(input_path, "Ausgabedatei wurde nicht erzeugt.")
+
+            if self._output_verifier is not None:
+                verification = self._output_verifier.verify(
+                    output_path=str(plan.staging),
+                    expected_duration_ms=(int(plan.duration_s * 1000) if plan.duration_s > 0 else None),
+                    expected_audio_tracks=plan.expected_audio_tracks,
+                    expected_subtitle_tracks=plan.expected_subtitle_tracks,
+                )
+                if not verification.ok:
+                    details = "; ".join(verification.messages) or "unbekannter Verifikationsfehler"
+                    return self._fail(input_path, f"MP4-Ausgabevalidierung fehlgeschlagen: {details}")
 
             if self._should_export_sidecars():
                 export_result = self._export_sidecars(
@@ -119,6 +133,10 @@ class MP4RemuxFileService:
                 except RuntimeError as exc:
                     return self._fail(input_path, str(exc))
 
+            if self._abort_requested():
+                preserve_for_recovery = not self._rollback_sidecars(sidecar_tx)
+                return self._fail(input_path, "Abgebrochen vor finalem MP4-Commit", log_error=False)
+
             if plan.staging != plan.destination:
                 try:
                     commit_staged_output(
@@ -127,9 +145,10 @@ class MP4RemuxFileService:
                         destination=plan.destination,
                         log=self._log,
                         min_size=1,
+                        abort_check=self._abort_requested,
                     )
                 except Exception as exc:
-                    self._rollback_sidecars(sidecar_tx)
+                    preserve_for_recovery = not self._rollback_sidecars(sidecar_tx)
                     return self._fail(
                         input_path,
                         f"Finales MP4-Replace fehlgeschlagen: {exc}",
@@ -151,7 +170,7 @@ class MP4RemuxFileService:
             self._emit_file_result(input_path, True, str(plan.destination))
             return True
         finally:
-            if not remux_complete:
+            if not remux_complete and not preserve_for_recovery:
                 self._cleanup_partial(plan.staging)
                 self._cleanup_sidecars(exported_sidecars)
 
@@ -164,16 +183,18 @@ class MP4RemuxFileService:
         self._emit_file_result(input_path, False, message)
         return False
 
-    def _rollback_sidecars(self, transaction: SidecarCommitTransaction | None) -> None:
+    def _rollback_sidecars(self, transaction: SidecarCommitTransaction | None) -> bool:
         if transaction is None:
-            return
+            return True
         try:
             transaction.rollback()
             journal = getattr(transaction, "_dragontools_journal", None)
             if journal is not None:
                 journal.finish()
+            return True
         except SidecarCommitError as exc:
             self._log(f"Sidecar-Rollback unvollständig: {exc}", "error")
+            return False
 
     def _finish_sidecars(
         self,

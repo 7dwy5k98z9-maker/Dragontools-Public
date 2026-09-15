@@ -2,7 +2,6 @@
 """Table state and proposal presentation for the movie/series renamer."""
 from __future__ import annotations
 
-from dataclasses import replace
 from pathlib import Path
 
 from PyQt6.QtCore import Qt
@@ -12,14 +11,13 @@ from ..core.movie_renamer import (
     MovieRenameProposal,
     RenameProposal,
     SeriesRenameProposal,
-    build_series_target_filename,
     build_target_filename,
     parse_movie_release_name,
     parse_series_release_name,
     sanitize_filename_part,
 )
+from ..core.renamer_candidate_decision import apply_candidate_decision, base_candidate_warnings
 from ..core.path_syntax import path_compare_key
-from ..rules.renamer_rules import manual_review_below, minimum_candidate_score
 from .movie_renamer_view import WideCandidateComboBox
 from .movie_renamer_table_search import MovieRenamerTableSearchMixin
 
@@ -122,93 +120,26 @@ class MovieRenamerTableController(MovieRenamerTableSearchMixin):
         proposal = self.row_proposal(row)
         if proposal is None or not proposal.candidates:
             return
-        index = max(0, min(int(candidate_index), len(proposal.candidates) - 1))
-        selected = proposal.candidates[index]
-        source_path = Path(self.row_path(row))
-
-        warnings = list(self.base_candidate_warnings(proposal.warnings))
-        if isinstance(proposal, SeriesRenameProposal):
-            target_name = build_series_target_filename(
-                selected.series,
-                selected.season,
-                selected.episode,
-                selected.episode_title,
-                proposal.parsed.suffix,
-            )
-            # Show what was parsed from the source in the Series column; the
-            # online candidate remains visible in the dropdown.
-            self.set_item(row, self.columns.SERIES, proposal.parsed.series, editable=False)
-            year = selected.year or proposal.parsed.year
-        else:
-            target_name = build_target_filename(
-                selected.title,
-                selected.year or proposal.parsed.year,
-                proposal.parsed.suffix,
-            )
-            year = selected.year or proposal.parsed.year
-
-        target_path = source_path.with_name(target_name)
-        target_exists = target_path.exists() and path_compare_key(target_path) != path_compare_key(source_path)
-        status = "ok"
-        if target_exists:
-            status = "conflict"
-            warnings.append("Zieldatei existiert bereits.")
-        elif proposal.status == "fallback_ambiguous":
-            status = "fallback_ambiguous"
-            warnings.append("Letzte Fuzzy-Stufe liefert mehrere ähnlich schwache Treffer; bitte Kandidat manuell prüfen.")
-        elif float(getattr(proposal, "minimum_score_used", 0.0) or 0.0) <= 0.0 and getattr(proposal, "search_mode", "auto") != "auto":
-            status = "manual_review"
-            warnings.append("Manuelle Trefferliste: Auswahl bitte prüfen.")
-        elif float(getattr(proposal, "minimum_score_used", 0.0) or 0.0) < minimum_candidate_score():
-            status = "fallback_review"
-            warnings.append("Treffer stammt aus einer reduzierten Fuzzy-Stufe und sollte manuell geprüft werden.")
-        elif selected.score < manual_review_below():
-            status = "manual_review"
-            warnings.append("Treffer ist unsicher und sollte manuell geprüft werden.")
-
-        updated = replace(
-            proposal,
-            selected=selected,
-            target_name=target_name,
-            target_path=target_path,
-            status=status,
-            confidence=selected.score,
-            warnings=tuple(warnings),
-            target_exists=target_exists,
-        )
+        decision = apply_candidate_decision(proposal, candidate_index, Path(self.row_path(row)))
+        updated = decision.proposal
+        selected = updated.selected
+        if isinstance(updated, SeriesRenameProposal):
+            self.set_item(row, self.columns.SERIES, updated.parsed.series, editable=False)
         self.set_row_proposal(row, updated)
-        self.set_item(row, self.columns.YEAR, str(year or ""), editable=False)
-        provider = str(getattr(selected, "provider", "") or "").strip().lower()
-        provider_label = {"thetvdb": "TheTVDB", "tmdb": "TMDB"}.get(provider, provider or "Metadaten")
-        self.set_item(row, self.columns.PROVIDER, provider_label, editable=False)
-        score_text = f"{int(round(selected.score * 100))} %"
-        threshold = float(getattr(proposal, "minimum_score_used", 0.0) or 0.0)
-        if 0.0 < threshold < minimum_candidate_score():
-            score_text += f" · Fallback {int(round(threshold * 100))} %"
-        elif threshold <= 0.0 and getattr(proposal, "search_mode", "auto") != "auto":
-            score_text += " · alle Treffer"
-        match_reason = str(getattr(selected, "match_reason", "") or "").strip()
-        if match_reason:
-            score_text += f" · {match_reason}"
-        self.set_item(row, self.columns.SCORE, score_text, editable=False)
-        self.set_item(row, self.columns.TARGET, target_name, editable=True)
+        self.set_item(row, self.columns.YEAR, str(decision.year or ""), editable=False)
+        self.set_item(row, self.columns.PROVIDER, decision.provider_label, editable=False)
+        self.set_item(row, self.columns.SCORE, decision.score_text, editable=False)
+        self.set_item(row, self.columns.TARGET, updated.target_name, editable=True)
         self.set_item(row, self.columns.HINTS, "; ".join(updated.warnings), editable=False)
         self.set_status(row, self.status_label(updated.status))
         if update_combo:
             combo = self.table.cellWidget(row, self.columns.MATCH)
             if isinstance(combo, QComboBox):
-                combo.setCurrentIndex(index)
+                combo.setCurrentIndex(decision.index)
 
     @staticmethod
     def base_candidate_warnings(warnings: tuple[str, ...]) -> tuple[str, ...]:
-        generated = {
-            "Zieldatei existiert bereits.",
-            "Treffer ist unsicher und sollte manuell geprüft werden.",
-            "Treffer stammt aus einer reduzierten Fuzzy-Stufe und sollte manuell geprüft werden.",
-            "Letzte Fuzzy-Stufe liefert mehrere ähnlich schwache Treffer; bitte Kandidat manuell prüfen.",
-            "Manuelle Trefferliste: Auswahl bitte prüfen.",
-        }
-        return tuple(item for item in warnings if item not in generated)
+        return base_candidate_warnings(warnings)
 
     @staticmethod
     def selected_candidate_index(proposal: RenameProposal) -> int:

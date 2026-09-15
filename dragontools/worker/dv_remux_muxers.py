@@ -21,6 +21,9 @@ class DVRemuxMuxer:
         subtitle_tracks: list[DVMuxSubtitleTrack] | None = None,
     ) -> bool:
         w = self.worker
+        # MP4 is intentionally a Profile-8.1 compatibility target.  The
+        # pipeline guarantees that ``video_hevc`` has actually been prepared
+        # with dovi_tool Mode 2 before this explicit container signal is set.
         cmd = [w.tools.mp4box, "-new", output_path, "-add", f"{video_hevc}:dvp=8.1.hdr10"]
         for audio_path, audio_job in audio_tracks:
             if not _nonempty_file(audio_path):
@@ -40,13 +43,17 @@ class DVRemuxMuxer:
             if subtitle_track.forced and "forced" not in title.lower():
                 title = f"{title} [Forced]".strip() if title else "Forced"
             add_arg = f"{subtitle_track.path}:lang={lang}"
+            # GPAC/tx3g uses the high two text flags for forced subtitles.
+            # A track name like "Forced" is cosmetic and is not sufficient.
+            if subtitle_track.forced:
+                add_arg += ":hdlr=text:txtflags=0xC0000000"
             if title:
                 add_arg += f':name="{title}"'
             cmd += ["-add", add_arg]
 
         w._last_stderr = ""
         rc, stdout, stderr = self.process_runner.run_abortable_capture(cmd)
-        if w.abort_requested:
+        if _abort_current_file(w):
             w.log("MP4Box abgebrochen.", "warn")
             return False
         if rc != 0:
@@ -88,7 +95,7 @@ class DVRemuxMuxer:
             cmd,
             timeout_s=get_timeout("dv_mkvmerge"),
         )
-        if w.abort_requested:
+        if _abort_current_file(w):
             w.log("mkvmerge abgebrochen.", "warn")
             return False
         if rc not in {0, 1}:
@@ -128,3 +135,7 @@ class DVRemuxMuxer:
 def _nonempty_file(path: str | Path) -> bool:
     candidate = Path(path)
     return candidate.exists() and candidate.stat().st_size > 0
+
+
+def _abort_current_file(worker) -> bool:
+    return bool(getattr(worker, "abort_requested", False) and getattr(worker, "abort_type", None) == "sofort")

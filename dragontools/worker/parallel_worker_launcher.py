@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
+from ..core.callback_dispatch import invoke_callback
 from ..core.path_syntax import path_compare_key
 
 
@@ -45,18 +46,22 @@ class ParallelWorkerLauncher:
         worker._suppress_session_header = True
         worker._display_index_by_path = self._queue_state.display_index_by_path
         worker._display_total = self._queue_state.display_total
-        worker.log_line.connect(log_emit)
-        worker.event.connect(event_emit)
+        worker.log_line.connect(lambda message: invoke_callback(log_emit, message))
+        worker.event.connect(lambda event: invoke_callback(event_emit, event))
         if hasattr(worker, "dv_crop_decision_requested"):
-            worker.dv_crop_decision_requested.connect(relay_crop_decision)
-        worker.file_progress.connect(on_file_progress)
+            worker.dv_crop_decision_requested.connect(
+                lambda payload: invoke_callback(relay_crop_decision, payload)
+            )
+        worker.file_progress.connect(
+            lambda path, pct, eta: invoke_callback(on_file_progress, path, pct, eta)
+        )
         worker.file_result.connect(
-            lambda input_path, output_path, status, child=worker: on_file_result(
-                child, input_path, output_path, status
+            lambda input_path, output_path, status, child=worker: invoke_callback(
+                on_file_result, child, input_path, output_path, status
             )
         )
-        worker.progress.connect(lambda _pct: emit_progress())
-        worker.finished.connect(lambda child=worker: on_finished(child))
+        worker.progress.connect(lambda _pct: invoke_callback(emit_progress))
+        worker.finished.connect(lambda child=worker: invoke_callback(on_finished, child))
         self._registry.workers.append(worker)
         self._registry.active_workers.add(worker)
         for path in files:

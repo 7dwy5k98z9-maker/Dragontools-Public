@@ -104,9 +104,24 @@ class MoveResultCommitMixin:
             self._log(traceback.format_exc(), "error")
             return False
 
-    def _move_sidecars(self, video_path: str, target_dir: str) -> dict:
+    def _move_sidecars(
+        self,
+        video_path: str,
+        target_dir: str,
+        dest_video_path: str | None = None,
+        source_video_path: str | None = None,
+    ) -> dict:
+        # ``video_path`` is the lookup key in the current/recovered sidecar map.
+        # During companion-only recovery it may already be the conflict-renamed
+        # destination.  The original source stem must therefore travel
+        # separately for correct companion rebasing.
         sidecars = self._attr("_sidecar_outputs_by_video", {}).get(video_path, [])
-        return self._sidecar_service().move_sidecars(video_path, target_dir, sidecars)
+        return self._sidecar_service().move_sidecars(
+            source_video_path or video_path,
+            target_dir,
+            sidecars,
+            dest_video_path=dest_video_path,
+        )
 
     def _record_media_library_move(self, source_path: str, move_result: dict | None) -> None:
         record_media_library_move(

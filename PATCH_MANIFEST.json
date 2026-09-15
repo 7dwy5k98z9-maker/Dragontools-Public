@@ -1,0 +1,4465 @@
+{
+  "patch": "DragonTools V9.8.3 public stability release",
+  "date": "2026-09-15",
+  "version": "9.8.3",
+  "validation": {
+    "full_tests": "1390 passed, 0 failed, 0 skipped",
+    "release_validation_regressions": "12 passed",
+    "syntax": "compileall passed",
+    "ruff": "E9,F821,F822,F823 passed",
+    "public_build": "PyInstaller 6.22.2, Python 3.14.6; 0 bundle errors, 0 warnings before external media tools are excluded",
+    "details": "PATCH_MANIFEST.json"
+  },
+  "privacy": {
+    "source": "No user data or credential findings in reviewed source and documents. XML/PDF metadata scrubbed; all 368 PDF pages scanned.",
+    "frozen": "1155 modules and 27619 code objects checked; two deliberate privacy-detection regex constants classified separately.",
+    "distribution": "1224 files checked for private markers; external media tools excluded."
+  },
+  "files": [
+    {
+      "path": ".github/workflows/tests.yml",
+      "size": 2893,
+      "sha256": "13d21a77489086596b709f7cf92e7f46d8217a6dfa70d37606fa377beaee8246"
+    },
+    {
+      "path": ".gitignore",
+      "size": 1017,
+      "sha256": "043c05012cfd88078127647bf77021385d31e54c195d20d9dc86c488b22d7ce4"
+    },
+    {
+      "path": "Aenderungshistorie/CHANGELOG.json",
+      "size": 223495,
+      "sha256": "7d37a6a839591ea84e9523112678d14470dedd2b591573ae2ea1f5d60d47809a"
+    },
+    {
+      "path": "Aenderungshistorie/CHANGELOG.txt",
+      "size": 218435,
+      "sha256": "c9800b521c9a0ebf6ceedac1242c15de23f0eaa148e353cf427c2aa938c9b1e4"
+    },
+    {
+      "path": "Aenderungshistorie/CHANGELOGV7.txt",
+      "size": 14163,
+      "sha256": "c6be4a8c794ddcd09ef387075e934a501c7780fd914dfdf359666f90db2bbb0b"
+    },
+    {
+      "path": "Aenderungshistorie/CHANGELOGV8.txt",
+      "size": 36724,
+      "sha256": "0ecac9431dfb5c62e0e0c42c618ea2964d4742e169cac0ea3a404a1f0423c8d1"
+    },
+    {
+      "path": "AUTHORS.md",
+      "size": 209,
+      "sha256": "6e4ddc2ef55bbf1d2af47bebca2f8b2858b9f8276d9e88297ce97c1150769da0"
+    },
+    {
+      "path": "Bilder/banner.png",
+      "size": 3053868,
+      "sha256": "b8b927b54e10c009017a55b8ff8083ace25a000b479e8a0ea15a8bb1d7a31ca2"
+    },
+    {
+      "path": "Bilder/splash_Intro.png",
+      "size": 3279242,
+      "sha256": "cdff43ece1839fbae31877c97c76449a52093ec3a23bc61aee1564188e6b1d9e"
+    },
+    {
+      "path": "Bilder/splash_pyinstaller.png",
+      "size": 775809,
+      "sha256": "431c7be14f98a540ef0e9dd328b3f264cdb01495c9c15b3624bfc562f61f00de"
+    },
+    {
+      "path": "build_v9.bat",
+      "size": 11566,
+      "sha256": "37289975729470bcd5037a577b6209f33b9a96688d8ee60bfe03b5110a88249c"
+    },
+    {
+      "path": "build_v9_angepasst.bat",
+      "size": 137,
+      "sha256": "21feabd58256bcf0e539f217da5ca30236e85559ab0c72ce9ac3b7d0663d6c9f"
+    },
+    {
+      "path": "Config_Type_Normalization_PATCH_NOTES.txt",
+      "size": 3873,
+      "sha256": "5c0d56dc7223e8dfc51b8b94e758cddedacb05fde4816ddf8ee1455cf6c5f6bf"
+    },
+    {
+      "path": "DOCUMENTATION_UPDATE_NOTES.md",
+      "size": 2575,
+      "sha256": "69672d16a9ca1acccb27879fe5878393d5bedce6a2e4ae7b063f0a436758d689"
+    },
+    {
+      "path": "dragontools/__init__.py",
+      "size": 183,
+      "sha256": "80bbae9a06243b5e339b7a84b0718e2cd8c1cbcf963980c85c076a73e2fe44fa"
+    },
+    {
+      "path": "dragontools/config/default_audio_rules.json",
+      "size": 2807,
+      "sha256": "9502bde18c8fa702144f2e272cd7d9f91f9c94d9f9c3ffb3e2762a9d48684d5e"
+    },
+    {
+      "path": "dragontools/config/default_move_rules.json",
+      "size": 721,
+      "sha256": "a9f392a036242f9de2212ff75b18ebcd42f11afcf434a5bda69f13dd60185b15"
+    },
+    {
+      "path": "dragontools/config/default_profiles.json",
+      "size": 1124,
+      "sha256": "f81c6dbddae008939e48daf97731400379945ead5a62cbc1112866e2cf4bb5a8"
+    },
+    {
+      "path": "dragontools/config/default_renamer_rules.json",
+      "size": 1104,
+      "sha256": "8c9276beb84af36b02b49382ee757b622d4bdb33faac14197be0659ed29db5de"
+    },
+    {
+      "path": "dragontools/config/default_subtitle_rules.json",
+      "size": 1297,
+      "sha256": "08a4d8f438229e7bcf8933dc9781e87b9100fc5cfbe150ee7b8e971eedbce0cd"
+    },
+    {
+      "path": "dragontools/core/__init__.py",
+      "size": 2,
+      "sha256": "7eb70257593da06f682a3ddda54a9d260d4fc514f645237f5ca74b08f8da61a6"
+    },
+    {
+      "path": "dragontools/core/audio_sync_planner.py",
+      "size": 11944,
+      "sha256": "14a3e22acc791eb5f36545484effe390f3f1b511f604dbb02399a1f7b6cc355a"
+    },
+    {
+      "path": "dragontools/core/audio_titles.py",
+      "size": 1466,
+      "sha256": "43d13208b88b2a69c43cb3b3e837ca855512198fbde1d490abe57900172518ca"
+    },
+    {
+      "path": "dragontools/core/audio_video_frame_analysis.py",
+      "size": 12708,
+      "sha256": "9a4fa62837b080c24760765f8e868f2784ff1708611bade4e9537dfb90847410"
+    },
+    {
+      "path": "dragontools/core/audio_video_match_models.py",
+      "size": 3697,
+      "sha256": "34cd365ad7eeded0c06698c1240aec9b8d508c8ccb9eb06e9d75d31f5b6b6600"
+    },
+    {
+      "path": "dragontools/core/audio_video_match_services.py",
+      "size": 10823,
+      "sha256": "d81f3c11e1e91ab7db57263db07153ac9f216e62160881857bc3bab2f8528ce1"
+    },
+    {
+      "path": "dragontools/core/audio_video_match_utils.py",
+      "size": 2224,
+      "sha256": "4c20e4f3e4eaa630e497f9db3e61026a6feb65ce83317e0d2ab4d5bb19d2adaa"
+    },
+    {
+      "path": "dragontools/core/audio_video_matcher.py",
+      "size": 2002,
+      "sha256": "2d40ed9d90810f82c95f17649842fdf2fbd20c151b39089ff45abb4595f05faa"
+    },
+    {
+      "path": "dragontools/core/audio_video_time_mapping.py",
+      "size": 3963,
+      "sha256": "d77c537b610b78159b2a147d54b8f6600716acf5edf238fe602110a0b9b5a172"
+    },
+    {
+      "path": "dragontools/core/audio_video_time_mapping_edges.py",
+      "size": 2979,
+      "sha256": "ef07dd3f4c2904b8708d5ba872bdfe31e4f7af2d3cb6034f499a7dab5a2b4e75"
+    },
+    {
+      "path": "dragontools/core/audio_video_time_mapping_fit.py",
+      "size": 4657,
+      "sha256": "01aa4cd4ce6f13e9caf432b23466500b9bcf63dfb0e03692cc117c0a6c12e3ee"
+    },
+    {
+      "path": "dragontools/core/audit_log.py",
+      "size": 3625,
+      "sha256": "325c1346f869ea30c4eb6265de981cd04f4372efe4496f97c7762d83c6022360"
+    },
+    {
+      "path": "dragontools/core/batch_preflight.py",
+      "size": 1299,
+      "sha256": "c17c074b105b6b371e58d89ab6f949c7df0e26d12246b20fd4e8ecd4b12fee5a"
+    },
+    {
+      "path": "dragontools/core/batch_preflight_decisions.py",
+      "size": 13273,
+      "sha256": "88bd408afd4ed937f154c88710f45222edc2cd306dc87e997d52561f5a7ec0ed"
+    },
+    {
+      "path": "dragontools/core/batch_preflight_formatting.py",
+      "size": 8097,
+      "sha256": "bce6078b2e5a258e53f66a9934759df1151a58a87ab0fd86cf81025e156acd61"
+    },
+    {
+      "path": "dragontools/core/batch_preflight_report.py",
+      "size": 2629,
+      "sha256": "f977f8faf159e764c5810f74c290545479106e94a6aa0f1fc9615be39a138caf"
+    },
+    {
+      "path": "dragontools/core/batch_preflight_rows.py",
+      "size": 7456,
+      "sha256": "bb92b9e9c63e50682ad8f4fdde83c4e3b5a437f793cb8891559e6f5d0790f187"
+    },
+    {
+      "path": "dragontools/core/batch_preflight_storage.py",
+      "size": 7127,
+      "sha256": "ab3aa8a90d49fdd05f4126bc745f253734948fa3c6743c9697d7bb12ef2f7521"
+    },
+    {
+      "path": "dragontools/core/callback_dispatch.py",
+      "size": 1098,
+      "sha256": "f82c2fff2b11078260753d37c865a60d31690e66cb05be96a76f35ffdf880405"
+    },
+    {
+      "path": "dragontools/core/changelog.py",
+      "size": 7382,
+      "sha256": "317e4de4a0b1bbbf351e9f58f6bc8080d302cf22aa3d5c4c52add0aac8bead88"
+    },
+    {
+      "path": "dragontools/core/codec_profile_assistant.py",
+      "size": 10540,
+      "sha256": "1d1c435e5b52b8ac8a406e29addc265cfb9e471f8f927205f0cab2e680a1d0f4"
+    },
+    {
+      "path": "dragontools/core/codec_utils.py",
+      "size": 1828,
+      "sha256": "60186ad495b065873fdc023fb6c466c7a8bf29a0b0486ec721279bbc514c56f8"
+    },
+    {
+      "path": "dragontools/core/config_migration.py",
+      "size": 11067,
+      "sha256": "213efa6a8fa36d8117929d99105aad1a837c4e8dae5061f0b96f8b3ae0f4c8da"
+    },
+    {
+      "path": "dragontools/core/conversion_artifacts.py",
+      "size": 4431,
+      "sha256": "18e20673b20cb8f14ac4dd4ba0f8f96763e901dc04acb4cd00126e1810bd82d4"
+    },
+    {
+      "path": "dragontools/core/crash_guard.py",
+      "size": 10872,
+      "sha256": "dd24a0cb028e0131a7d125aa2665a3060fb340b8f9c79ff210c400ba963f2ebb"
+    },
+    {
+      "path": "dragontools/core/diagnostic_package.py",
+      "size": 7040,
+      "sha256": "4b5ff75ed3df7e2d88c9311b61927c52cdbad8f450a7353482284a868eb81810"
+    },
+    {
+      "path": "dragontools/core/disk_space.py",
+      "size": 4833,
+      "sha256": "0b2961033b18da74d17e5d242519760988611ebb8e817c27dc95530d265a67d0"
+    },
+    {
+      "path": "dragontools/core/encoder_profile_override.py",
+      "size": 8074,
+      "sha256": "ab2b4f9bedc206aa9347a92f14dcbe715c9de507b628d330ecc3a85c9b961108"
+    },
+    {
+      "path": "dragontools/core/error_report.py",
+      "size": 12953,
+      "sha256": "de8977fc2aa8a61d6dbb9255568b580bede794d1710c29073087ce7950f02242"
+    },
+    {
+      "path": "dragontools/core/file_override_normalization.py",
+      "size": 6659,
+      "sha256": "df775d86fa434fec020b5fabf84ea41107acd4733fe529d7f8e2b2423ae29a90"
+    },
+    {
+      "path": "dragontools/core/formatting.py",
+      "size": 743,
+      "sha256": "14251416f599815d1f7924aa449a7d1fd0457f88a476f055e00d53813ac6ded7"
+    },
+    {
+      "path": "dragontools/core/german_title_variants.py",
+      "size": 2043,
+      "sha256": "2702ade5d18e3f15cd4f979c9f3195072416253418df33003403145d72d6dfa3"
+    },
+    {
+      "path": "dragontools/core/gpu_detection.py",
+      "size": 5691,
+      "sha256": "1ce14abd7890264e046d2b0fd02daef30c8d588b247593309b6e1820db5fa889"
+    },
+    {
+      "path": "dragontools/core/jellyfin_nfo.py",
+      "size": 11439,
+      "sha256": "3219ed3a70abb0033a24b59a3060bcbc8a4e5cfdd94c5fed3e638550804b9479"
+    },
+    {
+      "path": "dragontools/core/job_journal.py",
+      "size": 8106,
+      "sha256": "9e1d2c33c35575396f50ffc6911100f0e99c6983446225fbf951f5e2cf26a27c"
+    },
+    {
+      "path": "dragontools/core/job_journal_resume.py",
+      "size": 4525,
+      "sha256": "fe76777a307999378516b9f3632ce48a08190d5d5641b0a536967da1d2b37360"
+    },
+    {
+      "path": "dragontools/core/job_journal_storage.py",
+      "size": 4890,
+      "sha256": "b9c7db0900a69d0f1023605157ba7fbda34bcd0b1bf83c1de99ca266d8e2fd00"
+    },
+    {
+      "path": "dragontools/core/json_io.py",
+      "size": 3021,
+      "sha256": "0589340f4ee2e996e0dfb7f0778744fede6e89ee4b4cce60c50e82ebb8454959"
+    },
+    {
+      "path": "dragontools/core/lang_codes.py",
+      "size": 12045,
+      "sha256": "09595be6294b6684db3e2304b44130103d442137b9c1f56cfd4b8f8e1913b2ad"
+    },
+    {
+      "path": "dragontools/core/log_cleanup.py",
+      "size": 4058,
+      "sha256": "ec4be4b6a8cc5f3847eb1b96956d7645e8972314fc514491ed81e0b0ddfdd450"
+    },
+    {
+      "path": "dragontools/core/logger.py",
+      "size": 8886,
+      "sha256": "0b0a6f65ebb022baab5af221ec2bdca7dcf9961087a7aaacfba47cbe62e209d7"
+    },
+    {
+      "path": "dragontools/core/logger_messages.py",
+      "size": 15063,
+      "sha256": "04f11190d0a11fa992a26d9494c474fcea2bf9b70a10fc8fee429a63e60c2b80"
+    },
+    {
+      "path": "dragontools/core/logger_paths.py",
+      "size": 2823,
+      "sha256": "cf9c4e54cace306b4b9a19013869e67c4540bf8f2599910b191b7c168a528af5"
+    },
+    {
+      "path": "dragontools/core/logger_verbose.py",
+      "size": 4731,
+      "sha256": "c0a5b802f5eb4f74f56de4b1f4236a0e7a814d49c80cae4c576a24ff65eb2bd0"
+    },
+    {
+      "path": "dragontools/core/media_analyzer.py",
+      "size": 4543,
+      "sha256": "ae9220a5dce1bf23b37d998e8d5fbdbd6f49e2d2c5c0cb12786adc1fbc1e0756"
+    },
+    {
+      "path": "dragontools/core/media_analyzer_audio_streams.py",
+      "size": 2125,
+      "sha256": "163dad689e6978f21be65f273500ef8e512a37d6160d23fa2bdf743cbf01614a"
+    },
+    {
+      "path": "dragontools/core/media_analyzer_io.py",
+      "size": 4098,
+      "sha256": "b1ba4f56a61cf3bcdb18167ac43194f0724020573762cf74bc89768cc75c9370"
+    },
+    {
+      "path": "dragontools/core/media_analyzer_metadata.py",
+      "size": 5850,
+      "sha256": "ba34817bc1c7864843fd7615f6cbde75d7fe0c64a599e2bbc63d5155f7f80ed1"
+    },
+    {
+      "path": "dragontools/core/media_analyzer_result.py",
+      "size": 1973,
+      "sha256": "c5127908de5d2401ba1541acc5de1d3f3773b3158e57e4b88203c9d99df943b0"
+    },
+    {
+      "path": "dragontools/core/media_analyzer_streams.py",
+      "size": 637,
+      "sha256": "d3e6afde1dbbf3ec1b443d210135bfad74b81dc8c00c8f91bd424d4a4141eebe"
+    },
+    {
+      "path": "dragontools/core/media_analyzer_subtitle_streams.py",
+      "size": 4692,
+      "sha256": "4a82d4ac4474236608ef8fdf2153b7064eb815e42bf550f361468447388cb8d7"
+    },
+    {
+      "path": "dragontools/core/media_analyzer_video_streams.py",
+      "size": 6541,
+      "sha256": "5cf3c073875c60ff0ad601c170b13305423d410ba4176a7402b95d7d0f61a60e"
+    },
+    {
+      "path": "dragontools/core/media_hdr_detection.py",
+      "size": 10128,
+      "sha256": "aa0bb4ce606de14b12349c60dffb24a9044aeda5c1cd6d726fbacc2028923993"
+    },
+    {
+      "path": "dragontools/core/media_library.py",
+      "size": 2647,
+      "sha256": "c75abc1283afefcde03f1ac5552eeba6a5cb190a46283931387c6ea78d2b8cfd"
+    },
+    {
+      "path": "dragontools/core/media_library_classification.py",
+      "size": 5338,
+      "sha256": "bf618a1b311a444a6274a94a997e0d724edd501c6d023c89151adbeecb57ae7d"
+    },
+    {
+      "path": "dragontools/core/media_library_db.py",
+      "size": 7868,
+      "sha256": "def990f43060958da3ad7bda24a5d1a1cc12911aafbb72a255e70b4776d554ad"
+    },
+    {
+      "path": "dragontools/core/media_library_episode_identity.py",
+      "size": 3312,
+      "sha256": "210e90d88a900403e85e8fe6eb19e5cb2cf1158dcf256ff6447ab0d28a69bfe9"
+    },
+    {
+      "path": "dragontools/core/media_library_export.py",
+      "size": 5185,
+      "sha256": "f217ef661b90b468d64068d432ed8d64e21844951e579d84dc37e020f41e44ce"
+    },
+    {
+      "path": "dragontools/core/media_library_item_sql.py",
+      "size": 5491,
+      "sha256": "a082c13503e41db83eeaf704eaebbf31028044eea36446437b7a52c8f40bf534"
+    },
+    {
+      "path": "dragontools/core/media_library_jellyfin.py",
+      "size": 7018,
+      "sha256": "2cc1363380b086346efd161db324134c291f12affcdfce3c1727b1234a97b9aa"
+    },
+    {
+      "path": "dragontools/core/media_library_jellyfin_items.py",
+      "size": 5466,
+      "sha256": "292558ae5cc640bb463207597b0477017e2457dc00b1c35938163c428069f185"
+    },
+    {
+      "path": "dragontools/core/media_library_jellyfin_metadata.py",
+      "size": 751,
+      "sha256": "88ce66b3302a665ef3ae18fd84118a5de45efd479f71ddd9bcf17d6d2fef27d5"
+    },
+    {
+      "path": "dragontools/core/media_library_jellyfin_metadata_loader.py",
+      "size": 8958,
+      "sha256": "b892966c2ec7d8bcf1be0bcb01860cb4b82c1ada6b2f5a59d542e847eff2a3c9"
+    },
+    {
+      "path": "dragontools/core/media_library_jellyfin_metadata_types.py",
+      "size": 890,
+      "sha256": "5fbfd6cd8a66cb814644b62375305a7f2c8f9ab06c9281673391f83bdef21844"
+    },
+    {
+      "path": "dragontools/core/media_library_jellyfin_metadata_writer.py",
+      "size": 3095,
+      "sha256": "7fa736eb5e4e0c0b205915f3bf8b648fdcb71a0ad4ff5de693ecea561c85a651"
+    },
+    {
+      "path": "dragontools/core/media_library_jellyfin_source.py",
+      "size": 4237,
+      "sha256": "f043aa20e01567a12f13f977d74b37959e4f8a8cea7f50bcd359cfb4db38cd54"
+    },
+    {
+      "path": "dragontools/core/media_library_jellyfin_streams.py",
+      "size": 8174,
+      "sha256": "454bf0d9e8e851246aabc50490914872170621cf0ea72baa8f8065ba047bf3da"
+    },
+    {
+      "path": "dragontools/core/media_library_media_info_mapper.py",
+      "size": 9046,
+      "sha256": "d8fcb1f57ebef3635ae8c41295a48a74403169ffa6f81f1615df09a3e88556ff"
+    },
+    {
+      "path": "dragontools/core/media_library_migrations.py",
+      "size": 3317,
+      "sha256": "c33b470c91f7e40f7b78a61a6cf570f5a2ddf5ad70c9976e805f0deea42f59c9"
+    },
+    {
+      "path": "dragontools/core/media_library_movie_paths.py",
+      "size": 7418,
+      "sha256": "e7082ff84c8a7030e84e52905320851ae0d4b462138b8a1668795e22231ec804"
+    },
+    {
+      "path": "dragontools/core/media_library_movie_resolution.py",
+      "size": 3104,
+      "sha256": "6f643724a217709fc37298b8f5c35553e2514b529a55bc07660e5f30d60965bb"
+    },
+    {
+      "path": "dragontools/core/media_library_nfo_inventory.py",
+      "size": 2626,
+      "sha256": "90e861b9364a64166539b2f6a4b145c3b5a589bf06ce657fb4ada09e831b1d0e"
+    },
+    {
+      "path": "dragontools/core/media_library_nfo_parser.py",
+      "size": 3790,
+      "sha256": "4f1337a0ae9f35cbf553d548d121a6c4103c80764ca538a2dc936848df7bdb4a"
+    },
+    {
+      "path": "dragontools/core/media_library_nfo_paths.py",
+      "size": 2254,
+      "sha256": "1e905284e6eaa7a35816de5fb6ec2e40201b323cb3f0a2515900191047b1225f"
+    },
+    {
+      "path": "dragontools/core/media_library_nfo_scan.py",
+      "size": 4003,
+      "sha256": "87f43c9945bc364161b5f9c2dbef1864f1c52667bbacef6614b553b045ab9fc4"
+    },
+    {
+      "path": "dragontools/core/media_library_nfo_store.py",
+      "size": 8063,
+      "sha256": "daf46e985f765598a96deec6007cf63fea6bb77aee10362834846f470c7d4ca5"
+    },
+    {
+      "path": "dragontools/core/media_library_path_mappings.py",
+      "size": 8724,
+      "sha256": "d8fe4a6b3b00651702d2ee70ee11f1485f6d3a2223b670c640ade3d1a3f945b1"
+    },
+    {
+      "path": "dragontools/core/media_library_paths.py",
+      "size": 1199,
+      "sha256": "b46648041c32f0815af0648dd228fb0d7058315289305efd156b15acfd300b51"
+    },
+    {
+      "path": "dragontools/core/media_library_query.py",
+      "size": 1921,
+      "sha256": "3439e655125a9ce87177ac20b3960235e07cd574d393c94f3f8b9f5052678900"
+    },
+    {
+      "path": "dragontools/core/media_library_query_filters.py",
+      "size": 2382,
+      "sha256": "87600fe2fc8d7c1abc558ffa76fcbdeae0a3ccc89033361de1ae8f945e6758cf"
+    },
+    {
+      "path": "dragontools/core/media_library_query_fragments.py",
+      "size": 5231,
+      "sha256": "b385f3ea6e93be16a7bd1447207220e25465723a1226c5d96efddccf77259063"
+    },
+    {
+      "path": "dragontools/core/media_library_query_presets.py",
+      "size": 7985,
+      "sha256": "0acd28e125b9075c1d037f2f113c9f7f8cc98a5a980c677bb92ffa2b8ec2a766"
+    },
+    {
+      "path": "dragontools/core/media_library_query_scope_filters.py",
+      "size": 2283,
+      "sha256": "da1795aaab6d5c10ade9fe53884fa5e18e0cf852b065bf1f01793185d528ebca"
+    },
+    {
+      "path": "dragontools/core/media_library_repository.py",
+      "size": 805,
+      "sha256": "6c0292b5b3b2a239a01ba8ecceb144aaa72e7d0b0ec0cdb54bf615dcc37b8222"
+    },
+    {
+      "path": "dragontools/core/media_library_repository_items.py",
+      "size": 1381,
+      "sha256": "994781539f9cd25ec11c12051f3bd6e2b029185b7f6f4a00d757da51883613d9"
+    },
+    {
+      "path": "dragontools/core/media_library_repository_moves.py",
+      "size": 5388,
+      "sha256": "cbd62bd3ce42ae31973773403a16d7f8c497159e96feefeb0d84ae5033ee3472"
+    },
+    {
+      "path": "dragontools/core/media_library_saved_queries.py",
+      "size": 2665,
+      "sha256": "7acbf13487d7f04809d61b3fa9f4560e75794ab76210b94cc65f9bb9f044011b"
+    },
+    {
+      "path": "dragontools/core/media_library_scan.py",
+      "size": 11547,
+      "sha256": "fc443c1273dd71962794396e9cc4d2cf8c2f8e5ace2cbc494c868b5373ac1f42"
+    },
+    {
+      "path": "dragontools/core/media_library_schema.py",
+      "size": 11020,
+      "sha256": "00da55b7f8f33bda898823ae20a833d502f12c0f2e74f56de2b14b37b5df0cd7"
+    },
+    {
+      "path": "dragontools/core/media_library_scope.py",
+      "size": 2580,
+      "sha256": "284e43c66c1965af46694eb2f4ba3619ffca6a2b9cb6a2eb16e86a1f6d933008"
+    },
+    {
+      "path": "dragontools/core/media_library_search.py",
+      "size": 1501,
+      "sha256": "c96f62455a2986b8288a2c37068fce37605b71578c3a63e5cf8b0cd30222b3b8"
+    },
+    {
+      "path": "dragontools/core/media_library_search_enrichment.py",
+      "size": 1020,
+      "sha256": "44883779c800df3c4a915d8aa4bcc62577ff202be26052612c7a63c74ed5d0b8"
+    },
+    {
+      "path": "dragontools/core/media_library_search_fields.py",
+      "size": 3402,
+      "sha256": "0d6bc4b60a7291f704676504d16924ace5168826ab5291d13c9f98198d144886"
+    },
+    {
+      "path": "dragontools/core/media_library_search_service.py",
+      "size": 5013,
+      "sha256": "f468bb940618fe9e169999eb3f63102f1697c2891dc62db279a7ad4c6db45a60"
+    },
+    {
+      "path": "dragontools/core/media_library_search_streams.py",
+      "size": 2152,
+      "sha256": "cbb0aa2e2fb7380d20d11557bbba3bd13727f87bacceab03fdaa40dbb01547be"
+    },
+    {
+      "path": "dragontools/core/media_library_series_lookup.py",
+      "size": 2184,
+      "sha256": "2a7204daf9f6d0178ff97b18d824542d7fbee79c452056c5e1bf0ffaafa8f40f"
+    },
+    {
+      "path": "dragontools/core/media_library_series_paths.py",
+      "size": 10562,
+      "sha256": "085fb51f705378071d2ff2ab15cedbff0f87804cb1fbc2d16567c155c274347b"
+    },
+    {
+      "path": "dragontools/core/media_library_series_resolution.py",
+      "size": 4440,
+      "sha256": "069307a6513989ef6e5699c385851a9944ba8f1c988f876ff0e7e56d96b4a79d"
+    },
+    {
+      "path": "dragontools/core/media_library_sidecars.py",
+      "size": 3147,
+      "sha256": "2888bd903fb5a649b1be0e07b4321f95c4bfc78d5c32f4dfb6f2f40597dd79ed"
+    },
+    {
+      "path": "dragontools/core/media_library_sql_help.py",
+      "size": 6929,
+      "sha256": "6e9b69ffcaedcc9dc9ad632bbe7b41121b5478eaa76045f6a71f30850b0397d2"
+    },
+    {
+      "path": "dragontools/core/media_library_sql_safety.py",
+      "size": 5412,
+      "sha256": "8b66c3686f39230990237d081c2322a0314d62195c8a0da8f48b6bfda90b06dc"
+    },
+    {
+      "path": "dragontools/core/media_library_sqlite.py",
+      "size": 1101,
+      "sha256": "fda18f58d73a540a856df8864ba1cf0b52f67ef321867b20e07eb08a1e3f10fa"
+    },
+    {
+      "path": "dragontools/core/media_library_types.py",
+      "size": 3733,
+      "sha256": "fb877178e5ea66c2be9dae3cb9c6622c63fcac814086c571d0d1dc9064d1bb9f"
+    },
+    {
+      "path": "dragontools/core/media_library_utils.py",
+      "size": 4074,
+      "sha256": "bb39f1eb3f087a9586e78879db07cbeda23ff43a9f6c4ebad810052b17eafa31"
+    },
+    {
+      "path": "dragontools/core/media_metadata.py",
+      "size": 6946,
+      "sha256": "54795c47c460d36e8944e941db5c0288abcbabb1f7b279fa914503a1fafee62e"
+    },
+    {
+      "path": "dragontools/core/mediainfo_details.py",
+      "size": 14726,
+      "sha256": "137bb93148b5d16460e43002c6256032e74293d70882331b2af2f91b50040b96"
+    },
+    {
+      "path": "dragontools/core/models.py",
+      "size": 6536,
+      "sha256": "8f863e43b51b62d3797e96901775221dd7bd2884d2aeb3f8c58d069966184451"
+    },
+    {
+      "path": "dragontools/core/move_conflict_transactions.py",
+      "size": 5823,
+      "sha256": "9fccbef217db0ef74ea0b40dc1b4d836788d9524463264efb3b174070baec774"
+    },
+    {
+      "path": "dragontools/core/move_conflicts.py",
+      "size": 8301,
+      "sha256": "c33ec889a4f88b82066ddca56a3329c2875bbcf035f5b533205b0695ec8e63e5"
+    },
+    {
+      "path": "dragontools/core/move_copy_verification.py",
+      "size": 1791,
+      "sha256": "329a8f7c5df90ef078059b299bd66b37a14e494ab63537575a0074fdca9dcba4"
+    },
+    {
+      "path": "dragontools/core/move_file_service.py",
+      "size": 8678,
+      "sha256": "431216a8d00576e7ff861b5d9ac281d47022b89980eab1277237851659ac0112"
+    },
+    {
+      "path": "dragontools/core/move_journal.py",
+      "size": 11197,
+      "sha256": "1c1db14fd2ba3dc825b24929ba03f398e0ab4f2e550ec84b633d90e066663f1d"
+    },
+    {
+      "path": "dragontools/core/move_journal_adapter.py",
+      "size": 1383,
+      "sha256": "7edc70e3b2b68a49eac6dd1640612a6a0b634f984b4639e60829a9f86c50d391"
+    },
+    {
+      "path": "dragontools/core/move_journal_contracts.py",
+      "size": 689,
+      "sha256": "f4c812686e84918b5d3a826a2e8ddaf2c499d3545a9203232cfeffad985c1b8a"
+    },
+    {
+      "path": "dragontools/core/move_journal_recovery.py",
+      "size": 7069,
+      "sha256": "e30fabf442c32fbf78b0a07856dc97ad34cdd3fafe3e9afa4c4298c364ca7b8f"
+    },
+    {
+      "path": "dragontools/core/move_journal_resume.py",
+      "size": 4769,
+      "sha256": "007c51ca3d75cd5dd3a29df23f7517b33ad4dd8b02c2e0378e51a34e768a8a5e"
+    },
+    {
+      "path": "dragontools/core/move_journal_storage.py",
+      "size": 4070,
+      "sha256": "1cd124aac7a6dcc5c05da21d11a7d327cd57e7200f3b575dd9ad0cae72e0c987"
+    },
+    {
+      "path": "dragontools/core/move_journal_utils.py",
+      "size": 2622,
+      "sha256": "e625224038afc56792ec61b408d269bd81083101806dc0b62b673aefe7fbf7e7"
+    },
+    {
+      "path": "dragontools/core/move_postprocess.py",
+      "size": 2716,
+      "sha256": "c4f695dda23c3e8f91b951136cf6675ce8a420b20125550df7d3aafe9e85498e"
+    },
+    {
+      "path": "dragontools/core/move_report.py",
+      "size": 9545,
+      "sha256": "0d108346067eedae0a9133a1eab9459d63a9d62936071f76f0cb0a7b4862a957"
+    },
+    {
+      "path": "dragontools/core/move_routing.py",
+      "size": 5705,
+      "sha256": "f226b0e330d7a97cc41563842b7de8e4f13a6f00657fa739a784d31b72e0da0d"
+    },
+    {
+      "path": "dragontools/core/move_sidecars.py",
+      "size": 13503,
+      "sha256": "9d0baa551161988f8ca6fbbbc8d43319e4ec926580e444c322bc0307dc6b21fc"
+    },
+    {
+      "path": "dragontools/core/move_transaction.py",
+      "size": 7429,
+      "sha256": "3ebde7c973cfa52a6be93ad3816327dd2fcb123b43a9bd558bb9db9c5906f333"
+    },
+    {
+      "path": "dragontools/core/move_transfer_executor.py",
+      "size": 10741,
+      "sha256": "58665c5971c297251d70280573ab00e0569a96060ed46c13f78b76445ac37d86"
+    },
+    {
+      "path": "dragontools/core/movie_renamer.py",
+      "size": 10862,
+      "sha256": "f5c42d18a62b327950211fbed33ddcc9e20cb8fba5812d4f0ef25f0acd61aba8"
+    },
+    {
+      "path": "dragontools/core/movie_renamer_candidate_mapping.py",
+      "size": 6867,
+      "sha256": "7ac70a62af7b9206959770e8dad5d7af6bc3bc1e27c7a0614a9532524d88cad9"
+    },
+    {
+      "path": "dragontools/core/movie_renamer_candidate_order.py",
+      "size": 1655,
+      "sha256": "d8deb6ea1cd926b86c19340ba3989c069bf3f570f972a83c0139eab28c926a7d"
+    },
+    {
+      "path": "dragontools/core/movie_renamer_candidate_resolvers.py",
+      "size": 3081,
+      "sha256": "4ddf8a4e90a75e164332996ef61c70ad9d12d5bc8c248cd10375b88c97cbce21"
+    },
+    {
+      "path": "dragontools/core/movie_renamer_candidate_scoring.py",
+      "size": 3173,
+      "sha256": "00c4801794a1e72ed37ed06f25e97d701cc33915b0617244accb7accc979f21c"
+    },
+    {
+      "path": "dragontools/core/movie_renamer_candidates.py",
+      "size": 1106,
+      "sha256": "5dff82a65f1551530e28091d347e4a765215bb6bb5b728239a80f4f427861438"
+    },
+    {
+      "path": "dragontools/core/movie_renamer_episode_refresh.py",
+      "size": 1713,
+      "sha256": "ec642a379ba489a885e27dd52478184388b6690997c419c8bf53f4569bffe8e9"
+    },
+    {
+      "path": "dragontools/core/movie_renamer_matching.py",
+      "size": 3162,
+      "sha256": "597a8d9036d1af7f0f6a1166eabd509be55545152bdc26b209800eedb9c8cc2a"
+    },
+    {
+      "path": "dragontools/core/movie_renamer_models.py",
+      "size": 4302,
+      "sha256": "b024fdb9e4dc26d52cf1ba817f9f3ce696a576d34bdf17e0306d872b66cf2638"
+    },
+    {
+      "path": "dragontools/core/movie_renamer_parsing.py",
+      "size": 13677,
+      "sha256": "d98cf49672f630a6a238f77ee329e03ab6404cc29947ac68d4140ff73806f1c2"
+    },
+    {
+      "path": "dragontools/core/online_metadata.py",
+      "size": 2537,
+      "sha256": "9b267b27d65059e81d2db27344fb1615c8ca815774a61f60adb52c9d1dae7313"
+    },
+    {
+      "path": "dragontools/core/online_metadata_cache.py",
+      "size": 1668,
+      "sha256": "7cbb089b6f0bcdb4ba7e7de04bf19d8973cad9558b6cdf1ba51e885a4b7c93c8"
+    },
+    {
+      "path": "dragontools/core/online_metadata_cache_paths.py",
+      "size": 971,
+      "sha256": "b5a43648279a3f4f36d8949147664905da795ac245177408de05cab13829a16f"
+    },
+    {
+      "path": "dragontools/core/online_metadata_common.py",
+      "size": 1370,
+      "sha256": "1b6f4a16a18323f3d3fd60cee385a8aadf844c61db75797023f79bd328574752"
+    },
+    {
+      "path": "dragontools/core/online_metadata_config.py",
+      "size": 5230,
+      "sha256": "093222be0245023b8cf9cc67cb1a2350024b964b21d1a6690f5d717d716d1b2f"
+    },
+    {
+      "path": "dragontools/core/online_metadata_parsing.py",
+      "size": 5784,
+      "sha256": "370077b6ff28f31f734ec0d7051d4e64fad2790f6f53884d8da34badd2fe1a67"
+    },
+    {
+      "path": "dragontools/core/online_metadata_payload.py",
+      "size": 4538,
+      "sha256": "ab084b9b394853b1ffa0bf332c379141499c35ec7cc02eb3cbcde1a4e6f56b10"
+    },
+    {
+      "path": "dragontools/core/online_metadata_service.py",
+      "size": 10131,
+      "sha256": "b2831f54114a0ede1f2e1429c3b04851bbc3dad16eae5345f64969d764f2802e"
+    },
+    {
+      "path": "dragontools/core/online_metadata_tmdb.py",
+      "size": 1557,
+      "sha256": "80ed63dd759f8aed86a9160c372efead2c6614e2ec98b2da9a40baf96f076450"
+    },
+    {
+      "path": "dragontools/core/online_metadata_tmdb_resolver.py",
+      "size": 12989,
+      "sha256": "6a2043f8b60efe01e22b1229c3bacaaf4663a39419d149265e68accf60a149d4"
+    },
+    {
+      "path": "dragontools/core/online_metadata_tmdb_suggestions.py",
+      "size": 9167,
+      "sha256": "7ae129d5cd35e28b4cbf6c556d0a6b323221159eeba68e2a3a191decceeaf0f4"
+    },
+    {
+      "path": "dragontools/core/online_metadata_tmdb_transport.py",
+      "size": 4350,
+      "sha256": "12127b7a2564d6b17c3fcdf9f6b46bbff62b470b90c81971ecb88d6da0987a6d"
+    },
+    {
+      "path": "dragontools/core/online_metadata_tvdb.py",
+      "size": 2269,
+      "sha256": "edb760b55db5c9f7fe1cf4382b4f275d1a38b00cb6eeaf6c81c840afcccf58a5"
+    },
+    {
+      "path": "dragontools/core/online_metadata_tvdb_candidates.py",
+      "size": 6964,
+      "sha256": "b5f4b9b20467c8f87735469b33d2fbe96126750b5ce31445cb0f2bb3fdc6755a"
+    },
+    {
+      "path": "dragontools/core/online_metadata_tvdb_episode_data.py",
+      "size": 6568,
+      "sha256": "8163b4deb5ca76f9614e63d284090d73931b0e8313900283e7e00b56ced5ff4e"
+    },
+    {
+      "path": "dragontools/core/online_metadata_tvdb_helpers.py",
+      "size": 10847,
+      "sha256": "1a4e185e672c7c8f7946382101ebc2d09ce27b622ad90e783f869dd95f0b523c"
+    },
+    {
+      "path": "dragontools/core/online_metadata_tvdb_resolver.py",
+      "size": 6564,
+      "sha256": "c6b301e38fe4354964870e8388afeec3023f43d6e7ab01539d7263f131fbd737"
+    },
+    {
+      "path": "dragontools/core/online_metadata_tvdb_suggestions.py",
+      "size": 7089,
+      "sha256": "69a49b6433355af29de2beb2ce134d2deadd10357f6ba7f507302dcbdfeee3a5"
+    },
+    {
+      "path": "dragontools/core/online_metadata_tvdb_transport.py",
+      "size": 6173,
+      "sha256": "8fda364061609efc2fc2837a6be52cb7814c4bd1c4328c2b10f4a9be0b41b5ea"
+    },
+    {
+      "path": "dragontools/core/online_metadata_types.py",
+      "size": 9007,
+      "sha256": "f655836e7b7af81bbe757511517bcd4e2b389c0fbe17d1848824d6548c36c553"
+    },
+    {
+      "path": "dragontools/core/output_replace.py",
+      "size": 8404,
+      "sha256": "64c819f8f5e3c0ac4cbd2c24961c8e93f83f5dfdcff8ef36df45e188f82d9e8c"
+    },
+    {
+      "path": "dragontools/core/parallel_settings.py",
+      "size": 3457,
+      "sha256": "b3c396df4bbc574aa53922903f934b6ff986dd7e3b4aff647993ed048bc01a4d"
+    },
+    {
+      "path": "dragontools/core/path_defaults.py",
+      "size": 4379,
+      "sha256": "b06797d160458196ed875549e2a2ed937ac85dfc229539e80e7353cb6b223e1a"
+    },
+    {
+      "path": "dragontools/core/path_safety.py",
+      "size": 1472,
+      "sha256": "3ccae2f54772586217f49c741ecfea298852e1e340c7926a99cce793e13c47e8"
+    },
+    {
+      "path": "dragontools/core/path_syntax.py",
+      "size": 7563,
+      "sha256": "741781f1f7640fe2d06442dffc74e19d86ac26e0840645fe6a426715e8efed71"
+    },
+    {
+      "path": "dragontools/core/paths.py",
+      "size": 1609,
+      "sha256": "c930ddd8e2b585d74cdce870977d01a51ebf36aa2ac1216ceabb33ae32d47f4d"
+    },
+    {
+      "path": "dragontools/core/preflight_report.py",
+      "size": 8208,
+      "sha256": "02e78e14a8ab3771dcdae134e3377d9cdf0bb8e94cdc116767d735c9e7e666d6"
+    },
+    {
+      "path": "dragontools/core/process_runner.py",
+      "size": 3452,
+      "sha256": "cf1ad57128271c4cf162d44fbfc2013ce4619429d64f27c9714080325eb18b73"
+    },
+    {
+      "path": "dragontools/core/profile_manager.py",
+      "size": 12643,
+      "sha256": "245bf984ee69a21ecf6e69450f328faff517e2369d195ae802cc900ccf604203"
+    },
+    {
+      "path": "dragontools/core/project_info.py",
+      "size": 7159,
+      "sha256": "21902aa2ce13a533359c0ceff66b890c8de8c4b3da93f2b93d24238bc0c1f0c4"
+    },
+    {
+      "path": "dragontools/core/quality_tester.py",
+      "size": 9160,
+      "sha256": "177207278c0bb4de0ce97dc79b6e6e924c6cb44e09418c208a9e33341e669cf5"
+    },
+    {
+      "path": "dragontools/core/release_packaging.py",
+      "size": 7838,
+      "sha256": "dc1aebd129ff075cceaa8f7ff3020f3751b2bd5e0490179d4b90a5bbc1177c3c"
+    },
+    {
+      "path": "dragontools/core/release_validation.py",
+      "size": 2613,
+      "sha256": "f3eeabea00b72e51fcbc844903ce08af44f3715cafa18453b7a426922640454f"
+    },
+    {
+      "path": "dragontools/core/release_validation_app.py",
+      "size": 2775,
+      "sha256": "c41fc22ae0a8c5ef66e4e2bf2fa67ba99b2b8badfe31953d6e084f14928d1341"
+    },
+    {
+      "path": "dragontools/core/release_validation_build.py",
+      "size": 3252,
+      "sha256": "2cd26b85fb99c0b05bfb8d1496a13bc06728a023620ca90b2ef45dd1c5129286"
+    },
+    {
+      "path": "dragontools/core/release_validation_common.py",
+      "size": 3298,
+      "sha256": "3d6c334edc352f1f02baf7235a09978424dbd34dd7740a1905730553c0cb8404"
+    },
+    {
+      "path": "dragontools/core/release_validation_environment.py",
+      "size": 10165,
+      "sha256": "93538f469d96290fcd94d90bb7fc7dd1a0d9886ef2a4aef7529c8c9f06c5ba4f"
+    },
+    {
+      "path": "dragontools/core/release_validation_package.py",
+      "size": 17064,
+      "sha256": "3c957ddb55128dbd49e5d3a8f79be18849068343a230a6d96e8384a4a4efa21a"
+    },
+    {
+      "path": "dragontools/core/release_validation_smoke_modules.py",
+      "size": 5502,
+      "sha256": "1ccf7cb82595366699bcdebc668391fbf1de78f401d4a1155c6a23e0b08aaf7f"
+    },
+    {
+      "path": "dragontools/core/release_validation_source.py",
+      "size": 7326,
+      "sha256": "924c6b50765dc7f08f1e8c07b356e0c89e5b7bbfb2b4ed6d2da52389fbf58518"
+    },
+    {
+      "path": "dragontools/core/renamer_candidate_decision.py",
+      "size": 4659,
+      "sha256": "e6260575bd1b72d3b117321a8f604760a5f05fbcf84da0b3378dd59bd5202b00"
+    },
+    {
+      "path": "dragontools/core/replace_journal.py",
+      "size": 7208,
+      "sha256": "aa333c9ef0ef5c8c59ee1dcbcf3837613c236ced0109b3da54d7aeeb7e226353"
+    },
+    {
+      "path": "dragontools/core/replacement_reminders.py",
+      "size": 4587,
+      "sha256": "348644c281699508718cc09b4f206caa0161d3ea9aac1195994cf65b274d3a66"
+    },
+    {
+      "path": "dragontools/core/resource_paths.py",
+      "size": 2634,
+      "sha256": "b40a925437c86e44c6e6bdc2f7958bb909c8a69be0f8fa94bac23b2cf2bc5289"
+    },
+    {
+      "path": "dragontools/core/result_status.py",
+      "size": 381,
+      "sha256": "f9449a293d11ff68f10b38aad56fb5b77c499da0153866fdf26a7a533b34dee8"
+    },
+    {
+      "path": "dragontools/core/rules_preview.py",
+      "size": 4082,
+      "sha256": "27379820019ea0b562f0da490cf814becf27b4ecef6e308bbc84ecb7e58cbf3c"
+    },
+    {
+      "path": "dragontools/core/rules_preview_audio.py",
+      "size": 1690,
+      "sha256": "ffcfadba627fbed7d3d542d3fb525baccec87e6b1cd3d2343d9636e6ab070c44"
+    },
+    {
+      "path": "dragontools/core/rules_preview_common.py",
+      "size": 273,
+      "sha256": "f6095ee9e4aa12b8bbea01c96cb37f1638788879bbf89b56cbbe2980bf782f44"
+    },
+    {
+      "path": "dragontools/core/rules_preview_subtitles.py",
+      "size": 5238,
+      "sha256": "58f17f6c5eb4c618fdabfb7c75ab710e40b404d395f18ec97eb3f94cb4d485a9"
+    },
+    {
+      "path": "dragontools/core/rules_preview_video.py",
+      "size": 3183,
+      "sha256": "f3e1003eef5f5b81d53199b23691b8105172ec119de6a973fc34c3c1b9ecc027"
+    },
+    {
+      "path": "dragontools/core/run_summary.py",
+      "size": 6846,
+      "sha256": "077d527021664125920c407d6b58e1d909f52cf8b551ed4edd33a56b6922e8ec"
+    },
+    {
+      "path": "dragontools/core/settings.py",
+      "size": 914,
+      "sha256": "726957d9193a77e8ca8f8fc8b57fedc3814a581b2f199a7b9930812fc77bd6d3"
+    },
+    {
+      "path": "dragontools/core/settings_access.py",
+      "size": 3220,
+      "sha256": "8ae6aebf0468ade1ca41d97f0177351ad8be95e58a78c8be62024e206ac4970c"
+    },
+    {
+      "path": "dragontools/core/settings_app.py",
+      "size": 270,
+      "sha256": "fc737e504bdea71d9200c0c8cc17e68def2a845109e42339531f70b083800f37"
+    },
+    {
+      "path": "dragontools/core/settings_backup.py",
+      "size": 1225,
+      "sha256": "959ce4d0d65495804caa8ef1ee34baf86074ddf235cdcbded141422c1942d49b"
+    },
+    {
+      "path": "dragontools/core/settings_backup_common.py",
+      "size": 5117,
+      "sha256": "589c9b92718a45b7f2f7615582d9269d4c408a34945cf1f74c44d1182a3ce79e"
+    },
+    {
+      "path": "dragontools/core/settings_backup_crypto.py",
+      "size": 3959,
+      "sha256": "0bb200a06dff2493f74340f5c92ba93c3a363f50f307e09d3d9035f96b781417"
+    },
+    {
+      "path": "dragontools/core/settings_backup_export.py",
+      "size": 3254,
+      "sha256": "f02bf19505848407085900af835f6df7e205c21cd3a1491962d94ba476bf7e01"
+    },
+    {
+      "path": "dragontools/core/settings_backup_restore.py",
+      "size": 6611,
+      "sha256": "518f60618ce018117e28feeb4474ec10864fd072d117ae68b93051ba08c1f8b3"
+    },
+    {
+      "path": "dragontools/core/settings_conversion.py",
+      "size": 4924,
+      "sha256": "c8e7838ba92001dea32e18b833810792a4937166cad4ec62654ca3288305eb7d"
+    },
+    {
+      "path": "dragontools/core/settings_media_library.py",
+      "size": 749,
+      "sha256": "d60f8a5e29dd7b68a135173aba9c59937c691efc4c250327c4df555711d73489"
+    },
+    {
+      "path": "dragontools/core/settings_metadata.py",
+      "size": 1757,
+      "sha256": "b4418f9edf4ead924fd858ad2adb80c68c6e20ce05a169bd2b326a6bbc7827f1"
+    },
+    {
+      "path": "dragontools/core/settings_postprocess.py",
+      "size": 1935,
+      "sha256": "c5ae269b3a0ab5c3e16e3072c3e7f3a4f024e2dfe673758b7667b127e70c2dfe"
+    },
+    {
+      "path": "dragontools/core/settings_storage.py",
+      "size": 2711,
+      "sha256": "c00cb23e500ea40fcc341e244f62d2b3904835f513e456f22d93a5eb807297fd"
+    },
+    {
+      "path": "dragontools/core/sidecar_journal.py",
+      "size": 10295,
+      "sha256": "42439e62034b4a1ff57a1ca2e075b1cf75e6a9e459d9308cfcf7e7a061dc2a27"
+    },
+    {
+      "path": "dragontools/core/sidecar_transaction.py",
+      "size": 9385,
+      "sha256": "c44edc2c15b1a6a2305a28ff33196cde1709c765a96e50a09d91a25bed38d2a8"
+    },
+    {
+      "path": "dragontools/core/system_shutdown.py",
+      "size": 2066,
+      "sha256": "47f8cd779045cd8ce4ad0f89173650ac6a131b2c3bf5fd66aa065d859c3772df"
+    },
+    {
+      "path": "dragontools/core/timeout_settings.py",
+      "size": 18493,
+      "sha256": "6403c24cd2f2aba0a88bfeca62d5def3dd368b155621cd6646d228349682fc2e"
+    },
+    {
+      "path": "dragontools/core/tool_diagnostics.py",
+      "size": 7942,
+      "sha256": "4e425753cb926aa94798fa49d51a5f5f444f499164952e38850c68944ab25881"
+    },
+    {
+      "path": "dragontools/core/tool_diagnostics_extended.py",
+      "size": 8401,
+      "sha256": "64b852c751dbbf35d2ce31ae6b0c5c4488be512ad4e0a4a400cc5e48adcc9de1"
+    },
+    {
+      "path": "dragontools/core/tool_paths.py",
+      "size": 7943,
+      "sha256": "82b42f5f483e6f2d61934fa023595f8d18edae3f70e7b0500e9ef4fb4c8fcd70"
+    },
+    {
+      "path": "dragontools/core/type_utils.py",
+      "size": 2832,
+      "sha256": "20c2f04609de9f2426a0c77dc426b84c79bf69b305efbb3c1013f55fd4aedbf5"
+    },
+    {
+      "path": "dragontools/core/update_check.py",
+      "size": 2763,
+      "sha256": "1297b3a01eb5c4a5abef2f9674b9fe61b56ef0ec5937099bf2c82cdf05d1e2b7"
+    },
+    {
+      "path": "dragontools/core/version.py",
+      "size": 462,
+      "sha256": "ce5a4543d65163fa04d9d9dd1e066ef5e9751f4d5cae555b2c9fda3132c897bf"
+    },
+    {
+      "path": "dragontools/core/windows_restart_policy.py",
+      "size": 4126,
+      "sha256": "edcc114998d3114cd660feaf1c7d727540158bc60afbc65737d76741bdc5109e"
+    },
+    {
+      "path": "dragontools/gui/__init__.py",
+      "size": 2,
+      "sha256": "7eb70257593da06f682a3ddda54a9d260d4fc514f645237f5ca74b08f8da61a6"
+    },
+    {
+      "path": "dragontools/gui/application_shutdown.py",
+      "size": 4522,
+      "sha256": "7b236f0a807df69753e94325dd23c4771b1840ad1d5381f735b5865f732ac633"
+    },
+    {
+      "path": "dragontools/gui/audio_muxer_widget.py",
+      "size": 7318,
+      "sha256": "ef93e7f6405131e4c239a9529bc8002f3baac726fb76f75e9453a80aa7e5e585"
+    },
+    {
+      "path": "dragontools/gui/audio_video_matcher_paths.py",
+      "size": 2403,
+      "sha256": "256836865faf5f9ee4b9a662cd835d937fd8fd7b5cf71ebd976555142e72ab23"
+    },
+    {
+      "path": "dragontools/gui/audio_video_matcher_results.py",
+      "size": 3836,
+      "sha256": "c30854282dcf1c9f42a488cf12e76089974feba6ce4e3a56e3a70c0c25527e8d"
+    },
+    {
+      "path": "dragontools/gui/audio_video_matcher_runtime.py",
+      "size": 3828,
+      "sha256": "3a50b1a7056dcbf258a6be958ccb66c4b68b23f814b937f8928d0858dc867139"
+    },
+    {
+      "path": "dragontools/gui/audio_video_matcher_view.py",
+      "size": 6296,
+      "sha256": "a10323797bfa43df0631b681219c365473edcf5eed0865cee1abee85e4aa4c12"
+    },
+    {
+      "path": "dragontools/gui/audio_video_matcher_widget.py",
+      "size": 1276,
+      "sha256": "c45f1c7a181f684742625de3c33a2ed7ee902add0a919a6941680410dfb643f9"
+    },
+    {
+      "path": "dragontools/gui/batch_preflight_dialog.py",
+      "size": 9531,
+      "sha256": "c19c0e8e6f447b1ad8d044e2b419ef5a957423db688e11ec8d83b1334bb201d9"
+    },
+    {
+      "path": "dragontools/gui/changelog_dialog.py",
+      "size": 11827,
+      "sha256": "3b587cdcf0e0fc2b2b35750fb7999a21e71fce62099a23fae6624d1f11a7cae7"
+    },
+    {
+      "path": "dragontools/gui/conversion_controller.py",
+      "size": 6296,
+      "sha256": "cbd4b03ae26c083a7064fbdad136d4b7a661f6fead325026f41dcc2a5b53297c"
+    },
+    {
+      "path": "dragontools/gui/conversion_diagnostics.py",
+      "size": 5192,
+      "sha256": "c4a6d14562b822fd58e6867ffa1bdc31da17078bc5de1c696254d09e1fd8ea38"
+    },
+    {
+      "path": "dragontools/gui/conversion_job_journal_tracker.py",
+      "size": 1428,
+      "sha256": "1974a578b8c3c59491059dcde92af3c93868f29eb122d661ed8aa3faf8ab42da"
+    },
+    {
+      "path": "dragontools/gui/conversion_progress_display.py",
+      "size": 3913,
+      "sha256": "a7be2d68e6d2baa0b8da3ec24a3e8774c08e42b2100ba0d8479969645bb4d665"
+    },
+    {
+      "path": "dragontools/gui/conversion_progress_focus.py",
+      "size": 4742,
+      "sha256": "90a0cccd76fc15aa0cd72c71c069e57e3e04eedecef3e4b0e67385e43803aeca"
+    },
+    {
+      "path": "dragontools/gui/conversion_progress_presenter.py",
+      "size": 5831,
+      "sha256": "6995498f7fa3dbcd3007f2a10dea1e8f906e8e516cce8aa555abbe8db1e6e627"
+    },
+    {
+      "path": "dragontools/gui/conversion_result_file_events.py",
+      "size": 7761,
+      "sha256": "eb175913e04a3f1aea4aab46e7bed3e8da942c957321ab9ca62b10319fc21e5e"
+    },
+    {
+      "path": "dragontools/gui/conversion_result_finish.py",
+      "size": 4863,
+      "sha256": "0cbfc1facd71829bdeac8ebe9af1285cdf62f7a2afc32bc88c5eee17de68e8cb"
+    },
+    {
+      "path": "dragontools/gui/conversion_result_service.py",
+      "size": 2012,
+      "sha256": "0b94dff2f5d066f87c2f912dcf060bc12c9e492214b8a2753fc46a29cafc1571"
+    },
+    {
+      "path": "dragontools/gui/conversion_run_finalizer.py",
+      "size": 7728,
+      "sha256": "8d268b4b7b25b5fc0cde3fe1a35c9b8f8cdbb51060f2722512131b125af647e5"
+    },
+    {
+      "path": "dragontools/gui/conversion_session_state.py",
+      "size": 9379,
+      "sha256": "45621e0eea3d25d6020e44af2477a1cad9c6dc42e330b3ae1b70f18ce4183bd1"
+    },
+    {
+      "path": "dragontools/gui/conversion_start_coordinator.py",
+      "size": 9346,
+      "sha256": "1e31a96e6abdd0f1b438096d665f70bd05db18ab295bb552aad719924aa3b8e6"
+    },
+    {
+      "path": "dragontools/gui/conversion_worker_factory.py",
+      "size": 6855,
+      "sha256": "a9992190bffe8489c2d4bd0be9985aa982b84cb325612b2ecf702a786a632306"
+    },
+    {
+      "path": "dragontools/gui/conversion_worker_lifecycle.py",
+      "size": 8568,
+      "sha256": "e364fe3c99c1cf02dc46e411849dad0a0fb98ec26510bafc3b53c984e9f94c03"
+    },
+    {
+      "path": "dragontools/gui/convert_override_groups.py",
+      "size": 9309,
+      "sha256": "af333d558a50c4fa21f6b213c89c40c5e8f18893e9a02cbc7946bff63587b20e"
+    },
+    {
+      "path": "dragontools/gui/convert_override_lifecycle.py",
+      "size": 1853,
+      "sha256": "c2b52268818551b5c41cac9ea59532522bb57f7758809ef927208a777b980053"
+    },
+    {
+      "path": "dragontools/gui/convert_override_state.py",
+      "size": 3741,
+      "sha256": "7baa5ced9b27298b4e8563ee3d79a63a9e3b942e4bbda166fba23c8812966629"
+    },
+    {
+      "path": "dragontools/gui/convert_override_tracks.py",
+      "size": 6474,
+      "sha256": "0da949c1d7b14bf76284f1785ed95f631f888755a930843e46848a00398378d3"
+    },
+    {
+      "path": "dragontools/gui/convert_queue_window.py",
+      "size": 8035,
+      "sha256": "3c3b7d0f73354c867cff2963cc7d86d4127899d6848d21b00d383affe078a59a"
+    },
+    {
+      "path": "dragontools/gui/convert_widget.py",
+      "size": 10919,
+      "sha256": "3038a942ff19243d2d571bba4b30ff7d73f2cd3d463fad9fec52ae2fce7fba61"
+    },
+    {
+      "path": "dragontools/gui/convert_widget_composition.py",
+      "size": 8934,
+      "sha256": "d5055debd09bcd87140481b9151e7cf93eb6b3dc85177f4dcfcdb8e4a74b8b82"
+    },
+    {
+      "path": "dragontools/gui/convert_widget_custom_widgets.py",
+      "size": 12735,
+      "sha256": "9e4f4f82a2599896665ff067002947dc14d15986674c24f7c42620b727743ca4"
+    },
+    {
+      "path": "dragontools/gui/convert_widget_encoder_apply.py",
+      "size": 1095,
+      "sha256": "05058baa2fb6c8fb921d8c7d5caa870b93565e4291510d30f8f9be6b3adf83a2"
+    },
+    {
+      "path": "dragontools/gui/convert_widget_encoder_controls.py",
+      "size": 6556,
+      "sha256": "ed687a01cb557b9b59974504c3bb4dae2093db7cf53c691c51b1a64a44ea3e8c"
+    },
+    {
+      "path": "dragontools/gui/convert_widget_encoder_override.py",
+      "size": 5596,
+      "sha256": "b3d35f3838f03f44a9cc48d82f1815040e45132a35940bcda01fcbcda569886d"
+    },
+    {
+      "path": "dragontools/gui/convert_widget_encoder_panels.py",
+      "size": 5301,
+      "sha256": "9f371b0ee9bc5bac492212f87abbb433c7d10f96379f7ac9dd5ffeddb1bef474"
+    },
+    {
+      "path": "dragontools/gui/convert_widget_encoder_state.py",
+      "size": 3116,
+      "sha256": "3696605ca8a4169defb27a3741a2feee6ca9b98bcb7b2d4c3e2e18889406e39d"
+    },
+    {
+      "path": "dragontools/gui/convert_widget_file_queue.py",
+      "size": 11673,
+      "sha256": "f9e13f851ff6958118ee2b86bef02a6bf73d12aa787f761e53ff4361b2427919"
+    },
+    {
+      "path": "dragontools/gui/convert_widget_host_actions.py",
+      "size": 2092,
+      "sha256": "f665922a88621839d0ed2dfcf5b51c64e07d7ec591be771a2c7413f573379244"
+    },
+    {
+      "path": "dragontools/gui/convert_widget_layout.py",
+      "size": 2518,
+      "sha256": "b5f0748252dc1001866a4a3fe044c23a0aed2a2b9cec10a8fa298dcb4631aff2"
+    },
+    {
+      "path": "dragontools/gui/convert_widget_layout_components.py",
+      "size": 5984,
+      "sha256": "a740d9b46c7b421313eb44451a9850a211cb4308c56fa206fba2d8370073e12e"
+    },
+    {
+      "path": "dragontools/gui/convert_widget_layout_options.py",
+      "size": 11604,
+      "sha256": "b56f0babe11d5f11e936437f229df7d9eb7d88e6eaaad0627b0c936c72129940"
+    },
+    {
+      "path": "dragontools/gui/convert_widget_layout_runtime.py",
+      "size": 7645,
+      "sha256": "3dc67883538cc6acdb6ae086ebaee8b73421f5b23ea47303bc9f2071c3015622"
+    },
+    {
+      "path": "dragontools/gui/convert_widget_override_dialog.py",
+      "size": 10716,
+      "sha256": "cf25eeb20e390995f3e4d4ad54b01e426df6444278b3de980faf8681d7d11747"
+    },
+    {
+      "path": "dragontools/gui/convert_widget_paths.py",
+      "size": 2735,
+      "sha256": "7aee476f2d2556e15efc51edc7f98f8eb7e1a019c35413c22dc7cc1b987d2940"
+    },
+    {
+      "path": "dragontools/gui/convert_widget_queue_actions.py",
+      "size": 1452,
+      "sha256": "849ab0722a7be997652f6d8021c71c6395f9622080762c0dacaad3839130fd01"
+    },
+    {
+      "path": "dragontools/gui/convert_widget_queue_add.py",
+      "size": 8813,
+      "sha256": "82aef885637d12950354442d396c588fa60d7e6fb7bd1d653280481320c92267"
+    },
+    {
+      "path": "dragontools/gui/convert_widget_queue_badges.py",
+      "size": 5084,
+      "sha256": "595b1298d0c5224250f5cced32cfc5ef1ec69f288a216f62d8b735c2e9f4a490"
+    },
+    {
+      "path": "dragontools/gui/convert_widget_queue_context_actions.py",
+      "size": 7794,
+      "sha256": "b220ca8f366a52a1d9cc2bcd8bd8d0eb5bbe6bea3c1c1dbf46050426816b8398"
+    },
+    {
+      "path": "dragontools/gui/convert_widget_queue_dragdrop.py",
+      "size": 2373,
+      "sha256": "bcecba2a92f70819e65547806e41bf3706f33d0d1cf1042807cb1c848b0a2e6d"
+    },
+    {
+      "path": "dragontools/gui/convert_widget_queue_management.py",
+      "size": 1796,
+      "sha256": "b8aa6390f1b9090b4b9f3d64f69e0ef36062dc2c83eda551ec36785a435bb0db"
+    },
+    {
+      "path": "dragontools/gui/convert_widget_queue_override_actions.py",
+      "size": 6141,
+      "sha256": "9c934bfb45b7f4aadfe4feac84ed8a2ca8fbdf09ec52c96d49a708534931c716"
+    },
+    {
+      "path": "dragontools/gui/convert_widget_queue_remove.py",
+      "size": 6511,
+      "sha256": "282023ea11b41467c4eb8735983a8332b8aaac351f1aee2739c55fb65c4b5670"
+    },
+    {
+      "path": "dragontools/gui/convert_widget_queue_window_actions.py",
+      "size": 3456,
+      "sha256": "ef6db8ed5c6341b9c9f76fbaf27ee24ac8fbf14ab8d7955d6599e073ec0a8160"
+    },
+    {
+      "path": "dragontools/gui/convert_widget_recovery.py",
+      "size": 5996,
+      "sha256": "c25f7d102bc8e7966d21f5f12195ae94812e43209763a075fb2e43b90a50d51a"
+    },
+    {
+      "path": "dragontools/gui/convert_widget_runtime_ui.py",
+      "size": 2571,
+      "sha256": "c4fd73a78577800a98347125f5ea90d3e2303e8cea5b4c3ab7ddd4138b81a4c1"
+    },
+    {
+      "path": "dragontools/gui/convert_widget_source_visual_actions.py",
+      "size": 3416,
+      "sha256": "449e5f004efee318e194ee58fb92f7dc7b88b36981ba418fe818089ef88a5941"
+    },
+    {
+      "path": "dragontools/gui/drop_path_decode.py",
+      "size": 2155,
+      "sha256": "50c810e332a54da4ae971e6b169d33158de0ea4a975ee4b3530c5f481e9b4fe9"
+    },
+    {
+      "path": "dragontools/gui/drop_path_extractor.py",
+      "size": 10446,
+      "sha256": "26bf5e11a04dbed3c8e6c1773d2822bdc86e2a5fec2b9c7fc0d03ab312058409"
+    },
+    {
+      "path": "dragontools/gui/drop_path_files.py",
+      "size": 940,
+      "sha256": "bc6a732f085f8c66705cbda48f99800c632a121401ce6e785e655ea1d6048afc"
+    },
+    {
+      "path": "dragontools/gui/drop_path_windows.py",
+      "size": 3273,
+      "sha256": "d554ab3b823400f2e2f124ca4ad8c129acde06ef3f61f30ad9e2d7c228feac89"
+    },
+    {
+      "path": "dragontools/gui/dv_crop_dialog.py",
+      "size": 1721,
+      "sha256": "d5942e9cffbab852c0e3cb21e26f38ccb7ff595da76dbafbce27cebe56074335"
+    },
+    {
+      "path": "dragontools/gui/encoder_profile_service.py",
+      "size": 4514,
+      "sha256": "cf1eb46337eb98c02d63be4e0bee0617b9f416f922a98e7cd312471a36e76a92"
+    },
+    {
+      "path": "dragontools/gui/encoder_settings_controller.py",
+      "size": 1387,
+      "sha256": "03af8986e0c652aad8ab52784a3c144ee254de17cf238d651d7f511f3aa4a56e"
+    },
+    {
+      "path": "dragontools/gui/encoder_settings_options.py",
+      "size": 6219,
+      "sha256": "aacc5e15c5059756c81fecb10e50de3e27af0634ad65641efcad480db936275d"
+    },
+    {
+      "path": "dragontools/gui/encoder_settings_panels.py",
+      "size": 4000,
+      "sha256": "1244f0f18fadf7195c04d215167dda627dab975f259cd7f77103b6fb5a2b0fde"
+    },
+    {
+      "path": "dragontools/gui/encoder_settings_persistence.py",
+      "size": 9307,
+      "sha256": "46662cad4678f34565a696aa9339915b085dfc50c34aa0d6241a056cd831bfa4"
+    },
+    {
+      "path": "dragontools/gui/encoder_settings_profiles.py",
+      "size": 7964,
+      "sha256": "5d8f2da655dfa9d41feb7b20ef32af4b3dbe0bb330fa290766aeec2736bc25bc"
+    },
+    {
+      "path": "dragontools/gui/encoder_settings_state.py",
+      "size": 633,
+      "sha256": "905951cb53cdf01c8ea7117f64d4fe686ebf13331af7981e8635e279111cf426"
+    },
+    {
+      "path": "dragontools/gui/encoder_settings_ui.py",
+      "size": 16681,
+      "sha256": "7892b0cbfa08079ad57af5985417f9b0eb102d4b265d0b2a8e336da07c4d0cdc"
+    },
+    {
+      "path": "dragontools/gui/file_drop_widgets.py",
+      "size": 1353,
+      "sha256": "506c1608875553db688eef2e8952199c9176676f2cdfb50eb8ea9dc9bd64ad43"
+    },
+    {
+      "path": "dragontools/gui/help_dialog.py",
+      "size": 3802,
+      "sha256": "ce3f0707eda07cf0bad78c35af6cf7d758d9cd6220b67957877632f22d42eba3"
+    },
+    {
+      "path": "dragontools/gui/info_button.py",
+      "size": 1476,
+      "sha256": "a5aee27c063e5857b4691e48b213fbea90e3d354cd57a1d75f8ff29a3ef9f61a"
+    },
+    {
+      "path": "dragontools/gui/iso_widget.py",
+      "size": 1984,
+      "sha256": "5ff80ceae2c997a9fff64a63aff3f4ef9010a9ef0c9460bc1e7e97e3dd7181bf"
+    },
+    {
+      "path": "dragontools/gui/iso_widget_inputs.py",
+      "size": 3745,
+      "sha256": "75f923829361fac67eafb8a6610e69e7451acff38f365b71194d9981bacaca64"
+    },
+    {
+      "path": "dragontools/gui/iso_widget_runtime.py",
+      "size": 8794,
+      "sha256": "0e35cc454d7854eec56e6c38f25f33f19d80ba25903ab7be7c306431c0ceabe3"
+    },
+    {
+      "path": "dragontools/gui/iso_widget_view.py",
+      "size": 5426,
+      "sha256": "db3fbab3912030dd6ffc691491603da666a80ccf45661e4862e2aedb85f1d364"
+    },
+    {
+      "path": "dragontools/gui/job_resume_dialog.py",
+      "size": 3128,
+      "sha256": "79b1d25ddeded19162584d0271ac78b662f6c8d1e47341a7edb8a9d2564b6d4e"
+    },
+    {
+      "path": "dragontools/gui/journal_resume_base.py",
+      "size": 1708,
+      "sha256": "c983c9101ff0078f69f23589121043cbd56a4f5fd350833370b6800d86962a52"
+    },
+    {
+      "path": "dragontools/gui/main_window.py",
+      "size": 4947,
+      "sha256": "f71e05e9549cfdad32da259daf05e4049fd59d16fb3b9a2b83ce404016e01d3a"
+    },
+    {
+      "path": "dragontools/gui/main_window_actions.py",
+      "size": 1194,
+      "sha256": "589136e67922b5631662a05c7eb075c961ace57e0fed52107fb9f6732e6df5c2"
+    },
+    {
+      "path": "dragontools/gui/main_window_backup_actions.py",
+      "size": 9562,
+      "sha256": "d914bf2a9f54c158a27779f06dc5735d7fd1786f97389da902fb5f06a2f5c16d"
+    },
+    {
+      "path": "dragontools/gui/main_window_convert_actions.py",
+      "size": 5904,
+      "sha256": "4493bc4e6f03a7279acc33118c8d27c7db6da53cddeb182d7fa78a4ad482ec99"
+    },
+    {
+      "path": "dragontools/gui/main_window_help_actions.py",
+      "size": 5952,
+      "sha256": "8ac2c087493277442f502b2261c4e2a89333700f3081320cb41aa44b8b2dfc13"
+    },
+    {
+      "path": "dragontools/gui/main_window_menus.py",
+      "size": 14295,
+      "sha256": "b48da896828b89c5659d1419dfc4f2ce2424c1923192f465897a7756d8b260c0"
+    },
+    {
+      "path": "dragontools/gui/main_window_metadata_actions.py",
+      "size": 4680,
+      "sha256": "cdd38a90ea8720ff29f73d34e7762de746b6b7b1d83c7811be7f6c32443a7249"
+    },
+    {
+      "path": "dragontools/gui/main_window_profile_actions.py",
+      "size": 2801,
+      "sha256": "b42c14fccd0fded47d604c7aa53c53fd45423ed08982f1a42872a8aa7d109a32"
+    },
+    {
+      "path": "dragontools/gui/main_window_recovery.py",
+      "size": 11967,
+      "sha256": "872ba932cac19ce0e7c5ed535317d13ba222ddf3ad9a453916e2df2dd78e7475"
+    },
+    {
+      "path": "dragontools/gui/main_window_settings_actions.py",
+      "size": 4462,
+      "sha256": "c8635569f08fd6c427ddef2d25f424fafe4ac843288faed9999f5a17360cc31f"
+    },
+    {
+      "path": "dragontools/gui/main_window_system_actions.py",
+      "size": 4446,
+      "sha256": "3ae4218d80d025d33a6f7fc67911d607a6a9c3a0c00e170510d02e29cc489023"
+    },
+    {
+      "path": "dragontools/gui/main_window_tabs.py",
+      "size": 14382,
+      "sha256": "cce73cd012bea82063677feec67e1d72e684f51dfb1bc61e14e072ada9547053"
+    },
+    {
+      "path": "dragontools/gui/media_info_dialog.py",
+      "size": 10507,
+      "sha256": "f01800e6e0dbcc8313acf0636fd38a67eed90fdbf465b10c5b78952b83a28883"
+    },
+    {
+      "path": "dragontools/gui/media_info_text_builder.py",
+      "size": 15572,
+      "sha256": "e8c8c3104b3272fe1475528d8f749ad9f6edfbd128eb4311cc83ef7a2758027e"
+    },
+    {
+      "path": "dragontools/gui/media_library_dialog.py",
+      "size": 14935,
+      "sha256": "20423f1576ece91994abbc6d89224baffa2a05691d570222c59ce69a37e172fc"
+    },
+    {
+      "path": "dragontools/gui/media_library_dialog_contracts.py",
+      "size": 1624,
+      "sha256": "ab7a67b531a51e208e673f4c7f3ed12913763e63fa4e1829ff5550229f3f17e1"
+    },
+    {
+      "path": "dragontools/gui/media_library_dialog_options.py",
+      "size": 4001,
+      "sha256": "f0f30b2d44d37a90ec0c6d5fa1cb8b2858456d972e70f6a2900d857c68608cdd"
+    },
+    {
+      "path": "dragontools/gui/media_library_dialog_presenter.py",
+      "size": 5474,
+      "sha256": "42dfd986832a68cbf1c4b003c5d42f51ac7d2971c1621ed500875d00c30729c6"
+    },
+    {
+      "path": "dragontools/gui/media_library_dialog_service.py",
+      "size": 10322,
+      "sha256": "9a25cb50a4799da7c07a29ff2b5964bca38ebe08effe723138a09e8ee7d7410b"
+    },
+    {
+      "path": "dragontools/gui/media_library_dialog_view.py",
+      "size": 3733,
+      "sha256": "2ba9836f895231c1197f551fec90bb4cdd51759f6ce247a683dc8c28022d8362"
+    },
+    {
+      "path": "dragontools/gui/media_library_maintenance_controller.py",
+      "size": 6507,
+      "sha256": "1d6d12bfacfa3f3d9478667866ba28faede931af9cc7fb35e898cf7bc07b4f89"
+    },
+    {
+      "path": "dragontools/gui/media_library_mapping_controller.py",
+      "size": 3042,
+      "sha256": "ee4f63aafcf74cc0e4f462d715981613d3e8e7a52759c2bf03632f7600d139d8"
+    },
+    {
+      "path": "dragontools/gui/media_library_mapping_tab.py",
+      "size": 1816,
+      "sha256": "1059b90abf37001e0c1719ebf285508f78233eed224528a55036115ee97dfef8"
+    },
+    {
+      "path": "dragontools/gui/media_library_nfo_controller.py",
+      "size": 4209,
+      "sha256": "dca5e83f0e488072cc588742f772d665b3be61e86ea989ce73d6632d7fb1ef4c"
+    },
+    {
+      "path": "dragontools/gui/media_library_nfo_scan_controller.py",
+      "size": 2818,
+      "sha256": "8eff9d5ed400d49e6b6f876163c0699e1500c332a7ecba46e0b3750badb3935e"
+    },
+    {
+      "path": "dragontools/gui/media_library_scan_controller.py",
+      "size": 3508,
+      "sha256": "1ba4ebc206849dc68c041996b9c81a9742fd0b85ba618eb1ecc5926e9aff8037"
+    },
+    {
+      "path": "dragontools/gui/media_library_search_controller.py",
+      "size": 13680,
+      "sha256": "97113f0c543fe8917fecdb7f1393b8c3fc197c5fe109f2ddc9c1b40c2f3f2558"
+    },
+    {
+      "path": "dragontools/gui/media_library_search_tab.py",
+      "size": 4436,
+      "sha256": "0ab7c93780dfe371124427db3f560142a26c0a05bf7787de68c80797602248d8"
+    },
+    {
+      "path": "dragontools/gui/media_library_search_worker.py",
+      "size": 1214,
+      "sha256": "17ecee4921e0da237968cb7400ce9ab95a6066fdb944853a3c6a8f73e4a8400d"
+    },
+    {
+      "path": "dragontools/gui/media_library_sql_tab.py",
+      "size": 2640,
+      "sha256": "0cc304714aa4b6ce2d985c9d0216bd11b0108d1f96da73183f566ac36e72fcdb"
+    },
+    {
+      "path": "dragontools/gui/media_library_status_tab.py",
+      "size": 5933,
+      "sha256": "f7376bfed8d2de3e1d0b9003a40c389bc7cff40ded33c22dde98fdc1f4ccd369"
+    },
+    {
+      "path": "dragontools/gui/merge_widget.py",
+      "size": 13250,
+      "sha256": "b5f807886e6b5d1e79916d1c8c2a129dd9ae2832e4713496c62035b6a99e61df"
+    },
+    {
+      "path": "dragontools/gui/move_incremental_lifecycle.py",
+      "size": 7917,
+      "sha256": "7bcf434c97704454e8ddc7c1369621150d7a8cbad8089bb2ae3911c3185700c3"
+    },
+    {
+      "path": "dragontools/gui/move_lifecycle_coordinator.py",
+      "size": 2507,
+      "sha256": "531740abf1815a5a16b053184ab25fabeaa82f51278b089e33f3ccaec2b9f044"
+    },
+    {
+      "path": "dragontools/gui/move_lifecycle_helpers.py",
+      "size": 2062,
+      "sha256": "d3f03c828bfa75dba3ee6189a2c39c8358a7bedadfba9d84b738208b04cd0456"
+    },
+    {
+      "path": "dragontools/gui/move_preflight_controller.py",
+      "size": 5392,
+      "sha256": "5a88d8ea049218a46ad4ffb2a73c2a252887aca51320aca2df756ae0ba4bdb8e"
+    },
+    {
+      "path": "dragontools/gui/move_preflight_workflow.py",
+      "size": 6690,
+      "sha256": "d40f1cacdb0a67e3712ebf2383b515c03b40652d66e504e493042f49720d36d0"
+    },
+    {
+      "path": "dragontools/gui/move_regular_lifecycle.py",
+      "size": 7392,
+      "sha256": "89820b51a186faa19406ce0a9b78c509ef03c2c894a5fafdf338ddfd04ff532c"
+    },
+    {
+      "path": "dragontools/gui/move_request_dialogs.py",
+      "size": 11527,
+      "sha256": "3f45e1719cf64f8a1aa19887be751e91237b675dc2ce8e52faeddce7f2047499"
+    },
+    {
+      "path": "dragontools/gui/move_resume_dialog.py",
+      "size": 1992,
+      "sha256": "845729cb480978ba18db6ca814efcfa9bb4ed5a5f2f128482317deba2cb96b95"
+    },
+    {
+      "path": "dragontools/gui/movie_renamer_actions.py",
+      "size": 6809,
+      "sha256": "37523115e22dc231585e052f5463182b2f1ea8750e3437cd54051f20d2ab6854"
+    },
+    {
+      "path": "dragontools/gui/movie_renamer_resolve_search.py",
+      "size": 2083,
+      "sha256": "df83a7e9845970de7464a87615c981acf3d4b91836e47de19570a20751997aed"
+    },
+    {
+      "path": "dragontools/gui/movie_renamer_resolver.py",
+      "size": 7409,
+      "sha256": "3f0dc8a31ec59a2d39f194d777e89e2dc8a7e1acf8abf46074ab2bc44e2c224c"
+    },
+    {
+      "path": "dragontools/gui/movie_renamer_search_actions.py",
+      "size": 2880,
+      "sha256": "a230b1c75d5f0bf2482a6a47d487fde1b9be513a3f022a472e567226d3ac9d0c"
+    },
+    {
+      "path": "dragontools/gui/movie_renamer_table_controller.py",
+      "size": 12433,
+      "sha256": "e7068d28d7ce40d8ac56225c5374587e8bea27e603e0574de62cdb15e1070bf1"
+    },
+    {
+      "path": "dragontools/gui/movie_renamer_table_search.py",
+      "size": 2680,
+      "sha256": "bb4045fc1286620e996e2f18a0afd18af90142a93daeea68679541b9970d68ec"
+    },
+    {
+      "path": "dragontools/gui/movie_renamer_view.py",
+      "size": 7055,
+      "sha256": "14deefc7c9093801b9c291701214f0d0914fd4382436600c202099551365b843"
+    },
+    {
+      "path": "dragontools/gui/movie_renamer_widget.py",
+      "size": 4785,
+      "sha256": "c329d166e9c91b49f4da6256eef197deaeefdd49ba8f64a080fcaa6ce21e6688"
+    },
+    {
+      "path": "dragontools/gui/mp4_remux_widget.py",
+      "size": 10505,
+      "sha256": "14781b5df7d049e6609702034e19e1e99b208ffafc1d3da248e6e249ea855ebe"
+    },
+    {
+      "path": "dragontools/gui/online_metadata_dialog.py",
+      "size": 1044,
+      "sha256": "9556f1c4b62b535ec320d3c0cf8f141389db7fe799592d1501325921ae087486"
+    },
+    {
+      "path": "dragontools/gui/online_metadata_dialog_state.py",
+      "size": 4719,
+      "sha256": "65a0bf4fbba704452b002a0a87c844da7ab36151ba09ef0917bb270ad109170a"
+    },
+    {
+      "path": "dragontools/gui/online_metadata_dialog_view.py",
+      "size": 8205,
+      "sha256": "0c23931f6908fb88aa6cb95141790419df9644b194a2190e40af26dae6bf026b"
+    },
+    {
+      "path": "dragontools/gui/online_metadata_settings_state.py",
+      "size": 5083,
+      "sha256": "496de63b87db10916154618491a1316fd2529a740a0b10f62cdf8a5347801b7f"
+    },
+    {
+      "path": "dragontools/gui/preflight_dialog.py",
+      "size": 9238,
+      "sha256": "cd0537a29b6ae3e0c1d131bb8b1f4adc9b7fae7044c61fe15ab23ef63e2e71a1"
+    },
+    {
+      "path": "dragontools/gui/preflight_film_hints.py",
+      "size": 2464,
+      "sha256": "d6a32b385bf303fab5117ba32296e6c8ff705b6b41aa6ebde7012b131296f39c"
+    },
+    {
+      "path": "dragontools/gui/preflight_film_widget.py",
+      "size": 9066,
+      "sha256": "daa4bbf0b3a395947a990dfcf2f67d8b823a230d08601a93817ef1575184d18e"
+    },
+    {
+      "path": "dragontools/gui/preflight_metadata.py",
+      "size": 4405,
+      "sha256": "27bf7c434416f766f6666b660982fe806ea5212ab220ff8b966f765057d2f48c"
+    },
+    {
+      "path": "dragontools/gui/preflight_metadata_apply.py",
+      "size": 3165,
+      "sha256": "3064728060813d939b7a75df9585d7fabb6905bd609801e8f2c9f664040fc833"
+    },
+    {
+      "path": "dragontools/gui/preflight_metadata_common.py",
+      "size": 3485,
+      "sha256": "ec342a4955638a79805741ccfcfb17ca7b91cc7b0c4353fb121fe4439ad7d680"
+    },
+    {
+      "path": "dragontools/gui/preflight_metadata_movie.py",
+      "size": 3117,
+      "sha256": "d421f65152e77355fcfb63fa86a9301869e71d1695952c87baa61bc044261149"
+    },
+    {
+      "path": "dragontools/gui/preflight_metadata_series.py",
+      "size": 2005,
+      "sha256": "d7ead4cafcb999c9d90143b177506f9237b78f100e4f49c4e17d3282e73e9062"
+    },
+    {
+      "path": "dragontools/gui/preflight_metadata_series_resolver.py",
+      "size": 5136,
+      "sha256": "e135f5922c9a5b345f27137d644c5e255cb2141a705f1025d219baf208d75132"
+    },
+    {
+      "path": "dragontools/gui/preflight_metadata_series_sources.py",
+      "size": 2256,
+      "sha256": "b2dbdadc6916380d268bd37e343023c3cd0b2deffd0897545eb55f5fb79212ac"
+    },
+    {
+      "path": "dragontools/gui/preflight_series_choices.py",
+      "size": 2713,
+      "sha256": "9713b120bf1c0bea6b6660774e8117eecbbc1af4fb3933af46c4464ba5b2fee8"
+    },
+    {
+      "path": "dragontools/gui/preflight_series_metadata.py",
+      "size": 6887,
+      "sha256": "98dd05e42e3cd35816fbf88d355760069d086a5c29be29f3d34c065c2c14e1de"
+    },
+    {
+      "path": "dragontools/gui/preflight_series_paths.py",
+      "size": 4619,
+      "sha256": "090a08d3a20c7b8ac9881bee2170ddbee49b891f2d4263c25ac4a00e0478bfef"
+    },
+    {
+      "path": "dragontools/gui/preflight_series_view.py",
+      "size": 6139,
+      "sha256": "6d5569103467b286d79d65a255d47e647a20470db3016c346ca31ae3e079beb9"
+    },
+    {
+      "path": "dragontools/gui/preflight_series_widget.py",
+      "size": 1366,
+      "sha256": "e6d7346fa3599262f536122e991f8d5b0e9460c2d2ae93e2e9bcad3f272f822c"
+    },
+    {
+      "path": "dragontools/gui/preflight_view.py",
+      "size": 5021,
+      "sha256": "676f09b941ca11d1a5f68692f62365d284629dfe3ca635454ab184ee64878dca"
+    },
+    {
+      "path": "dragontools/gui/preflight_widget_common.py",
+      "size": 1892,
+      "sha256": "5a442f3c36da00426cd052670a561d5fd4b720af2ede20fec7e2d06b395ea28f"
+    },
+    {
+      "path": "dragontools/gui/preflight_widgets.py",
+      "size": 591,
+      "sha256": "bb0e7a6b8a526c71820710bc0ae7223026aafbe17078783487c2e22f4c464d76"
+    },
+    {
+      "path": "dragontools/gui/profile_manager_dialog.py",
+      "size": 5359,
+      "sha256": "eb82cb92eb68618bff945b0d5f16508e794b751220f88988bec719ab00deb513"
+    },
+    {
+      "path": "dragontools/gui/quality_file_compare_dialog.py",
+      "size": 12394,
+      "sha256": "27400e8f6523fd53e3cc5c156a4eb9e6afce06bb8e74389a528f70b71f870a84"
+    },
+    {
+      "path": "dragontools/gui/quality_tester_execution.py",
+      "size": 3606,
+      "sha256": "8b7197e5697671e613fee22496adee4a6f6549c6bc3154cc2c3e49fe1db77913"
+    },
+    {
+      "path": "dragontools/gui/quality_tester_files.py",
+      "size": 2972,
+      "sha256": "e29a4002277a5d84b580f038dd38caadcefad52cd41a31337be06bbd0a45141c"
+    },
+    {
+      "path": "dragontools/gui/quality_tester_run_config.py",
+      "size": 7717,
+      "sha256": "f949f91ce36c15f183cbe488f58d5bb3b8e3e08f3aabd53e098fcf26613a6e81"
+    },
+    {
+      "path": "dragontools/gui/quality_tester_run_dialog.py",
+      "size": 15079,
+      "sha256": "0e05048eba894158bab4c5a36bb1674d15edb9caa9dfabbd55ab39993d3b8eb1"
+    },
+    {
+      "path": "dragontools/gui/quality_tester_widget.py",
+      "size": 7695,
+      "sha256": "335235f80a76152470194f16eedb5885eb9207c47cb223c0b25f4ef7c66c2452"
+    },
+    {
+      "path": "dragontools/gui/replacement_reminder_dialog.py",
+      "size": 5043,
+      "sha256": "37fad0f3ed89908a47b489db455fae43497a0f2fda133f9b1ffe0d460392955b"
+    },
+    {
+      "path": "dragontools/gui/rules_audio_tab.py",
+      "size": 1170,
+      "sha256": "454a20403bba79be7b46a7994f94f3835632b58e757a2350c428dbd9f63cec86"
+    },
+    {
+      "path": "dragontools/gui/rules_audio_tab_channels.py",
+      "size": 12705,
+      "sha256": "148f5137c453572f8ae13ebc6a51f3eacae2b206f9705f136ebf76ecfd1da904"
+    },
+    {
+      "path": "dragontools/gui/rules_audio_tab_sections.py",
+      "size": 12622,
+      "sha256": "0fa24f68bd62f416653e1da326443e882d0f97bc754c96a787b86014f0512ff6"
+    },
+    {
+      "path": "dragontools/gui/rules_audio_tab_state.py",
+      "size": 6222,
+      "sha256": "36fe6689c55e15c3dea3f333ea1e3bc1665e6c9a921a4e3be29984ea8c37b71b"
+    },
+    {
+      "path": "dragontools/gui/rules_dialog.py",
+      "size": 3829,
+      "sha256": "2ab7e1449f135c61cbcff3ace774c57bc807efb8cf7bf57ba2d6be0c6cf1fa72"
+    },
+    {
+      "path": "dragontools/gui/rules_dialog_common.py",
+      "size": 416,
+      "sha256": "212ec0bfb377a2b0d22bc901efe7e545ff633ae49ad776d679e42f7ef8c7fba1"
+    },
+    {
+      "path": "dragontools/gui/rules_dialog_storage.py",
+      "size": 1919,
+      "sha256": "b272d0e229423bab16d22a4d9219683d5fe9be1ddaaccb6953137cd9ae0fec66"
+    },
+    {
+      "path": "dragontools/gui/rules_flags_tab.py",
+      "size": 2708,
+      "sha256": "ab782edff387f8544fe0d64a756c50cbb809c50c7db12f17be87ec7d180b11b3"
+    },
+    {
+      "path": "dragontools/gui/rules_language_editor.py",
+      "size": 5798,
+      "sha256": "c41684d22cea73bdbb1af8c64a2403c280c1fdf325b62297e0427cd5c16b317b"
+    },
+    {
+      "path": "dragontools/gui/rules_regex_help.py",
+      "size": 4521,
+      "sha256": "526d93b24202974069078ae2a1fb2efe0d292aa9daa45bb5524972f115806d50"
+    },
+    {
+      "path": "dragontools/gui/rules_renamer_tab.py",
+      "size": 9570,
+      "sha256": "38becafa3c4999fe80319416b2ea2653e6e2d3d4a1e80d2295ef952dda3f5354"
+    },
+    {
+      "path": "dragontools/gui/rules_series_tab.py",
+      "size": 7842,
+      "sha256": "20ed9b32525111baa0d4217a615788b1c0e810e01f2a944a686bf84aab33144a"
+    },
+    {
+      "path": "dragontools/gui/rules_subtitle_tab.py",
+      "size": 14936,
+      "sha256": "da67e6e45bfb1146c9d38f91872df222e7bf9274475294f58d29671d492996e8"
+    },
+    {
+      "path": "dragontools/gui/run_summary_dialog.py",
+      "size": 6740,
+      "sha256": "ff2e6451c3ba52c1b990c66642f0eb6b0842344b816c35ef3f66ff64bdd50f4a"
+    },
+    {
+      "path": "dragontools/gui/save_settings_dialog.py",
+      "size": 423,
+      "sha256": "21cca96f11b3563acce782724b43e2dac70b3d8bb8000e8a7947f399f93fec91"
+    },
+    {
+      "path": "dragontools/gui/settings_dialog.py",
+      "size": 6198,
+      "sha256": "6569d656db0bc7128bf32fa8d36b7ac40c5c67014638b287f074f8eb3b7126bd"
+    },
+    {
+      "path": "dragontools/gui/settings_sections/__init__.py",
+      "size": 479,
+      "sha256": "f2ba1e097f75e170fa51bd21d3d32581f1816d0fe79fee44a7ff6c10b1c436f7"
+    },
+    {
+      "path": "dragontools/gui/settings_sections/base.py",
+      "size": 784,
+      "sha256": "b4a5c4fc06c3c5cce37da321ed33ce6f385f3b321dbac4a80e07a40cd9928a55"
+    },
+    {
+      "path": "dragontools/gui/settings_sections/media.py",
+      "size": 21487,
+      "sha256": "4275471ef6cf61b822d67c37b9b555cb7b1f69b92395f421e4b641035d4af5bf"
+    },
+    {
+      "path": "dragontools/gui/settings_sections/runtime.py",
+      "size": 13738,
+      "sha256": "5f1893cf710bbba71133b7efd05e5441bfe335d5206a904d716d9787686139e5"
+    },
+    {
+      "path": "dragontools/gui/settings_sections/safety.py",
+      "size": 11259,
+      "sha256": "52d1e0b1a61aacf56fe1a983ec8e45f72b5ff407965860a88c986f9d7546acb2"
+    },
+    {
+      "path": "dragontools/gui/settings_sections/storage.py",
+      "size": 12448,
+      "sha256": "7f46ec8b135db873099fa4d6a589c57865b64cfd99ee7b47bbf5625eec0b59d2"
+    },
+    {
+      "path": "dragontools/gui/settings_sections/video.py",
+      "size": 12316,
+      "sha256": "02a9aeef7dc17c96d66b67392104508db6ccf99cde990674f1e6e55419ad0fdd"
+    },
+    {
+      "path": "dragontools/gui/shortcut_dialog.py",
+      "size": 1877,
+      "sha256": "578613fef8c9088f07a5de889ac9478b56f24f6e87507a697ea4f23f47b35c46"
+    },
+    {
+      "path": "dragontools/gui/styles.py",
+      "size": 3209,
+      "sha256": "acece5631929872869fb5405523a601f916fb5d233c8d4e11320320567942d98"
+    },
+    {
+      "path": "dragontools/gui/subtitle_widget.py",
+      "size": 12855,
+      "sha256": "35356e5804193eae9b6cf45a5d7ca8effa367e9fdf211c4eb7fec5677aad2363"
+    },
+    {
+      "path": "dragontools/gui/subtitle_widget_files.py",
+      "size": 1976,
+      "sha256": "2c2d42a343d2dfe3335f82a32338186461b7cdad683aedbb473ee8deec307c9e"
+    },
+    {
+      "path": "dragontools/gui/subtitle_widget_workers.py",
+      "size": 10718,
+      "sha256": "805d86b9747c625f9a0bee35afe13c2badf24931c76e75e9f3a4221716d1b5e3"
+    },
+    {
+      "path": "dragontools/gui/tab_manager.py",
+      "size": 8518,
+      "sha256": "d9398ad4634f6d1f2d878ff61d3b0151a8875d771a859ff79fd96194fd2406e4"
+    },
+    {
+      "path": "dragontools/gui/timeout_settings_dialog.py",
+      "size": 11151,
+      "sha256": "271147bf279087559c57ceb7a6ae44faba6f2066f7cf95844132e33b538fce34"
+    },
+    {
+      "path": "dragontools/gui/tool_path_settings.py",
+      "size": 3384,
+      "sha256": "21d4b8dd6492b0430c2bf51d77b4f55910f267ca415e992c3e2a2d5bcd766bb6"
+    },
+    {
+      "path": "dragontools/gui/ui_helpers.py",
+      "size": 2925,
+      "sha256": "03e28275af8f9e2aa0251c3eee980326c12fedabb62d03b2871e58751fec35ac"
+    },
+    {
+      "path": "dragontools/gui/update_checker.py",
+      "size": 2678,
+      "sha256": "4c45d4b876aeb3e44323670846959fd279c9db6d911bfd21f7c85e1581a67ea4"
+    },
+    {
+      "path": "dragontools/gui/video_file_input.py",
+      "size": 3971,
+      "sha256": "f74178a11c6d6da421f462bf00bb4b9b2e8d4d10aad1dc1b9b43ec05d7c67e5a"
+    },
+    {
+      "path": "dragontools/gui/windows_restart_guard.py",
+      "size": 8458,
+      "sha256": "a74bf09f0981471bdb4612f34db7cf730a5a111c69bc5530c358cceb219c8360"
+    },
+    {
+      "path": "dragontools/rules/__init__.py",
+      "size": 2,
+      "sha256": "7eb70257593da06f682a3ddda54a9d260d4fc514f645237f5ca74b08f8da61a6"
+    },
+    {
+      "path": "dragontools/rules/audio_plan.py",
+      "size": 11541,
+      "sha256": "9b15c00ff989825eb4ad0d53b95f5a058d2a6a94784a0c7517dcde09cbfd7e21"
+    },
+    {
+      "path": "dragontools/rules/audio_plan_policy.py",
+      "size": 4982,
+      "sha256": "b685cd3d006576fec205422410602633de9f42f445311d77e7c33539d916b6ff"
+    },
+    {
+      "path": "dragontools/rules/audio_rule_basics.py",
+      "size": 7473,
+      "sha256": "efc7f846f53db9dd4ea678168c138720dc115c963846fba8b344475143e8230d"
+    },
+    {
+      "path": "dragontools/rules/audio_rule_migration.py",
+      "size": 9345,
+      "sha256": "00e13f9a850e8977c41eae90a9ba1e4c865cf0c7b3337d3d091448070c4987b6"
+    },
+    {
+      "path": "dragontools/rules/audio_rule_repository.py",
+      "size": 1159,
+      "sha256": "3fa1023748b3b83b7f38ba231f66e9d9e958e6899a06f305a5fda87876df1cae"
+    },
+    {
+      "path": "dragontools/rules/audio_rules.py",
+      "size": 2081,
+      "sha256": "435915a4bf173f9007f18f4036e909e5abb4d5bd4fd18d62d532ff8b1dde7fb9"
+    },
+    {
+      "path": "dragontools/rules/audio_selection.py",
+      "size": 5270,
+      "sha256": "481fd6bf83cc9c62527a5b51ae78222d1c2869befc60ede5894d60b39ce07e83"
+    },
+    {
+      "path": "dragontools/rules/audio_transcode_policy.py",
+      "size": 9110,
+      "sha256": "78a1017c2cc58a32100651a9eb1228a63e36aed7b1e6baba7d1b73ffe5a36bf1"
+    },
+    {
+      "path": "dragontools/rules/move_path_helpers.py",
+      "size": 5743,
+      "sha256": "e4df16dc36f1598a6c6e577d11bb568a1d5a7d51a1de3f12228b0a4d4f4adefe"
+    },
+    {
+      "path": "dragontools/rules/move_rule_config.py",
+      "size": 2021,
+      "sha256": "19ac17ebd8d360c571ba1965f46a2cb16ecb2482bd7770b57585c3cea46cd70d"
+    },
+    {
+      "path": "dragontools/rules/move_rules.py",
+      "size": 6465,
+      "sha256": "727b5da81bff7a56ef0d968671debb1512a16ee6662ebe7cee295ba514b88c56"
+    },
+    {
+      "path": "dragontools/rules/move_series_detection.py",
+      "size": 4148,
+      "sha256": "60d57edb793a5bb0aaa6dd91cf624c4cbfb91361f7a839ef264a830ab0ecdad2"
+    },
+    {
+      "path": "dragontools/rules/move_series_directories.py",
+      "size": 4383,
+      "sha256": "cddcd0cba86529cc6bcf6c6cfefdcee23b6cf13250f122b6e6b969d63eaac43b"
+    },
+    {
+      "path": "dragontools/rules/pipeline_capabilities.py",
+      "size": 5002,
+      "sha256": "9620ed457e1f7b32f9ef5324ab2b2d0fe09d56af45f933935616bfff3441b4e8"
+    },
+    {
+      "path": "dragontools/rules/pipeline_policy.py",
+      "size": 3717,
+      "sha256": "7f056625b787c6b28063fc3983ec1308efe2312312fed2010a0905f0710412c2"
+    },
+    {
+      "path": "dragontools/rules/pipeline_selector.py",
+      "size": 6589,
+      "sha256": "e63a3292802296ca565d53c89cdfb34f8c44f547c0c09d79faac9598ef70fd24"
+    },
+    {
+      "path": "dragontools/rules/renamer_rules.py",
+      "size": 10998,
+      "sha256": "594d95e522b66c73d30642117eb3abcd7d09949e8ae3067067e96c2623ca8967"
+    },
+    {
+      "path": "dragontools/rules/rule_loader.py",
+      "size": 6289,
+      "sha256": "26c7f9bb34d95f0b43a4c3012dc6ea0f292d0ff3b70e4f27964c13530047e0c9"
+    },
+    {
+      "path": "dragontools/rules/subtitle_burn_policy.py",
+      "size": 5839,
+      "sha256": "acff74def92022e9dfa754c3fb918dbb250556e43ac327a77969898b6cadb3bb"
+    },
+    {
+      "path": "dragontools/rules/subtitle_keep_policy.py",
+      "size": 6514,
+      "sha256": "872a737463006d84ce8fda44ae160c65540e17bcb7183e83b2f070a35e0d93a2"
+    },
+    {
+      "path": "dragontools/rules/subtitle_plan_models.py",
+      "size": 1077,
+      "sha256": "31cb28f57c032c1493a65220a86d293d88e050f6e29fc333e874e6b0f6814b54"
+    },
+    {
+      "path": "dragontools/rules/subtitle_plan_service.py",
+      "size": 6757,
+      "sha256": "98c3278cf5ec27552207162fbcb48ad95d35c11e7819b002badf6e20c8487940"
+    },
+    {
+      "path": "dragontools/rules/subtitle_rule_config.py",
+      "size": 9776,
+      "sha256": "9e17a15fa1e0442127dc5859fd97cf8c11e0af46c0fd8eb6ac1862be0f35e538"
+    },
+    {
+      "path": "dragontools/rules/subtitle_rules.py",
+      "size": 3390,
+      "sha256": "fa660d881cc1fa293086cb7d362dac5da6e91323800c4354a448714131cbfde6"
+    },
+    {
+      "path": "dragontools/rules/subtitle_selection.py",
+      "size": 1354,
+      "sha256": "7e4a5bd0a7f305210bac6dcb5e0ce23fd46ab3a150ba3852953a3c602837b23b"
+    },
+    {
+      "path": "dragontools/rules/subtitle_selection_common.py",
+      "size": 5537,
+      "sha256": "311e3fb1ebd6de4cf5aa4112752fb32f486d69711260b438a51c2c60da76a50c"
+    },
+    {
+      "path": "dragontools/rules/subtitle_selection_priority.py",
+      "size": 2036,
+      "sha256": "f1af03ed62b32d2d5a84b79289db1be64393894df02432615a98b983ab17950a"
+    },
+    {
+      "path": "dragontools/rules/subtitle_selection_sidecar.py",
+      "size": 2899,
+      "sha256": "2cd2e1693eb5459d5c03bd6dcbf3db93159459f6913424d36191f0c24f5c742f"
+    },
+    {
+      "path": "dragontools/rules/subtitle_storage.py",
+      "size": 3781,
+      "sha256": "796700a87782a7379d398bc7c32aef7486b262a124563700ecf7025385b19359"
+    },
+    {
+      "path": "dragontools/subtitle/__init__.py",
+      "size": 2,
+      "sha256": "7eb70257593da06f682a3ddda54a9d260d4fc514f645237f5ca74b08f8da61a6"
+    },
+    {
+      "path": "dragontools/subtitle/converter.py",
+      "size": 7468,
+      "sha256": "f0684059f2b2fc391e3d0d3b100c392fc1d6230ef410fcce7b601b88d3551728"
+    },
+    {
+      "path": "dragontools/subtitle/extractor.py",
+      "size": 1924,
+      "sha256": "758493b7beb25add631e3d81d84afd63ca77e625ad522a4c7eced9f3ca8ebc2b"
+    },
+    {
+      "path": "dragontools/subtitle/injector.py",
+      "size": 3689,
+      "sha256": "be9a7259eca3c8f83cf34f3ff77dd8f5c217a84480a0c2b6c0428baef314af5f"
+    },
+    {
+      "path": "dragontools/subtitle/tagger.py",
+      "size": 2112,
+      "sha256": "cbd46b679851c21c9dcaf41ee0fbf11ab7ca006e3c359b95fdd4cd81d1bb6770"
+    },
+    {
+      "path": "dragontools/subtitle/tool_logging.py",
+      "size": 811,
+      "sha256": "575f2f7369fde28b1aedf6f0046397d206117cf40f6eb6397d8faad88e52492d"
+    },
+    {
+      "path": "dragontools/tests/__init__.py",
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "dragontools/tests/ci_requirements.py",
+      "size": 2784,
+      "sha256": "6546fdc2fa947020873af3db5b5bb86ccd419e26a6ed02096737fc9d335d0764"
+    },
+    {
+      "path": "dragontools/tests/conftest.py",
+      "size": 1962,
+      "sha256": "942540abf02c618f6225b67071926ab37dee42cfaab3b6cee25a7aa734f06387"
+    },
+    {
+      "path": "dragontools/tests/test_audio_processing.py",
+      "size": 3264,
+      "sha256": "a801358123f72faed3cbde59d23c61bc79dc01e1ec0a93c3826d425a8841127c"
+    },
+    {
+      "path": "dragontools/tests/test_audio_video_matcher.py",
+      "size": 5053,
+      "sha256": "f9dde25d9284676ac4747ccd9496cb84263abc5dba5fb356935e7bd95be219e9"
+    },
+    {
+      "path": "dragontools/tests/test_audit_log.py",
+      "size": 930,
+      "sha256": "216d4d762d669ae7a12ad2e1f8080f64f33a6b26b1ee68914d8659702ac27d17"
+    },
+    {
+      "path": "dragontools/tests/test_auxiliary_workers.py",
+      "size": 18240,
+      "sha256": "c0999217c7277a3ea8db9fccab2884b3edc444d5705c1e61995d5f0524ff9a6f"
+    },
+    {
+      "path": "dragontools/tests/test_av1_metadata_pipeline.py",
+      "size": 6731,
+      "sha256": "df0302dd1b55837d42e64ee12e2ae599163928491b71274d1ace6c699d0a0d57"
+    },
+    {
+      "path": "dragontools/tests/test_batch_preflight.py",
+      "size": 14506,
+      "sha256": "b0bb8f8fc74f2f5555d9283633907e1513deef388e4025d787638a4d8cca3ded"
+    },
+    {
+      "path": "dragontools/tests/test_block2_crash_durability.py",
+      "size": 7062,
+      "sha256": "66808763172cee92ea8dcf9b4ca817671100a952402eb877c6c68633ef622af5"
+    },
+    {
+      "path": "dragontools/tests/test_block3_process_hardening.py",
+      "size": 6132,
+      "sha256": "6ebf1c81569466cdff0ccaa2b5b75f2544e465c6cefe0dea9ffbfc15bd965357"
+    },
+    {
+      "path": "dragontools/tests/test_block6_coordinator_architecture.py",
+      "size": 3227,
+      "sha256": "b2eee8a929dce44dd2a25db8753294e2f5cb62e89f794f53a636b7d9a665e4a7"
+    },
+    {
+      "path": "dragontools/tests/test_block7_architecture_cleanup.py",
+      "size": 4969,
+      "sha256": "e43cc9f623caf7a9d89b28f64168cb88e6a07a987fc7e554dbce8a9242c0a891"
+    },
+    {
+      "path": "dragontools/tests/test_block_f_architecture.py",
+      "size": 1241,
+      "sha256": "c8b6334e5caa9530fee4e0f81d24f404dc5565ac3328d47c625cbd167b97842e"
+    },
+    {
+      "path": "dragontools/tests/test_changelog.py",
+      "size": 1903,
+      "sha256": "de964dc89806110169690177e87953e8090c55ccebbfb121baa8649bcda7c3f0"
+    },
+    {
+      "path": "dragontools/tests/test_cleanup_rollback.py",
+      "size": 5772,
+      "sha256": "7a1495774d58ff46e35578064f1f8f7a8d6d7c4e24c7c700841b613cb24e283f"
+    },
+    {
+      "path": "dragontools/tests/test_codec_profile_assistant.py",
+      "size": 2207,
+      "sha256": "be065aad5c19058e152b60d32eb23492b2b3ca68893c3773903508a52fedfd85"
+    },
+    {
+      "path": "dragontools/tests/test_config_migration.py",
+      "size": 12522,
+      "sha256": "4c5586a7defb09cfa2dbd2217440572f72eb4d8601813dcdc909be8b75ad7f1e"
+    },
+    {
+      "path": "dragontools/tests/test_conversion_controller_architecture.py",
+      "size": 2925,
+      "sha256": "1cae22c41e2f42eacc266e5ea4eb8845fb18c4cea6eef765576338a77fa396da"
+    },
+    {
+      "path": "dragontools/tests/test_conversion_controller_start.py",
+      "size": 13110,
+      "sha256": "392df85a6e81af60130433df6a5efb6c54b9138133f0ef465b86531ddfd4e5c7"
+    },
+    {
+      "path": "dragontools/tests/test_conversion_result_service.py",
+      "size": 11146,
+      "sha256": "51818da160cd3e0da0eb71dba3f61e22d07b1cd04611de032b76c2593758dd23"
+    },
+    {
+      "path": "dragontools/tests/test_convert_widget_architecture.py",
+      "size": 3010,
+      "sha256": "b1a2c11720d1859ee8f752864154c12e0efc7cab0d9684a50fd5a218e615678c"
+    },
+    {
+      "path": "dragontools/tests/test_convert_widget_queue_actions_architecture.py",
+      "size": 6367,
+      "sha256": "45764c91cb743ce39fa0fb0b763599d41a153bca33cdaaf66e4bc73d63c73e13"
+    },
+    {
+      "path": "dragontools/tests/test_convert_widget_services.py",
+      "size": 5161,
+      "sha256": "7ab4a1b0030abf77b0f618ed0d72539e3dd2ce16f97dd071b3613f619e01dbee"
+    },
+    {
+      "path": "dragontools/tests/test_converter_detection.py",
+      "size": 3124,
+      "sha256": "0b888ac5f779f738297f6155ab86f6c80d25bbe4f0256198859351e55a2912fc"
+    },
+    {
+      "path": "dragontools/tests/test_converter_thread_refactor.py",
+      "size": 11130,
+      "sha256": "560d734c3abb753e0386bba39d8814148371793d4c8138a9bfb9d72d73bef06d"
+    },
+    {
+      "path": "dragontools/tests/test_crash_guard_cleanup.py",
+      "size": 1704,
+      "sha256": "41836822dfef6e7486d408cd5f8bd000615463b38573e93258629c8a434feb04"
+    },
+    {
+      "path": "dragontools/tests/test_current_ffmpeg_abort.py",
+      "size": 3666,
+      "sha256": "48e85772ea4be6823deb35390066c5f1c5bc5ed2276e95927d8e1a44925bdf7d"
+    },
+    {
+      "path": "dragontools/tests/test_diagnostic_package.py",
+      "size": 2463,
+      "sha256": "d8f10607d13584b91f780ff898cca7fffd077cce6a33d4512eee90892d3b0640"
+    },
+    {
+      "path": "dragontools/tests/test_disk_space.py",
+      "size": 1746,
+      "sha256": "8b25eff7acb0d096f2c6b1273d0fba1e55ba22ffbb700b7959d9651946ba2117"
+    },
+    {
+      "path": "dragontools/tests/test_downscale_only_policy.py",
+      "size": 6287,
+      "sha256": "853bdaa70accff357e62392a93873170e53da219436f7a146cee8c000c12851b"
+    },
+    {
+      "path": "dragontools/tests/test_duration_repair_architecture.py",
+      "size": 3478,
+      "sha256": "3180dc2dce787852dc9c21610271ecec924c1de0d210a95fee03ce534ad6b581"
+    },
+    {
+      "path": "dragontools/tests/test_duration_repair_service.py",
+      "size": 44332,
+      "sha256": "783508d8c441575761175b563a31fa2f56f3f2b0a7ab637ec727c889610625ed"
+    },
+    {
+      "path": "dragontools/tests/test_duration_repair_stream_guard.py",
+      "size": 2730,
+      "sha256": "89ac73d79e0a36615dc905639444443a7aaa852058eda8bf3df79efeb5d7f592"
+    },
+    {
+      "path": "dragontools/tests/test_dv_audio_mux_service.py",
+      "size": 1942,
+      "sha256": "7e0b296008593c3108025f8efbdab09b40e5188c10b0bfc8347f35811e0bdf53"
+    },
+    {
+      "path": "dragontools/tests/test_dv_pipeline_architecture.py",
+      "size": 10454,
+      "sha256": "dfa6e441f5ea64e1f55a3deb0cc6e086099b6de4ef01b4a46f13fc2aa7dd28c8"
+    },
+    {
+      "path": "dragontools/tests/test_dv_regressions.py",
+      "size": 47434,
+      "sha256": "9734b629cc2241bf30f7d713e0fb024ace667c8c4b8b86d9cde308fceecd90f0"
+    },
+    {
+      "path": "dragontools/tests/test_dv_remux_abort_fix.py",
+      "size": 4012,
+      "sha256": "c91a7266e26d0968be4e08c47c9d16263b5af9054c56884f4f736949e7243c4c"
+    },
+    {
+      "path": "dragontools/tests/test_dv_remux_container_selection.py",
+      "size": 13061,
+      "sha256": "a75af4ff661d8d1de5ffa38d3dfa58a7a51b330ef542d1556b784d4db7850b9c"
+    },
+    {
+      "path": "dragontools/tests/test_dv_stage_service_architecture.py",
+      "size": 3085,
+      "sha256": "3d8225438983599b6fff2b3ee6f26c4285167361c6c984268edf0fdefd10de71"
+    },
+    {
+      "path": "dragontools/tests/test_encoder_args.py",
+      "size": 6139,
+      "sha256": "3ff63fd9b58c491f9c6e53f624f6cf70db57468bfc18bb474645d8531bbef613"
+    },
+    {
+      "path": "dragontools/tests/test_encoder_inactivity_timeout.py",
+      "size": 4435,
+      "sha256": "da6c2b6c47d911a9fdcd0f1371bd4623d322e24e66098ff87c08d3e5dcc1ce4e"
+    },
+    {
+      "path": "dragontools/tests/test_encoder_profile_override.py",
+      "size": 6220,
+      "sha256": "57b9fac8254cc4c53cd675a3ffb0cb82b26b6b4980d9e63177dd7fd9f476bd1b"
+    },
+    {
+      "path": "dragontools/tests/test_encoder_settings_architecture.py",
+      "size": 3645,
+      "sha256": "afd0de56079af4d29bfd7495c67b62e519f46b92586880808833e2c775db0157"
+    },
+    {
+      "path": "dragontools/tests/test_encoder_settings_shutdown.py",
+      "size": 13239,
+      "sha256": "0013021601c03f684059e5ee0e64ab484a122eea6ec0700edcc58cd74da149f4"
+    },
+    {
+      "path": "dragontools/tests/test_end_to_end_media_fixture.py",
+      "size": 4489,
+      "sha256": "1ad1362701a951f234db977a81ff35e709524ee42993fa2d2108df42e44c683d"
+    },
+    {
+      "path": "dragontools/tests/test_episode_replacement_artifacts.py",
+      "size": 3669,
+      "sha256": "0d4ae38677b16fa9e053f33c4e2d8a65f989d65c7fb7482bae7620a4137643e7"
+    },
+    {
+      "path": "dragontools/tests/test_error_report.py",
+      "size": 6108,
+      "sha256": "73dc552944c39c5e6f06909257666752a8a7bdfc72adbdcfe6252b1e16653707"
+    },
+    {
+      "path": "dragontools/tests/test_exception_boundary_architecture.py",
+      "size": 3032,
+      "sha256": "be0cb38e9c432e85f57ce3989dec6429aa0e1f7007cd1ce2a6ae214ca1f58742"
+    },
+    {
+      "path": "dragontools/tests/test_extended.py",
+      "size": 43246,
+      "sha256": "6fcc2034fdabae18a2d85ec116c9fcae438bdf912ca4e46a503205de72e0e3bd"
+    },
+    {
+      "path": "dragontools/tests/test_facade_split_architecture.py",
+      "size": 2142,
+      "sha256": "b30ae3c41fa7860b1fcbad790d0c25f82e4e369176ba77ea0519d0f4aab288f4"
+    },
+    {
+      "path": "dragontools/tests/test_fix_20260906_iso_renamer.py",
+      "size": 4296,
+      "sha256": "31d96f3e0400348e93688b10f4838dfa19889ab8c76ad7974c2b7f79b4f18cfb"
+    },
+    {
+      "path": "dragontools/tests/test_formatting_helpers.py",
+      "size": 606,
+      "sha256": "dbda057ffbafc454b00273efdb29a4aa3bb2543dbdac8362e96e1d1b912c32c4"
+    },
+    {
+      "path": "dragontools/tests/test_gui_dialog_services.py",
+      "size": 7981,
+      "sha256": "5a5f99d7fb072821c57f70f5bfc2b862cf05b4e027a4daa483463428b1c1ac35"
+    },
+    {
+      "path": "dragontools/tests/test_hdr10_color_standard.py",
+      "size": 11310,
+      "sha256": "eb40089169212cc5b3a8534a4ecf778153dd5b0685c334647d1a28d075b79cde"
+    },
+    {
+      "path": "dragontools/tests/test_hdrplus_architecture.py",
+      "size": 10057,
+      "sha256": "43012dd81d770127332c685a6274c02422987a286e58cf3db68dbe848cfd6848"
+    },
+    {
+      "path": "dragontools/tests/test_hdrplus_final_verification.py",
+      "size": 9104,
+      "sha256": "f4d6d7e1e64d9c91f56d016b77367565c5debc73e708fbd7cea8c196f940fa5e"
+    },
+    {
+      "path": "dragontools/tests/test_hdrplus_five_step_pipeline.py",
+      "size": 10272,
+      "sha256": "cb8599ac1e186953c1d2c85ca2b90aa7d2d2b5fb15f88ba3989ebe88dffbe335"
+    },
+    {
+      "path": "dragontools/tests/test_incremental_move_queue_edit.py",
+      "size": 9702,
+      "sha256": "2b91cfe871a16cfcc56976589cc09dcd08fee6605e47f39d552aef8faba52143"
+    },
+    {
+      "path": "dragontools/tests/test_iso_architecture.py",
+      "size": 2593,
+      "sha256": "dd66c53acad521b91eab3200c85313276c8fdfe3e8d3a580bb555baae00686fd"
+    },
+    {
+      "path": "dragontools/tests/test_jellyfin_nfo.py",
+      "size": 3417,
+      "sha256": "3efe6bfe7916b0c044567d42647449879ea052853fd4a4e29b24b6b85030e016"
+    },
+    {
+      "path": "dragontools/tests/test_job_journal.py",
+      "size": 10092,
+      "sha256": "15b6f3c9866c9c8a0592e176fe5c73ab83ced64702cafe7c24e9f36bf7861a5d"
+    },
+    {
+      "path": "dragontools/tests/test_language_priority_rules.py",
+      "size": 15926,
+      "sha256": "7a97e8dd309b23968857dad8d8adea34b7973cfedf115cd0a16de67e93eb1dba"
+    },
+    {
+      "path": "dragontools/tests/test_legacy_cleanup_architecture.py",
+      "size": 4264,
+      "sha256": "07397df98b479fbbceefeb00cbd615829b72b8ab684debb037c845203152f62f"
+    },
+    {
+      "path": "dragontools/tests/test_log_cleanup.py",
+      "size": 2400,
+      "sha256": "af45b74dbe448269b7b44b490a29aba2d7b97afc8a475b93d52eab5c52fe5f5e"
+    },
+    {
+      "path": "dragontools/tests/test_log_short_and_audio_titles.py",
+      "size": 1523,
+      "sha256": "37fb8d3d3b701b846002ddcef0c84081d26941dce307774a0c454193899336f4"
+    },
+    {
+      "path": "dragontools/tests/test_main_window_actions_architecture.py",
+      "size": 4874,
+      "sha256": "523bf577e18e6d6b1ead387f36de782db4162393d1a6571d0e7773279d0dde53"
+    },
+    {
+      "path": "dragontools/tests/test_main_window_architecture.py",
+      "size": 3150,
+      "sha256": "9180a2c879fe51fed638c46b3e425732ca62d1b501f8011ef688df52f265d288"
+    },
+    {
+      "path": "dragontools/tests/test_main_window_tab_visibility.py",
+      "size": 2935,
+      "sha256": "d05080197552df986cfaea2e7907db04e0e0278fffff9309b6a3fb1c3c36a6dc"
+    },
+    {
+      "path": "dragontools/tests/test_media_analyzer_pix_fmt.py",
+      "size": 3311,
+      "sha256": "65909eb2322a7b56e9a5273bb7df704a7c9791ea02f83e9039bd0b4c52f68e6c"
+    },
+    {
+      "path": "dragontools/tests/test_media_contract.py",
+      "size": 6732,
+      "sha256": "2a12731ec2404aa0ae0097a7e6e9a986f14f017f20183aa0e18689fbd82be0bd"
+    },
+    {
+      "path": "dragontools/tests/test_media_info_text_builder.py",
+      "size": 4016,
+      "sha256": "0ce1cf060ee6b02bfe4ec3215ab092e4e5285a54462a392ec84001e2741973a1"
+    },
+    {
+      "path": "dragontools/tests/test_media_library.py",
+      "size": 103173,
+      "sha256": "0aa6240a00c6d1c20f6de61cf5dbe90d8428480898a8edb8806d297b457164aa"
+    },
+    {
+      "path": "dragontools/tests/test_media_library_architecture.py",
+      "size": 2682,
+      "sha256": "b45904c5d7423b15d039226224f387b5d89c1a39f11c77adcea3f2bab302f050"
+    },
+    {
+      "path": "dragontools/tests/test_media_library_dialog_architecture.py",
+      "size": 2914,
+      "sha256": "c0ac73bf1214d6b461803a0e71aab663d2315a24c208882f15313d13a9240a65"
+    },
+    {
+      "path": "dragontools/tests/test_media_library_dialog_service.py",
+      "size": 8461,
+      "sha256": "43bffd0e9967838857007f68017de88ed4d43c05c109a82da6f23ded82be73b8"
+    },
+    {
+      "path": "dragontools/tests/test_media_library_nfo_parser_security.py",
+      "size": 2325,
+      "sha256": "e98547404031a6cf9af885e323edca7e975f6c1600a3f1f5484d3dfe8e24bc90"
+    },
+    {
+      "path": "dragontools/tests/test_media_library_series_lookup_performance.py",
+      "size": 7021,
+      "sha256": "33b799d50b7b6dc7c04f5f3b57cf830708a2fc8f7d30083479a806a6e4809a5f"
+    },
+    {
+      "path": "dragontools/tests/test_mediainfo_details.py",
+      "size": 3340,
+      "sha256": "3414814e495d7f6f0ded67b6992b14f6795b205872cdf231994ce9ef15fd8064"
+    },
+    {
+      "path": "dragontools/tests/test_models.py",
+      "size": 5225,
+      "sha256": "d66b75b06aa01712c47751b5cdb0b5a63099f785f269815934553cd676ae30d2"
+    },
+    {
+      "path": "dragontools/tests/test_move_conflicts.py",
+      "size": 6733,
+      "sha256": "7733a1fea02e91dd65045e33b52c3115cd45768eec75ce2c6e9d193dc3842c80"
+    },
+    {
+      "path": "dragontools/tests/test_move_journal.py",
+      "size": 17887,
+      "sha256": "971d549763e60fc84db34eafe9dde53cc8b4b46df666f5ce864291242e84cb65"
+    },
+    {
+      "path": "dragontools/tests/test_move_progress_callback_safety.py",
+      "size": 1916,
+      "sha256": "550c1dc2a8186f4a17942107c12fa217c79212612dc70bc575ae051ce8518070"
+    },
+    {
+      "path": "dragontools/tests/test_move_report.py",
+      "size": 4936,
+      "sha256": "c8db9751109d22b14cc3f568d67edb16c39ef4b2d4c4f434c4d94a6d3ba4ab0e"
+    },
+    {
+      "path": "dragontools/tests/test_move_rules_series_detection.py",
+      "size": 3088,
+      "sha256": "49a600ba92ab0f64789e6751e8676a4f70fff3b399b99f8c3ddb51da69e4e984"
+    },
+    {
+      "path": "dragontools/tests/test_move_service_architecture.py",
+      "size": 3866,
+      "sha256": "99fb4b8030c06a1c9f9e7d6a2219443f9f084ec7ae48f94a930c233a2fa68bee"
+    },
+    {
+      "path": "dragontools/tests/test_move_sidecar_recovery.py",
+      "size": 1529,
+      "sha256": "1df93e871def35eb9a792f605209640b150320ccd80dfa589b1c6ddb1bca37b3"
+    },
+    {
+      "path": "dragontools/tests/test_move_transaction_core.py",
+      "size": 5702,
+      "sha256": "6f182ffbca73edc0539b5ae2089d69c2d9441b26c3f25a6ef0a91c64090ee1a6"
+    },
+    {
+      "path": "dragontools/tests/test_move_transactional.py",
+      "size": 12719,
+      "sha256": "8022b5fa2e08fd852b14a535a0f9c9215613a1f17dac1cf4d1c28f17a1acc247"
+    },
+    {
+      "path": "dragontools/tests/test_movie_renamer.py",
+      "size": 22258,
+      "sha256": "0b4b7b2463ce94dcd7f2fa4544a042eaaaec0958a9a79f9c504291d631177fa6"
+    },
+    {
+      "path": "dragontools/tests/test_movie_renamer_table_controller_runtime.py",
+      "size": 3318,
+      "sha256": "ebc2207972eecf11f3dd6c293fff58896a9fa4a4996f54868114260fd498f5cf"
+    },
+    {
+      "path": "dragontools/tests/test_movie_renamer_widget_architecture.py",
+      "size": 3929,
+      "sha256": "f0bfad07e6a4e634ee8b866f419b152fde8e33a40e5af82710d8df3467503ca1"
+    },
+    {
+      "path": "dragontools/tests/test_mp4_remux_architecture.py",
+      "size": 1340,
+      "sha256": "3163a77e5ec594cf31a0109732d496961ccef1e73c9ab66e4763d8d412fd1442"
+    },
+    {
+      "path": "dragontools/tests/test_mp4_subtitle_policy.py",
+      "size": 6341,
+      "sha256": "67cd876202ecc2a296b8aa4faa5dc5efc7eb7a026da66514f7413d2073278f66"
+    },
+    {
+      "path": "dragontools/tests/test_online_metadata.py",
+      "size": 29163,
+      "sha256": "0218e9931cb2ea31971aaa0e41595b3310f4b020baf27a9a60003de68e472c3c"
+    },
+    {
+      "path": "dragontools/tests/test_online_metadata_architecture.py",
+      "size": 4383,
+      "sha256": "9c8cc26becb94b6d5a23215766df08c229aafc849b9f3f1ce052a91e4b35e604"
+    },
+    {
+      "path": "dragontools/tests/test_output_path_service.py",
+      "size": 1812,
+      "sha256": "d28c1ef5c18b97b2e7ada05ee060c325e19e8144347e52bda4fdd0090ca7109d"
+    },
+    {
+      "path": "dragontools/tests/test_output_verifier.py",
+      "size": 14419,
+      "sha256": "f1cef0322a4b89d8a90c087819e553a7a15192f1b650a7d4d3fcaa05c45f3dfc"
+    },
+    {
+      "path": "dragontools/tests/test_parallel_converter_architecture.py",
+      "size": 1387,
+      "sha256": "1b549d5e9ab164c7e38a944bc699f04c0c5173d72bba7029638f3938ae6c9686"
+    },
+    {
+      "path": "dragontools/tests/test_parallel_converter_thread.py",
+      "size": 9413,
+      "sha256": "0e9e90a5a2a0171f3cb309e2c1754815fb96b39b2abd92bfb7ea966234ceed6e"
+    },
+    {
+      "path": "dragontools/tests/test_parallel_settings.py",
+      "size": 3733,
+      "sha256": "62e80826e7150db6a7bd18cb5496ed73cd1e5e99c125a3ffc976c5e1e8b67d35"
+    },
+    {
+      "path": "dragontools/tests/test_patch1_burnin_resolution.py",
+      "size": 6040,
+      "sha256": "dec19d13ced4ea767da3aa2ef7a6c1ed3557f6b4492bf5cff724b1611c5ce1c5"
+    },
+    {
+      "path": "dragontools/tests/test_patch2_sidecar_crash_recovery.py",
+      "size": 5398,
+      "sha256": "770f19537d1f3ac8014a18ff10ff195157172d9b308875869471bff9c6c0bfc8"
+    },
+    {
+      "path": "dragontools/tests/test_patch3_dv_metadata_and_process.py",
+      "size": 8809,
+      "sha256": "0484b8330d50b6e8ebf3e49dee2fdf7405e6126f474e5188cedaf0f6f8e2fe35"
+    },
+    {
+      "path": "dragontools/tests/test_patch3_subtitle_process_control.py",
+      "size": 2315,
+      "sha256": "02b45901986e8f700aaeab5eb16e0694ab12fa237bf93a4324426259688c465a"
+    },
+    {
+      "path": "dragontools/tests/test_patch4_lifecycle_hardening.py",
+      "size": 5791,
+      "sha256": "ea4a526b6edcc111c34e82fc7f28699eb1b11d15c6d7bf2fd516ffa72a27b4be"
+    },
+    {
+      "path": "dragontools/tests/test_patch5_release_ci.py",
+      "size": 6044,
+      "sha256": "f02f2e6738102f1f07c9cc75a3c6eadf8913b8da44aaac0d4d3114efcab2b6ac"
+    },
+    {
+      "path": "dragontools/tests/test_patch8_move_signal_ci_hardening.py",
+      "size": 9544,
+      "sha256": "60bd4fdbd85c47e541d8bd61b61dc81e17cc9bf9c726d53d2a22eaf06d3324db"
+    },
+    {
+      "path": "dragontools/tests/test_patch_pipeline_codec_safety.py",
+      "size": 9834,
+      "sha256": "21d133123ad57c31108e7703e909e622633ba4e970dbe00c364cce3c6f77dea7"
+    },
+    {
+      "path": "dragontools/tests/test_path_safety.py",
+      "size": 3214,
+      "sha256": "79385b6dd9a970eb3b292b11f6c3c570eb4994dc7082f71267ac0a03d2bfdd93"
+    },
+    {
+      "path": "dragontools/tests/test_per_file_strip_only.py",
+      "size": 4809,
+      "sha256": "fde3075de3be9845b1534a5e9ade710cf7d4b554c572d6d15a2be38c20db4d56"
+    },
+    {
+      "path": "dragontools/tests/test_pipeline_and_singleton.py",
+      "size": 3370,
+      "sha256": "76a1bc7a752161ef01adfa8130950e0419b72cc8e59ee25813e93a5854daff02"
+    },
+    {
+      "path": "dragontools/tests/test_pipeline_decision_service_safety.py",
+      "size": 4534,
+      "sha256": "df1327b440e56d22759478fbb70bf9d079fb6ef767cb8b7d172ac6dbb6945977"
+    },
+    {
+      "path": "dragontools/tests/test_postprocess_move_sidecars.py",
+      "size": 6796,
+      "sha256": "3cbfd6d363cc7b751d722ce250675169b9bca40698462efa09e8456fa3b99666"
+    },
+    {
+      "path": "dragontools/tests/test_postprocess_service.py",
+      "size": 3194,
+      "sha256": "b28090a8741ece10491ba489c8912f0a8b29ac8d975a845ecce0e41a730df42d"
+    },
+    {
+      "path": "dragontools/tests/test_postprocess_signal_logging.py",
+      "size": 6617,
+      "sha256": "bb1c86da32024231bb5b0c0b4a4b791456a06230933c2670659019c387104ffc"
+    },
+    {
+      "path": "dragontools/tests/test_power_module_refactor.py",
+      "size": 17191,
+      "sha256": "4bad0efc598e888db98780091927713e93899f297f09662a895db32d0f20bb1f"
+    },
+    {
+      "path": "dragontools/tests/test_preflight_dialog_performance.py",
+      "size": 19641,
+      "sha256": "012683588b43a2a288792296e6255289c9f9b54ca606bde4261da4faa36c3e91"
+    },
+    {
+      "path": "dragontools/tests/test_preflight_gui_architecture.py",
+      "size": 2048,
+      "sha256": "7f706be556da3f5e202a38621124c77637cba493932f63b8a4bd7f49d4fbb2ca"
+    },
+    {
+      "path": "dragontools/tests/test_preflight_report.py",
+      "size": 2571,
+      "sha256": "fa224986dd07d343626052792aea1bfce07bb12d965408eef8b10ac354c5051f"
+    },
+    {
+      "path": "dragontools/tests/test_process_runner_boundaries.py",
+      "size": 937,
+      "sha256": "c365ae6af420c9c281a3ce6247624ef350f6b2e844f8d5c64dd22b7046cc732e"
+    },
+    {
+      "path": "dragontools/tests/test_project_info.py",
+      "size": 1739,
+      "sha256": "f2734f5e7ca9522a3982b25901810d41d4c478ae820a6c97631812524d153d6c"
+    },
+    {
+      "path": "dragontools/tests/test_quality_tester.py",
+      "size": 2652,
+      "sha256": "45a74e4149652393116b65811f312c313bee5ca0124a7ff550304e73ee3364d2"
+    },
+    {
+      "path": "dragontools/tests/test_real_dv_hdr_integration.py",
+      "size": 8008,
+      "sha256": "4727d64efa9627fb0a1c76f57aa4a1beec462f923fa1c2a94c1aab2b465e7901"
+    },
+    {
+      "path": "dragontools/tests/test_refactor_block10_architecture.py",
+      "size": 948,
+      "sha256": "3f5445809b0dcf731e91d85d2add2663404d01f5455d5143166522c3c1e22a99"
+    },
+    {
+      "path": "dragontools/tests/test_refactor_block11_analyzer_renamer_architecture.py",
+      "size": 3166,
+      "sha256": "78588ab134271ab29d06a236c45545045edcd394b1bdbfc6ddc3e61b7cd4b67c"
+    },
+    {
+      "path": "dragontools/tests/test_refactor_block12_matcher_metadata_architecture.py",
+      "size": 3053,
+      "sha256": "33c2007bcc947c566af9af08cdb2dc3b49f9c9ba1fdee84be448f83df6bc24c8"
+    },
+    {
+      "path": "dragontools/tests/test_refactor_block2_architecture.py",
+      "size": 2136,
+      "sha256": "f03c6aebb40a51eb84205b294b52a03e8efd985e03e703cbd29f5c7252592632"
+    },
+    {
+      "path": "dragontools/tests/test_refactor_block3_dv_media_view_architecture.py",
+      "size": 2899,
+      "sha256": "6428c4b56aa023e7546264d16ab05c94e4b32fa75527a029cd420cbb860da7f0"
+    },
+    {
+      "path": "dragontools/tests/test_refactor_block4_architecture.py",
+      "size": 2144,
+      "sha256": "678685b681898147095f34b3c4b6e75121baa7ab4075c440172c2fc766550c3b"
+    },
+    {
+      "path": "dragontools/tests/test_refactor_block5_architecture.py",
+      "size": 2019,
+      "sha256": "c11f2e9fa40da0eeaae5212afa301472a5264453fdc72e79dfe4e54fe10eb204"
+    },
+    {
+      "path": "dragontools/tests/test_refactor_block5_runtime_architecture.py",
+      "size": 3657,
+      "sha256": "04b9ee7d6f6e6d820d3807352ff814f37f2da5389fdffa3798db9e64d525721a"
+    },
+    {
+      "path": "dragontools/tests/test_refactor_block6_iso_parallel_architecture.py",
+      "size": 2974,
+      "sha256": "754c84a2071333f7c4dcd95bc876a1b294eb876087db924c45f925535c8ed676"
+    },
+    {
+      "path": "dragontools/tests/test_refactor_block7_move_architecture.py",
+      "size": 2208,
+      "sha256": "be0acbf780234121810859b90972b3ec7fe214e561313b7c4a3e927fd7e21d85"
+    },
+    {
+      "path": "dragontools/tests/test_refactor_block8_encoder_duration_architecture.py",
+      "size": 3258,
+      "sha256": "40477b1e55175f5e590f0ca404b47f5a2036cdf92636a905fd3b28ebded71339"
+    },
+    {
+      "path": "dragontools/tests/test_refactor_block9_12_architecture.py",
+      "size": 2749,
+      "sha256": "73fce116fcc1c3d0cc6f34834461dd03530704efb9cfd8c5fc52f8b421ecedc2"
+    },
+    {
+      "path": "dragontools/tests/test_refactor_block9_hdr_move_library_architecture.py",
+      "size": 8135,
+      "sha256": "0f6487670b8928a673957a57dbd02395289c4828fff47e81dc909e3fe3893d8d"
+    },
+    {
+      "path": "dragontools/tests/test_refactor_runtime_connections.py",
+      "size": 4823,
+      "sha256": "e71e8aa909a8ae62626df3ec3c914e191021a34d2ff51f6755867d9a80712496"
+    },
+    {
+      "path": "dragontools/tests/test_release_artifact_e2e.py",
+      "size": 3367,
+      "sha256": "e73dffaaad6d20498926fa5ae6f1bece9a4efa51fa5946da3eca138dec9abe0a"
+    },
+    {
+      "path": "dragontools/tests/test_release_packaging.py",
+      "size": 5834,
+      "sha256": "6777e3a628507dba0b939a3d662cb8c8029b76cc78806767873c0a5fa811a030"
+    },
+    {
+      "path": "dragontools/tests/test_release_validation.py",
+      "size": 27791,
+      "sha256": "b5223b676725e1eebf4803b40b430d196b0ee6364d816ae4fbec1d6d3ed8be2f"
+    },
+    {
+      "path": "dragontools/tests/test_renamer_fallback_and_simulator.py",
+      "size": 3758,
+      "sha256": "7fea7b304c1ffd98beb154b0ed023653d117095fb8f09a701c2361a2966d00ee"
+    },
+    {
+      "path": "dragontools/tests/test_replacement_reminders.py",
+      "size": 3039,
+      "sha256": "cfb6e679f315e91f9286872f0240e44a86f8e6a8444c60c500904a93b0d90604"
+    },
+    {
+      "path": "dragontools/tests/test_review_patch_block2_output_persistence.py",
+      "size": 3470,
+      "sha256": "a845c51ab4acd540b8619caecb543109243699f9eaa33fe36c2666b93b0e0566"
+    },
+    {
+      "path": "dragontools/tests/test_review_patch_block3_resilience_cleanup.py",
+      "size": 5477,
+      "sha256": "08a3b3b6ac8033590134302854af5d556090ed202a362e48d5028d1deb5cc0e5"
+    },
+    {
+      "path": "dragontools/tests/test_review_patch_safety_regressions.py",
+      "size": 8641,
+      "sha256": "077be68aad5a5eaf9f0e418e2ff295a2620a20a026ce5464fc5a1f854dcd0134"
+    },
+    {
+      "path": "dragontools/tests/test_review_patch_v10_artifact_contract.py",
+      "size": 5472,
+      "sha256": "2f6943de0e534dd6354699212217014d5654f79213694727974a288f3b86c75d"
+    },
+    {
+      "path": "dragontools/tests/test_review_patch_v11_release_blockers.py",
+      "size": 12447,
+      "sha256": "ae7cea2619b9961eaa461376925d806be48ae99017b099594cc1cba019be3af7"
+    },
+    {
+      "path": "dragontools/tests/test_review_patch_v12_dv_transaction_safety.py",
+      "size": 11562,
+      "sha256": "f819802752b09d3a4303ef3267f1e9a313e50081b21e944fdaadf53a565534d4"
+    },
+    {
+      "path": "dragontools/tests/test_review_patch_v3_architecture.py",
+      "size": 3289,
+      "sha256": "0b0ff19c4abe6acbad50f32aff1ca7c3630b5568d6caa572a35d3748010a8dbb"
+    },
+    {
+      "path": "dragontools/tests/test_review_patch_v4_architecture.py",
+      "size": 3729,
+      "sha256": "ff6429c0f1fc38bf92837618942ef94e7d8e76c1d9b9543227dbc23369b3b9e2"
+    },
+    {
+      "path": "dragontools/tests/test_review_patch_v4_quality_services.py",
+      "size": 4428,
+      "sha256": "bf963a5989742b669c934d36cd86d3231acce840b20f6832ce3fd05832b61578"
+    },
+    {
+      "path": "dragontools/tests/test_review_patch_v5_safety.py",
+      "size": 5097,
+      "sha256": "25c3e439b7b49740dcf386d0f392361d4bfbd43d1d848c7a0810f8893e023b97"
+    },
+    {
+      "path": "dragontools/tests/test_review_patch_v6_architecture.py",
+      "size": 1880,
+      "sha256": "9fef265d6718e6ccf4acf321d88d22486ee855d4c828b9a37ef245d421fa77cd"
+    },
+    {
+      "path": "dragontools/tests/test_review_patch_v6_safety.py",
+      "size": 6140,
+      "sha256": "5ca29ba2b06d1e0da1330e341f280f4bd86b7df98d58ab7dc079652b620e3684"
+    },
+    {
+      "path": "dragontools/tests/test_review_patch_v7_safety.py",
+      "size": 8349,
+      "sha256": "f07b012a4eb04230440e4eae800eb4905e83696478bac385005025a2c8b4e866"
+    },
+    {
+      "path": "dragontools/tests/test_review_patch_v8_safety.py",
+      "size": 10359,
+      "sha256": "3f2956ea0c397a5eb718e0c72fe24fbfadb63f78bd9f07d2e6f696e2c801125e"
+    },
+    {
+      "path": "dragontools/tests/test_review_patch_v9_integration.py",
+      "size": 12508,
+      "sha256": "1c90b8cf563c2856ae15031d8e8388af45ca0e7a4401b62f8eb6fb7edff17a1b"
+    },
+    {
+      "path": "dragontools/tests/test_review_stdlib.py",
+      "size": 9220,
+      "sha256": "14d30b3f2aaa1dd750ff76d0da58c739980c55c6751fab624aa4e5eeeb7f4e37"
+    },
+    {
+      "path": "dragontools/tests/test_rules_preview_headless.py",
+      "size": 591,
+      "sha256": "4a72e80230347e42fcd4aa42a16a0cafec2ae9b8ad945e0ec404af135057e8fd"
+    },
+    {
+      "path": "dragontools/tests/test_rules_refactor_architecture.py",
+      "size": 1549,
+      "sha256": "3789fd6970fc931995f67438d7035d5be85504d619c1d0075515993fabb94402"
+    },
+    {
+      "path": "dragontools/tests/test_run_summary.py",
+      "size": 3324,
+      "sha256": "205ecd0345541502acd76c9659645a66437d59ede84c8f2feb073aeb8624c080"
+    },
+    {
+      "path": "dragontools/tests/test_settings_backup.py",
+      "size": 10915,
+      "sha256": "f925f5707d0aab3538f85ce3d174142e7c53532d68395a88c8b96004b46826d1"
+    },
+    {
+      "path": "dragontools/tests/test_settings_dialog_architecture.py",
+      "size": 5071,
+      "sha256": "dbe1de489f8b5bd5430eade1fb5b29ded78f3f1e95d08e546b60e22b17ea44ce"
+    },
+    {
+      "path": "dragontools/tests/test_settings_helpers.py",
+      "size": 5942,
+      "sha256": "aa00a033e81158eb7c1a8217675c532cc144f0095236eb547d378f3cd4360fd9"
+    },
+    {
+      "path": "dragontools/tests/test_sidecar_transaction.py",
+      "size": 1760,
+      "sha256": "43c1002ebd2a4cc03365920776dcc4d391d72faf769617bf7f487f25691e75bb"
+    },
+    {
+      "path": "dragontools/tests/test_source_visual_check.py",
+      "size": 5439,
+      "sha256": "4d31613a79d4e0ca10aedd5b9ab412a682eda4d87ec5bad7d13d747016bca3f3"
+    },
+    {
+      "path": "dragontools/tests/test_stability_983.py",
+      "size": 12354,
+      "sha256": "37e4f76f3fb4e23be219407015dba883876d0b6971a778b1ee2b86b0fd44f241"
+    },
+    {
+      "path": "dragontools/tests/test_stability_review_fixes.py",
+      "size": 5920,
+      "sha256": "16dc631b36789f2a01186bbec96e8fee24077bc8dcbbac0b95865257e9888bf4"
+    },
+    {
+      "path": "dragontools/tests/test_subtitle_converter.py",
+      "size": 3699,
+      "sha256": "9bd484d311ef795cb663db9ab128a3f578e8fc3315a74c8596d613fdbfe9b006"
+    },
+    {
+      "path": "dragontools/tests/test_subtitle_sidecar_service.py",
+      "size": 18567,
+      "sha256": "3a5d0bcca17e186c674e7937d861a3ffc7e7051c78c2651abbefe33cf89cdb70"
+    },
+    {
+      "path": "dragontools/tests/test_subtitle_tagger_contract.py",
+      "size": 1399,
+      "sha256": "fccdbcd04ef676b5508900013459e93c5ba786775f6ca88939f088a8494da484"
+    },
+    {
+      "path": "dragontools/tests/test_system_shutdown.py",
+      "size": 2313,
+      "sha256": "1f355deaacc8ac5cb975e9a8ed3ed578881eb16848249dee63316a645b450b33"
+    },
+    {
+      "path": "dragontools/tests/test_tool_diagnostics.py",
+      "size": 3390,
+      "sha256": "4c4b6a756c8548ac29a44eeb7e29bda323f963e61b64af37563f9617a27fcfa5"
+    },
+    {
+      "path": "dragontools/tests/test_tool_paths.py",
+      "size": 3701,
+      "sha256": "304b7a84f3ae688a5a303d17bc23354187ee51880e2ef362aefbaac9184d3e0d"
+    },
+    {
+      "path": "dragontools/tests/test_tool_runner.py",
+      "size": 1683,
+      "sha256": "88882b7b9de0af523de1b38ce51c09631cf9132e9f5fce4958a66007d915d43b"
+    },
+    {
+      "path": "dragontools/tests/test_trickplay_service.py",
+      "size": 14798,
+      "sha256": "ee8965a4ac4b46ba30d722fab4fadf5bbd87e0f1987536ba3feddd5c0e41e342"
+    },
+    {
+      "path": "dragontools/tests/test_ui_helpers_geometry.py",
+      "size": 2549,
+      "sha256": "becce9a2e5984a86601b56aba79dfc6d9660135d24fb87b8a9813c8b2f71dc8c"
+    },
+    {
+      "path": "dragontools/tests/test_update_check.py",
+      "size": 1953,
+      "sha256": "432fac95eb495174003fd543caa2e739c8608f0a42d28a4d00c932496e8dbe0b"
+    },
+    {
+      "path": "dragontools/tests/test_v97_four_patches.py",
+      "size": 8311,
+      "sha256": "9682a68fc5d9364e07f42b5e131de3f7a7412029f9a50708aa38e54f7e3d7dae"
+    },
+    {
+      "path": "dragontools/tests/test_verbose_cleanup.py",
+      "size": 1736,
+      "sha256": "fa3d7c83b7ee64ef8a69a38224090d7682b6163f51bbe99bc65c476a0af507df"
+    },
+    {
+      "path": "dragontools/tests/test_version_contract.py",
+      "size": 2946,
+      "sha256": "dc566aecf987c8bfa4bb018f136dbf78231149b5c7df853d793392744f36e475"
+    },
+    {
+      "path": "dragontools/tests/test_windows_path_helpers.py",
+      "size": 2605,
+      "sha256": "c2986d918f167099b3175cdc534e43e7a57c37d40cb3af027ca1e7f849bf6046"
+    },
+    {
+      "path": "dragontools/tests/test_windows_restart_policy.py",
+      "size": 2253,
+      "sha256": "f5d7e62b771697cd2d130925d705aa84291f153e8889df8a9186b0b0716b777e"
+    },
+    {
+      "path": "dragontools/tests/test_workflow_pipeline_contract.py",
+      "size": 9851,
+      "sha256": "13df88659379b5ec17670e342ca00d75c48a778afe669a2178e99cb6d27e3f3f"
+    },
+    {
+      "path": "dragontools/worker/__init__.py",
+      "size": 2,
+      "sha256": "7eb70257593da06f682a3ddda54a9d260d4fc514f645237f5ca74b08f8da61a6"
+    },
+    {
+      "path": "dragontools/worker/archive_service.py",
+      "size": 5844,
+      "sha256": "909171257d8265396ea532b122883819e37c0df28f000d1a71ae8d03078f0e56"
+    },
+    {
+      "path": "dragontools/worker/audio_mux_job.py",
+      "size": 4950,
+      "sha256": "e7d4dbc09a76e2fb6b9f9337846d19b0276dadb7ed7929bb17399980132f93cd"
+    },
+    {
+      "path": "dragontools/worker/audio_mux_output_verifier.py",
+      "size": 1620,
+      "sha256": "ea46da219c42dfb99303f08b175aee7bc4170b7a13eb4017ac29bc764052d2ae"
+    },
+    {
+      "path": "dragontools/worker/audio_mux_plan_service.py",
+      "size": 5217,
+      "sha256": "5718e963d78eb4517413f91745601137b770ad09581797570ac908fb92a4a63d"
+    },
+    {
+      "path": "dragontools/worker/audio_mux_thread.py",
+      "size": 5058,
+      "sha256": "e7d70423500cf09a367e4f0a83d2f77cd87c25cc759119ecc2f177471ecea941"
+    },
+    {
+      "path": "dragontools/worker/audio_video_match_analysis_service.py",
+      "size": 3026,
+      "sha256": "2fa5c7401deac197f47fae4a7e2bcc598ace0c3c167aa0a40bf12963eff8faa5"
+    },
+    {
+      "path": "dragontools/worker/audio_video_match_contracts.py",
+      "size": 2042,
+      "sha256": "24c7675c6c8e68ac7efa8041f369b96c8a670545ca00b2f7814f180f58dde6d4"
+    },
+    {
+      "path": "dragontools/worker/audio_video_match_create_service.py",
+      "size": 5081,
+      "sha256": "82d7350ca692195ab38f5e4f5d62f94cd30e6e3278661dd3ee11d6cda8683e9a"
+    },
+    {
+      "path": "dragontools/worker/audio_video_match_render.py",
+      "size": 3581,
+      "sha256": "d11b1bda59d4712bd4ebd0e160bbf312f7636c20d2e8faa4edf8920732a2516a"
+    },
+    {
+      "path": "dragontools/worker/audio_video_match_reporting.py",
+      "size": 2285,
+      "sha256": "ba2ba64b8e50a2e2dfed291264936a2afc516439b068925f45b2a7f09a1320b4"
+    },
+    {
+      "path": "dragontools/worker/audio_video_match_runtime.py",
+      "size": 2509,
+      "sha256": "27f535d718a37aed68fd47b22ea5b3a98aa6d52e9f8c852c5a83f69c332d98cc"
+    },
+    {
+      "path": "dragontools/worker/audio_video_match_service.py",
+      "size": 1869,
+      "sha256": "1bb84ab16999a24202bd85af026a739a5f7850e75c118595abc8e3c413d8a8fb"
+    },
+    {
+      "path": "dragontools/worker/audio_video_match_thread.py",
+      "size": 4245,
+      "sha256": "88f8b8e56044fb7c2b0cd98e27f39e12859c98aeb5fabfc74617630881bafcdf"
+    },
+    {
+      "path": "dragontools/worker/av1_metadata_pipeline.py",
+      "size": 14165,
+      "sha256": "3c2f585d0f45a8253239bfcc1ac9109705eb561d7c30fa5363481515ef7e1146"
+    },
+    {
+      "path": "dragontools/worker/base_worker.py",
+      "size": 5703,
+      "sha256": "7f08eed7ce79fd533bab80755711ed4ea643f23b92b6c1b6963a41b91ddc3b92"
+    },
+    {
+      "path": "dragontools/worker/cleanup_service.py",
+      "size": 5869,
+      "sha256": "1e0f7d5e2c2280c44e8d8d8695ff7ac3aa3191d55746369c1b61afccbe117d44"
+    },
+    {
+      "path": "dragontools/worker/command_formatting.py",
+      "size": 423,
+      "sha256": "b16e4f82ff11323c6b7e45a8631b575eff4ec7fc2b2c0ea4b0685a6d5d651cfd"
+    },
+    {
+      "path": "dragontools/worker/converter_audio_args.py",
+      "size": 3304,
+      "sha256": "224eddd7fbc1b8f8de408e6f9164dbd2266604d20f6745176675e7aa7654db40"
+    },
+    {
+      "path": "dragontools/worker/converter_config.py",
+      "size": 3141,
+      "sha256": "f71d7803ebd59cad8f7375f7bb4fa8589a6f8ab277a042f4df6ef452d3846d6c"
+    },
+    {
+      "path": "dragontools/worker/converter_control.py",
+      "size": 6806,
+      "sha256": "8bca14de35f4f8fbc248b5691b940d6838d141f7868648fe98b6d3d40cde54b8"
+    },
+    {
+      "path": "dragontools/worker/converter_detection.py",
+      "size": 8904,
+      "sha256": "535f87a50b2390ac3ae61d2a7845aec6eac869bf379ab3d109f6ec052791aac9"
+    },
+    {
+      "path": "dragontools/worker/converter_file_executor.py",
+      "size": 4781,
+      "sha256": "3b0ed5a30500fd6c7876507d0ada21b3f78c38027d617991ce0e76c391513da5"
+    },
+    {
+      "path": "dragontools/worker/converter_lifecycle.py",
+      "size": 5286,
+      "sha256": "5f48d1139bb381a14981951e61ec99448feca4f0d6b631870c4ded1d9d3517e9"
+    },
+    {
+      "path": "dragontools/worker/converter_media_probe.py",
+      "size": 2715,
+      "sha256": "ce6d4eea3a0dc8ae6da8a7c91f2e4d8aca873b41628b01c63fcf434014e11c9c"
+    },
+    {
+      "path": "dragontools/worker/converter_process_executor.py",
+      "size": 9742,
+      "sha256": "338cb01c46d16e60226099386a23ea1d2153692291e9cad95c6098d1966a59f1"
+    },
+    {
+      "path": "dragontools/worker/converter_progress.py",
+      "size": 2113,
+      "sha256": "c17549add0d1b13b5884def0cdb40a29564b4d701774f4290bb87f9881c7ea26"
+    },
+    {
+      "path": "dragontools/worker/converter_progress_parser.py",
+      "size": 3399,
+      "sha256": "50f1b634ae9b66c2f6d8e1c760a94bd009cdeba948f150e526d34506c61519e5"
+    },
+    {
+      "path": "dragontools/worker/converter_queue_state.py",
+      "size": 4676,
+      "sha256": "9698a654c73c3c487209bd6e30e11daf152406cb1312a64eeb48609508a3105a"
+    },
+    {
+      "path": "dragontools/worker/converter_run_loop.py",
+      "size": 6992,
+      "sha256": "5c5b4c4ae5f507df5e5f053a603add8188d158465e54633fb2de1591961bb2a5"
+    },
+    {
+      "path": "dragontools/worker/converter_runtime_builder.py",
+      "size": 10101,
+      "sha256": "3fa81dd4c3316664ee9745ef7598d57e82e4e51219545a757c005ec087b0c881"
+    },
+    {
+      "path": "dragontools/worker/converter_static_composition.py",
+      "size": 3201,
+      "sha256": "8b078d5e2a397c8627c71da2d2eda45c23b8d9cb254d5352ed408c532038ca28"
+    },
+    {
+      "path": "dragontools/worker/converter_stream_args.py",
+      "size": 5310,
+      "sha256": "09a5f0da971b1305f9eaa330c812f1adc2fc76d1751fff76671a1766795fa947"
+    },
+    {
+      "path": "dragontools/worker/converter_strip.py",
+      "size": 2132,
+      "sha256": "72ed956db4ca957fec70daea836a8c261fc8f536acc3fa556f7c523599817bba"
+    },
+    {
+      "path": "dragontools/worker/converter_strip_audio.py",
+      "size": 1163,
+      "sha256": "d38240d20227919c838e96f44a0f379e1c981af4ecd7e17cfb305f90392a5917"
+    },
+    {
+      "path": "dragontools/worker/converter_strip_runtime.py",
+      "size": 715,
+      "sha256": "e40fa68d870aa6519c88a683bcb6aed83eb39c77af4e1e1e327c0ca66835e589"
+    },
+    {
+      "path": "dragontools/worker/converter_strip_sidecars.py",
+      "size": 1266,
+      "sha256": "85c5eec807b9b4ac21e044f50e816d450a47fc19f989f80a3ceb480182c86846"
+    },
+    {
+      "path": "dragontools/worker/converter_strip_subtitles.py",
+      "size": 2147,
+      "sha256": "76acb7e16850d9788cb187941eecabeed3953bf25ac6ca13aba5547f9e6b0c3c"
+    },
+    {
+      "path": "dragontools/worker/converter_subtitle_args.py",
+      "size": 3115,
+      "sha256": "92995694f479cb46930945634786196afc4c2ebd5717d362839b85afc14b3c6c"
+    },
+    {
+      "path": "dragontools/worker/converter_thread.py",
+      "size": 12063,
+      "sha256": "f6249a936e1e35545ab2a9c67edeab6184aab0b2838341b92d23b916cd0dcb40"
+    },
+    {
+      "path": "dragontools/worker/converter_thread_bootstrap.py",
+      "size": 3479,
+      "sha256": "d45c6c97da80ec132494320841b87d108adf6aac4c04c0a1e32025f6071fdc32"
+    },
+    {
+      "path": "dragontools/worker/converter_thread_compat.py",
+      "size": 437,
+      "sha256": "2a523dd2a85a79cfd8fa945afe9a7bc6ae755d201b6a7048252739cdc11b2876"
+    },
+    {
+      "path": "dragontools/worker/converter_thread_state.py",
+      "size": 4255,
+      "sha256": "b4eddfca6291a81ff1e0e45fed53ff213ed01e609cb78ee8ef37cabcf7a5bc3b"
+    },
+    {
+      "path": "dragontools/worker/converter_utils.py",
+      "size": 2868,
+      "sha256": "961687165d211eb754484f807ef0cb9df7b4aacd45a526eaa42aeda8aef49b67"
+    },
+    {
+      "path": "dragontools/worker/converter_video_filter_args.py",
+      "size": 1010,
+      "sha256": "12c096616acca4ca7278b87ea48700f6a63f44c7e9c45260093e458dae73b2d6"
+    },
+    {
+      "path": "dragontools/worker/duration_remux_service.py",
+      "size": 4908,
+      "sha256": "03a2567743b13208871f96add5453745355b9b284c53a9c0cd369433a163dac6"
+    },
+    {
+      "path": "dragontools/worker/duration_repair_archive.py",
+      "size": 1850,
+      "sha256": "4a0839c893a36245762ce80926dd3ea2f89f0ec8fd470904f349db0332787694"
+    },
+    {
+      "path": "dragontools/worker/duration_repair_commands.py",
+      "size": 2527,
+      "sha256": "f10532b5fd104e0deadbee9d4df813d6ed4e61c901e320f0f233274b1d7f5e13"
+    },
+    {
+      "path": "dragontools/worker/duration_repair_models.py",
+      "size": 6204,
+      "sha256": "83dcf77c859684dfdfaacd4f0a789b1ae25ef6d02d71ec841eb6ee327d62fb23"
+    },
+    {
+      "path": "dragontools/worker/duration_repair_orchestrator.py",
+      "size": 8341,
+      "sha256": "32f418c5bcb224dad797f9a8d062af34867778c44135942795c34af79d4da33a"
+    },
+    {
+      "path": "dragontools/worker/duration_repair_policy.py",
+      "size": 1716,
+      "sha256": "8efbdadf5917491ebead37f42d04def74d51572500d39239c688ba3480ee16cd"
+    },
+    {
+      "path": "dragontools/worker/duration_repair_runtime.py",
+      "size": 1692,
+      "sha256": "1beffe2e6449750240d2ec3d9986dfe699eee713dc57d29007f10838153654df"
+    },
+    {
+      "path": "dragontools/worker/duration_repair_service.py",
+      "size": 8650,
+      "sha256": "bb83f5d1c1363133603d1ed3aa836fc45e24025428541bd8e6345be99c50e87a"
+    },
+    {
+      "path": "dragontools/worker/duration_repair_stream_guard.py",
+      "size": 7925,
+      "sha256": "17156b486226a9b0d2ed4b9ec7f2f4df71de1d25c6f19896f916c55a33b5a3fc"
+    },
+    {
+      "path": "dragontools/worker/duration_repair_validation.py",
+      "size": 3419,
+      "sha256": "eef909f316cbb7e63fb3a5c34d591fa3682163dc811d6a43444bca72d51f7c35"
+    },
+    {
+      "path": "dragontools/worker/duration_timestamp_candidate_archive.py",
+      "size": 1811,
+      "sha256": "ae483d34d15ac84192689f410ec26878d9bace61aa94a3c409be461270016483"
+    },
+    {
+      "path": "dragontools/worker/duration_timestamp_candidate_service.py",
+      "size": 7867,
+      "sha256": "1dd0adbbbcf51efd8ad29ea3bfd8f4713be01ef439d0c086a6cb475c2c41b8d2"
+    },
+    {
+      "path": "dragontools/worker/duration_timestamp_candidate_validation.py",
+      "size": 3248,
+      "sha256": "65aed950587a4778fbfddd9061abf195801733cd96701b20673ce692a5a699e3"
+    },
+    {
+      "path": "dragontools/worker/duration_timestamp_service.py",
+      "size": 13861,
+      "sha256": "3ab87f1308aa746ce9663bc508359a322ef3c156dea25bc38667a78ba77098cc"
+    },
+    {
+      "path": "dragontools/worker/duration_timing_analyzer.py",
+      "size": 4045,
+      "sha256": "4af8cdf9c4633b33b8faa28b37b0d6d99392107a91d73f0893b07d2ce69e0c9b"
+    },
+    {
+      "path": "dragontools/worker/duration_timing_inference.py",
+      "size": 2797,
+      "sha256": "2345ed32ffdb3681f10a7b654f8707d5fa507d6329336a2f5fcca6a0916134d2"
+    },
+    {
+      "path": "dragontools/worker/duration_timing_mapping.py",
+      "size": 4334,
+      "sha256": "6e67b08f3fffd2954951d8892e3d37ce87dc8d124fc9f075a6cdf16f41137c61"
+    },
+    {
+      "path": "dragontools/worker/duration_timing_parsing.py",
+      "size": 3510,
+      "sha256": "b6b0c1a276cf35dcaafa603a84a51de5e56199f68146cf57279f79a9f9a86f78"
+    },
+    {
+      "path": "dragontools/worker/duration_timing_sources.py",
+      "size": 1892,
+      "sha256": "65e10586a74e774e69470e48c99cd76666a6f40c90ff35a68aa892a36df32403"
+    },
+    {
+      "path": "dragontools/worker/dv5_encode_fallback.py",
+      "size": 5877,
+      "sha256": "ab0c61eb5bab04f3bf3bc9a4549fbf217e2637631c9165bc57913b3ce43e1427"
+    },
+    {
+      "path": "dragontools/worker/dv_audio_mux_service.py",
+      "size": 9099,
+      "sha256": "17e4aff25514e5729e7eee17f6ddea0094276a47049508f596602d549cbb940b"
+    },
+    {
+      "path": "dragontools/worker/dv_command_runner.py",
+      "size": 6480,
+      "sha256": "bb90d9931170537418d205b1879487a988fe11f8d40d66cdc7f6aaae935b2c41"
+    },
+    {
+      "path": "dragontools/worker/dv_crop_reconcile.py",
+      "size": 11069,
+      "sha256": "62b197a078de79756aecc23bacd68fc86982bd7ffd35768425332b18e0f957d5"
+    },
+    {
+      "path": "dragontools/worker/dv_dynamic_metadata_service.py",
+      "size": 12189,
+      "sha256": "338b0fa44f088b3e560e7ea0af8030833019fd18a7cd9fe81bca774360747b5e"
+    },
+    {
+      "path": "dragontools/worker/dv_encode_command.py",
+      "size": 3428,
+      "sha256": "614dbb5b569ad11ccbef74aeb23c93eb4a5e7157f2b64162e3f03731016c805d"
+    },
+    {
+      "path": "dragontools/worker/dv_failure_recovery.py",
+      "size": 3450,
+      "sha256": "233b6a0c8963cf5dbbfde123509714d7edfce614e3840b24657cfcbe806adfef"
+    },
+    {
+      "path": "dragontools/worker/dv_final_metadata_verifier.py",
+      "size": 7023,
+      "sha256": "31fda5d9317737a73e2c259828cca585ea8be52cd7e2d50d437bb3d3910883fd"
+    },
+    {
+      "path": "dragontools/worker/dv_final_mux_service.py",
+      "size": 2424,
+      "sha256": "f19c8108fabc36a5eac410e0b0127d99faa769fdd88ed3b1faf817611b160833"
+    },
+    {
+      "path": "dragontools/worker/dv_final_output_service.py",
+      "size": 2286,
+      "sha256": "8649ff0878d84225f909a114a97afe27a05baeef8a0440aa376034a907519c9e"
+    },
+    {
+      "path": "dragontools/worker/dv_level5_editor.py",
+      "size": 7269,
+      "sha256": "126391fc8a89074e8808e458a828561c6c12f0ada870f99c995f2bdfe32ef67b"
+    },
+    {
+      "path": "dragontools/worker/dv_mkv_muxer.py",
+      "size": 1813,
+      "sha256": "7e74334783a12eed0c82dcd85a5340f5022e543fcd123b852719501a5fb6194a"
+    },
+    {
+      "path": "dragontools/worker/dv_mp4box_muxer.py",
+      "size": 2698,
+      "sha256": "e2435fbebc4001b5fde16f778cdcc0cf4842e1ed084d246c3c7b8ccea300617c"
+    },
+    {
+      "path": "dragontools/worker/dv_output_install.py",
+      "size": 1237,
+      "sha256": "07d7b4ce9370f4a3d4fc915d569f121c5ba299b24f07b1c213e5f70edcb3ddc2"
+    },
+    {
+      "path": "dragontools/worker/dv_pipeline_compat.py",
+      "size": 2142,
+      "sha256": "0390c6665fabf40ce56ffe2e34f2772cec371308c6ebfaf6e113364aeadf526d"
+    },
+    {
+      "path": "dragontools/worker/dv_pipeline_context.py",
+      "size": 5083,
+      "sha256": "e85b911515aae0b5a8ccddbb50351cfc48de4564bed65417bc16fc7d9644a728"
+    },
+    {
+      "path": "dragontools/worker/dv_pipeline_runtime.py",
+      "size": 8366,
+      "sha256": "5eb73c5d3cf61d56abb03bd3bd9fa770c4ae1a9774cfa996101183bf54e6b7df"
+    },
+    {
+      "path": "dragontools/worker/dv_pipeline_stage_factory.py",
+      "size": 1551,
+      "sha256": "15c63a9dece1b1574c2d4944eaed4b0977c1fac670469a6b56bacbd871ed0e26"
+    },
+    {
+      "path": "dragontools/worker/dv_pipeline_stages.py",
+      "size": 14650,
+      "sha256": "acdd9e529a0df0fe761760aba4c8d8a12c494b26b36b7080eaadf5e94725cc82"
+    },
+    {
+      "path": "dragontools/worker/dv_pipeline_timeouts.py",
+      "size": 782,
+      "sha256": "4b24e75051fcf3ba1bfcbaacff4936365540643591ed43d3121178ff50c55abf"
+    },
+    {
+      "path": "dragontools/worker/dv_processing_components.py",
+      "size": 3208,
+      "sha256": "37e5c4a317a200c2a81f57554f71c5bd5fe0332006ec57ac6f58a6dbd587c31f"
+    },
+    {
+      "path": "dragontools/worker/dv_processing_pipeline.py",
+      "size": 8675,
+      "sha256": "b73d63e8f72188cc5a98d3b755bc74a8f9e44e81d862dcc238bdfba79d6ad7a5"
+    },
+    {
+      "path": "dragontools/worker/dv_remux_audio.py",
+      "size": 2569,
+      "sha256": "3f0639576b179c6ec079da7be0758e20ea808b72a1e068ae6657cc5623e07529"
+    },
+    {
+      "path": "dragontools/worker/dv_remux_components.py",
+      "size": 1665,
+      "sha256": "3cd92f5fcb317596dd2e25957603884bf463944fc43a6d364620da9bb3341743"
+    },
+    {
+      "path": "dragontools/worker/dv_remux_file_dispatcher.py",
+      "size": 3913,
+      "sha256": "baf86791ecc71c3bed42983e077ee774bec75eac7be77f8459494d1464d4ae43"
+    },
+    {
+      "path": "dragontools/worker/dv_remux_job.py",
+      "size": 19156,
+      "sha256": "dce3a47bc7ef7d2b04143c55e39dd8b5ecca39bc39bb0327df2de1535ffbf0a8"
+    },
+    {
+      "path": "dragontools/worker/dv_remux_muxers.py",
+      "size": 5850,
+      "sha256": "429835fc92d4cc2bd74731ef64a358e696e0cda8a7f90ff35fe2285fe3c60af3"
+    },
+    {
+      "path": "dragontools/worker/dv_remux_output.py",
+      "size": 7312,
+      "sha256": "b281d0a1227983e3c21fe116c94ece9afc5b38e5f700d7e0d925469c953998bc"
+    },
+    {
+      "path": "dragontools/worker/dv_remux_output_verifier.py",
+      "size": 2910,
+      "sha256": "27c757d299497ab177e53be8f03700d545e9dd3189216bacb1c068695443196e"
+    },
+    {
+      "path": "dragontools/worker/dv_remux_pipeline.py",
+      "size": 14122,
+      "sha256": "543b74240bb37c4c0b05fdd105789394d39892ec1405b8cc138432ed2a5ea706"
+    },
+    {
+      "path": "dragontools/worker/dv_remux_policy.py",
+      "size": 3456,
+      "sha256": "e11d9f821d003c48a0625667f34366393bcf4a9363b72a0997fdd5a5c0b2f798"
+    },
+    {
+      "path": "dragontools/worker/dv_remux_process.py",
+      "size": 5495,
+      "sha256": "c81d6f4e75ef0a47885e33c06ddb5a0ac067fe68579abe1f4336b2ba7407d3a9"
+    },
+    {
+      "path": "dragontools/worker/dv_remux_profile_service.py",
+      "size": 5175,
+      "sha256": "07d3cdbe428acd9863ab5f09af4905f612b90e6edf3e8899ed71374e6d8be634"
+    },
+    {
+      "path": "dragontools/worker/dv_remux_thread.py",
+      "size": 15568,
+      "sha256": "75cafd795cf662cde3c69b12dc28f9f598040386f766466015a1b5d6a4b97d70"
+    },
+    {
+      "path": "dragontools/worker/dv_result_contract.py",
+      "size": 3378,
+      "sha256": "996cd5ba5ded3bad4bd7a7a7eefad2238ac6fbb7efcbe5241faa8f69f19f6a1c"
+    },
+    {
+      "path": "dragontools/worker/dv_rpu_service.py",
+      "size": 1393,
+      "sha256": "8cabcba03cb6c994b290a45ffaa98c2b4a21023215884b9036e2b2602ecbaf05"
+    },
+    {
+      "path": "dragontools/worker/dv_runtime_models.py",
+      "size": 1213,
+      "sha256": "1bf5107167f94b6ca2f944c15a78f1a0adf2d8c23d30766a060867763450d3cc"
+    },
+    {
+      "path": "dragontools/worker/dv_subtitle_mux_service.py",
+      "size": 10057,
+      "sha256": "00382ba5079ef3b6315a85f164a53592e5ec23f4f4c6462077303f5ba0ba1cf7"
+    },
+    {
+      "path": "dragontools/worker/dv_track_preparation_service.py",
+      "size": 3469,
+      "sha256": "dd5b8420b0e601dbd94c9bfe94b90ba19df83024fbece40a6dbbe2536669d3ae"
+    },
+    {
+      "path": "dragontools/worker/dv_video_filters.py",
+      "size": 3738,
+      "sha256": "508df2adc269df8799627a7370cb334ca00b5ae8bc9fa9d66eb0a1ec7fa49ba8"
+    },
+    {
+      "path": "dragontools/worker/dv_video_stage_service.py",
+      "size": 10005,
+      "sha256": "d17cebc79643cc7c08f631b30b9514df4cad2c8d7cefca6314467644e149f7b1"
+    },
+    {
+      "path": "dragontools/worker/dv_workflow_pipeline_adapter.py",
+      "size": 2943,
+      "sha256": "26db15719e1c3229b9e8d4e921e676d7525de5b0b355d304757596ea5a4587e5"
+    },
+    {
+      "path": "dragontools/worker/encode_plan.py",
+      "size": 316,
+      "sha256": "27e2a611c8f75a399f2cfb079162051f2df2079dff54ccb84776fec19ccf1575"
+    },
+    {
+      "path": "dragontools/worker/encode_plan_service.py",
+      "size": 6922,
+      "sha256": "96d6a46e18c8a5941a9d706efa4febefd822c7942e7b621e9c1e8714d74c8677"
+    },
+    {
+      "path": "dragontools/worker/encoder_args.py",
+      "size": 7648,
+      "sha256": "48ccab70e7220f3766c5d17209a965fb2401c832e955c622624c6f38bac28b5f"
+    },
+    {
+      "path": "dragontools/worker/hdr10_color.py",
+      "size": 2722,
+      "sha256": "62e147d4f0a2717e38a27266ab0226a282d9d5d81dae325a6b147d064a988b79"
+    },
+    {
+      "path": "dragontools/worker/hdr10plus_bitstream_service.py",
+      "size": 5558,
+      "sha256": "2f0d56bc384fe8529798e7620317ab213e4aa79470b53bdef21ef6fe8267f1cd"
+    },
+    {
+      "path": "dragontools/worker/hdrplus_conversion.py",
+      "size": 8202,
+      "sha256": "7167c305a76c55e1e705e44c1ac5fc68db2de562b24262b5fa34cc25cd9184b0"
+    },
+    {
+      "path": "dragontools/worker/hdrplus_encode_service.py",
+      "size": 3676,
+      "sha256": "e63deb1c813f380e9010ed7a38bb785dc5f53159df2010f1f81931df0d3133bc"
+    },
+    {
+      "path": "dragontools/worker/hdrplus_helper_compat.py",
+      "size": 5245,
+      "sha256": "e278c6d7a33f1e0f467758f699c3767f33ce74645edb6dc804903ee881081c51"
+    },
+    {
+      "path": "dragontools/worker/hdrplus_helper_services.py",
+      "size": 3410,
+      "sha256": "7d24459366cda4de0dd9f1639313dd8afe9df73a990236e98db7a716995f0e21"
+    },
+    {
+      "path": "dragontools/worker/hdrplus_mux_service.py",
+      "size": 7351,
+      "sha256": "59c6e730bc10c3f202215192a9fb52c603e58b92646063849f2c5e3377b311f8"
+    },
+    {
+      "path": "dragontools/worker/hdrplus_pipeline_coordinator.py",
+      "size": 13332,
+      "sha256": "3aa04806b906648cd02f55ac677f72c869bcfcc1b15b91c896f8b6236c59f429"
+    },
+    {
+      "path": "dragontools/worker/hdrplus_runtime_models.py",
+      "size": 2837,
+      "sha256": "24687945566aee6dca9e4239e5b30cd0bf807fe32bfafa2e6c700f6e7564676a"
+    },
+    {
+      "path": "dragontools/worker/hdrplus_stream_service.py",
+      "size": 3819,
+      "sha256": "317fa27108121e6b31bcc63c73031c4570feac10b375de8fa7b99b37b6fd98af"
+    },
+    {
+      "path": "dragontools/worker/hdrplus_tool_runner.py",
+      "size": 5109,
+      "sha256": "fa906406c4c62e8c9de33b0320e16c502c15f2bc92056eb6879bb8dc368345d3"
+    },
+    {
+      "path": "dragontools/worker/interfaces.py",
+      "size": 2558,
+      "sha256": "d24f45417e4120dd3c80f31fcb576c3525f8376f563e2a1fab99bdad5b7f7f50"
+    },
+    {
+      "path": "dragontools/worker/iso_disc_inspector.py",
+      "size": 9026,
+      "sha256": "dcc4764043fb95de87e3f6d6da38361d325e49876989b8e9f554f8944e577dee"
+    },
+    {
+      "path": "dragontools/worker/iso_ffmpeg_fallback_service.py",
+      "size": 5979,
+      "sha256": "718281065e29295cb1ff1cbe9d56425af2c41fb11d1ac501660f696d6e4e21be"
+    },
+    {
+      "path": "dragontools/worker/iso_input_processor.py",
+      "size": 4650,
+      "sha256": "e8c40ddac7b59cbba6e7c25ff939d7743bcf4773a9ff69d175b94a7b9dafdbf3"
+    },
+    {
+      "path": "dragontools/worker/iso_makemkv_service.py",
+      "size": 6801,
+      "sha256": "2e43a871d567dec6121fb06fa10626f7b4e28a1fb617cf4326d09af90e8ebac6"
+    },
+    {
+      "path": "dragontools/worker/iso_models.py",
+      "size": 522,
+      "sha256": "aec73002e94165205e8728ddcc6a1065a5caf453812e3fa83e94b6a281c5afb7"
+    },
+    {
+      "path": "dragontools/worker/iso_processor_host_mixin.py",
+      "size": 1816,
+      "sha256": "24e9755e7e99d333e52c77403a78fe029207622ee6d0077ac8e28c4c675d011c"
+    },
+    {
+      "path": "dragontools/worker/iso_selection.py",
+      "size": 4201,
+      "sha256": "9dab241a04b1ea1ce0a7e0fedfd51a4d6cd52f52009d1ec24c077651ce6583df"
+    },
+    {
+      "path": "dragontools/worker/iso_thread.py",
+      "size": 9408,
+      "sha256": "3210e3969cb89c87046324d2a50ee3648f0c65745a8f67e78707bb3059e21d58"
+    },
+    {
+      "path": "dragontools/worker/job_process_owner.py",
+      "size": 1271,
+      "sha256": "f793215ca6a784d5e1eedbd1bf159036382134a41a6122f25ffcb284a5d193cc"
+    },
+    {
+      "path": "dragontools/worker/log_dispatch.py",
+      "size": 3481,
+      "sha256": "a69fcf0b2672ba3ffce64fc81e155fc5acf5fd54533f6748b7080d2101907b5d"
+    },
+    {
+      "path": "dragontools/worker/media_analysis_service.py",
+      "size": 1160,
+      "sha256": "f3086958345f30e0719c244d0e5b1d9d5c1e0995a687a3d31a4a1a7a681d4ac4"
+    },
+    {
+      "path": "dragontools/worker/media_contract.py",
+      "size": 2335,
+      "sha256": "8d1979cd3873b6a1c85e782411985ae7e92d70fe6527a01ecf86f9032e917129"
+    },
+    {
+      "path": "dragontools/worker/media_contract_builder.py",
+      "size": 7797,
+      "sha256": "b151c17eb5854398fba2e4487cbccb24153a5975bc6b6996d57f654683028f08"
+    },
+    {
+      "path": "dragontools/worker/media_contract_types.py",
+      "size": 1162,
+      "sha256": "b189043c79f1bfcfde9d5a1df5b357b861fbc1ae98ac2b7317192a1fa3696c9c"
+    },
+    {
+      "path": "dragontools/worker/merge_analysis.py",
+      "size": 5452,
+      "sha256": "e36e94ca24f69aebba9dc4efbaf2a4fe805aa1c2c632abf1152d5d8f9f11a1de"
+    },
+    {
+      "path": "dragontools/worker/merge_common.py",
+      "size": 1930,
+      "sha256": "73cf845dbbe1fd509bd7bb05b25511c423b64768bf7aef6b14b661305ba4cded"
+    },
+    {
+      "path": "dragontools/worker/merge_executor.py",
+      "size": 6950,
+      "sha256": "42591a1d2e7515570e45da6ad400a23681cb0ea08a4785fa60876305ea66e4d7"
+    },
+    {
+      "path": "dragontools/worker/merge_output_verifier.py",
+      "size": 2007,
+      "sha256": "aad7592512645937088d4f98490b61292402887516c15dadf1de8d9469cb97c4"
+    },
+    {
+      "path": "dragontools/worker/merge_plan.py",
+      "size": 2637,
+      "sha256": "4f68547f5f3a96b391a93ad42b8ab2c67bddf336d471bddfa80fe8cadeb043e2"
+    },
+    {
+      "path": "dragontools/worker/merge_thread.py",
+      "size": 4881,
+      "sha256": "8ad77ee581d4493b12e93d752aa6ec42f94cb68c1efa0f3a0ade2a4e010c89a4"
+    },
+    {
+      "path": "dragontools/worker/move_batch_executor.py",
+      "size": 7059,
+      "sha256": "624e8d28ca492cf926473e8982c73dcb009a65ff20d100352305e9d8fd827698"
+    },
+    {
+      "path": "dragontools/worker/move_batch_lifecycle.py",
+      "size": 4825,
+      "sha256": "cad8aab004ef1bf87ed0ad956207ea26fb91106bf7b93e80e5fd3bf2edccd9bc"
+    },
+    {
+      "path": "dragontools/worker/move_completion_service.py",
+      "size": 5338,
+      "sha256": "ffc0a16d4663611ce28a81ef6ebb9ba9d046194497cf5e2d480ea29376b7f7f4"
+    },
+    {
+      "path": "dragontools/worker/move_result_commit.py",
+      "size": 6954,
+      "sha256": "5250a1b913f30a0db6dbf5f76edeec624a7f53e40d6f4403bab3ab5cdd82bf0e"
+    },
+    {
+      "path": "dragontools/worker/move_runtime_control.py",
+      "size": 2410,
+      "sha256": "08d2d90b77e61c14d448dbcc72c392b9662e78ce54d538f1fe40338bae3e9736"
+    },
+    {
+      "path": "dragontools/worker/move_thread.py",
+      "size": 5540,
+      "sha256": "b57342e983ca096fc5535b1950bee27408f7bad18018b43d133bb103ab88fb97"
+    },
+    {
+      "path": "dragontools/worker/mp4_remux_file_service.py",
+      "size": 9608,
+      "sha256": "af70d1df60a1e1b89b9b9d6833bfb71180b1fb5b3644ffffc41557876f0c2b8e"
+    },
+    {
+      "path": "dragontools/worker/mp4_remux_output_verifier.py",
+      "size": 1836,
+      "sha256": "de3171960376ec2d968312d5f43d1fd01cedb0afbd8d3d7fda61d0438195de9a"
+    },
+    {
+      "path": "dragontools/worker/mp4_remux_plan.py",
+      "size": 10482,
+      "sha256": "9c85418529458ceda9e860c5c8a94468e82be13638de6b03e47546031191271d"
+    },
+    {
+      "path": "dragontools/worker/mp4_remux_sidecars.py",
+      "size": 3463,
+      "sha256": "574e092e27d51d8d06bff4071ee4c8947f738f1ce6145405cbd708f4fea4cf83"
+    },
+    {
+      "path": "dragontools/worker/mp4_remux_thread.py",
+      "size": 8624,
+      "sha256": "f99300b3461aa26c1f50a6aa2a131cef742f519fe019225da313d51c1c0451d1"
+    },
+    {
+      "path": "dragontools/worker/nfo_commit.py",
+      "size": 4496,
+      "sha256": "7314ef2696874a93c3dad12b07a6f0d8be8664d4f4dd5ad669bb654dc40e1fe2"
+    },
+    {
+      "path": "dragontools/worker/output_contract_metadata.py",
+      "size": 848,
+      "sha256": "51e08eb3f313c9b7a29fb448dd5e838f78fb64316e750bbc50f2b35379243998"
+    },
+    {
+      "path": "dragontools/worker/output_contract_tracks.py",
+      "size": 4116,
+      "sha256": "d27f5e4a9928765ef330ffbf768d2547994257e5e5a84139d6189b71072985d3"
+    },
+    {
+      "path": "dragontools/worker/output_contract_verifier.py",
+      "size": 1827,
+      "sha256": "604740d9457ad1bf3571cae5333a2786ab3f2d398dc6e4c590ebd8ccb6fb2921"
+    },
+    {
+      "path": "dragontools/worker/output_contract_video.py",
+      "size": 2549,
+      "sha256": "8fd12ea7603a51b93e4c025f3f229a5da154aacf3514f9b21b001ba065451445"
+    },
+    {
+      "path": "dragontools/worker/output_path_service.py",
+      "size": 2062,
+      "sha256": "362e94d9a7098ebcacd46c4133fe862ef39db79218ccedfdc8b22ba85fb76cf4"
+    },
+    {
+      "path": "dragontools/worker/output_probe.py",
+      "size": 2296,
+      "sha256": "b56e72a9ab4e3e54651714ae67694c66c6d35626d8656e9883ed040714f3baf9"
+    },
+    {
+      "path": "dragontools/worker/output_size_policy.py",
+      "size": 5085,
+      "sha256": "73dae0c4512062db303bd4fa1173fbf0c8c1ed22078e007b1f2c06a2d2873d1c"
+    },
+    {
+      "path": "dragontools/worker/output_verifier.py",
+      "size": 8765,
+      "sha256": "21be0a456564cbf73357eddc2a9c0afae28d01e33a0b85ebd8a40b0592ab95d7"
+    },
+    {
+      "path": "dragontools/worker/parallel_child_result_coordinator.py",
+      "size": 4957,
+      "sha256": "e0ba0a869bf5cc46ac554e81749de37d82f2242396f700890fba11fecf9f5228"
+    },
+    {
+      "path": "dragontools/worker/parallel_converter_compat.py",
+      "size": 2830,
+      "sha256": "10edffbb31d72806d87ea742f8813d7c7a5f3a27e96cf2bd979402e952e31009"
+    },
+    {
+      "path": "dragontools/worker/parallel_converter_control.py",
+      "size": 2618,
+      "sha256": "1d1df39790cf14c2aa171a61fe5b674d662d1b3333e585f9df2b8e1c91fe63b0"
+    },
+    {
+      "path": "dragontools/worker/parallel_converter_lifecycle.py",
+      "size": 4660,
+      "sha256": "857ba442499185e8b39850227114f4f2e664bd0854fb9a85b3e2a3998f6848a0"
+    },
+    {
+      "path": "dragontools/worker/parallel_converter_queue.py",
+      "size": 4112,
+      "sha256": "3b68a32650ddcf68c293453ed8526a9a90bb9f73f83b96b3e081ebdd88b55102"
+    },
+    {
+      "path": "dragontools/worker/parallel_converter_state.py",
+      "size": 8022,
+      "sha256": "d6d6c0712f4e1c13a0ae40f2f4fe09d57b14cda04cc3faa5b4694f0c34763923"
+    },
+    {
+      "path": "dragontools/worker/parallel_converter_thread.py",
+      "size": 7313,
+      "sha256": "2d4b255635c0595177dea1b1160d5aa237b5610a1da0b3b06b519bcf63aa09ba"
+    },
+    {
+      "path": "dragontools/worker/parallel_worker_launcher.py",
+      "size": 2817,
+      "sha256": "2a402949ff825fae25326800a3766d39d03286af4026052afc6066dbfbccb11a"
+    },
+    {
+      "path": "dragontools/worker/pipeline_decision_service.py",
+      "size": 8196,
+      "sha256": "c5b5ebf185c0fda787f39da4c7b2fa31bb09868b965e7610d9deac66e353dc3d"
+    },
+    {
+      "path": "dragontools/worker/postprocess_async.py",
+      "size": 10780,
+      "sha256": "386c2392b2b428475a92b177c5a39bc6c59c2b3649885c1ff6deccd1402147a2"
+    },
+    {
+      "path": "dragontools/worker/postprocess_config.py",
+      "size": 5229,
+      "sha256": "b7eae4e591a26770746728e587afff162b0a300d396388565c6a4d37dd3bc613"
+    },
+    {
+      "path": "dragontools/worker/postprocess_metadata.py",
+      "size": 4040,
+      "sha256": "668195cbb66dab1779245921bd86b9f891fe1289adf7b25cfbfa3f3d2935823d"
+    },
+    {
+      "path": "dragontools/worker/postprocess_metadata_resolution.py",
+      "size": 9213,
+      "sha256": "a8b81421f60277d713ec4724a4fd3a2e363bf458b990ed4da8e1534b365da7df"
+    },
+    {
+      "path": "dragontools/worker/postprocess_models.py",
+      "size": 839,
+      "sha256": "c02c74ddbe7691dd9de05c8b009ca56e583c1a33f78047d69da4d62a4c089254"
+    },
+    {
+      "path": "dragontools/worker/postprocess_runner.py",
+      "size": 11074,
+      "sha256": "06a1ec5924cca35633ddad511d0f9c5257ac6387d715bef5f1bfc97be32f5c3f"
+    },
+    {
+      "path": "dragontools/worker/postprocess_service.py",
+      "size": 726,
+      "sha256": "7176c35557b14667e9142dd43434676fcae7422d95cdc6633dd269630d44821f"
+    },
+    {
+      "path": "dragontools/worker/process_control.py",
+      "size": 14074,
+      "sha256": "8a7e3b4a588d2b881c3537c1b2ff36d4a0344393dac91c8895ae776d21c86453"
+    },
+    {
+      "path": "dragontools/worker/quality_compare_service.py",
+      "size": 9103,
+      "sha256": "c0252ab9ec4b31fec7da4554f2e5ea6843cafcbdc170c9d674d0fe996fe746eb"
+    },
+    {
+      "path": "dragontools/worker/quality_compare_thread.py",
+      "size": 5032,
+      "sha256": "d82d45f7c03557dfb639046fb0fb749e84f5a00ab6413482f686880dc3bb8d80"
+    },
+    {
+      "path": "dragontools/worker/quality_metrics_service.py",
+      "size": 3022,
+      "sha256": "d58d6ecbc7874c01acbadf71ae1803d23b5d981c31ba818cf4686bdca555ef75"
+    },
+    {
+      "path": "dragontools/worker/quality_process_runner.py",
+      "size": 1256,
+      "sha256": "68c76433df164a4faa1f9fffa0cd5332a25261f9cd13d2bb9451852db42eec5e"
+    },
+    {
+      "path": "dragontools/worker/quality_test_service.py",
+      "size": 8282,
+      "sha256": "a2bb775018cc5e09a11c6c2a5e7ee39d72023fc8e9f49ffb86d8ec6a22002f7a"
+    },
+    {
+      "path": "dragontools/worker/quality_test_thread.py",
+      "size": 4754,
+      "sha256": "0974a3f2f2d1390b3b79e7d6fd31c07e69bbb53ef51d76d0c47c4966a1746639"
+    },
+    {
+      "path": "dragontools/worker/replace_service.py",
+      "size": 6285,
+      "sha256": "18e1117ad5dbf5619c57d2f53405cde9cac9c76811ee8308ffb978577f66f58c"
+    },
+    {
+      "path": "dragontools/worker/source_visual_analysis.py",
+      "size": 2258,
+      "sha256": "4236d2e3acfe7e94a216099b9d17ea9ed705f67c26cabdb407ff24133810434b"
+    },
+    {
+      "path": "dragontools/worker/source_visual_check.py",
+      "size": 8111,
+      "sha256": "48918f6fce63020c13d7f8e325397fd2016e04c926c6806252eaf5f2994c19eb"
+    },
+    {
+      "path": "dragontools/worker/source_visual_models.py",
+      "size": 3151,
+      "sha256": "76b273235ed7bcc85d5b02556b0832244137cc7d78557eff9d763fdaae600d59"
+    },
+    {
+      "path": "dragontools/worker/source_visual_sampling.py",
+      "size": 5506,
+      "sha256": "8cb14810cd06a04ff061002716b898e7a309f2fde562ceeb15a97b6ddd41b370"
+    },
+    {
+      "path": "dragontools/worker/source_visual_settings.py",
+      "size": 2215,
+      "sha256": "2784eef105e871ae297e38484bd805a3c4ef6e4c81d5bc5e66f231dfe8fea8c9"
+    },
+    {
+      "path": "dragontools/worker/standard_pipeline_runner.py",
+      "size": 7241,
+      "sha256": "7c69928ae30402566d3f940884b7fd5de10705af821b26ab7c0012c214fd31fe"
+    },
+    {
+      "path": "dragontools/worker/subtitle_sidecar_plan.py",
+      "size": 4065,
+      "sha256": "5c3bc95948daf2833ba27f57c3381bcb7a5a550b389bbd60e91facf77511804f"
+    },
+    {
+      "path": "dragontools/worker/subtitle_sidecar_service.py",
+      "size": 14348,
+      "sha256": "b373891a347c236183ea660487cdb86c163be8198de41e3ab5ca61af7ccca8ae"
+    },
+    {
+      "path": "dragontools/worker/subtitle_sidecar_targets.py",
+      "size": 4914,
+      "sha256": "fe4c3746ca3cc6568bb049dedc8f2b976fc5c84fe2a852fc674e223c8faff524"
+    },
+    {
+      "path": "dragontools/worker/tool_process_lifecycle.py",
+      "size": 9805,
+      "sha256": "7bc81b7ca3f6f00963f46e27efc36f10543790b42173864374768f80878ad2a9"
+    },
+    {
+      "path": "dragontools/worker/tool_runner.py",
+      "size": 10998,
+      "sha256": "c57c0393939b2f1f6457fe0c23aa68586c7cc6ef47233a7dc743cafb0c32f913"
+    },
+    {
+      "path": "dragontools/worker/trickplay_commit.py",
+      "size": 2980,
+      "sha256": "566da464e4bfaee5ec0563b3662d7744a2a4ac26f4d41f84e84a33eee32da9e5"
+    },
+    {
+      "path": "dragontools/worker/trickplay_concurrency.py",
+      "size": 845,
+      "sha256": "e1af36369c6266adfd78c76bca4f0144dcf2472bffe564891416e3865cf70b06"
+    },
+    {
+      "path": "dragontools/worker/trickplay_ffmpeg.py",
+      "size": 4502,
+      "sha256": "8686a2bbe61a07551774adc8df01819058201d6e651bd23ac9a8af504e0550b0"
+    },
+    {
+      "path": "dragontools/worker/trickplay_models.py",
+      "size": 794,
+      "sha256": "b36bfd8dc2e076b7b0d515cba3c9ead204b74072992a9e7ebeffe2d1d44a4978"
+    },
+    {
+      "path": "dragontools/worker/trickplay_paths.py",
+      "size": 1188,
+      "sha256": "9f3f9a32e3ead39f6e70019718928499ecc3c471457ddaf1e992ec12f751fed9"
+    },
+    {
+      "path": "dragontools/worker/trickplay_service.py",
+      "size": 9130,
+      "sha256": "c7442d9c456e397aefdcf2e41beed19bb2308e4e7801bdfe414592565a3d90ec"
+    },
+    {
+      "path": "dragontools/worker/worker_contracts.py",
+      "size": 821,
+      "sha256": "01eac798045b8efebb78e38f529888215de8a92a6f01aa1910c46190f78e9710"
+    },
+    {
+      "path": "dragontools/worker/worker_events.py",
+      "size": 1313,
+      "sha256": "51114d3f8b62cd9097644514df59159a83d58422db0ca8ce7faa2581765b950f"
+    },
+    {
+      "path": "dragontools/worker/worker_result_service.py",
+      "size": 9634,
+      "sha256": "6ecfd2e9f2c6783e348efad31dda3507f6a23e1b11e648f484e7ffae844c504f"
+    },
+    {
+      "path": "dragontools/worker/worker_runtime_state.py",
+      "size": 301,
+      "sha256": "f0399e911796057fec4efe4ac3dbef2ca37a83b0f31ec6afbe62860a0a16f3f0"
+    },
+    {
+      "path": "dragontools/worker/workflow_engine.py",
+      "size": 6144,
+      "sha256": "d69905ed448fe14dc9b512343c9aaf2eb60845ff804864d6f55f71a10004151c"
+    },
+    {
+      "path": "dragontools/worker/workflow_factory.py",
+      "size": 3054,
+      "sha256": "93e8e08bf745611a50b745b2baf0fa5d2ad5705930a4f76163d6b68a067e5271"
+    },
+    {
+      "path": "dragontools/worker/workflow_models.py",
+      "size": 3785,
+      "sha256": "9aa4d58d6d59851d347a0e496b8fcf5356fb1153da5d8c4e23fd3b1abc34d3e6"
+    },
+    {
+      "path": "dragontools/worker/workflow_output_commit.py",
+      "size": 6263,
+      "sha256": "2bc4bf5909b6999e786661b44b1bd0640ea5dc0ff48fe981adc07b1505566a3d"
+    },
+    {
+      "path": "dragontools/worker/workflow_pipeline_executor.py",
+      "size": 3065,
+      "sha256": "abe2daf9882a6e9ce4eb9703e79156fd241a4c6473c1dbdad8749cff7ec6f6f9"
+    },
+    {
+      "path": "dragontools/worker/workflow_planning_service.py",
+      "size": 8328,
+      "sha256": "52a4b257ecf0d0b922edc28f0126b570594ecbb0443c48a7566d90249ed6989f"
+    },
+    {
+      "path": "dragontools/worker/workflow_postprocess_commit.py",
+      "size": 4474,
+      "sha256": "a59c3aa358227147c1eacf3a0354abb63b8233cd40f8a4d7dbd6f9b9f0aee08e"
+    },
+    {
+      "path": "dragontools/worker/workflow_services.py",
+      "size": 7921,
+      "sha256": "96d9392fc7cd8ef072c020142005b9121c876fa5fcecfcb11d0036a3982d8360"
+    },
+    {
+      "path": "dragontools/worker/workflow_sidecar_commit.py",
+      "size": 4501,
+      "sha256": "1527cbfe130f5a43595d32356d345e5820f46413acc58cc0024ac9ffb60d2464"
+    },
+    {
+      "path": "dragontools/worker/workflow_verification_service.py",
+      "size": 6709,
+      "sha256": "750daf91a9ae72630dc99099e7d763396817624015fe21a7cec7fd17ca0c4365"
+    },
+    {
+      "path": "DragonToolsV9.7.spec",
+      "size": 2773,
+      "sha256": "a41b99c5797f6cebd2876943684e675deac0bf06a9b35a6cba5b365f1566c148"
+    },
+    {
+      "path": "DragonToolsV9.8.2.spec",
+      "size": 2777,
+      "sha256": "7ecd07d2274cf34e408720bd91b884758a56740d259033e2f32f6e7362ad4456"
+    },
+    {
+      "path": "DragonToolsV9.8.3.spec",
+      "size": 2707,
+      "sha256": "d7ff1cdfede6336174c94638274dcab7d098548f3b9528b8a04a86d73db4c730"
+    },
+    {
+      "path": "DragonToolsV9.8.spec",
+      "size": 2773,
+      "sha256": "c929e3c5b1bf360ff8d33bdd4351b37a936f28bf8fe83e74e76f8ed789bf09d1"
+    },
+    {
+      "path": "DragonToolsV9.py",
+      "size": 19901,
+      "sha256": "04c1bf1a70565098e069574b9d885d6870b47fc605c2f61c9addb8183fd1c582"
+    },
+    {
+      "path": "DragonToolsV9_Dokumentation.docx",
+      "size": 270433,
+      "sha256": "ff710292dc7b888a4a40319742d0fa828608e55bb43ac8da810e472ecf1da43b"
+    },
+    {
+      "path": "DV_HDR10plus_Fix_NOTES.txt",
+      "size": 2009,
+      "sha256": "535081dfe6aeed668e809125942b048d81547dedda2f59e12da39a548eb7d08a"
+    },
+    {
+      "path": "Handbuch/Handbuch.pdf",
+      "size": 6300388,
+      "sha256": "4b424cf7b138fd580410905dd7714fa9cf78f42dfc06821b6dd045f84a22ab7a"
+    },
+    {
+      "path": "HDR10Plus_AnnexB_Fallback_PATCH_NOTES.txt",
+      "size": 823,
+      "sha256": "260a7bc14864ac5630edc7670164628d38bcc9bd93234641f762823bc3dbb810"
+    },
+    {
+      "path": "help.html",
+      "size": 196801,
+      "sha256": "7e5c49ab12ab4eb8df6ea1bf2afe290ae0a82d36acc3a7ed159cb97956cf9f8a"
+    },
+    {
+      "path": "icon/Feuerdrache.ico",
+      "size": 180638,
+      "sha256": "d87c5b3f229daa0440b764e923f3371e6aad9af48859bf018de973e09d185c06"
+    },
+    {
+      "path": "Info.txt",
+      "size": 2462,
+      "sha256": "93f08de31094891a2fa717f5778e82c3e224621dafcf5fdb6b1d033596afd756"
+    },
+    {
+      "path": "INTEGRATION_TESTS.md",
+      "size": 4233,
+      "sha256": "c432cd2c87c6763150663575d5589499e7dcdb48b68e58b4277da9244a30668a"
+    },
+    {
+      "path": "NO_UPSCALING_PATCH_NOTES.txt",
+      "size": 1695,
+      "sha256": "71edeb2120a741e1b4a714c7aa0671f14af4e4e5dbf178fc1153731d075f2c9e"
+    },
+    {
+      "path": "patch.md",
+      "size": 2226,
+      "sha256": "7ab48abeba38f28b283b2c08c6702f57b011191a226b4aade887589383bae505"
+    },
+    {
+      "path": "POST_REVIEW_PATCH_NOTES.md",
+      "size": 1675,
+      "sha256": "cfd2cb8c3424574763626a10161a625b30db3f489223f549a7258dda5fb357dd"
+    },
+    {
+      "path": "PUBLIC_RELEASE_CHECKLIST.md",
+      "size": 2003,
+      "sha256": "4415e44d1c8c970ddf402b3aed79ed04e4eecadac0e5605640322b5287c0d79a"
+    },
+    {
+      "path": "pytest.ini",
+      "size": 319,
+      "sha256": "bd4e5d4c06329d80cf628969da1fbdeffa4eb93e38081fb3ae05b02d0748fedb"
+    },
+    {
+      "path": "README.md",
+      "size": 21342,
+      "sha256": "dae83786f4c30175c725a8320f9f53cfcc6a06cb57fa94a802e0cc475d6ec625"
+    },
+    {
+      "path": "release_manifest.json",
+      "size": 664,
+      "sha256": "9f3b4f990855f035bf38f929c315ae07f921f6b1977d5f286df9db80b69a49a9"
+    },
+    {
+      "path": "RELEASE_REVIEW_MANIFEST.json",
+      "size": 76968,
+      "sha256": "e72fb8b31d492f4bacb96b1b15a5bd019ef3b4d5cdc939dd0cee52ea34a29303"
+    },
+    {
+      "path": "RELEASE_REVIEW_MANIFEST.md",
+      "size": 51930,
+      "sha256": "60de8185c87486bb28ad5be523e573ea5b99119510f6918fd1a29f11bbf7eb52"
+    },
+    {
+      "path": "requirements-build.txt",
+      "size": 116,
+      "sha256": "7ab4688ccd1cdc692ddb014091eb58fa44d0eda85a361abd67a5aad21a406040"
+    },
+    {
+      "path": "requirements-optional.txt",
+      "size": 167,
+      "sha256": "18f5aa0cb1e82e92d4a566482913a4635fe086b044cd038533e2c6f28f3da4bf"
+    },
+    {
+      "path": "requirements-runtime.txt",
+      "size": 119,
+      "sha256": "d0abe10f49aa37df47e9bdb1c34d8bbbc1e367e561f1f26f37ea836da1f44515"
+    },
+    {
+      "path": "requirements-test.txt",
+      "size": 107,
+      "sha256": "fef8dd1090d7126ce5d9a67a1373c90bc4e99d9b6705d2be2605ff932f2ef9e7"
+    },
+    {
+      "path": "ReviewPatch_Block2_NOTES.txt",
+      "size": 1381,
+      "sha256": "3c445881a11356b2fac222cc3a2278f933b4e3eea00e23e13c824aadedda2a99"
+    },
+    {
+      "path": "scripts/check_public_privacy.py",
+      "size": 3393,
+      "sha256": "5acf417da389c83e65eb2056617223fec5c1741b45ae209e6868a1827f869eb3"
+    },
+    {
+      "path": "TESTBERICHT_RENAMER_SIMULATOR_20260911.txt",
+      "size": 2524,
+      "sha256": "95bbc9c59c76bb2bc98a479f099e73fbfd8907f9a31e9215c55d6ddbe16f7aa5"
+    },
+    {
+      "path": "TOOLS_INSTALLIEREN.txt",
+      "size": 1291,
+      "sha256": "7aa39169d4a81a7052f50b3251a0c48d6c5d2e4cb24c23d282ee454d19ac4e92"
+    }
+  ]
+}

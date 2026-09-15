@@ -4,15 +4,42 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from ..core.conversion_artifacts import ConversionArtifactBundle
+from ..core.result_status import accepts_result
+
+
+def _worker_mapping(thread, session_attr: str, legacy_attr: str) -> dict:
+    """Read refactored ConverterSessionState first, then the legacy worker view."""
+    if thread is None:
+        return {}
+    session = getattr(thread, "_session_state", None)
+    value = getattr(session, session_attr, None) if session is not None else None
+    if isinstance(value, dict):
+        return value
+    legacy = getattr(thread, legacy_attr, {})
+    return legacy if isinstance(legacy, dict) else {}
+
 
 class ConversionResultFileEventsMixin:
     """Pflegt Queue-/Session-State für file_result-Signale."""
 
     def on_file_result(self, input_path: str, output_path: str, status: str) -> None:
-        self._set_file_list_item_text(input_path, f"{status}  {Path(input_path).name}")
         state = self._state
+        previous = getattr(state, "artifacts_by_input", {}).get(input_path)
+        if previous is not None and not accepts_result(previous.status, status):
+            return
+        self._set_file_list_item_text(input_path, f"{status}  {Path(input_path).name}")
+        if status in {"❌", "⚠️", "⏭️"}:
+            # Also revoke a previously accepted success (defensive legacy path).
+            for path in (input_path, output_path, getattr(previous, "output_path", "")):
+                state.fertig.discard(path)
+                state.sidecar_outputs_by_video.pop(path, None)
         if status == "🧩":
-            state.pending_postprocess_inputs.add(input_path)
+            # Defensive ordering guard: a terminal result always wins. This
+            # also protects the GUI from third-party/legacy workers that emit
+            # a delayed pending marker after completion.
+            if input_path not in state.completed_inputs:
+                state.pending_postprocess_inputs.add(input_path)
             self._refresh_queue()
             return
         if status not in {"✅", "❌", "⚠️", "⏭️"}:
@@ -21,6 +48,11 @@ class ConversionResultFileEventsMixin:
 
         state.pending_postprocess_inputs.discard(input_path)
         state.completed_inputs.add(input_path)
+        thread = self._state.thread
+        bundle = ConversionArtifactBundle.from_worker(
+            thread, input_path, output_path=output_path, status=status
+        )
+        state.artifacts_by_input[input_path] = bundle
         self._record_terminal_result(input_path, output_path, status)
         self._record_journal_result(input_path, output_path, status)
 
@@ -30,6 +62,8 @@ class ConversionResultFileEventsMixin:
             state.file_overrides.pop(input_path, None)
             state.planned_targets.pop(input_path, None)
             state.planned_targets.pop(output_path, None)
+            state.artifacts_by_input.pop(input_path, None)
+            state.sidecar_outputs_by_video.pop(output_path, None)
             self._log(
                 f"⏭️ '{Path(input_path).name}' wurde nach Abschluss aus der Queue entfernt.",
                 "info",
@@ -48,15 +82,11 @@ class ConversionResultFileEventsMixin:
                 blocked_inputs = set(replace_service)
             if input_path not in blocked_inputs:
                 state.fertig.add(output_path)
-                thread = self._state.thread
-                sidecar_map: dict = getattr(thread, "_sidecar_outputs", {}) if thread else {}
-                sidecars: list[str] = sidecar_map.get(input_path, [])
+                sidecars = list(bundle.sidecars)
                 state.sidecar_outputs_by_video[output_path] = sidecars
                 self._update_result_sidecars(input_path, sidecars)
 
-                postprocess_map: dict = getattr(thread, "_postprocess_outputs", {}) if thread else {}
-                postprocess = [dict(item) for item in (postprocess_map.get(input_path, []) or [])]
-                state.postprocess_outputs_by_input[input_path] = postprocess
+                postprocess = [dict(item) for item in bundle.postprocess]
                 self._update_result_postprocess(input_path, postprocess)
 
             planned_target = state.planned_targets.get(input_path)
@@ -83,9 +113,13 @@ class ConversionResultFileEventsMixin:
         }.get(status, "error")
         details = {}
         if status_key in {"error", "skipped"}:
-            thread = self._state.thread
-            detail_map: dict = getattr(thread, "_failure_details", {}) if thread else {}
-            details = dict(detail_map.get(input_path, {}) or {})
+            bundle = self._state.artifacts_by_input.get(input_path)
+            if bundle is not None:
+                details = dict(bundle.failure or {})
+            else:
+                thread = self._state.thread
+                detail_map = _worker_mapping(thread, "failure_details", "_failure_details")
+                details = dict(detail_map.get(input_path, {}) or {})
         self._state.run_results[input_path] = {
             "input_path": input_path,
             "output_path": output_path if status_key == "ok" else "",

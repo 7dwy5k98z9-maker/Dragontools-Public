@@ -118,13 +118,16 @@ class ConvertWidget(ConvertWidgetQueueActionsMixin, QWidget):
         if container == "mkv":
             mux_hint = "Finaler Mux: mkvmerge / MKVToolNix"
             subtitle_hint = "Untertitel: nach Regelwerk intern im MKV-Container"
+            profile_hint = "DV7: je nach Remux-Einstellung als P7 erhalten oder nach P8.1 normalisiert"
         else:
             mux_hint = "Finaler Mux: MP4Box (streamingoptimiertes MP4)"
             subtitle_hint = "Untertitel: MP4-Policy (Sidecars an: extern; aus: Text intern als mov_text, Bitmap extern)"
+            profile_hint = "DV7: wird für MP4 immer nach P8.1 normalisiert"
         self._ui.dv_remux_btn.setToolTip(
-            "Dolby-Vision-Dateien ohne Video-Re-Encoding remuxen:\n"
+            "Dolby-Vision-Dateien remuxen bzw. kompatibel aufbereiten:\n"
             "• Zielcontainer: folgt Einstellungen > Ausgabecontainer > Dolby Vision\n"
-            "• Video: unverändert, Dolby Vision bleibt erhalten\n"
+            f"• {profile_hint}\n"
+            "• DV5: je nach Einstellung automatisch H.265/DV encodieren oder überspringen\n"
             "• Audio: nach den zentralen Audioregeln\n"
             f"• {subtitle_hint}\n"
             f"• {mux_hint}"

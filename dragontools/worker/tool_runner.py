@@ -275,6 +275,14 @@ def run_tool_bytes(
             # Binary-producing tools must obey the exact same pause semantics
             # as text tools. Paused time is excluded from the absolute timeout.
             lifecycle.handle_pause()
+            # A process may finish exactly while a pause is being released.
+            # Observe that completion before evaluating the timeout; otherwise
+            # a successful tool can be mislabeled rc=124 at the deadline.
+            polled = proc.poll()
+            if polled is not None:
+                stdout, stderr = proc.communicate()
+                rc = int(polled)
+                break
             rc = lifecycle.handle_timeout(display="seconds")
             if rc is not None:
                 break

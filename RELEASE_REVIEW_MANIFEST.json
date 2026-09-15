@@ -1,21 +1,11 @@
 {
   "document_type": "dragontools-refactoring-release-review-manifest",
   "schema_version": 1,
-  "generated_on": "2026-09-13",
-  "app_version": "9.8.2",
+  "generated_on": "2026-09-14",
+  "app_version": "9.8.3",
   "baseline_archive": "dragontools(20260912-165602).zip",
-  "current_archive": "dragontools_20260913_postreview_hardening.zip",
-  "release_manifest_note": "This is a review/change manifest, not the application release_manifest.json build contract. The source-only uploaded archive does not include build_v9.bat and the other declared release artifacts, so creating the real build manifest here would make the release contract misleading.",
-  "validation": {
-    "compileall": "ok",
-    "targeted_regression": "101 passed, 1 host-only crashguard test deselected",
-    "baseline_reproduction": "CrashGuard Errno 5 reproduces unchanged on Block 11",
-    "metadata_settings_roundtrip": "identical",
-    "known_environment_limits": [
-      "PyQt6 unavailable on review host",
-      "durable/fsync temp-file host I/O errors"
-    ]
-  },
+  "current_archive": null,
+  "release_manifest_note": "Anonymized public source 9.8.3; Windows build succeeded on 2026-09-15. External media tools are excluded from the public ZIP.",
   "line_reductions": [
     {
       "file": "dragontools/core/media_library_db.py",
@@ -1871,5 +1861,23 @@
       "lines": 392,
       "reason": "High branch density and long recovery logic; refactor only after durability/recovery review."
     }
-  ]
+  ],
+  "historical_validation_20260913": {
+    "compileall": "ok",
+    "targeted_regression": "101 passed, 1 host-only crashguard test deselected",
+    "baseline_reproduction": "CrashGuard Errno 5 reproduces unchanged on Block 11",
+    "metadata_settings_roundtrip": "identical",
+    "known_environment_limits": [
+      "PyQt6 unavailable on review host",
+      "durable/fsync temp-file host I/O errors"
+    ]
+  },
+  "validation": {
+    "full_tests": "1390 passed, 0 failed, 0 skipped",
+    "release_validation_regressions": "12 passed",
+    "syntax": "compileall passed",
+    "ruff": "E9,F821,F822,F823 passed",
+    "public_build": "PyInstaller 6.22.2, Python 3.14.6; 0 bundle errors, 0 warnings before external media tools are excluded",
+    "details": "PATCH_MANIFEST.json"
+  }
 }

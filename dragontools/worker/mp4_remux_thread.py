@@ -14,6 +14,7 @@ from ..core.timeout_settings import get_timeout
 from ..rules.rule_loader import load_subtitle_rules
 from .mp4_remux_file_service import MP4RemuxFileService
 from .mp4_remux_plan import MP4RemuxPlanner, resolve_mp4_output_path
+from .mp4_remux_output_verifier import MP4RemuxOutputVerifier
 from .mp4_remux_sidecars import MP4RemuxSidecarService
 from .subtitle_sidecar_service import SubtitleExportResult
 from .tool_runner import run_tool
@@ -30,7 +31,6 @@ class MP4RemuxThread(BaseWorker):
     progress = pyqtSignal(int)
     file_progress = pyqtSignal(str, int, object)
     file_result = pyqtSignal(str, bool, str)
-    finished = pyqtSignal()
 
     def __init__(
         self,
@@ -86,7 +86,6 @@ class MP4RemuxThread(BaseWorker):
                 self.progress.emit(int(index / max(total, 1) * 100))
         finally:
             self.current_process = None
-            self.finished.emit()
 
     def _planner(self) -> MP4RemuxPlanner:
         return MP4RemuxPlanner(
@@ -99,6 +98,9 @@ class MP4RemuxThread(BaseWorker):
             log=self._log,
             log_audio=self._logger.audio,
         )
+
+    def _output_verifier(self) -> MP4RemuxOutputVerifier:
+        return MP4RemuxOutputVerifier(ffprobe_path=str(self.tools.ffprobe))
 
     def _sidecar_service(self) -> MP4RemuxSidecarService:
         return MP4RemuxSidecarService(
@@ -198,6 +200,7 @@ class MP4RemuxThread(BaseWorker):
             emit_file_progress=self.file_progress.emit,
             export_subtitles=self.export_subtitles,
             ignore_subtitles=self.ignore_subtitles,
+            output_verifier=self._output_verifier(),
         )
         return service.remux(
             input_path,

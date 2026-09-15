@@ -245,7 +245,7 @@ def test_dv_remux_mkv_mux_writes_subtitle_language_title_and_forced_flag(tmp_pat
     assert str(subtitle) in cmd
 
 
-def test_dv_remux_mp4_mux_does_not_embed_subtitle_tracks(tmp_path):
+def test_dv_remux_mp4_mux_embeds_text_track_with_forced_flag(tmp_path):
     video = tmp_path / "video.hevc"
     subtitle = tmp_path / "forced.srt"
     output = tmp_path / "Film.mp4"
@@ -285,8 +285,10 @@ def test_dv_remux_mp4_mux_does_not_embed_subtitle_tracks(tmp_path):
     )
 
     assert ok is True
-    assert str(subtitle) not in seen["cmd"]
-    assert "--forced-display-flag" not in seen["cmd"]
+    add_args = [arg for arg in seen["cmd"] if str(subtitle) in str(arg)]
+    assert len(add_args) == 1
+    assert ":txtflags=0xC0000000" in add_args[0]
+    assert ":lang=de" in add_args[0]
 
 
 def test_standard_dv_mkv_does_not_duplicate_actual_burn_in_subtitle(monkeypatch):

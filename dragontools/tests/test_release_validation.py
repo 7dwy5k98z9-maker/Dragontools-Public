@@ -364,7 +364,7 @@ def test_release_validation_warns_about_private_paths(tmp_path):
     from dragontools.core.release_validation import validate_release
 
     root = tmp_path
-    (root / "help.html").write_text(r"C:\Users\Dev\Documents\DragonTools", encoding="utf-8")
+    (root / "help.html").write_text(r"C:\Users\Developer\Documents\DragonTools", encoding="utf-8")
 
     checks = validate_release(root)
 
@@ -380,7 +380,7 @@ def test_app_bundle_validation_checks_exe_not_source_files(tmp_path):
     (app_dir / f"DragonToolsV{APP_VERSION}.exe").parent.mkdir(parents=True)
     (app_dir / f"DragonToolsV{APP_VERSION}.exe").write_bytes(b"exe")
     (data_dir / "help.html").parent.mkdir(parents=True)
-    (data_dir / "help.html").write_text("<html>Dev</html>", encoding="utf-8")
+    (data_dir / "help.html").write_text("<html>Developer</html>", encoding="utf-8")
     (data_dir / "Handbuch").mkdir()
     (data_dir / "Handbuch" / "Handbuch.pdf").write_bytes(b"%PDF")
     (data_dir / "Aenderungshistorie").mkdir()
@@ -448,7 +448,7 @@ def test_source_only_manifest_makes_source_archive_self_consistent(tmp_path):
     _write_json(config / "default_renamer_rules.json", {"_schema_version": 2})
     _write_json(config / "default_profiles.json", {"_schema_version": 3})
     (root / "requirements-runtime.txt").write_text(
-        "PyQt6>=6.4,<7\ncryptography>=42,<51\n", encoding="utf-8"
+        "PyQt6>=6.4,<7\ncryptography>=42,<51\ndefusedxml>=0.7.1,<1\n", encoding="utf-8"
     )
     (root / "requirements-test.txt").write_text(
         "-r requirements-runtime.txt\npytest>=8\npytest-qt>=4.4\n", encoding="utf-8"
@@ -523,7 +523,7 @@ def test_package_only_manifest_validates_code_only_release(tmp_path):
     _write_json(config / "default_renamer_rules.json", {"_schema_version": 2})
     _write_json(config / "default_profiles.json", {"_schema_version": 3})
     (root / "requirements-runtime.txt").write_text(
-        "PyQt6>=6.4,<7\ncryptography>=42,<51\n", encoding="utf-8"
+        "PyQt6>=6.4,<7\ncryptography>=42,<51\ndefusedxml>=0.7.1,<1\n", encoding="utf-8"
     )
     (root / "requirements-test.txt").write_text(
         "-r requirements-runtime.txt\npytest>=8\npytest-qt>=4.4\n", encoding="utf-8"

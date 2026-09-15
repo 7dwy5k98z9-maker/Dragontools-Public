@@ -207,14 +207,37 @@ def terminate_process_tree(
     terminate_timeout: float = 3,
     kill_timeout: float = 5,
     label: str = "Prozess",
+    process=None,
 ) -> bool:
-    """Beendet den aktuell registrierten Prozess ohne den Worker-Lock zu halten."""
-    if hasattr(worker, attr_name):
-        with lock:
-            proc = getattr(worker, attr_name, None)
-    else:
-        with lock:
-            proc = getattr(worker, "current_process", None)
+    """Beendet den aktuell registrierten Prozess ohne Lock-Reentrancy.
+
+    ConverterThread speichert den Prozess in ``_control_state``. Dessen
+    öffentliche ``current_process``-Property nimmt denselben Lock und darf
+    deshalb hier unter ``lock`` nicht aufgerufen werden.
+    """
+    state = getattr(worker, "_control_state", None)
+
+    def _read_registered_unlocked():
+        if state is not None:
+            return state.current_process
+        if hasattr(worker, attr_name):
+            return getattr(worker, attr_name, None)
+        return getattr(worker, "current_process", None)
+
+    def _clear_registered_unlocked(expected) -> None:
+        if state is not None:
+            if state.current_process is expected:
+                state.current_process = None
+            return
+        if hasattr(worker, attr_name):
+            if getattr(worker, attr_name, None) is expected:
+                setattr(worker, attr_name, None)
+            return
+        if getattr(worker, "current_process", None) is expected:
+            worker.current_process = None
+
+    with lock:
+        proc = process if process is not None else _read_registered_unlocked()
 
     if proc is None:
         if callable(log):
@@ -225,35 +248,23 @@ def terminate_process_tree(
         if callable(log):
             log(f"{label}: Prozess ist bereits beendet.", "info")
         with lock:
-            if hasattr(worker, attr_name):
-                if getattr(worker, attr_name, None) is proc:
-                    setattr(worker, attr_name, None)
-            elif getattr(worker, "current_process", None) is proc:
-                worker.current_process = None
+            _clear_registered_unlocked(proc)
         return False
 
     if callable(log):
         log(f"{label}: Sofort-Abbruch - terminate() wird gesendet.", "warn")
 
     if os.name == "nt":
-        # Windows: echte Prozessbaum-Beendigung über taskkill /T /F
-        # Damit werden auch alle Kindprozesse (ffmpeg-interne Threads,
-        # MP4Box, dovi_tool, mkvmerge) sofort beendet.
         _taskkill_tree(proc.pid, log=log, label=label)
         try:
             proc.wait(timeout=terminate_timeout + kill_timeout)
         except subprocess.TimeoutExpired:
-            # Letzter Fallback: direkt per Python-API
             try:
                 proc.kill()
             except OSError as exc:
                 if callable(log):
                     log(f"{label}: Python-Kill-Fallback fehlgeschlagen: {exc}", "error")
     else:
-        # Linux/macOS: Prozesse des gemeinsamen Tool-Runners laufen in einer
-        # eigenen Session/Prozessgruppe. Dann beenden wir die komplette
-        # Gruppe statt nur den Parent. Für ältere/fremde Popen-Objekte bleibt
-        # der bisherige Parent-Fallback erhalten.
         import signal
 
         use_group = bool(getattr(proc, "_dragontools_process_group", False))
@@ -289,11 +300,7 @@ def terminate_process_tree(
                 log(f"{label}: Prozess konnte nicht beendet werden: {exc}", "error")
 
     with lock:
-        if hasattr(worker, attr_name):
-            if getattr(worker, attr_name, None) is proc:
-                setattr(worker, attr_name, None)
-        elif getattr(worker, "current_process", None) is proc:
-            worker.current_process = None
+        _clear_registered_unlocked(proc)
     return True
 
 
@@ -301,7 +308,7 @@ def terminate_process_tree(
 # High-Level-Helper für Worker-Threads
 # ---------------------------------------------------------------------------
 
-def wait_while_paused(worker, lock) -> bool:
+def wait_while_paused(worker, lock, *, process=None) -> bool:
     """Haelt den aufrufenden Thread an solange ``worker._paused`` True ist.
 
     Liest den laufenden Prozess einmalig und suspendiert ihn, damit die CPU
@@ -323,7 +330,9 @@ def wait_while_paused(worker, lock) -> bool:
 
     # ConverterThread hält Prozess/Pause explizit im Control-State. Für andere
     # Worker bleibt der historische Worker-Protokoll-Fallback erhalten.
-    if state is not None:
+    if process is not None:
+        proc = process
+    elif state is not None:
         with lock:
             proc = state.current_process
     elif hasattr(worker, "_current_process"):
@@ -357,7 +366,9 @@ def wait_while_paused(worker, lock) -> bool:
     # Blockieren bis resume() aufgerufen wird
     pause_ev = state.pause_event if state is not None else getattr(worker, "_pause_ev", None)
     if pause_ev is not None:
-        pause_ev.wait()
+        while not pause_ev.wait(timeout=0.1):
+            if bool(getattr(worker, "abort_requested", False)):
+                break
 
     resumed = resume_process(proc, log=log, label="Worker-Prozess")
     if not resumed:

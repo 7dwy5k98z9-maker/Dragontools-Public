@@ -60,6 +60,10 @@ def build_workflow_services(
         postprocess_outputs=session_state.postprocess_outputs,
         postprocess_service=services.postprocess,
         postprocess_coordinator=services.postprocess_coordinator,
+        abort_check=lambda: bool(
+            getattr(getattr(services.postprocess, "worker", None), "abort_requested", False)
+            and getattr(getattr(services.postprocess, "worker", None), "abort_type", None) == "sofort"
+        ),
     )
     return WorkflowServices(
         config=config,

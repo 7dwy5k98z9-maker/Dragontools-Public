@@ -1,5 +1,5 @@
 PyQt6-App: Dragon Tools – Multifunktionales Videobearbeitungstool
-Autor: Dragon Developer (GUI-Port)
+Autor: Developer (GUI-Port)
 Entwicklungszeitraum: 10.06.2025 – 01.03.2026  (400Stunden)
 
 Dragon Tools ist ein modular aufgebautes PyQt6-Tool zur Video-Konvertierung,

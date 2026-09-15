@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from ..core.path_syntax import path_compare_key
+from ..core.conversion_artifacts import ArtifactRegistry, ConversionArtifactBundle, bundles_from_worker
 
 
 @dataclass
@@ -86,31 +87,26 @@ class ParallelQueueState:
 
 @dataclass
 class ParallelResultState:
-    sidecar_outputs: dict[str, list[str]] = field(default_factory=dict)
-    postprocess_outputs: dict[str, list[dict]] = field(default_factory=dict)
-    failure_details: dict[str, dict] = field(default_factory=dict)
+    artifacts: ArtifactRegistry = field(default_factory=ArtifactRegistry)
     synthetic_failures: int = 0
 
+    @property
+    def sidecar_outputs(self) -> dict[str, list[str]]:
+        return self.artifacts.sidecar_outputs
+
+    @property
+    def postprocess_outputs(self) -> dict[str, list[dict]]:
+        return self.artifacts.postprocess_outputs
+
+    @property
+    def failure_details(self) -> dict[str, dict]:
+        return self.artifacts.failure_details
+
     def sync_from_child(self, child, input_path: str | None = None) -> None:
-        sidecars = getattr(child, "_sidecar_outputs", {}) or {}
-        postprocess = getattr(child, "_postprocess_outputs", {}) or {}
-        failures = getattr(child, "_failure_details", {}) or {}
-        if input_path:
-            if input_path in sidecars:
-                self.sidecar_outputs[input_path] = list(sidecars.get(input_path) or [])
-            if input_path in postprocess:
-                self.postprocess_outputs[input_path] = [
-                    dict(item) for item in (postprocess.get(input_path) or [])
-                ]
-            if input_path in failures:
-                self.failure_details[input_path] = dict(failures.get(input_path) or {})
-            return
-        for path, values in sidecars.items():
-            self.sidecar_outputs[path] = list(values or [])
-        for path, values in postprocess.items():
-            self.postprocess_outputs[path] = [dict(item) for item in (values or [])]
-        for path, values in failures.items():
-            self.failure_details[path] = dict(values or {})
+        bundles = bundles_from_worker(child, [input_path] if input_path else None)
+        for bundle in bundles:
+            self.artifacts.publish(bundle)
+        return
 
 @dataclass
 class ParallelWorkerRegistry:

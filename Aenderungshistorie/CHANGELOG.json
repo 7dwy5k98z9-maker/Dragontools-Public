@@ -1,9 +1,19 @@
 {
   "format_version": 1,
-  "title": "Dragon Tools V9.8.2 – Änderungshistorie",
-  "app_version": "9.8.2",
-  "updated": "2026-09-13",
+  "title": "Dragon Tools V9.8.3 – Änderungshistorie",
+  "app_version": "9.8.3",
+  "updated": "2026-09-14",
   "sections": [
+    {
+      "title": "V9.8.3 Stabilitäts-Patch vom 14.09.2026",
+      "icon": "🛡️",
+      "blocks": [
+        "Cleanup-Warnungen und Fehler bleiben terminal erhalten. Hintergrund-Nachbearbeitung darf daraus keinen Erfolg machen; Auto-Move bleibt für solche Ergebnisse gesperrt.",
+        "Nachbearbeitungsaufträge besitzen eigene Prozess-Slots. Timeout, Abbruch und Pause verwenden die konkrete Prozessinstanz; ein lokaler Auftrag darf keinen parallelen Auftrag beenden. Ein ausdrücklich angeforderter Batch-Abbruch gilt weiterhin für den gesamten Batch.",
+        "Normaler MP4-Remux prüft Abbruch erneut nach Sidecar-Arbeit und unmittelbar in der finalen Dateitransaktion. Vor dem Commit eingegangene Abbrüche erhalten das Original und rollen Sidecars zurück. Ein unvollständiger Rollback bewahrt Staging und Journal zur Recovery.",
+        "Abbruch ist kooperativ: Ein bereits abgeschlossenes atomares Dateisystem-Replace kann nicht rückwirkend verhindert werden. Die Prüfung liegt unmittelbar vor dem Commit und beim Containerwechsel nochmals vor dem Original-Cleanup; bei einem dort erkannten Abbruch wird die Installation zurückgerollt. Bereits sicher installierte Ausgaben werden nicht blind gelöscht."
+      ]
+    },
     {
       "title": "Überblick",
       "icon": "📋",

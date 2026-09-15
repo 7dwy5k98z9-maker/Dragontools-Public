@@ -212,14 +212,14 @@ def test_run_tool_bytes_timeout_excludes_pause_time() -> None:
             run_tool_bytes(
                 [sys.executable, "-c", "import time; time.sleep(0.15); print('ok')"],
                 label="Binary-Pause-Test",
-                timeout_s=1.0,
+                timeout_s=2.0,
                 worker=worker,
             )
         )
 
     thread = threading.Thread(target=run_process)
     thread.start()
-    time.sleep(1.4)  # longer than timeout, but entirely paused
+    time.sleep(2.4)  # longer than timeout, but entirely paused
     worker._paused = False
     worker._pause_ev.set()
     thread.join(timeout=5)

@@ -31,8 +31,12 @@ def worker_lock(worker):
 
 
 def current_process_attr(worker) -> str:
+    # ConverterThread hält den Prozess im Control-State. Der öffentliche
+    # current_process-Propertyzugriff ist selbst lock-gesichert und darf daher
+    # niemals unter demselben Lock verwendet werden. Für process_control bleibt
+    # bei Control-State-Workern der historische Attributname nur als Fallback.
     if worker is not None and getattr(worker, "_control_state", None) is not None:
-        return "current_process"
+        return "_current_process"
     if worker is not None and hasattr(worker, "_current_process"):
         return "_current_process"
     return "current_process"
@@ -41,35 +45,31 @@ def current_process_attr(worker) -> str:
 def set_current_process(worker, lock, proc) -> None:
     if worker is None or lock is None:
         return
-    attr = current_process_attr(worker)
+    state = getattr(worker, "_control_state", None)
     with lock:
-        if attr == "current_process":
-            try:
-                worker.current_process = proc
-            except Exception:
-                setattr(worker, "_current_process", proc)
+        if state is not None:
+            state.current_process = proc
+        elif hasattr(worker, "_current_process"):
+            worker._current_process = proc
         else:
-            setattr(worker, attr, proc)
+            worker.current_process = proc
 
 
 def clear_current_process(worker, lock, proc) -> None:
     if worker is None or lock is None:
         return
-    attr = current_process_attr(worker)
+    state = getattr(worker, "_control_state", None)
     with lock:
-        try:
-            current = worker.current_process if attr == "current_process" else getattr(worker, attr, None)
-        except Exception:
-            current = getattr(worker, "_current_process", None)
-        if current is not proc:
+        if state is not None:
+            if state.current_process is proc:
+                state.current_process = None
             return
-        if attr == "current_process":
-            try:
-                worker.current_process = None
-            except Exception:
-                setattr(worker, "_current_process", None)
-        else:
-            setattr(worker, attr, None)
+        if hasattr(worker, "_current_process"):
+            if getattr(worker, "_current_process", None) is proc:
+                worker._current_process = None
+            return
+        if getattr(worker, "current_process", None) is proc:
+            worker.current_process = None
 
 
 def terminate_plain(
@@ -166,6 +166,12 @@ class ProcessLifecycle:
 
     def register(self, proc) -> None:
         self.proc = proc
+        # Timeouts describe the lifetime of the running child, not Python's
+        # Popen/startup overhead.  Reset both clocks only once the process has
+        # actually been created and registered.
+        registered_at = time.monotonic()
+        self.started = registered_at
+        self.last_activity = registered_at
         setattr(proc, "_dragontools_process_group", os.name != "nt")
         set_current_process(self.worker, self.lock, proc)
         mark_activity(f"{self.label} läuft", file_path=self.file_path, command=self.command, extra={"pid": proc.pid})
@@ -193,6 +199,7 @@ class ProcessLifecycle:
                 log=self.log,
                 attr_name=current_process_attr(self.worker),
                 label=self.label,
+                process=self.proc,
             )
         else:
             terminate_plain(self.proc, log=self.log, label=self.label)
@@ -214,7 +221,7 @@ class ProcessLifecycle:
         if not paused:
             return
         pause_started = time.monotonic()
-        wait_while_paused(self.worker, self.lock)
+        wait_while_paused(self.worker, self.lock, process=self.proc)
         pause_duration = time.monotonic() - pause_started
         self.started += pause_duration
         self.last_activity += pause_duration

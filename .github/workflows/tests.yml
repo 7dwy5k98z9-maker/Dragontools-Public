@@ -1,17 +1,39 @@
-name: DragonTools tests
+name: tests
 
 on:
   push:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
-  test:
+  static-undefined-names:
+    name: Ruff undefined-name gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            requirements-test.txt
+            requirements-runtime.txt
+            requirements-optional.txt
+      - name: Install test tooling
+        run: python -m pip install -r requirements-test.txt
+      - name: Reject syntax and undefined-name regressions
+        run: python -m ruff check DragonToolsV9.py dragontools --select E9,F821,F822,F823
+
+  pytest:
+    name: pytest (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-latest]
-    runs-on: ${{ matrix.os }}
+        os: [ubuntu-latest, windows-latest]
     env:
       QT_QPA_PLATFORM: offscreen
       DRAGONTOOLS_REQUIRE_QT_TESTS: "1"
@@ -21,35 +43,42 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-      - name: Install test dependencies
+          cache-dependency-path: |
+            requirements-test.txt
+            requirements-runtime.txt
+            requirements-optional.txt
+      - name: Install test environment
         run: python -m pip install -r requirements-test.txt
-      - name: Run unit, GUI and media-fixture tests
+      - name: Run standard suite
         run: python -m pytest -m "not dv_hdr_integration"
 
   dv-hdr-contract:
-    if: ${{ github.event_name == 'workflow_dispatch' }}
-    runs-on: windows-latest
+    # Real external-tool validation is deliberately not faked on a GitHub-hosted
+    # runner. A labelled Windows self-hosted runner must provide the tools in
+    # PATH (or via DRAGONTOOLS_* variables). The strict flag turns any missing
+    # prerequisite into a hard failure instead of a skip.
+    if: github.event_name == 'workflow_dispatch'
+    name: Real DV/HDR roundtrip (self-hosted)
+    runs-on: [self-hosted, Windows, X64, dragontools-media]
     env:
       QT_QPA_PLATFORM: offscreen
       DRAGONTOOLS_REQUIRE_QT_TESTS: "1"
+      DRAGONTOOLS_REQUIRE_DV_HDR_INTEGRATION: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install test dependencies
+          cache: pip
+          cache-dependency-path: |
+            requirements-test.txt
+            requirements-runtime.txt
+            requirements-optional.txt
+      - name: Install test environment
         run: python -m pip install -r requirements-test.txt
-      - name: Explain external DV/HDR tool requirement
+      - name: Verify tool discovery
         shell: pwsh
         run: |
-          Write-Host "DV/HDR integration requires DRAGONTOOLS_DOVI_TOOL, DRAGONTOOLS_HDR10PLUS_TOOL and DRAGONTOOLS_MP4BOX."
-          Write-Host "The job remains controlled/manual because these binaries are not downloaded by the repository."
-      - name: Run DV/HDR integration when tool paths are supplied by the runner
-        shell: pwsh
-        run: |
-          if ($env:DRAGONTOOLS_DOVI_TOOL -and $env:DRAGONTOOLS_HDR10PLUS_TOOL -and $env:DRAGONTOOLS_MP4BOX) {
-            $env:DRAGONTOOLS_REQUIRE_DV_HDR_INTEGRATION = "1"
-            python -m pytest -m "dv_hdr_integration"
-          } else {
-            Write-Host "External DV/HDR tools not configured on this runner; controlled integration job skipped."
-          }
+          python -c "from dragontools.tests.ci_requirements import external_media_environment as e; x=e(); print(x); assert not x.missing, 'Missing tools: ' + ', '.join(x.missing)"
+      - name: Run real DV/HDR integration
+        run: python -m pytest -m dv_hdr_integration

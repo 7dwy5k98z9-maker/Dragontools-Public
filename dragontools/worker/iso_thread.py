@@ -42,7 +42,6 @@ class ISOThread(ISOProcessorHostMixin, QThread):
     file_progress = pyqtSignal(str, int, object)
     file_result = pyqtSignal(str, bool, str)
     files_extracted = pyqtSignal(list)
-    finished = pyqtSignal()
 
     def __init__(
         self,
@@ -159,7 +158,6 @@ class ISOThread(ISOProcessorHostMixin, QThread):
         finally:
             self.current_process = None
             self.files_extracted.emit(list(self._extracted_files))
-            self.finished.emit()
 
     def _process_input(self, path: str, total: int) -> None:
         self._input_processor.process(path, total)

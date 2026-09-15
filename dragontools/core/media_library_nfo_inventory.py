@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import sqlite3
-import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
 
-from .media_library_nfo_parser import parse_nfo
+from .media_library_nfo_parser import NfoParseError, parse_nfo
 from .media_library_nfo_paths import _find_nfo, _media_directory_reachable
 
 
@@ -61,8 +60,13 @@ def _inspect_nfo_candidate(row: sqlite3.Row) -> dict[str, Any]:
             "mtime": nfo_path.stat().st_mtime,
             "parsed": parse_nfo(nfo_path),
         }
-    except ET.ParseError as exc:
-        return {"status": "invalid", "path": nfo_path, "error": str(exc)}
+    except NfoParseError as exc:
+        return {
+            "status": "invalid",
+            "path": nfo_path,
+            "error": str(exc),
+            "warning": f"NFO ungültig/unsicher: {nfo_path}: {exc}",
+        }
     except OSError as exc:
         return {
             "status": "unreadable",

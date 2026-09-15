@@ -12,7 +12,7 @@ python -m pytest -m media_integration
 
 ## Dolby Vision / HDR10+
 
-`dv_hdr_integration` prueft reale Extract-/Inject-/Mux-/Verify-Roundtrips. Die Tests erwarten FFmpeg/FFprobe sowie `dovi_tool`, `hdr10plus_tool` und MP4Box. Die Tools koennen ueber `PATH` oder explizit ueber folgende Variablen bereitgestellt werden:
+`dv_hdr_integration` prueft reale Extract-/Inject-/Mux-/Verify-Roundtrips. Die Tests erwarten FFmpeg/FFprobe sowie `dovi_tool`, `hdr10plus_tool` und MP4Box. Die Tools werden automatisch ueber `PATH`, lokale `third_party`-Toolordner oder explizit ueber folgende Variablen erkannt:
 
 ```text
 DRAGONTOOLS_FFMPEG
@@ -30,6 +30,12 @@ python -m pytest -m dv_hdr_integration
 ```
 
 Mit `DRAGONTOOLS_REQUIRE_DV_HDR_INTEGRATION=1` wird eine fehlende Toolumgebung als Testfehler behandelt, statt die Tests still zu ueberspringen.
+
+### GitHub Actions / realer Tool-Runner
+
+Der Workflow `.github/workflows/tests.yml` fuehrt den realen DV/HDR-Job **nicht** mehr auf einem frischen `windows-latest`-Runner mit fehlenden Werkzeugen aus. Der manuell startbare Job `dv-hdr-contract` verlangt stattdessen einen Windows-X64-Self-hosted-Runner mit dem zusaetzlichen Label `dragontools-media`.
+
+Auf diesem Runner muessen FFmpeg/FFprobe, `dovi_tool`, `hdr10plus_tool` und MP4Box entweder im `PATH` liegen oder ueber die oben genannten `DRAGONTOOLS_*`-Variablen auf reale Dateien zeigen. Der Job setzt `DRAGONTOOLS_REQUIRE_DV_HDR_INTEGRATION=1`; fehlt auch nur ein Werkzeug, bricht die Testsitzung hart ab. Ein gruenes Ergebnis ist damit ein echter Roundtrip-Nachweis und kein Skip.
 
 ## Qt/GUI
 

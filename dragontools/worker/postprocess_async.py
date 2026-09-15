@@ -11,6 +11,7 @@ from .postprocess_config import config_from_settings
 from .postprocess_metadata import PostProcessMetadataSession
 from .postprocess_models import PostProcessRunResult
 from .postprocess_runner import PostProcessService
+from .job_process_owner import JobProcessOwner
 
 
 def postprocess_max_workers(settings) -> int:
@@ -41,7 +42,7 @@ class AsyncPostProcessCoordinator:
                 settings=self.settings,
                 tools=self.tools,
                 log=self.log,
-                worker=self.worker,
+                worker=JobProcessOwner(self.worker),
                 metadata_session=self._metadata_session,
             )
         )
@@ -62,6 +63,7 @@ class AsyncPostProcessCoordinator:
         sidecar_outputs: dict[str, list[str]] | None,
         postprocess_outputs: dict[str, list[dict]] | None,
         result_service,
+        prepared_source_trickplay: PostProcessRunResult | None = None,
     ) -> bool:
         """Schedule one job without ever duplicating a successfully submitted job."""
         with self._lock:
@@ -70,19 +72,34 @@ class AsyncPostProcessCoordinator:
                 return False
             try:
                 service = self._service_factory()
-                future = self._executor.submit(
-                    service.run_result,
-                    input_path=input_path,
-                    output_path=output_path,
-                )
+                run_kwargs = {
+                    "input_path": input_path,
+                    "output_path": output_path,
+                }
+                # Keep the historical service contract intact when no prepared
+                # source-trickplay result exists. Several lightweight adapters
+                # and tests implement only run_result(input_path, output_path).
+                if prepared_source_trickplay is not None:
+                    run_kwargs["prepared_source_trickplay"] = prepared_source_trickplay
+                future = self._executor.submit(service.run_result, **run_kwargs)
                 self._futures.append(future)
             except Exception as exc:
                 self._warn(f"Post-Processing konnte nicht gestartet werden: {exc}")
                 return False
 
-        # Attach the callback before any non-essential operation. Once this
-        # point is reached the Future owns the job and callers must not start a
-        # second synchronous postprocess for the same file.
+        # Announce the pending state *before* attaching the callback.
+        # ``Future.add_done_callback`` executes immediately when an already
+        # completed Future is registered, so attaching first can otherwise
+        # produce the invalid order ✅ -> 🧩 and leave GUI/parallel state stuck.
+        self._emit_pending_no_throw(
+            result_service=result_service,
+            input_path=input_path,
+            output_path=output_path,
+        )
+
+        # Attach the callback before any other non-essential operation. Once
+        # this point is reached the Future owns the job and callers must not
+        # start a second synchronous postprocess for the same file.
         try:
             future.add_done_callback(
                 lambda done: self._complete_no_throw(
@@ -172,6 +189,10 @@ class AsyncPostProcessCoordinator:
                 ],
             )
 
+        # NFO/Trickplay are optional companion work. Their failure must be
+        # visible in details/logging, but it must not turn an otherwise valid
+        # video conversion into a failed terminal result or block auto-move.
+        completion_status = "✅"
         try:
             details = [dict(item) for item in (getattr(result, "items", []) or [])]
             if postprocess_outputs is not None:
@@ -189,7 +210,7 @@ class AsyncPostProcessCoordinator:
                 if str(item.get("status", "")).lower() == "error"
             ]
             if errors:
-                self._warn(f"🧩 Post-Processing mit Hinweis beendet: {Path(output_path).name}")
+                self._warn(f"⚠️ Post-Processing mit Fehlern beendet: {Path(output_path).name}")
             else:
                 self._info(f"🧩 Post-Processing abgeschlossen: {Path(output_path).name}")
         finally:
@@ -199,14 +220,26 @@ class AsyncPostProcessCoordinator:
                 result_service=result_service,
                 input_path=input_path,
                 output_path=output_path,
+                status=completion_status,
             )
 
-    def _emit_completion_no_throw(self, *, result_service, input_path: str, output_path: str) -> None:
+    def _emit_pending_no_throw(self, *, result_service, input_path: str, output_path: str) -> None:
+        if result_service is None:
+            return
+        try:
+            result_service.emit_file_result(input_path, output_path, "🧩")
+        except Exception as exc:
+            # The Future is already scheduled at this point. Failing the
+            # scheduling API would invite a duplicate synchronous fallback, so
+            # keep ownership here and still deliver the terminal result later.
+            self._warn(f"Post-Processing-Start konnte nicht gemeldet werden: {exc}")
+
+    def _emit_completion_no_throw(self, *, result_service, input_path: str, output_path: str, status: str = "✅") -> None:
         if result_service is None:
             return
         try:
             result_service.emit_file_progress(input_path, 100)
-            result_service.emit_file_result(input_path, output_path, "✅")
+            result_service.emit_file_result(input_path, output_path, status)
         except Exception as exc:
             self._warn(f"Post-Processing-Abschluss konnte nicht gemeldet werden: {exc}")
 

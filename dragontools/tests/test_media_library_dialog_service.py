@@ -102,11 +102,13 @@ def test_storage_path_mapping_prefers_h265_then_fallback():
     ]
 
 
-def test_sql_mutation_detection_is_conservative_for_non_plain_select():
+def test_sql_mutation_detection_accepts_safe_read_only_diagnostics():
     service = MediaLibraryDialogService()
     assert service.sql_is_mutating("SELECT * FROM media_items") is False
-    assert service.sql_is_mutating(" pragma table_info(media_items)") is True
-    assert service.sql_is_mutating("WITH q AS (SELECT 1) SELECT * FROM q") is True
+    assert service.sql_is_mutating(" pragma table_info(media_items)") is False
+    assert service.sql_is_mutating("WITH x AS (SELECT 1) SELECT * FROM x") is False
+    assert service.sql_is_mutating("PRAGMA foreign_keys=OFF") is True
+    assert service.sql_is_mutating("WITH q AS (SELECT 1) SELECT * FROM q") is False
     assert service.sql_is_mutating("UPDATE media_items SET active=0") is True
 
 

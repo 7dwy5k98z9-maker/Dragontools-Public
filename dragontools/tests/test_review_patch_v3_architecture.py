@@ -72,3 +72,4 @@ def test_converter_thread_no_longer_inherits_legacy_state_alias_mixin():
     assert "def is_paused" in source
     assert "def abort_requested" in source
     assert "def abort_type" in source
+

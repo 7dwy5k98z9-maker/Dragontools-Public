@@ -23,7 +23,6 @@ class AudioVideoMatchThread(QThread):
     plan_ready = pyqtSignal(object)
     result_ready = pyqtSignal(str)
     error = pyqtSignal(str)
-    finished = pyqtSignal()
 
     def __init__(
         self,
@@ -103,7 +102,6 @@ class AudioVideoMatchThread(QThread):
             self.error.emit(str(exc))
         finally:
             self.current_process = None
-            self.finished.emit()
 
     def _log(self, message: str, severity: str = "info") -> None:
         prefix = {"error": "❌", "warn": "⚠️", "info": "ℹ️"}.get(severity, "ℹ️")

@@ -57,8 +57,7 @@ def build_dv_audio_jobs(
                 {
                     **common,
                     "mode": "transcode",
-                    "channels": decision.target_channels,
-                    "bitrate_k": bitrate_k,
+                            "bitrate_k": bitrate_k,
                     "filter_chain": filter_builder(decision),
                     "drc_scale": decision.drc_scale,
                 }

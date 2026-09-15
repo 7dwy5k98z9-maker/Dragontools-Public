@@ -140,9 +140,19 @@ def _recover_backup_pairs(
 
 
 def recover_interrupted_backups(data: dict[str, Any]) -> dict[str, int]:
-    """Stellt sichere Backups wieder her und erkennt Crash-Erfolge."""
+    """Stellt sichere Backups wieder her und erkennt Crash-Erfolge.
+
+    A physically committed video is not equivalent to a completed move when
+    the journal still knows companion files. In that crash window recovery
+    advances the phase to ``sidecars_pending`` instead of dropping the entry.
+    """
     counts = _RecoveryCounts()
     files = data.get("files") if isinstance(data.get("files"), dict) else {}
+    sidecars_by_video = (
+        data.get("sidecar_outputs_by_video")
+        if isinstance(data.get("sidecar_outputs_by_video"), dict)
+        else {}
+    )
     for source_text, row in files.items():
         if not isinstance(row, dict):
             continue
@@ -163,6 +173,23 @@ def recover_interrupted_backups(data: dict[str, Any]) -> dict[str, int]:
         )
         commit_proven = dest_exists and not source_exists
         ambiguous_state = dest_exists and source_exists
+
+        pending_sidecars = list(sidecars_by_video.get(str(source_text), []) or [])
+        if (
+            status in {"running", "warn"}
+            and commit_proven
+            and phase == "video_pending"
+            and pending_sidecars
+        ):
+            row["status"] = "running"
+            row["phase"] = "sidecars_pending"
+            row["message"] = (
+                "Video-Commit nach Crash erkannt; Companion-Dateien werden fortgesetzt"
+            )
+            row.pop("recovery_status", None)
+            phase = "sidecars_pending"
+            counts.changed = True
+
         _classify_recovered_move_state(
             row,
             status=status,

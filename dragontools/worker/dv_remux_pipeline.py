@@ -6,7 +6,13 @@ import tempfile
 from pathlib import Path
 
 from .dv_remux_audio import build_dv_audio_jobs
+from ..core.lang_codes import canonical_lang
+from ..core.media_metadata import normalize_video_codec
+from .media_contract import _audio_codec_family, _subtitle_codec_family
+from .media_contract_types import ExpectedAudioTrack, ExpectedMediaContract, ExpectedSubtitleTrack
 from .dv_remux_muxers import DVRemuxMuxer
+from .dv_remux_policy import decide_dv_remux
+from .dv_remux_profile_service import DVRemuxProfileService
 from .dv_subtitle_mux_service import (
     DVMuxSubtitleTrack,
     DVSubtitleMuxService,
@@ -38,6 +44,9 @@ class DVRemuxPipelineRunner:
             log=worker.log,
         )
         self._muxer = DVRemuxMuxer(worker, process_runner)
+        self._profile_service = DVRemuxProfileService(worker, process_runner)
+        self.last_expected_contract: ExpectedMediaContract | None = None
+        self.last_expected_dv_profile: int | None = None
 
     def build_audio_jobs(self, media_info, file_override: dict | None) -> list[dict]:
         return build_dv_audio_jobs(
@@ -139,6 +148,12 @@ class DVRemuxPipelineRunner:
     ) -> bool:
         return self._muxer.mux(video_hevc, audio_tracks, output_path, subtitle_tracks)
 
+    def _abort_current_file(self) -> bool:
+        return bool(
+            getattr(self.worker, "abort_requested", False)
+            and getattr(self.worker, "abort_type", None) == "sofort"
+        )
+
     def run(
         self,
         input_path: str,
@@ -148,20 +163,51 @@ class DVRemuxPipelineRunner:
         file_override: dict | None,
         name: str,
     ) -> bool:
+        self.last_expected_contract = None
+        self.last_expected_dv_profile = None
         with tempfile.TemporaryDirectory(prefix="dragontools_dv_remux_") as tmp_dir_str:
             tmp_dir = Path(tmp_dir_str)
             raw_video = tmp_dir / "video.hevc"
+            normalized_video = tmp_dir / "video_p81.hevc"
             audio_jobs = self.build_audio_jobs(mi, file_override)
             audio_tracks: list[tuple[str, dict]] = []
             container = _container(self.worker)
             muxer_name = "mkvmerge" if container == "mkv" else "MP4Box"
+            decision = decide_dv_remux(
+                mi,
+                container=container,
+                keep_dv7_mkv=bool(getattr(self.worker, "keep_dv7_mkv", False)),
+                encode_dv5=bool(getattr(self.worker, "encode_dv5", True)),
+            )
+            if decision.should_skip or decision.should_encode:
+                self.worker.log(
+                    "❌ Interner DV-Remux-Policyfehler: Datei wurde nicht vor der Remux-Pipeline abgefangen.",
+                    "error",
+                )
+                return False
+            self.last_expected_dv_profile = decision.expected_profile_major
+            self.worker.log(f"  🌈 {decision.reason}", "info")
+            if decision.warning:
+                self.worker.log(f"  ⚠️ {decision.warning}", "warn")
 
             self.worker.log(f"  🎞️ Extrahiere DV-Videostream für {muxer_name} ...", "info")
             if not self.extract_video(input_path, str(raw_video), dur_ms):
                 self.worker.log(f"❌ Video-Extraktion fehlgeschlagen: {name}", "error")
                 return False
-            if self.worker.abort_requested:
+            if self._abort_current_file():
                 return False
+
+            video_for_mux = raw_video
+            if decision.should_normalize_to_p81:
+                if decision.source_profile_major == 7:
+                    self._profile_service.detect_p7_enhancement_layer(raw_video, tmp_dir)
+                    if self._abort_current_file():
+                        return False
+                if not self._profile_service.normalize_to_p81(raw_video, normalized_video):
+                    return False
+                video_for_mux = normalized_video
+                if self._abort_current_file():
+                    return False
 
             if not self._prepare_audio_tracks(
                 input_path,
@@ -181,22 +227,68 @@ class DVRemuxPipelineRunner:
                 dur_ms,
                 container,
             )
-            if not ok_subs or self.worker.abort_requested:
+            if not ok_subs or self._abort_current_file():
                 return False
 
+            self.last_expected_contract = self._build_expected_contract(
+                mi,
+                audio_jobs,
+                subtitle_tracks,
+                expected_dv_profile=decision.expected_profile_major,
+            )
             self.worker.log(
                 f"  📦 Erstelle finale DV-{container.upper()} mit {muxer_name} ...",
                 "info",
             )
             self.worker.file_progress.emit(input_path, 82, None)
-            if self.worker.abort_requested:
+            if self._abort_current_file():
                 return False
             return self.mux(
-                str(raw_video),
+                str(video_for_mux),
                 audio_tracks,
                 output_path,
                 subtitle_tracks,
-            ) and not self.worker.abort_requested
+            ) and not self._abort_current_file()
+
+    def _build_expected_contract(
+        self,
+        media_info,
+        audio_jobs: list[dict],
+        subtitle_tracks: list[DVMuxSubtitleTrack],
+        *,
+        expected_dv_profile: int | None = None,
+    ) -> ExpectedMediaContract:
+        primary = getattr(media_info, "primary_video", None)
+        source_audio = {int(stream.index): stream for stream in (getattr(media_info, "audio_streams", None) or [])}
+        return ExpectedMediaContract(
+            container=_container(self.worker),
+            video_codec=normalize_video_codec(getattr(primary, "codec", "")),
+            video_stream_count=1,
+            audio_tracks=tuple(
+                ExpectedAudioTrack(
+                    codec=_audio_codec_family(job.get("codec")),
+                    channels=max(0, int(job.get("channels") or getattr(source_audio.get(int(job.get("stream_index") or -1)), "channels", 0) or 0)),
+                    language=canonical_lang(job.get("language")),
+                )
+                for job in audio_jobs
+            ),
+            subtitle_tracks=tuple(
+                ExpectedSubtitleTrack(
+                    codec=_subtitle_codec_family(track.codec),
+                    language=canonical_lang(track.language),
+                    forced=bool(track.forced),
+                )
+                for track in subtitle_tracks
+            ),
+            min_video_bit_depth=getattr(primary, "bit_depth", None),
+            require_hdr=True,
+            require_dolby_vision=True,
+            expected_dolby_vision_profile=expected_dv_profile,
+            expected_width=getattr(primary, "width", None),
+            expected_height=getattr(primary, "height", None),
+            attachment_stream_count=0,
+            data_stream_count=0,
+        )
 
     def _prepare_audio_tracks(
         self,
@@ -227,7 +319,7 @@ class DVRemuxPipelineRunner:
                     "error",
                 )
                 return False
-            if self.worker.abort_requested:
+            if self._abort_current_file():
                 return False
             audio_tracks.append((str(audio_path), job))
         return True

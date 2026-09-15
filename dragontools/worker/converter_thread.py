@@ -52,7 +52,6 @@ class ConverterThread(QThread):
     log_line = pyqtSignal(str)
     event = pyqtSignal(object)
     dv_crop_decision_requested = pyqtSignal(object)
-    finished = pyqtSignal()
 
     def __init__(self, files, config: ConverterConfig, *, shared_logger=None, parent=None):
         super().__init__(parent)
@@ -224,7 +223,66 @@ class ConverterThread(QThread):
             self._session_state.keep_verbose_log = True
         finally:
             self._lifecycle.finalize_run()
-            self.finished.emit()
+
+    # ==================================================================
+    # Refactoring state bridges
+    # ==================================================================
+    # These narrow properties keep the pre-refactor worker contract alive for
+    # GUI/result and parallel orchestration code while the actual ownership
+    # remains in ConverterSessionState / ConverterServiceRegistry. Without
+    # these bridges, generated NFO/trickplay sidecars are not handed to Move.
+
+    @property
+    def _all_input_files(self) -> list[str]:
+        return self._session_state.all_input_files
+
+    @property
+    def _sidecar_outputs(self) -> dict[str, list[str]]:
+        return self._session_state.sidecar_outputs
+
+    @property
+    def _postprocess_outputs(self) -> dict[str, list[dict]]:
+        return self._session_state.postprocess_outputs
+
+    @property
+    def _failure_details(self) -> dict[str, dict]:
+        return self._session_state.failure_details
+
+    @property
+    def _replace_service(self):
+        return self._services.replace
+
+    @property
+    def _suppress_session_header(self) -> bool:
+        return self._session_state.suppress_session_header
+
+    @_suppress_session_header.setter
+    def _suppress_session_header(self, value: bool) -> None:
+        self._session_state.suppress_session_header = bool(value)
+
+    @property
+    def _display_index_by_path(self) -> dict[str, int]:
+        return self._session_state.display_index_by_path
+
+    @_display_index_by_path.setter
+    def _display_index_by_path(self, value) -> None:
+        self._session_state.display_index_by_path = dict(value or {})
+
+    @property
+    def _display_total(self) -> int | None:
+        return self._session_state.display_total
+
+    @_display_total.setter
+    def _display_total(self, value) -> None:
+        self._session_state.display_total = None if value is None else int(value)
+
+    @property
+    def _run_start_ts(self) -> float | None:
+        return self._session_state.run_start_ts
+
+    @_run_start_ts.setter
+    def _run_start_ts(self, value) -> None:
+        self._session_state.run_start_ts = None if value is None else float(value)
 
     @property
     def total_before(self) -> int:

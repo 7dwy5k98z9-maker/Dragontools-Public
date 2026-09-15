@@ -1,4 +1,4 @@
-Dragon Tools V9.8.2 - Build-Hinweise
+Dragon Tools V9.8.3 - Build-Hinweise
 =====================================
 
 Diese Hinweise gelten für den aktuellen DragonTools-Quellstand unter Windows 10/11.
@@ -37,7 +37,7 @@ Den Build aus einer Eingabeaufforderung im Projektordner starten:
 
 Das fertige Programm liegt anschließend unter:
 
-   dist\DragonToolsV9.8.2\
+   dist\DragonToolsV9.8.3\
 
 Prüfung vor einer Veröffentlichung
 ----------------------------------

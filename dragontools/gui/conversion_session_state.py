@@ -8,6 +8,8 @@ sind hier gebündelt. Keine PyQt6-Abhängigkeiten.
 """
 from __future__ import annotations
 
+from ..core.conversion_artifacts import ConversionArtifactBundle
+
 
 class ConversionSessionState:
     """
@@ -40,8 +42,8 @@ class ConversionSessionState:
         Leere Liste = Datei fertig, aber keine externen Subs erzeugt.
         """
 
-        self.postprocess_outputs_by_input: dict[str, list[dict]] = {}
-        """NFO-/Trickplay-Statusdaten pro Eingabedatei (input_path -> Details)."""
+        self.artifacts_by_input: dict[str, ConversionArtifactBundle] = {}
+        """Atomare Worker-Ergebnis-Snapshots pro Eingabedatei."""
 
         self.pending_postprocess_inputs: set[str] = set()
         """Eingabepfade, deren NFO-/Trickplay-Nacharbeit noch nicht terminal gemeldet wurde."""
@@ -113,6 +115,43 @@ class ConversionSessionState:
         self.incremental_move_active: bool = False
         """True während 'Fertige verschieben' parallel zu einem laufenden Encode."""
 
+    @property
+    def postprocess_outputs_by_input(self) -> dict[str, list[dict]]:
+        """Read-only compatibility snapshot derived from canonical bundles.
+
+        v10 made ``artifacts_by_input`` the single source of truth.  Keeping a
+        second mutable postprocess map made stale state possible after moves.
+        """
+        return {
+            input_path: [dict(item) for item in bundle.postprocess]
+            for input_path, bundle in self.artifacts_by_input.items()
+        }
+
+    def consume_moved_output(self, output_path: str) -> list[str]:
+        """Consume move-only state after a successfully moved video."""
+        output = str(output_path or "")
+        self.fertig.discard(output)
+        self.sidecar_outputs_by_video.pop(output, None)
+        self.planned_targets.pop(output, None)
+        consumed: list[str] = []
+        for input_path, bundle in list(self.artifacts_by_input.items()):
+            if str(bundle.output_path or "") == output:
+                consumed.append(input_path)
+                self.artifacts_by_input.pop(input_path, None)
+        return consumed
+
+    def sidecars_for_move(self) -> dict[str, list[str]]:
+        """Build the move companion map from canonical terminal bundles.
+
+        Journal/recovery entries in ``sidecar_outputs_by_video`` are preserved;
+        fresh conversion bundles override them for their concrete output path.
+        """
+        result = {key: list(value or []) for key, value in self.sidecar_outputs_by_video.items()}
+        for bundle in self.artifacts_by_input.values():
+            if bundle.output_path and bundle.status == "✅":
+                result[bundle.output_path] = list(bundle.sidecars)
+        return result
+
     # ── Lifecycle ───────────────────────────────────────────────────
 
     def reset_for_run(self, file_count: int) -> None:
@@ -122,7 +161,7 @@ class ConversionSessionState:
         self.completed_inputs.clear()
         self.run_results.clear()
         self.move_report_log.clear()
-        self.postprocess_outputs_by_input.clear()
+        self.artifacts_by_input.clear()
         self.pending_postprocess_inputs.clear()
         self.finish_waiting_for_postprocess = False
         self.preflight_rows_by_path.clear()
@@ -152,7 +191,7 @@ class ConversionSessionState:
         self.completed_inputs.clear()
         self.run_results.clear()
         self.move_report_log.clear()
-        self.postprocess_outputs_by_input.clear()
+        self.artifacts_by_input.clear()
         self.pending_postprocess_inputs.clear()
         self.finish_waiting_for_postprocess = False
         self.move_ok_count = 0

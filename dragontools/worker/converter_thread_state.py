@@ -20,6 +20,7 @@ import threading
 from typing import Any
 
 from .converter_config import ConverterConfig
+from ..core.conversion_artifacts import ArtifactRegistry
 
 
 @dataclass(slots=True)
@@ -72,9 +73,7 @@ class ConverterControlState:
 @dataclass(slots=True)
 class ConverterSessionState:
     all_input_files: list[str]
-    sidecar_outputs: dict[str, list[str]] = field(default_factory=dict)
-    postprocess_outputs: dict[str, list[dict]] = field(default_factory=dict)
-    failure_details: dict[str, dict] = field(default_factory=dict)
+    artifacts: ArtifactRegistry = field(default_factory=ArtifactRegistry)
     keep_verbose_log: bool = False
     suppress_session_header: bool = False
     display_index_by_path: dict[str, int] = field(default_factory=dict)
@@ -82,6 +81,18 @@ class ConverterSessionState:
     dv_crop_decisions: dict[str, dict] = field(default_factory=dict)
     dv_crop_decision_lock: threading.Lock = field(default_factory=threading.Lock)
     run_start_ts: float | None = None
+
+    @property
+    def sidecar_outputs(self) -> dict[str, list[str]]:
+        return self.artifacts.sidecar_outputs
+
+    @property
+    def postprocess_outputs(self) -> dict[str, list[dict]]:
+        return self.artifacts.postprocess_outputs
+
+    @property
+    def failure_details(self) -> dict[str, dict]:
+        return self.artifacts.failure_details
 
 
 @dataclass(slots=True)

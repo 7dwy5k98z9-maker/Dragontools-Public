@@ -42,6 +42,8 @@ class WorkflowVerifyResult:
     video_stream_count: int = 0
     audio_stream_count: int = 0
     subtitle_stream_count: int = 0
+    attachment_stream_count: int = 0
+    data_stream_count: int = 0
     video_codec: str = ""
     video_bit_depth: int | None = None
     has_hdr: bool = False
@@ -117,6 +119,7 @@ class WorkflowContext:
     cleanup_pending: bool = False
     cleanup_pending_message: str = ""
     postprocess_pending: bool = False
+    postprocess_pending_announced: bool = False
     replace_original: bool = False
     strip_only: bool = False
     pipeline_failure_reason: str = ""

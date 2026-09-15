@@ -31,7 +31,14 @@ class MoveSidecarService:
         self._append_report = append_report
         self._set_last_result = set_last_result
 
-    def move_sidecars(self, video_path: str, target_dir: str, sidecars: list[str]) -> dict:
+    def move_sidecars(
+        self,
+        video_path: str,
+        target_dir: str,
+        sidecars: list[str],
+        *,
+        dest_video_path: str | None = None,
+    ) -> dict:
         """Verschiebt Companion-Dateien idempotent und liefert einen Gesamtstatus.
 
         Ein fehlender Quell-Sidecar gilt bei einer Wiederaufnahme als bereits
@@ -50,7 +57,12 @@ class MoveSidecarService:
             summary["total"] += 1
             sidecar_p = Path(sidecar)
             sidecar_type = self.sidecar_type(sidecar_p)
-            dest_name = self.sidecar_dest_name(sidecar_p, target_dir)
+            dest_name = self.sidecar_dest_name(
+                sidecar_p,
+                target_dir,
+                video_path=video_path,
+                dest_video_path=dest_video_path,
+            )
             dest_path = Path(target_dir) / dest_name
 
             if not sidecar_p.exists():
@@ -218,13 +230,52 @@ class MoveSidecarService:
             return "subtitle"
         return "sidecar"
 
-    def sidecar_dest_name(self, sidecar_p: Path, target_dir: str) -> str:
-        if sidecar_p.suffix.lower() != ".nfo" or not self.is_film_target(target_dir):
-            return sidecar_p.name
-        configured = str(self.nfo_movie_target_name or "").strip()
-        if configured == "stem":
-            return sidecar_p.name
-        return configured or "movie.nfo"
+    def sidecar_dest_name(
+        self,
+        sidecar_p: Path,
+        target_dir: str,
+        *,
+        video_path: str | None = None,
+        dest_video_path: str | None = None,
+    ) -> str:
+        # Film-NFOs may intentionally use the canonical Jellyfin name. This
+        # rule takes precedence over stem rebasing.
+        if sidecar_p.suffix.lower() == ".nfo" and self.is_film_target(target_dir):
+            configured = str(self.nfo_movie_target_name or "").strip()
+            if configured != "stem":
+                return configured or "movie.nfo"
+
+        return self._rebase_companion_name(
+            sidecar_p.name,
+            video_path=video_path,
+            dest_video_path=dest_video_path,
+        )
+
+    @staticmethod
+    def _rebase_companion_name(
+        sidecar_name: str,
+        *,
+        video_path: str | None,
+        dest_video_path: str | None,
+    ) -> str:
+        """Keep companion stems aligned with a conflict-renamed video.
+
+        Example: ``Film.mkv`` -> ``Film_01.mkv`` also maps
+        ``Film.de.srt``/``Film.trickplay``/``Film.nfo`` to the ``Film_01`` stem.
+        Unrelated sidecars (for example ``movie.nfo``) are left untouched.
+        """
+        if not video_path or not dest_video_path:
+            return sidecar_name
+        source_stem = Path(video_path).stem
+        dest_stem = Path(dest_video_path).stem
+        if not source_stem or not dest_stem or source_stem.casefold() == dest_stem.casefold():
+            return sidecar_name
+        if sidecar_name.casefold() == source_stem.casefold():
+            return dest_stem
+        prefix = f"{source_stem}."
+        if sidecar_name[: len(prefix)].casefold() == prefix.casefold():
+            return f"{dest_stem}{sidecar_name[len(source_stem):]}"
+        return sidecar_name
 
     def is_film_target(self, target_dir: str) -> bool:
         if not self.filme_path:

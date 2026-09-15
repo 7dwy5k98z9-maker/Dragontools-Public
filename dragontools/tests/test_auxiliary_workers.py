@@ -85,7 +85,13 @@ def _mp4_thread():
     with patch.dict(sys.modules, _qt_core_stub_modules()):
         mp4_mod = _reload_module("dragontools.worker.mp4_remux_thread")
     with patch.object(mp4_mod, "create_worker_logger", return_value=_fake_logger()):
-        return mp4_mod.MP4RemuxThread(files=[], tools=_fake_tools())
+        thread = mp4_mod.MP4RemuxThread(files=[], tools=_fake_tools())
+    # Die Hilfstests erzeugen absichtlich Mini-Bytefolgen statt echter MP4s;
+    # die reale v6-Output-Verifikation wird separat getestet.
+    thread._output_verifier = lambda: SimpleNamespace(
+        verify=lambda **_kwargs: SimpleNamespace(ok=True, messages=())
+    )
+    return thread
 
 def _dv_remux_thread(files=None, *, overwrite_original=False):
     with patch.dict(sys.modules, _qt_core_stub_modules()):
@@ -486,7 +492,7 @@ def test_dv_remux_exportiert_sidecars_vor_container_replace(tmp_path, monkeypatc
     thread = _dv_remux_thread([str(source)], overwrite_original=True)
     thread._prepare_remux_metadata = lambda path: (
         "Film",
-        SimpleNamespace(),
+        SimpleNamespace(has_dv=True, dv_profile_major=8, audio_streams=[]),
         1000,
         {},
     )

@@ -5,6 +5,7 @@ import traceback
 
 from PyQt6.QtCore import QSettings
 
+from ..core.callback_dispatch import invoke_callback
 from ..core.settings_app import APP_NAME, APP_ORG
 from ..core.settings_storage import SET_KEY_MOVE_CONFLICT
 from .move_lifecycle_helpers import format_move_eta, merge_restored_target_paths, retire_move_thread
@@ -97,7 +98,7 @@ class RegularMoveLifecycle:
             planned_targets=dict(state.planned_targets),
             conflict_mode=conflict_mode,
             log_file_path=getattr(finished_thread, "log_file_path", None),
-            sidecar_outputs_by_video=dict(state.sidecar_outputs_by_video),
+            sidecar_outputs_by_video=state.sidecars_for_move(),
             supersedes_journal_path=str(restored_context.get("journal_path") or ""),
             companion_resume_sources=dict(restored_context.get("companion_resume_sources") or {}),
         )
@@ -106,14 +107,17 @@ class RegularMoveLifecycle:
 
     def _wire_thread(self, move_thread, files: list[str], finished_thread) -> None:
         ui = self._ui
-        move_thread.log_line.connect(self._log)
+        move_thread.log_line.connect(lambda message: invoke_callback(self._log, message))
         move_thread.progress.connect(ui.progress_bar.setValue)
-        move_thread.request_user.connect(self._on_move_req)
+        move_thread.request_user.connect(
+            lambda request_id, payload: invoke_callback(self._on_move_req, request_id, payload)
+        )
         move_thread.file_counted.connect(
             lambda done, total: ui.total_lbl.setText(f"Gesamt: Verschieben {done}/{total}")
         )
         move_thread.move_eta.connect(lambda eta_s: ui.eta_lbl.setText(format_move_eta(eta_s)))
-        move_thread.finished.connect(
+        result_signal = getattr(move_thread, "batch_finished", None) or move_thread.finished
+        result_signal.connect(
             lambda moved, shutdown, thread=move_thread: self._finish(
                 thread,
                 finished_thread=finished_thread,

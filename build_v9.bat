@@ -74,7 +74,7 @@ for %%F in (
 )
 
 REM Python-/Build-Abhaengigkeiten aus derselben Umgebung wie die App.
-for %%M in (PyInstaller PyQt6 numpy cv2 cryptography) do (
+for %%M in (PyInstaller PyQt6 numpy cv2 cryptography defusedxml) do (
   "%PYTHON_EXE%" -c "import %%M" >nul 2>nul
   if errorlevel 1 (
     echo [FEHLER] Python-Modul %%M fehlt in der verwendeten Umgebung.
@@ -170,7 +170,7 @@ if errorlevel 1 (
 )
 
 REM Versionsinfo fuer reproduzierbare Build-Logs.
-"%PYTHON_EXE%" -c "import sys, PyInstaller, PyQt6, cv2, numpy, cryptography; print('[INFO] App:', '%BUILD_NAME%'); print('[INFO] Python:', sys.version.split()[0]); print('[INFO] PyInstaller:', PyInstaller.__version__); print('[INFO] PyQt6:', getattr(PyQt6, '__version__', 'installiert')); print('[INFO] OpenCV:', cv2.__version__); print('[INFO] NumPy:', numpy.__version__); print('[INFO] cryptography:', cryptography.__version__)"
+"%PYTHON_EXE%" -c "import sys, PyInstaller, PyQt6, cv2, numpy, cryptography, defusedxml; print('[INFO] App:', '%BUILD_NAME%'); print('[INFO] Python:', sys.version.split()[0]); print('[INFO] PyInstaller:', PyInstaller.__version__); print('[INFO] PyQt6:', getattr(PyQt6, '__version__', 'installiert')); print('[INFO] OpenCV:', cv2.__version__); print('[INFO] NumPy:', numpy.__version__); print('[INFO] cryptography:', cryptography.__version__); print('[INFO] defusedxml:', getattr(defusedxml, '__version__', 'installiert'))"
 
 "%PYTHON_EXE%" -m PyInstaller ^
   --onedir ^

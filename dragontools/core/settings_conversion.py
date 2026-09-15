@@ -7,6 +7,15 @@ SET_KEY_OUTPUT_CONTAINER_DV = "convert/output_container_dv"
 DEFAULT_OUTPUT_CONTAINER_STANDARD = "mkv"
 DEFAULT_OUTPUT_CONTAINER_DV = "mp4"
 
+# Separate policy switches for the explicit DV-Remux workflow.  The normal
+# Dolby-Vision encoder keeps using ``SET_KEY_OUTPUT_CONTAINER_DV``; these two
+# values only decide how sources that cannot be copied 1:1 are handled when
+# the user presses the DV-Remux button.
+SET_KEY_DV_REMUX_KEEP_DV7_MKV = "dv_remux/keep_dv7_mkv"
+SET_KEY_DV_REMUX_ENCODE_DV5 = "dv_remux/encode_dv5"
+DEFAULT_DV_REMUX_KEEP_DV7_MKV = False
+DEFAULT_DV_REMUX_ENCODE_DV5 = True
+
 SET_KEY_ALLOW_GROWTH = "storage/allow_bigger_than_source"
 SET_KEY_SAVE_ALLOW_LARGER_OUTPUT = "save/allow_larger_output"
 SET_KEY_SAVE_ALLOW_LARGER_OUTPUT_PERCENT = "save/allow_larger_output_percent"
