@@ -1,23 +1,27 @@
-# DragonTools V9.8.3
+# DragonTools V9.8.4
 
 DragonTools ist eine Windows-Anwendung zur Analyse, Konvertierung und Verwaltung von Video-, Audio- und Untertiteldateien. Das Projekt bündelt die benötigten Drittanbieterprogramme nicht im Git-Repository. Sie müssen separat von den jeweiligen Projektseiten heruntergeladen werden.
 
 
-## Stabilitätsstand 9.8.3 – 14.09.2026
+## Stand 9.8.4 – 16.09.2026
+
+Normalisierter FFmpeg-AutoCrop ist die verbindliche physische DV-Crop-Quelle. Finaler RPU-Nachweis schützt das Original auch bei exakter Geometrie. Zieländerungen während laufender Aufträge sind an der Move-Transaktionsgrenze abgesichert. Renamer unterstützt Releasegruppen, E05S06 und EPxx mit Staffelwahl; Fenster und Spalten sind flexibel skalierbar.
 
 - Cleanup-Warnungen und Fehler bleiben terminal erhalten. Hintergrund-Nachbearbeitung darf daraus keinen Erfolg machen; Auto-Move bleibt für solche Ergebnisse gesperrt.
 - Nachbearbeitungsaufträge besitzen eigene Prozess-Slots. Timeout, Abbruch und Pause verwenden die konkrete Prozessinstanz; ein lokaler Auftrag darf keinen parallelen Auftrag beenden. Ein ausdrücklich angeforderter Batch-Abbruch gilt weiterhin für den gesamten Batch.
 - Normaler MP4-Remux prüft Abbruch erneut nach Sidecar-Arbeit und unmittelbar in der finalen Dateitransaktion. Vor dem Commit eingegangene Abbrüche erhalten das Original und rollen Sidecars zurück. Ein unvollständiger Rollback bewahrt Staging und Journal zur Recovery.
+- Die Haupt-Tab-Leiste und der Renamer erzwingen keine überbreite Mindestgröße mehr. Renamer-Aktionen sind mehrzeilig angeordnet; Tabellenspalten lassen sich frei skalieren, ein-/ausblenden und persistent speichern. OK, Typ und Hinweise sind in der Standardansicht ausgeblendet.
+- Renamer-Regeln Schema 3 ergänzt eine eigene Releasegruppen-Liste: bekannte Gruppen wie `STARS` können am Anfang/Ende des Release-Namens gefiltert werden. Serienmuster `E05S06` werden als Staffel 6 / Episode 5 erkannt; bei `EP01` ohne Staffel fragt DragonTools vor der Providerabfrage ausdrücklich nach der Staffel.
 
 Abbruch ist kooperativ: Ein bereits abgeschlossenes atomares Dateisystem-Replace kann nicht rückwirkend verhindert werden. Die Prüfung liegt unmittelbar vor dem Commit und beim Containerwechsel nochmals vor dem Original-Cleanup; bei einem dort erkannten Abbruch wird die Installation zurückgerollt. Bereits sicher installierte Ausgaben werden nicht blind gelöscht.
 
-Die nachfolgende Bestandsbeschreibung und deren damalige Testzahlen dokumentieren den historischen Stand 9.8.2. Aktuelle Validierungsergebnisse stehen in PATCH_MANIFEST.json und patch.md.
+Aktueller Quellstand: 857 Python-Dateien, 128.481 Gesamtzeilen und 108.628 Codezeilen (nichtleer, keine reinen Kommentarzeilen). Testpaket: 191 Python-Dateien, 188 test_*.py und 1.397 statisch erkannte Testfunktionen. Vollständiger Nachreview: 1.449 Tests bestanden, ohne Fehler oder Skips. Die nachfolgende Bestandsbeschreibung dokumentiert den historischen Stand 9.8.2.
 
 ## Historischer Entwicklungsstand 9.8.2 – 13.09.2026
 
-Der aktuelle V9.8.2-Stand wurde nach den Datenbank-/Metadaten-Patches in zwölf größeren Refactoring- und Stabilitätsblöcken und anschließend mit dem kumulativen Technical Review Patch v4 weiter zerlegt. Ziel war nicht, nur Dateien kleiner zu machen, sondern GUI, Orchestrierung, Datenbankzugriff, Dateisystem-I/O, externe Tools und reine Fachlogik klarer voneinander zu trennen. Bestehende Importpfade bleiben dort über schmale Kompatibilitätsfassaden erhalten, wo Worker, Tests oder andere Module darauf angewiesen sind.
+Der damalige V9.8.2-Stand wurde nach den Datenbank-/Metadaten-Patches in zwölf größeren Refactoring- und Stabilitätsblöcken und anschließend mit dem kumulativen Technical Review Patch v4 weiter zerlegt. Ziel war nicht, nur Dateien kleiner zu machen, sondern GUI, Orchestrierung, Datenbankzugriff, Dateisystem-I/O, externe Tools und reine Fachlogik klarer voneinander zu trennen. Bestehende Importpfade bleiben dort über schmale Kompatibilitätsfassaden erhalten, wo Worker, Tests oder andere Module darauf angewiesen sind.
 
-Wichtige Änderungen des aktuellen Stands:
+Wichtige Änderungen dieses historischen Stands:
 
 - **Mediathek:** migrationssichere Schema-Reihenfolge, indexfreundlicher Serien-Lookup über `normalized_title`, korrigierte Jellyfin-Normalisierung, weniger unnötige SQLite-Verbindungen/Writes und eine asynchrone Mediathek-Suche außerhalb des GUI-Threads.
 - **Preflight und Metadaten:** Film-/Serienpfade werden bei aktivierter Mediathek zuerst über SQLite aufgelöst. Persistenter Suchcache und frische Batch-Metadaten sind getrennt; finale Renamer-/NFO-Läufe können aktuelle Providerdaten einmal pro Serie/Batch laden und anschließend wiederverwenden.
@@ -168,6 +172,8 @@ Neue und bestehende DragonTools-Mediatheken werden kompatibel auf Schema 6 gebra
 
 Der Film-/Serien-Renamer bewertet Metadatenkandidaten in konfigurierbaren Stufen. Standardmäßig wird zuerst die normale Mindestübereinstimmung von **60 %** verwendet. Gibt es dort keinen Kandidaten, folgen automatisch die Fallback-Stufen **45 %** und **30 %**. Alle drei Grenzwerte sind unter **Regeln → Renamer-Regeln** separat einstellbar. Treffer aus reduzierten Stufen werden sichtbar als Fallback markiert und bleiben prüfbedürftig; die letzte Stufe behandelt mehrere ähnlich schwache Kandidaten bewusst als mehrdeutig statt blind zu raten.
 
+Konfigurierbare Releasegruppen werden nur an den Namensrändern entfernt: `STARS.Show.S01E01`, `[STARS] Show S01E01` und `Show.S01E01-STARS` können bereinigt werden, während ein echter Titel wie `A STARS Story` unangetastet bleibt. Zusätzlich werden `E05S06`/`E05 S06` als Staffel 6, Episode 5 erkannt. `EP01`/`EPISODE01` ohne Staffel bleibt absichtlich unvollständig und löst vor der Providerabfrage eine Staffelabfrage aus; DragonTools rät keine Staffel.
+
 Wenn die automatische Typ-Erkennung falsch liegt, kann eine markierte Zeile gezielt **als Serie** oder **als Film** gesucht werden. Der Suchbegriff kann manuell geändert werden; außerdem lassen sich auf Wunsch alle Provider-Kandidaten ohne Fuzzy-Grenze anzeigen. Die Ergebnistabelle zeigt den tatsächlich gewählten Provider (**TMDB** oder **TheTVDB**) in einer eigenen Spalte.
 
 Wenn der Metadatencache für eine Serienfolge nur einen generischen Platzhalter wie **Folge 10** enthält, fragt der Renamer den Provider einmal frisch am Cache vorbei ab. Liefert TMDB oder TheTVDB inzwischen einen echten Episodentitel, wird der Cache erneuert und der neue Zielname verwendet. Bei TheTVDB kann eine vorhandene Episode ohne brauchbaren Titel zusätzlich über die konfigurierte Fallback-Sprache ergänzt werden. Für finale Rename-/NFO-Läufe kann eine frisch geladene Serien-/Episodenliste innerhalb desselben Batches wiederverwendet werden, sodass zwanzig Folgen nicht zwanzig identische Providerabfragen auslösen. Serienfolgen bleiben dabei im Standard **Serienname - SXXEXX - Episodenname.ext**.
@@ -190,7 +196,7 @@ Kontrolliere anschließend, dass alle externen Werkzeuge unter `third_party` vor
 build_v9.bat
 ```
 
-Der fertige Build wird unter `dist/DragonToolsV9.8.3/` abgelegt. `build/` und `dist/` sind lokale Ausgaben und werden nicht in Git gespeichert.
+Der fertige Build wird unter `dist/DragonToolsV9.8.4/` abgelegt. `build/` und `dist/` sind lokale Ausgaben und werden nicht in Git gespeichert.
 
 ## Programm-Updates über GitHub
 

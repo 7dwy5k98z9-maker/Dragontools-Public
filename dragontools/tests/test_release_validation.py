@@ -333,7 +333,7 @@ def test_release_validation_checks_required_files_and_schema(tmp_path):
     _write_json(config / "default_audio_rules.json", {"_schema_version": 4})
     _write_json(config / "default_subtitle_rules.json", {"_schema_version": 6})
     _write_json(config / "default_move_rules.json", {"_schema_version": 1})
-    _write_json(config / "default_renamer_rules.json", {"_schema_version": 2})
+    _write_json(config / "default_renamer_rules.json", {"_schema_version": 3})
     _write_json(config / "default_profiles.json", {"_schema_version": 3})
 
     checks = validate_release(root)
@@ -390,7 +390,7 @@ def test_app_bundle_validation_checks_exe_not_source_files(tmp_path):
     _write_json(config / "default_audio_rules.json", {"_schema_version": 4})
     _write_json(config / "default_subtitle_rules.json", {"_schema_version": 6})
     _write_json(config / "default_move_rules.json", {"_schema_version": 1})
-    _write_json(config / "default_renamer_rules.json", {"_schema_version": 2})
+    _write_json(config / "default_renamer_rules.json", {"_schema_version": 3})
     _write_json(config / "default_profiles.json", {"_schema_version": 3})
 
     checks = validate_release(data_dir, mode="app")
@@ -445,7 +445,7 @@ def test_source_only_manifest_makes_source_archive_self_consistent(tmp_path):
     _write_json(config / "default_audio_rules.json", {"_schema_version": 4})
     _write_json(config / "default_subtitle_rules.json", {"_schema_version": 6})
     _write_json(config / "default_move_rules.json", {"_schema_version": 1})
-    _write_json(config / "default_renamer_rules.json", {"_schema_version": 2})
+    _write_json(config / "default_renamer_rules.json", {"_schema_version": 3})
     _write_json(config / "default_profiles.json", {"_schema_version": 3})
     (root / "requirements-runtime.txt").write_text(
         "PyQt6>=6.4,<7\ncryptography>=42,<51\ndefusedxml>=0.7.1,<1\n", encoding="utf-8"
@@ -520,7 +520,7 @@ def test_package_only_manifest_validates_code_only_release(tmp_path):
     _write_json(config / "default_audio_rules.json", {"_schema_version": 4})
     _write_json(config / "default_subtitle_rules.json", {"_schema_version": 6})
     _write_json(config / "default_move_rules.json", {"_schema_version": 1})
-    _write_json(config / "default_renamer_rules.json", {"_schema_version": 2})
+    _write_json(config / "default_renamer_rules.json", {"_schema_version": 3})
     _write_json(config / "default_profiles.json", {"_schema_version": 3})
     (root / "requirements-runtime.txt").write_text(
         "PyQt6>=6.4,<7\ncryptography>=42,<51\ndefusedxml>=0.7.1,<1\n", encoding="utf-8"
@@ -590,7 +590,7 @@ def test_release_validation_detects_stale_built_documentation(tmp_path):
     _write_json(config / "default_audio_rules.json", {"_schema_version": 4})
     _write_json(config / "default_subtitle_rules.json", {"_schema_version": 6})
     _write_json(config / "default_move_rules.json", {"_schema_version": 1})
-    _write_json(config / "default_renamer_rules.json", {"_schema_version": 2})
+    _write_json(config / "default_renamer_rules.json", {"_schema_version": 3})
     _write_json(config / "default_profiles.json", {"_schema_version": 3})
 
     dist = root / "dist" / f"DragonToolsV{APP_VERSION}"

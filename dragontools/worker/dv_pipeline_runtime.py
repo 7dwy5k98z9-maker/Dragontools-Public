@@ -28,6 +28,15 @@ class DVPipelineDiagnostics:
     sidecar_paths: list[str] = field(default_factory=list)
     hdr10plus_verified: bool = False
     dolby_vision_verified: bool = False
+    dv_crop_alignment_verified: bool = False
+    final_rpu_checked: bool = False
+    final_rpu_present: bool = False
+    final_rpu_matches_injected: bool | None = None
+    final_rpu_expected_sha256: str = ""
+    final_rpu_actual_sha256: str = ""
+    final_rpu_level5_offsets: tuple[tuple[int, int, int, int], ...] = ()
+    final_rpu_level5_dynamic: bool = False
+    final_rpu_message: str = ""
     failure_reason: str = ""
     failure_stage: str = ""
     tool_output: str = ""
@@ -38,6 +47,15 @@ class DVPipelineDiagnostics:
         self.sidecar_paths.clear()
         self.hdr10plus_verified = False
         self.dolby_vision_verified = False
+        self.dv_crop_alignment_verified = False
+        self.final_rpu_checked = False
+        self.final_rpu_present = False
+        self.final_rpu_matches_injected = None
+        self.final_rpu_expected_sha256 = ""
+        self.final_rpu_actual_sha256 = ""
+        self.final_rpu_level5_offsets = ()
+        self.final_rpu_level5_dynamic = False
+        self.final_rpu_message = ""
         self.failure_reason = ""
         self.failure_stage = ""
         self.tool_output = ""
@@ -66,6 +84,15 @@ class DVPipelineDiagnostics:
         self.sidecar_paths[:] = list(result.sidecar_paths)
         self.hdr10plus_verified = bool(result.success and result.verified_hdr10plus)
         self.dolby_vision_verified = bool(result.success and result.verified_dolby_vision)
+        self.dv_crop_alignment_verified = bool(result.success and getattr(result, "verified_dv_crop_alignment", False))
+        self.final_rpu_checked = bool(getattr(result, "final_rpu_checked", False))
+        self.final_rpu_present = bool(getattr(result, "final_rpu_present", False))
+        self.final_rpu_matches_injected = getattr(result, "final_rpu_matches_injected", None)
+        self.final_rpu_expected_sha256 = str(getattr(result, "final_rpu_expected_sha256", "") or "")
+        self.final_rpu_actual_sha256 = str(getattr(result, "final_rpu_actual_sha256", "") or "")
+        self.final_rpu_level5_offsets = tuple(getattr(result, "final_rpu_level5_offsets", ()) or ())
+        self.final_rpu_level5_dynamic = bool(getattr(result, "final_rpu_level5_dynamic", False))
+        self.final_rpu_message = str(getattr(result, "final_rpu_message", "") or "")
         if not result.success:
             self.failure_reason = result.failure_reason or temp_state.failure_reason
             self.failure_stage = result.failure_stage or temp_state.failure_stage

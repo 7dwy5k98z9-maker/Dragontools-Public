@@ -176,6 +176,17 @@ def test_postprocess_pending_result_is_not_terminal(monkeypatch):
     assert refreshes
 
 
+def test_postprocess_pending_uses_star_like_display_marker(monkeypatch):
+    service, state, _logs, _move_calls, _start_enabled, _queue_edit, _refreshes, _clears = _service()
+    rendered = []
+    monkeypatch.setattr(service, "_set_file_list_item_text", lambda path, text: rendered.append((path, text)))
+
+    service.on_file_result("film.mkv", "film.mkv", "🧩")
+
+    assert rendered[-1] == ("film.mkv", "✳️  film.mkv")
+    assert "film.mkv" in state.pending_postprocess_inputs
+
+
 def test_finished_waits_for_pending_postprocess_before_move(monkeypatch):
     service, state, logs, move_calls, _start_enabled, _queue_edit, _refreshes, _clears = _service()
     thread = SimpleNamespace(abort_requested=False, _sidecar_outputs={}, _postprocess_outputs={})

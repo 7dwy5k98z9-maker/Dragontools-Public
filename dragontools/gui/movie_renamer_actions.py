@@ -11,9 +11,10 @@ from ..core.movie_renamer import rename_movie_file
 from ..core.path_syntax import VIDEO_EXTENSIONS, is_video_file, path_compare_key
 from .drop_path_extractor import _iter_video_files_in_folder
 from .movie_renamer_search_actions import MovieRenamerSearchActionsMixin
+from .movie_renamer_season_prompt import MovieRenamerSeasonPromptMixin
 
 
-class MovieRenamerActionController(MovieRenamerSearchActionsMixin):
+class MovieRenamerActionController(MovieRenamerSeasonPromptMixin, MovieRenamerSearchActionsMixin):
     def __init__(self, owner, view, table_controller, resolver) -> None:
         self.owner = owner
         self.view = view
@@ -35,13 +36,14 @@ class MovieRenamerActionController(MovieRenamerSearchActionsMixin):
                 ignored += 1
 
         added = 0
+        added_rows: list[int] = []
         existing = self.table_controller.known_path_keys()
         for raw in expanded:
             path = Path(raw)
             key = path_compare_key(path)
             if key in existing:
                 continue
-            self.table_controller.add_row(path)
+            added_rows.append(self.table_controller.add_row(path))
             existing.add(key)
             added += 1
 
@@ -50,6 +52,7 @@ class MovieRenamerActionController(MovieRenamerSearchActionsMixin):
             message += f" {ignored} Eintrag/Einträge ignoriert."
         self.view.status_lbl.setText(message)
         if added:
+            self.prompt_missing_seasons(added_rows)
             self.resolver.schedule_new()
 
     def choose_files(self) -> None:

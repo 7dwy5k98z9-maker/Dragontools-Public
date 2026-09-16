@@ -118,6 +118,17 @@ class MoveJournal:
         journal._write()
         return journal
 
+    def update_planned_target_if_queued(self, source_path: str, target) -> bool:
+        """Persist a changed target only while the file has not started moving."""
+        with self._lock:
+            row = self._row(source_path)
+            if str(row.get("status") or "queued") != "queued":
+                return False
+            planned = self.data.setdefault("planned_targets", {})
+            planned[str(source_path)] = _json_safe_dict({"value": target}).get("value")
+            self._touch()
+            return True
+
     def start_file(self, source_path: str, *, target_dir: str = "", dest_path: str = "") -> None:
         with self._lock:
             row = self._row(source_path)

@@ -54,7 +54,7 @@ PRIVATE_PATTERNS = (
 
 
 def is_skipped(path: Path) -> bool:
-    return any(part.casefold() in SKIP_DIRS for part in path.relative_to(ROOT).parts)
+    return any(part.casefold() in SKIP_DIRS or part.casefold().startswith(".pytest_tmp") for part in path.relative_to(ROOT).parts)
 
 
 def scan_text(label: str, text: str, findings: list[str]) -> None:

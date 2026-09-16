@@ -15,6 +15,7 @@ from pathlib import Path
 
 
 from ..core.process_runner import subprocess_no_window_kwargs as _no_window_kwargs
+from .crop_geometry import CropRect, normalize_crop_rect
 
 
 def _tools(worker):
@@ -156,13 +157,28 @@ class ConverterDetectionHelper:
             k = tuple(int(x) for x in m)
             c[k] = c.get(k, 0) + 1
         cw, ch, cx, cy = max(c, key=lambda k: (c[k], k[0] * k[1]))
-        # Mod 2 (einzige echte Encoder-Anforderung)
-        cw = (cw // 2) * 2
-        ch = (ch // 2) * 2
-        cx = (cx // 2) * 2
-        cy = (cy // 2) * 2
-        if cw <= 0 or ch <= 0:
+        raw_crop = CropRect(width=cw, height=ch, x=cx, y=cy)
+        try:
+            normalized_crop = normalize_crop_rect(
+                raw_crop,
+                source_width=w,
+                source_height=h,
+            )
+        except ValueError as exc:
+            worker.log(f"⚠️ Auto-Crop-Geometrie ungueltig: {exc}", "warn")
             return None
+        if normalized_crop != raw_crop:
+            worker._logger.info(
+                "Auto-Crop normalisiert: "
+                f"{raw_crop.as_filter()} → {normalized_crop.as_filter()} "
+                "(4:2:0, ungerade Kanten werden bevorzugt erweitert)."
+            )
+        cw, ch, cx, cy = (
+            normalized_crop.width,
+            normalized_crop.height,
+            normalized_crop.x,
+            normalized_crop.y,
+        )
         if cw < w * 0.5 or ch < h * 0.5:
             return None
         if (w - cw) < 4 and (h - ch) < 4:

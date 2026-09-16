@@ -12,6 +12,7 @@ from .convert_widget_queue_dragdrop import ConvertWidgetQueueDragDropMixin
 from .convert_widget_queue_management import ConvertWidgetQueueManagementMixin
 from .convert_widget_queue_window_actions import ConvertWidgetQueueWindowActionsMixin
 from .convert_widget_queue_context_actions import ConvertWidgetQueueContextActionsMixin
+from .convert_widget_queue_target_actions import ConvertWidgetQueueTargetActionsMixin
 from .convert_widget_queue_override_actions import ConvertWidgetQueueOverrideActionsMixin
 from .convert_widget_queue_badges import ConvertWidgetQueueBadgesMixin
 from .convert_widget_source_visual_actions import ConvertWidgetSourceVisualActionsMixin
@@ -22,6 +23,7 @@ class ConvertWidgetQueueActionsMixin(
     ConvertWidgetQueueManagementMixin,
     ConvertWidgetQueueWindowActionsMixin,
     ConvertWidgetQueueContextActionsMixin,
+    ConvertWidgetQueueTargetActionsMixin,
     ConvertWidgetQueueOverrideActionsMixin,
     ConvertWidgetQueueBadgesMixin,
     ConvertWidgetSourceVisualActionsMixin,

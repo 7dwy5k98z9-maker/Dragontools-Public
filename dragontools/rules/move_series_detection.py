@@ -19,6 +19,9 @@ _SER_EP_RE = re.compile(r"""
       |
         (?P<season3>\d{1,4})\s*[x]\s*(?P<episode3>\d{1,4})
             (?P<tail3>(?:\s*[x\-]\s*\d{1,4})*)
+      |
+        e\s*(?P<episode4>\d{1,4})[.\-_\s]*s\s*(?P<season4>\d{1,4})
+            (?P<tail4>(?:[eE]\d{1,4}|[-_.\s]+[eE]?\d{1,4})*)
     )
     (?!\d)
 """, re.VERBOSE | re.IGNORECASE)
@@ -77,9 +80,9 @@ def parse_series_match_details(filename: str) -> dict[str, Any] | None:
     if not m:
         return None
 
-    season_s  = m.group("season")  or m.group("season2")  or m.group("season3")
-    episode_s = m.group("episode") or m.group("episode2") or m.group("episode3")
-    tail      = m.group("tail")    or m.group("tail2")    or m.group("tail3") or ""
+    season_s  = m.group("season")  or m.group("season2")  or m.group("season3") or m.group("season4")
+    episode_s = m.group("episode") or m.group("episode2") or m.group("episode3") or m.group("episode4")
+    tail      = m.group("tail")    or m.group("tail2")    or m.group("tail3") or m.group("tail4") or ""
     is_x_fmt  = bool(m.group("season2") or m.group("season3"))
 
     season   = int(season_s)

@@ -55,6 +55,17 @@ class DVPipelineExecutorAdapter:
             verified_dolby_vision=bool(
                 ok and getattr(self._pipeline, "last_dolby_vision_verified", False)
             ),
+            verified_dv_crop_alignment=bool(
+                ok and getattr(self._pipeline, "last_dv_crop_alignment_verified", False)
+            ),
+            final_rpu_checked=bool(getattr(self._pipeline, "last_final_rpu_checked", False)),
+            final_rpu_present=bool(getattr(self._pipeline, "last_final_rpu_present", False)),
+            final_rpu_matches_injected=getattr(self._pipeline, "last_final_rpu_matches_injected", None),
+            final_rpu_expected_sha256=str(getattr(self._pipeline, "last_final_rpu_expected_sha256", "") or ""),
+            final_rpu_actual_sha256=str(getattr(self._pipeline, "last_final_rpu_actual_sha256", "") or ""),
+            final_rpu_level5_offsets=tuple(getattr(self._pipeline, "last_final_rpu_level5_offsets", ()) or ()),
+            final_rpu_level5_dynamic=bool(getattr(self._pipeline, "last_final_rpu_level5_dynamic", False)),
+            final_rpu_message=str(getattr(self._pipeline, "last_final_rpu_message", "") or ""),
             failure_reason=(
                 self._pipeline.last_failure_reason or self._temp_state.failure_reason
             ),

@@ -9,7 +9,7 @@ from ..core.type_utils import _safe_bool, _safe_int
 from .rule_loader import load_named_rules
 
 _DEFAULT = {
-    "_schema_version": 2,
+    "_schema_version": 3,
     "character_replacements": [
         {"character": "*", "replacement": "X"},
         {"character": '"', "replacement": "'"},
@@ -24,6 +24,7 @@ _DEFAULT = {
         {"character": "|", "replacement": "."},
     ],
     "title_exceptions": [],
+    "release_groups": [],
     "matching": {
         "minimum_candidate_score": 0.60,
         "fallback_candidate_scores": [0.45, 0.30],
@@ -89,6 +90,23 @@ def migrate_renamer_rules(data: dict[str, Any] | None) -> dict[str, Any]:
                 cleaned.append({"source": source, "replacement": target})
         result["title_exceptions"] = cleaned
 
+    groups = raw.get("release_groups")
+    if isinstance(groups, (list, tuple)):
+        cleaned_groups: list[str] = []
+        seen_groups: set[str] = set()
+        for item in groups:
+            if isinstance(item, dict):
+                value = str(item.get("name") or item.get("group") or item.get("value") or "").strip()
+            else:
+                value = str(item or "").strip()
+            value = value.strip(" ._-[](){}")
+            key = value.casefold()
+            if not value or key in seen_groups:
+                continue
+            seen_groups.add(key)
+            cleaned_groups.append(value)
+        result["release_groups"] = cleaned_groups
+
     matching = dict(raw.get("matching") or {})
     defaults = _DEFAULT["matching"]
     raw_fallback_scores = list(matching.get("fallback_candidate_scores") or [])
@@ -118,7 +136,7 @@ def migrate_renamer_rules(data: dict[str, Any] | None) -> dict[str, Any]:
             matching.get("fuzzy_prefix_min_words"), defaults["fuzzy_prefix_min_words"], 2, 8
         ),
     }
-    result["_schema_version"] = 2
+    result["_schema_version"] = 3
     return result
 
 
@@ -197,6 +215,71 @@ def apply_title_exception(value: str) -> str:
         if source and replacement and _title_key(source) == key:
             return replacement
     return original
+
+
+def release_groups() -> tuple[str, ...]:
+    """Konfigurierte Scene-/P2P-Gruppen, die nicht zum Titel gehören.
+
+    Die Liste ist absichtlich benutzerdefiniert: Gruppenbezeichnungen sind
+    nicht zuverlässig aus allgemeinen Technik-Tags ableitbar und können mit
+    echten Titeln kollidieren. Der Vergleich erfolgt ohne Beachtung der
+    Groß-/Kleinschreibung.
+    """
+    values = get_rules().get("release_groups") or []
+    result: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        text = str(value or "").strip().strip(" ._-[](){}")
+        key = text.casefold()
+        if text and key not in seen:
+            seen.add(key)
+            result.append(text)
+    return tuple(result)
+
+
+def strip_configured_release_groups(value: str) -> tuple[str, tuple[str, ...]]:
+    """Entfernt konfigurierte Releasegruppen nur an Dateinamen-Rändern.
+
+    Unterstützt typische Formen wie ``STARS.Show.S01E01``,
+    ``[STARS] Show S01E01`` und ``Show.S01E01-STARS``. Ein Gruppenname mitten
+    in einem echten Titel wird bewusst nicht entfernt. Mehrere verschachtelte
+    Präfixe/Suffixe werden wiederholt abgearbeitet.
+    """
+    text = str(value or "")
+    configured = sorted(release_groups(), key=len, reverse=True)
+    if not configured or not text:
+        return text, ()
+
+    found: list[str] = []
+    changed = True
+    while changed:
+        changed = False
+        for group in configured:
+            escaped = re.escape(group)
+            prefix = re.compile(
+                rf"^\s*(?:[\[({{]\s*)?{escaped}(?:\s*[\])}}])?(?=$|[\s._-])[\s._-]*",
+                flags=re.IGNORECASE,
+            )
+            suffix = re.compile(
+                rf"[\s._-]*(?:[\[({{]\s*)?{escaped}(?:\s*[\])}}])?\s*$",
+                flags=re.IGNORECASE,
+            )
+            m = prefix.search(text)
+            if m and m.end() > m.start():
+                text = text[m.end():]
+                if group.casefold() not in {item.casefold() for item in found}:
+                    found.append(group)
+                changed = True
+                break
+            m = suffix.search(text)
+            if m and m.end() > m.start() and m.start() < len(text):
+                text = text[:m.start()]
+                if group.casefold() not in {item.casefold() for item in found}:
+                    found.append(group)
+                changed = True
+                break
+
+    return text.strip(" ._-"), tuple(found)
 
 
 def matching_rules() -> dict[str, Any]:

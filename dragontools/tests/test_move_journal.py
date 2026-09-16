@@ -505,3 +505,26 @@ def test_move_batch_lifecycle_counts_journal_finalization_failure_as_error():
     assert owner.journal_finalize_failed is True
     assert owner.messages[-1][1] == "error"
     assert "Move-Journal konnte nicht finalisiert werden" in owner.messages[-1][0]
+
+
+def test_planned_target_can_change_while_move_file_is_still_queued(tmp_path):
+    from dragontools.core.move_journal import MoveJournal
+
+    source = str(tmp_path / "episode.mkv")
+    journal = MoveJournal.start(
+        files=[source],
+        planned_targets={source: str(tmp_path / "Old" / "Staffel 01")},
+        root=tmp_path,
+    )
+    new_target = str(tmp_path / "New" / "Staffel 01")
+    assert journal.update_planned_target_if_queued(source, new_target) is True
+    assert journal.data["planned_targets"][source] == new_target
+
+
+def test_planned_target_change_is_rejected_after_move_started(tmp_path):
+    from dragontools.core.move_journal import MoveJournal
+
+    source = str(tmp_path / "episode.mkv")
+    journal = MoveJournal.start(files=[source], root=tmp_path)
+    journal.start_file(source, target_dir=str(tmp_path / "Old"))
+    assert journal.update_planned_target_if_queued(source, str(tmp_path / "New")) is False

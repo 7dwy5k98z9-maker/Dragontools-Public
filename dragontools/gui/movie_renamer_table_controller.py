@@ -42,7 +42,7 @@ class MovieRenamerTableController(MovieRenamerTableSearchMixin):
         self.table = table
         self.columns = RenamerColumns
 
-    def add_row(self, path: Path) -> None:
+    def add_row(self, path: Path) -> int:
         movie_parsed = parse_movie_release_name(path)
         series_parsed = parse_series_release_name(path) if movie_parsed.is_probable_series else None
         row = self.table.rowCount()
@@ -51,16 +51,30 @@ class MovieRenamerTableController(MovieRenamerTableSearchMixin):
         accept = QTableWidgetItem("")
         accept.setFlags(Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
         accept.setCheckState(Qt.CheckState.Unchecked)
-        accept.setData(Qt.ItemDataRole.UserRole, {"path": str(path), "proposal": None})
+        accept.setData(Qt.ItemDataRole.UserRole, {
+            "path": str(path),
+            "proposal": None,
+            "season_missing": bool(series_parsed is not None and series_parsed.season_missing),
+            "season_override": None,
+        })
         self.table.setItem(row, self.columns.ACCEPT, accept)
 
-        self.set_item(row, self.columns.STATUS, "bereit", editable=False)
+        self.set_item(
+            row,
+            self.columns.STATUS,
+            "⚠️ Staffel fehlt" if series_parsed is not None and series_parsed.season_missing else "bereit",
+            editable=False,
+        )
         self.set_item(row, self.columns.TYPE, "Serie" if series_parsed is not None else "Film", editable=False)
         self.set_item(row, self.columns.SOURCE, path.name, editable=False, tooltip=str(path))
         self.set_item(
             row,
             self.columns.QUERY,
-            f"S{series_parsed.season:02d}E{series_parsed.episode:02d}"
+            (
+                f"EP{series_parsed.episode:02d}"
+                if series_parsed.season_missing
+                else f"S{series_parsed.season:02d}E{series_parsed.episode:02d}"
+            )
             if series_parsed is not None
             else movie_parsed.query_title,
             editable=False,
@@ -73,6 +87,7 @@ class MovieRenamerTableController(MovieRenamerTableSearchMixin):
         self.set_item(row, self.columns.TARGET, "", editable=True)
         warnings = series_parsed.warnings if series_parsed is not None else movie_parsed.warnings
         self.set_item(row, self.columns.HINTS, "; ".join(warnings), editable=False)
+        return row
 
     def on_proposal_ready(self, row: int, proposal: RenameProposal) -> None:
         if row < 0 or row >= self.table.rowCount():
@@ -174,6 +189,7 @@ class MovieRenamerTableController(MovieRenamerTableSearchMixin):
             "no_match": "❌ kein Treffer",
             "not_movie": "🚫 Serie?",
             "not_series": "🚫 keine Serie",
+            "needs_season": "⚠️ Staffel fehlt",
         }.get(status, status)
 
     def collect_rename_problems(self, rows: list[int]) -> list[str]:
@@ -237,6 +253,42 @@ class MovieRenamerTableController(MovieRenamerTableSearchMixin):
 
     def row_path(self, row: int) -> str:
         return str(self.row_meta(row).get("path") or "")
+
+    def row_requires_season(self, row: int) -> bool:
+        meta = self.row_meta(row)
+        return bool(meta.get("season_missing")) and meta.get("season_override") is None
+
+    def row_season_override(self, row: int) -> int | None:
+        value = self.row_meta(row).get("season_override")
+        try:
+            return int(value) if value is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    def set_row_season_override(self, row: int, season: int) -> None:
+        season_value = int(season)
+        if season_value < 0 or season_value > 9999:
+            raise ValueError("Staffel muss zwischen 0 und 9999 liegen.")
+        meta = self.row_meta(row)
+        meta["season_override"] = season_value
+        meta["season_missing"] = False
+        self.row_item(row, self.columns.ACCEPT).setData(Qt.ItemDataRole.UserRole, meta)
+
+        parsed = parse_series_release_name(self.row_path(row))
+        if parsed is not None:
+            self.set_item(
+                row,
+                self.columns.QUERY,
+                f"S{season_value:02d}E{parsed.episode:02d}",
+                editable=False,
+            )
+            hints = [
+                item for item in parsed.warnings
+                if not item.startswith("Staffel fehlt im EPxx-Muster")
+            ]
+            hints.append(f"Staffel {season_value} manuell für EPxx gesetzt.")
+            self.set_item(row, self.columns.HINTS, "; ".join(hints), editable=False)
+        self.set_status(row, "bereit")
 
     def set_row_path(self, row: int, path: str | Path) -> None:
         meta = self.row_meta(row)

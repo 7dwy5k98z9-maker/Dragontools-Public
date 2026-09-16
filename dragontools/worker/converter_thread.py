@@ -20,10 +20,12 @@ ConverterThread behält die öffentliche Worker-Oberfläche, Queue-Fassade,
 Signale und die öffentliche Queue-/Lifecycle-API für GUI-Aufrufer.
 
 DV-Crop-Fix:
-  AutoCrop und RPU-Level-5 werden vor dem Encode abgeglichen. Wird der
-  HEVC-Stream anschließend physisch gecroppt, sind diese Pixel im Ziel-Frame
-  bereits entfernt. Deshalb setzt dovi_tool die finale RPU Active Area danach
-  auf 0/0/0/0; alte Crop-Offsets würden am DV-Gerät einen Double-Crop auslösen.
+  AutoCrop ist die verbindliche Quelle für den physischen Video-Crop.
+  RPU-Level-5 wird vor dem Encode nur diagnostisch verglichen und darf den
+  AutoCrop nicht überschreiben. Nach dem physischen Crop sind die entfernten
+  Pixel im Ziel-Frame bereits weg; deshalb setzt dovi_tool die finale RPU
+  Active Area auf 0/0/0/0. Alte Crop-Offsets würden am DV-Gerät einen
+  Double-Crop auslösen.
   Die korrigierte RPU wird vor der Injection und bei gecroppten Ausgaben auch
   nach dem finalen MKV-/MP4-Mux verifiziert.
 """

@@ -82,6 +82,33 @@ class _RenamerTab(QWidget):
         exc_layout.addLayout(exc_buttons)
         root.addWidget(exc_group)
 
+        group_group = QGroupBox("Releasegruppen aus Dateinamen filtern")
+        group_layout = QVBoxLayout(group_group)
+        group_layout.addWidget(QLabel(
+            "Gruppen wie STARS, NIMA4K oder andere Scene-/P2P-Tags können hier hinterlegt werden. "
+            "Der Renamer entfernt diese Begriffe nur am Anfang oder Ende des Release-Namens, "
+            "damit sie nicht als Teil des Serien-/Filmtitels interpretiert werden."
+        ))
+        self.release_group_table = QTableWidget(0, 1)
+        self.release_group_table.setHorizontalHeaderLabels(["Releasegruppe"])
+        self.release_group_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.release_group_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        for value in data.get("release_groups", []):
+            if isinstance(value, dict):
+                value = value.get("name") or value.get("group") or value.get("value") or ""
+            self._append_release_group(str(value or ""))
+        group_layout.addWidget(self.release_group_table)
+        group_buttons = QHBoxLayout()
+        group_add = QPushButton("➕ Releasegruppe hinzufügen")
+        group_del = QPushButton("➖ Auswahl entfernen")
+        group_add.clicked.connect(lambda: self._append_release_group(""))
+        group_del.clicked.connect(lambda: self._delete_selected(self.release_group_table))
+        group_buttons.addWidget(group_add)
+        group_buttons.addWidget(group_del)
+        group_buttons.addStretch(1)
+        group_layout.addLayout(group_buttons)
+        root.addWidget(group_group)
+
         match_group = QGroupBox("Trefferbewertung und Fallback-Suche")
         form = QFormLayout(match_group)
         matching = dict(data.get("matching") or {})
@@ -164,6 +191,11 @@ class _RenamerTab(QWidget):
         self.exc_table.setItem(row, 0, self._item(source))
         self.exc_table.setItem(row, 1, self._item(replacement))
 
+    def _append_release_group(self, value: str) -> None:
+        row = self.release_group_table.rowCount()
+        self.release_group_table.insertRow(row)
+        self.release_group_table.setItem(row, 0, self._item(value))
+
     @staticmethod
     def _delete_selected(table: QTableWidget) -> None:
         rows = sorted({idx.row() for idx in table.selectedIndexes()}, reverse=True)
@@ -193,10 +225,20 @@ class _RenamerTab(QWidget):
             if source and replacement:
                 exceptions.append({"source": source, "replacement": replacement})
 
+        release_groups = []
+        seen_groups = set()
+        for row in range(self.release_group_table.rowCount()):
+            value = self._cell(self.release_group_table, row, 0).strip().strip(" ._-[](){}")
+            key = value.casefold()
+            if value and key not in seen_groups:
+                seen_groups.add(key)
+                release_groups.append(value)
+
         return {
-            "_schema_version": 2,
+            "_schema_version": 3,
             "character_replacements": replacements,
             "title_exceptions": exceptions,
+            "release_groups": release_groups,
             "matching": {
                 "minimum_candidate_score": self.min_score.value(),
                 "fallback_candidate_scores": [

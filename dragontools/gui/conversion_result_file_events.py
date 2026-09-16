@@ -5,7 +5,11 @@ from __future__ import annotations
 from pathlib import Path
 
 from ..core.conversion_artifacts import ConversionArtifactBundle
-from ..core.result_status import accepts_result
+from ..core.result_status import (
+    POSTPROCESS_PENDING_ICON,
+    POSTPROCESS_PENDING_STATUS,
+    accepts_result,
+)
 
 
 def _worker_mapping(thread, session_attr: str, legacy_attr: str) -> dict:
@@ -28,13 +32,14 @@ class ConversionResultFileEventsMixin:
         previous = getattr(state, "artifacts_by_input", {}).get(input_path)
         if previous is not None and not accepts_result(previous.status, status):
             return
-        self._set_file_list_item_text(input_path, f"{status}  {Path(input_path).name}")
+        display_status = POSTPROCESS_PENDING_ICON if status == POSTPROCESS_PENDING_STATUS else status
+        self._set_file_list_item_text(input_path, f"{display_status}  {Path(input_path).name}")
         if status in {"❌", "⚠️", "⏭️"}:
             # Also revoke a previously accepted success (defensive legacy path).
             for path in (input_path, output_path, getattr(previous, "output_path", "")):
                 state.fertig.discard(path)
                 state.sidecar_outputs_by_video.pop(path, None)
-        if status == "🧩":
+        if status == POSTPROCESS_PENDING_STATUS:
             # Defensive ordering guard: a terminal result always wins. This
             # also protects the GUI from third-party/legacy workers that emit
             # a delayed pending marker after completion.

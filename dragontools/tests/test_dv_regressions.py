@@ -1280,3 +1280,66 @@ def test_cropped_dv_postmux_extraction_uses_correct_mp4_and_mkv_bitstream_path(t
             assert "hevc_mp4toannexb" in extract_cmd
         else:
             assert "hevc_mp4toannexb" not in extract_cmd
+
+
+def test_final_rpu_hash_mismatch_is_nonfatal_and_recorded_for_archive(tmp_path):
+    import hashlib
+    import json
+    from types import SimpleNamespace
+    from dragontools.worker.dv_final_metadata_verifier import DVFinalMetadataVerifier
+
+    expected = tmp_path / "expected.rpu"
+    expected.write_bytes(b"planned-rpu")
+    final_rpu = tmp_path / "final.rpu"
+    final_hevc = tmp_path / "final.hevc"
+    final_hevc.write_bytes(b"hevc")
+
+    class RPUService:
+        def extract_rpu(self, _runner, *, input_hevc, output_rpu):
+            Path(output_rpu).write_bytes(b"different-final-rpu")
+            return True
+
+    class Runner:
+        def adapter(self, **_kwargs):
+            return self
+        def run(self, cmd, **_kwargs):
+            if "export" in cmd:
+                target = Path(cmd[-1].split("=", 1)[1])
+                target.write_text(json.dumps({
+                    "active_area": {
+                        "presets": [{"left": 0, "right": 0, "top": 2, "bottom": 0}]
+                    }
+                }), encoding="utf-8")
+            return 0
+
+    state = SimpleNamespace(
+        rpu_to_use=expected,
+        files=SimpleNamespace(root=tmp_path),
+        verified_dolby_vision=False,
+        verified_dv_crop_alignment=False,
+    )
+    logs = []
+    verifier = DVFinalMetadataVerifier(
+        tools=SimpleNamespace(dovi_tool="dovi_tool"),
+        temp_state=SimpleNamespace(),
+        rpu_service=RPUService(),
+        hdr10plus_service=None,
+        log=lambda message, level="info": logs.append((level, message)),
+        verbose_log=lambda *_: None,
+        assert_nonempty_file=lambda path, _label: Path(path).exists() and Path(path).stat().st_size > 0,
+    )
+
+    ok = verifier._verify_dv(
+        state, final_hevc, final_rpu, Runner(),
+        lambda path: hashlib.sha256(Path(path).read_bytes()).hexdigest(),
+        "mkv",
+    )
+
+    assert ok is True
+    assert state.verified_dolby_vision is True
+    assert state.verified_dv_crop_alignment is False
+    assert state.final_rpu_checked is True
+    assert state.final_rpu_present is True
+    assert state.final_rpu_matches_injected is False
+    assert state.final_rpu_level5_offsets == ((0, 0, 2, 0),)
+    assert any(level == "info" and "kein fehler" in message.lower() for level, message in logs)

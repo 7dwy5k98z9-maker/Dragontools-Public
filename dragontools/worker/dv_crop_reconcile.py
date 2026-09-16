@@ -6,28 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-
-@dataclass(frozen=True)
-class CropRect:
-    width: int
-    height: int
-    x: int
-    y: int
-
-    @property
-    def area(self) -> int:
-        return max(0, self.width) * max(0, self.height)
-
-    def as_filter(self) -> str:
-        return f"crop={self.width}:{self.height}:{self.x}:{self.y}"
-
-    def edges(self, source_width: int, source_height: int) -> tuple[int, int, int, int]:
-        return (
-            self.x,
-            max(0, source_width - self.x - self.width),
-            self.y,
-            max(0, source_height - self.y - self.height),
-        )
+from .crop_geometry import CropRect, normalize_crop_rect, parse_crop_filter
 
 
 @dataclass(frozen=True)
@@ -41,24 +20,6 @@ class DVCropComparison:
     def needs_user_decision(self) -> bool:
         return bool((self.autocrop is not None or self.rpu_crop is not None)
                     and self.max_difference_px > 20)
-
-
-def parse_crop_filter(value: str | None) -> CropRect | None:
-    text = str(value or "").strip()
-    if not text:
-        return None
-    if text.startswith("crop="):
-        text = text[5:]
-    parts = text.split(":")
-    if len(parts) < 4:
-        return None
-    try:
-        width, height, x, y = (int(float(part.strip().replace(",", "."))) for part in parts[:4])
-    except (TypeError, ValueError):
-        return None
-    if min(width, height) <= 0 or min(x, y) < 0:
-        return None
-    return CropRect(width, height, x, y)
 
 
 def crop_from_level5_offsets(
@@ -101,6 +62,14 @@ def _collect_offset_dicts(node: Any, result: list[tuple[int, int, int, int]]) ->
     elif isinstance(node, list):
         for value in node:
             _collect_offset_dicts(value, result)
+
+
+def read_level5_offsets(path: str | Path) -> tuple[tuple[int, int, int, int], ...]:
+    """Return all unique Level-5 active-area offset tuples from a dovi_tool export."""
+    payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    offsets: list[tuple[int, int, int, int]] = []
+    _collect_offset_dicts(payload, offsets)
+    return tuple(dict.fromkeys(offsets))
 
 
 def parse_level5_export(
@@ -160,31 +129,13 @@ def compare_crops(
 
 
 def automatic_choice(comparison: DVCropComparison) -> str:
-    """Liefert ``autocrop``/``rpu``/``none`` für sichere automatische Fälle.
+    """Return the physical-crop policy for compatibility callers.
 
-    Bei kleinen Abweichungen gewinnt bewusst der weniger aggressive Crop, also
-    der größere aktive Bildbereich. So werden Bildinhalte nicht wegen einer
-    leicht zu engen Erkennung abgeschnitten.
+    AutoCrop is authoritative. RPU Level-5 is diagnostic source metadata and
+    must never become the physical video crop. If AutoCrop selected no crop,
+    the physical result remains the full frame (``none``).
     """
-    auto, rpu = comparison.autocrop, comparison.rpu_crop
-    if comparison.dynamic_rpu_area:
-        return "autocrop" if auto is not None else "none"
-    if auto is None and rpu is None:
-        return "none"
-    if comparison.needs_user_decision:
-        return "ask"
-    # Bei <=20 px gewinnt weiterhin der größere aktive Bildbereich. "Kein
-    # Crop" entspricht dabei dem kompletten Frame und ist am wenigsten aggressiv.
-    if auto is None:
-        return "autocrop"
-    if rpu is None:
-        return "rpu"
-    if auto.area > rpu.area:
-        return "autocrop"
-    if rpu.area > auto.area:
-        return "rpu"
-    # Gleich große Fläche: RPU-Masteringdaten sind der stabilere Tie-Breaker.
-    return "rpu"
+    return "autocrop" if comparison.autocrop is not None else "none"
 
 
 
@@ -197,13 +148,60 @@ class DVCropOutcome:
     failure_reason: str = ""
 
 
+def _normalize_candidate(
+    rect: CropRect | None,
+    *,
+    source_width: int,
+    source_height: int,
+    label: str,
+    log,
+) -> CropRect | None:
+    if rect is None:
+        return None
+    try:
+        normalized = normalize_crop_rect(
+            rect,
+            source_width=source_width,
+            source_height=source_height,
+        )
+    except ValueError as exc:
+        log(f"⚠️ [DV][CROP] {label} ist ungueltig und wird nicht erzwungen: {exc}", "warn")
+        return None
+    if normalized != rect:
+        log(
+            f"ℹ️ [DV][CROP] {label} auf 4:2:0-Geometrie normalisiert: "
+            f"{rect.as_filter()} → {normalized.as_filter()}. "
+            "Ungerade Kanten werden bevorzugt um 1 Pixel nach außen erweitert.",
+            "info",
+        )
+    return normalized
+
+
 def reconcile_dv_crop(
     *, runner, dovi_tool: str, rpu_path: Path, export_path: Path,
     source_width: int, source_height: int, autocrop_text: str | None,
     input_path: str, crop_decision=None, timeout: int | float = 3600, log=lambda *_: None,
 ) -> DVCropOutcome:
-    """Exportiert Level 5, vergleicht RPU/AutoCrop und liefert den sicheren Ziel-Crop."""
-    auto = parse_crop_filter(autocrop_text)
+    """Use FFmpeg AutoCrop as the authoritative physical video crop.
+
+    Dolby-Vision Level-5 data is source metadata and is useful for diagnostics,
+    but it must never enlarge, shrink or shift the physical crop selected by the
+    image analysis.  After the physical crop, ``DVLevel5Editor`` rewrites the
+    RPU for the cropped output (L5=0/0/0/0).
+
+    ``crop_decision`` remains in the signature for API compatibility only.
+    """
+    del input_path, crop_decision
+
+    auto = _normalize_candidate(
+        parse_crop_filter(autocrop_text),
+        source_width=source_width,
+        source_height=source_height,
+        label="AutoCrop",
+        log=log,
+    )
+    auto_label = auto.as_filter() if auto else "kein Crop"
+
     export_path.unlink(missing_ok=True)
     attempts = (
         [dovi_tool, "export", "-i", str(rpu_path), "-d", f"level5={export_path}"],
@@ -211,40 +209,52 @@ def reconcile_dv_crop(
     )
     for idx, cmd in enumerate(attempts):
         export_path.unlink(missing_ok=True)
-        rc = runner.run(cmd, timeout=timeout, label=f"DV Level-5 Export ({idx + 1}/{len(attempts)})", allow_error=True)
+        rc = runner.run(
+            cmd,
+            timeout=timeout,
+            label=f"DV Level-5 Export ({idx + 1}/{len(attempts)})",
+            allow_error=True,
+        )
         if rc == 0 and export_path.exists() and export_path.stat().st_size > 0:
             break
     else:
-        log("⚠️ [DV][CROP] Level-5 konnte nicht aus der RPU exportiert werden – FFmpeg-AutoCrop bleibt maßgeblich.", "warn")
+        log(
+            "⚠️ [DV][CROP] Level-5 konnte nicht aus der RPU exportiert werden – "
+            f"AutoCrop bleibt allein maßgeblich: {auto_label}.",
+            "warn",
+        )
         return DVCropOutcome(True, auto, "autocrop")
 
     try:
-        rpu, dynamic = parse_level5_export(export_path, source_width=source_width, source_height=source_height)
+        # Deliberately keep the source RPU geometry *raw* here.  It is only a
+        # diagnostic reference; normalising it must not create a competing
+        # physical crop candidate.
+        rpu, dynamic = parse_level5_export(
+            export_path,
+            source_width=source_width,
+            source_height=source_height,
+        )
     except (OSError, ValueError, TypeError) as exc:
         log(f"⚠️ [DV][CROP] Level-5-Export konnte nicht ausgewertet werden: {exc}", "warn")
         return DVCropOutcome(True, auto, "autocrop")
+
     if dynamic:
-        log("ℹ️ [DV][CROP] RPU enthält mehrere Active-Area-Werte (z. B. wechselndes IMAX). Kein globaler RPU-Crop wird erzwungen; AutoCrop bleibt unverändert.", "info")
+        log(
+            "ℹ️ [DV][CROP] RPU enthält mehrere Active-Area-Werte (z. B. wechselndes IMAX). "
+            f"Sie werden nur diagnostisch betrachtet; physischer Crop bleibt AutoCrop={auto_label}.",
+            "info",
+        )
         return DVCropOutcome(True, auto, "autocrop")
 
     comparison = compare_crops(auto, rpu, source_width=source_width, source_height=source_height)
-    auto_label = auto.as_filter() if auto else "kein Crop"
     rpu_label = rpu.as_filter() if rpu else "kein Crop"
-    log(f"ℹ️ [DV][CROP] AutoCrop={auto_label} | RPU-Level5={rpu_label} | Abweichung={comparison.max_difference_px}px", "info")
-    choice = automatic_choice(comparison)
-    if choice == "ask":
-        if crop_decision is None:
-            return DVCropOutcome(False, auto, failure_reason="DV-Crop-Abweichung >20px; Benutzerentscheidung erforderlich.")
-        choice = str(crop_decision({
-            "input_path": input_path, "autocrop": auto_label, "rpu_crop": rpu_label,
-            "difference_px": comparison.max_difference_px,
-        }) or "").strip().lower()
-        if choice == "disable_dv":
-            return DVCropOutcome(False, auto, disable_dv=True, failure_reason="DV_DISABLED_BY_USER_CROP")
-        if choice not in {"autocrop", "rpu"}:
-            return DVCropOutcome(False, auto, failure_reason="DV-Crop-Konflikt wurde ohne gültige Auswahl beendet.")
-    crop = auto if choice == "autocrop" else rpu if choice == "rpu" else None
-    return DVCropOutcome(True, crop, choice)
+    log(
+        f"ℹ️ [DV][CROP] AutoCrop={auto_label} | RPU-Level5={rpu_label} | "
+        f"Abweichung={comparison.max_difference_px}px | AutoCrop ist maßgeblich; "
+        "RPU wird nach dem physischen Crop an den Zielstream angepasst.",
+        "info",
+    )
+    return DVCropOutcome(True, auto, "autocrop")
 
 
 
@@ -272,16 +282,44 @@ def _split_filter_chain(chain: str) -> list[str]:
     return [part for part in parts if part]
 
 def replace_crop_in_vf_args(vf_args: list, old_crop: str | None, new_crop: str | None) -> list:
-    """Ersetzt/ergänzt den Crop in einer FFmpeg ``-vf``-Kette ohne andere Filter zu verlieren."""
+    """Replace the physical crop without losing subtitle/filter graphs.
+
+    Image based subtitle burn-in uses ``-filter_complex``.  If AutoCrop is
+    normalised (for example 1607 -> 1608), the crop inside that graph must be
+    updated in-place; adding a second ``-vf`` would leave the burn-in path on
+    the stale geometry.
+    """
     args = list(vf_args)
     old_text = str(old_crop or "").strip()
     new_text = str(new_crop or "").strip()
+
+    if "-filter_complex" in args:
+        idx = args.index("-filter_complex")
+        if idx + 1 >= len(args):
+            return args
+        graph = str(args[idx + 1])
+        if old_text and old_text in graph:
+            graph = graph.replace(old_text, new_text, 1) if new_text else graph.replace(old_text, "", 1)
+        elif new_text:
+            # Insert directly after the video input label.  DV P7/P8 remapping
+            # later turns [0:v:0] into [1:v:0], so support both forms here.
+            for label in ("[0:v:0]", "[1:v:0]"):
+                if label in graph:
+                    graph = graph.replace(label, f"{label}{new_text},", 1)
+                    break
+            else:
+                # A graph without a recognisable video input cannot be safely
+                # rewritten.  Keep it unchanged rather than creating a second
+                # independent -vf chain.
+                return args
+        args[idx + 1] = graph
+        return args
+
     try:
         idx = args.index("-vf")
     except ValueError:
         if not new_text:
             return args
-        # Video-Map bleibt vorne, Filter wird direkt danach ergänzt.
         return args + ["-vf", new_text]
     if idx + 1 >= len(args):
         return args

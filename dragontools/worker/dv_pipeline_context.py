@@ -144,6 +144,15 @@ class DVPipelineState:
     sidecar_paths: list[str] = field(default_factory=list)
     verified_hdr10plus: bool = False
     verified_dolby_vision: bool = False
+    verified_dv_crop_alignment: bool = False
+    final_rpu_checked: bool = False
+    final_rpu_present: bool = False
+    final_rpu_matches_injected: bool | None = None
+    final_rpu_expected_sha256: str = ""
+    final_rpu_actual_sha256: str = ""
+    final_rpu_level5_offsets: tuple[tuple[int, int, int, int], ...] = ()
+    final_rpu_level5_dynamic: bool = False
+    final_rpu_message: str = ""
     effective_crop: str | None = None
     effective_vf_args: list = field(default_factory=list)
 
@@ -156,5 +165,14 @@ class DVPipelineResult:
     failure_stage: str = ""
     verified_hdr10plus: bool = False
     verified_dolby_vision: bool = False
+    verified_dv_crop_alignment: bool = False
+    final_rpu_checked: bool = False
+    final_rpu_present: bool = False
+    final_rpu_matches_injected: bool | None = None
+    final_rpu_expected_sha256: str = ""
+    final_rpu_actual_sha256: str = ""
+    final_rpu_level5_offsets: tuple[tuple[int, int, int, int], ...] = ()
+    final_rpu_level5_dynamic: bool = False
+    final_rpu_message: str = ""
     effective_crop: str | None = None
     effective_vf_args: list = field(default_factory=list)

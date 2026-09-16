@@ -31,6 +31,47 @@ class DVPipelineDiagnosticCompatibilityMixin:
         self._diagnostics.dolby_vision_verified = bool(value)
 
     @property
+    def last_dv_crop_alignment_verified(self) -> bool:
+        return self._diagnostics.dv_crop_alignment_verified
+
+    @last_dv_crop_alignment_verified.setter
+    def last_dv_crop_alignment_verified(self, value) -> None:
+        self._diagnostics.dv_crop_alignment_verified = bool(value)
+
+
+    @property
+    def last_final_rpu_checked(self) -> bool:
+        return self._diagnostics.final_rpu_checked
+
+    @property
+    def last_final_rpu_present(self) -> bool:
+        return self._diagnostics.final_rpu_present
+
+    @property
+    def last_final_rpu_matches_injected(self):
+        return self._diagnostics.final_rpu_matches_injected
+
+    @property
+    def last_final_rpu_expected_sha256(self) -> str:
+        return self._diagnostics.final_rpu_expected_sha256
+
+    @property
+    def last_final_rpu_actual_sha256(self) -> str:
+        return self._diagnostics.final_rpu_actual_sha256
+
+    @property
+    def last_final_rpu_level5_offsets(self):
+        return self._diagnostics.final_rpu_level5_offsets
+
+    @property
+    def last_final_rpu_level5_dynamic(self) -> bool:
+        return self._diagnostics.final_rpu_level5_dynamic
+
+    @property
+    def last_final_rpu_message(self) -> str:
+        return self._diagnostics.final_rpu_message
+
+    @property
     def last_failure_reason(self) -> str:
         return self._diagnostics.failure_reason
 

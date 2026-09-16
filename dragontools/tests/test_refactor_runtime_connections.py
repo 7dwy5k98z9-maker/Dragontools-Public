@@ -3,6 +3,8 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+
+import pytest
 from pathlib import Path
 
 
@@ -71,10 +73,13 @@ def test_move_journal_split_error_and_fallback_paths(tmp_path):
 
 
 def test_split_gui_runtime_dependencies_are_connected(tmp_path):
+    pytest.importorskip("PyQt6")
     video = tmp_path / "episode.mkv"
     video.write_bytes(b"")
     code = r'''
 import sys
+
+import pytest
 from types import SimpleNamespace
 from PyQt6.QtCore import QSettings, QUrl
 from PyQt6.QtWidgets import QApplication, QFileDialog, QVBoxLayout, QWidget

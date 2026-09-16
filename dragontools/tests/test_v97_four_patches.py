@@ -60,12 +60,12 @@ def test_dv_crop_kleine_abweichung_nimmt_groesseren_autocrop():
     assert automatic_choice(comparison) == "autocrop"
 
 
-def test_dv_crop_kleine_abweichung_nimmt_groesseren_rpu_crop():
+def test_dv_crop_rpu_darf_autocrop_auch_bei_groesserer_flaeche_nicht_ueberschreiben():
     auto = CropRect(3840, 1600, 0, 280)
     rpu = CropRect(3840, 1608, 0, 276)
     comparison = compare_crops(auto, rpu, source_width=3840, source_height=2160)
     assert comparison.max_difference_px <= 20
-    assert automatic_choice(comparison) == "rpu"
+    assert automatic_choice(comparison) == "autocrop"
 
 
 def test_dv_crop_grosse_abweichung_braucht_benutzerentscheidung():
@@ -74,14 +74,14 @@ def test_dv_crop_grosse_abweichung_braucht_benutzerentscheidung():
     comparison = compare_crops(auto, rpu, source_width=3840, source_height=2160)
     assert comparison.max_difference_px > 20
     assert comparison.needs_user_decision is True
-    assert automatic_choice(comparison) == "ask"
+    assert automatic_choice(comparison) == "autocrop"
 
 
 def test_dv_crop_kein_autocrop_gegen_grossen_rpu_crop_ist_ebenfalls_konflikt():
     rpu = CropRect(3840, 1608, 0, 276)
     comparison = compare_crops(None, rpu, source_width=3840, source_height=2160)
     assert comparison.max_difference_px == 552
-    assert automatic_choice(comparison) == "ask"
+    assert automatic_choice(comparison) == "none"
 
 
 def test_dv_crop_dynamic_level5_wird_nicht_als_globaler_crop_verwendet(tmp_path):

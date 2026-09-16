@@ -39,6 +39,7 @@ class MovieRenameResolveThread(QThread):
                 force_kind = str(job[2] if len(job) > 2 else "" or "").strip().lower() or None
                 query_override = str(job[3] if len(job) > 3 else "" or "").strip() or None
                 show_all_candidates = bool(job[4]) if len(job) > 4 else False
+                season_override = job[5] if len(job) > 5 else None
                 if self.isInterruptionRequested():
                     return
                 parsed = parse_movie_release_name(path)
@@ -56,6 +57,7 @@ class MovieRenameResolveThread(QThread):
                     movie_query_override=query_override if not use_series else None,
                     force_kind=force_kind,
                     show_all_candidates=show_all_candidates,
+                    series_season_override=season_override,
                 )
                 self.proposal_ready.emit(row, proposal)
         except OnlineMetadataError as exc:
@@ -80,10 +82,17 @@ class MovieRenamerResolveCoordinator(MovieRenamerResolveSearchMixin):
             QMessageBox.information(self.owner, "Metadaten-Suche", "Die Vorschlagssuche läuft bereits.")
             return
         jobs = [
-            (row, self.table_controller.row_path(row))
+            (
+                row,
+                self.table_controller.row_path(row),
+                "",
+                "",
+                False,
+                self.table_controller.row_season_override(row),
+            )
             for row in range(self.view.table.rowCount())
+            if self.table_controller.row_path(row)
         ]
-        jobs = [(row, path) for row, path in jobs if path]
         if not jobs:
             QMessageBox.information(self.owner, "Renamer", "Bitte zuerst Video-Dateien hinzufügen.")
             return
@@ -98,7 +107,7 @@ class MovieRenamerResolveCoordinator(MovieRenamerResolveSearchMixin):
             self.auto_resolve_pending = True
             return
 
-        jobs: list[tuple[int, str]] = []
+        jobs: list[tuple] = []
         for row in range(self.view.table.rowCount()):
             path = self.table_controller.row_path(row)
             if not path:
@@ -107,7 +116,7 @@ class MovieRenamerResolveCoordinator(MovieRenamerResolveSearchMixin):
                 continue
             if self.table_controller.row_item(row, self.table_controller.columns.STATUS).text() != "bereit":
                 continue
-            jobs.append((row, path))
+            jobs.append((row, path, "", "", False, self.table_controller.row_season_override(row)))
 
         self.auto_resolve_pending = False
         if jobs:

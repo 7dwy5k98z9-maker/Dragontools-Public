@@ -12,22 +12,26 @@ class MoveBatchLifecycleMixin:
     """Kapselt Run-übergreifenden Journal- und Batch-Lifecycle."""
 
     def _start_move_journal(self, files: list[tuple[str, int]]) -> None:
-        self._move_journal = MoveJournal.start(
-            files=[path for path, _size in files],
-            target_paths={
-                "tv": str(self.tv_path or ""),
-                "anime": str(self.anime_path or ""),
-                "film": str(self.filme_path or ""),
-            },
-            planned_targets=dict(self.planned_targets),
-            sidecar_outputs_by_video=dict(self._sidecar_outputs_by_video),
-            conflict_mode=self.conflict_mode,
-            log_file=self.log_file_path,
-            root=self._move_journal_root,
-            on_write_error=lambda msg: self._log(
-                f"❌ {msg} – Verschieben wird aus Sicherheitsgründen abgebrochen.", "error"
-            ),
-        )
+        # Use the same lock as runtime target edits.  Otherwise an edit can land
+        # exactly between the planned-target snapshot and assignment of the new
+        # journal, leaving recovery metadata one target behind.
+        with self._planned_targets_lock:
+            self._move_journal = MoveJournal.start(
+                files=[path for path, _size in files],
+                target_paths={
+                    "tv": str(self.tv_path or ""),
+                    "anime": str(self.anime_path or ""),
+                    "film": str(self.filme_path or ""),
+                },
+                planned_targets=dict(self.planned_targets),
+                sidecar_outputs_by_video=dict(self._sidecar_outputs_by_video),
+                conflict_mode=self.conflict_mode,
+                log_file=self.log_file_path,
+                root=self._move_journal_root,
+                on_write_error=lambda msg: self._log(
+                    f"❌ {msg} – Verschieben wird aus Sicherheitsgründen abgebrochen.", "error"
+                ),
+            )
         self._archive_superseded_journal()
 
     def _execute_move_batch(self, files: list[tuple[str, int]], total_bytes: int):

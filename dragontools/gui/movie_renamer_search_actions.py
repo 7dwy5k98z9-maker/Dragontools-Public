@@ -47,6 +47,11 @@ class MovieRenamerSearchActionsMixin:
             label = "Als Serie suchen" if kind == "series" else "Als Film suchen"
             QMessageBox.information(self.owner, label, "Bitte eine oder mehrere Zeilen markieren.")
             return
+        if kind == "series" and hasattr(self, "prompt_missing_seasons"):
+            self.prompt_missing_seasons(rows)
+            rows = [row for row in rows if not self.table_controller.row_requires_season(row)]
+            if not rows:
+                return
         label = title or ("Als Serie suchen" if kind == "series" else "Als Film suchen")
         field = "Serien-Suchbegriff:" if kind == "series" else "Film-Suchbegriff:"
         query, ok = QInputDialog.getText(self.owner, label, field, text=current)

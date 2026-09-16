@@ -54,7 +54,7 @@ REFACTOR_SMOKE_MODULES = (
         "move_batch_lifecycle move_batch_executor move_completion_service "
         "subtitle_sidecar_service subtitle_sidecar_plan subtitle_sidecar_targets converter_progress converter_media_probe "
         "converter_process_executor converter_progress_parser media_contract media_contract_builder "
-        "media_contract_types output_verifier output_probe output_contract_verifier "
+        "media_contract_types output_verifier output_probe output_contract_verifier output_verification_archive "
         "dv_remux_components dv_remux_process dv_remux_audio dv_remux_muxers dv_remux_pipeline "
         "dv_remux_output dv_remux_job dv_remux_thread "
         "merge_common merge_analysis merge_plan merge_executor merge_thread "

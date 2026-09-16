@@ -24,6 +24,19 @@ class MoveRuntimeControlMixin:
             if path not in self.planned_targets:
                 self.planned_targets[path] = target
 
+    def update_planned_target(self, path: str, target) -> bool:
+        """Replace a queued move target without racing an active file transfer.
+
+        Once the MoveJournal marks a file as running, its destination is part of
+        the active transaction and must no longer change.
+        """
+        with self._planned_targets_lock:
+            journal = getattr(self, "_move_journal", None)
+            if journal is not None and not journal.update_planned_target_if_queued(path, target):
+                return False
+            self.planned_targets[path] = target
+            return True
+
     def request_abort(self, mode: str = "sofort") -> None:
         self.abort_requested = True
         self.abort_type = mode

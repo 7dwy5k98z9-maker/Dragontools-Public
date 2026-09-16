@@ -2,13 +2,38 @@
 """Tab-, Lazy-Loading- und Converter-Handoff-Logik des MainWindow."""
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QTabWidget, QTabBar, QWidget, QLabel, QMessageBox
+from PyQt6.QtCore import QSize, Qt
+from PyQt6.QtWidgets import (
+    QLabel,
+    QMessageBox,
+    QSizePolicy,
+    QTabBar,
+    QTabWidget,
+    QWidget,
+)
 
 from .tab_manager import TabManagerDialog, get_visible_tabs
 
 
 class _TabBar(QTabBar):
+    """Tab-Leiste, die die Mindestbreite des Hauptfensters nicht diktiert.
+
+    Dragon Tools besitzt inzwischen viele, teils lange Tab-Namen. Qt kann die
+    aufsummierte Breite aller Tabs sonst als ``minimumSizeHint`` bis zum
+    ``QMainWindow`` propagieren. Das Fenster lässt sich dann trotz ScrollArea
+    im eigentlichen Inhalt kaum noch verkleinern.
+
+    Die Tabs behalten ihre normale Wunschbreite; wenn der Platz nicht reicht,
+    übernimmt QTabBar mit Scrollbuttons/Elide. Horizontal darf die Leiste daher
+    bis auf eine kleine Bedienbreite schrumpfen.
+    """
+
+    _MINIMUM_USABLE_WIDTH = 240
+
+    def minimumSizeHint(self) -> QSize:
+        hint = super().minimumSizeHint()
+        return QSize(min(hint.width(), self._MINIMUM_USABLE_WIDTH), hint.height())
+
     def mouseReleaseEvent(self, e):
         if e.button() == Qt.MouseButton.MiddleButton:
             idx = self.tabAt(e.pos())
@@ -22,8 +47,13 @@ class MainWindowTabsMixin:
 
     def _init_tabs(self):
         self.tabs = QTabWidget()
-        self.tabs.setTabBar(_TabBar())
-        self.tabs.tabBar().setMovable(True)
+        tab_bar = _TabBar()
+        tab_bar.setMovable(True)
+        tab_bar.setExpanding(False)
+        tab_bar.setUsesScrollButtons(True)
+        tab_bar.setElideMode(Qt.TextElideMode.ElideRight)
+        tab_bar.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
+        self.tabs.setTabBar(tab_bar)
         self.tabs.setTabsClosable(True)
         self.tabs.tabCloseRequested.connect(self._on_tab_close)
         self.tabs.currentChanged.connect(self._on_tab_activate)

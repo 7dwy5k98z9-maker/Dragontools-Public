@@ -7,7 +7,7 @@ from pathlib import Path
 from .movie_renamer_models import ParsedMovieReleaseName, ParsedSeriesReleaseName
 from .online_metadata_common import default_episode_title, normalize_episode_metadata_title, parse_series_query
 from .path_syntax import path_compare_key
-from ..rules.renamer_rules import sanitize_renamer_text
+from ..rules.renamer_rules import sanitize_renamer_text, strip_configured_release_groups
 
 VIDEO_SUFFIXES = {
     ".mkv",
@@ -54,7 +54,19 @@ EDITION_PATTERNS: tuple[tuple[str, str], ...] = (
 
 _YEAR_RE = re.compile(r"(?<!\d)(19\d{2}|20\d{2})(?!\d)")
 _RELEASE_GROUP_RE = re.compile(r"-(?P<group>[A-Za-z0-9][A-Za-z0-9._]{1,32})$")
-_SERIES_EPISODE_RE = re.compile(r"\bS\d{1,2}E\d{1,3}(?:[-_ ]?E?\d{1,3})*\b|\b\d{1,2}x\d{1,3}\b", re.IGNORECASE)
+_SERIES_EPISODE_RE = re.compile(
+    r"(?<!\w)(?:"
+    r"S\s*\d{1,4}[.\-_\s]*E\s*\d{1,4}(?:[-_ ]?E?\d{1,4})*"
+    r"|E\s*\d{1,4}[.\-_\s]*S\s*\d{1,4}"
+    r"|EP(?:ISODE)?[.\-_\s]*\d{1,4}"
+    r"|\d{1,4}\s*x\s*\d{1,4}"
+    r")(?!\d)",
+    re.IGNORECASE,
+)
+_EPISODE_ONLY_RE = re.compile(
+    r"(?<!\w)EP(?:ISODE)?[.\-_\s]*(?P<episode>\d{1,4})(?!\d)",
+    re.IGNORECASE,
+)
 
 def _looks_like_series_release_group(stem: str, episode_marker: re.Match[str], group_match: re.Match[str]) -> bool:
     """Konservative Release-Gruppen-Erkennung fuer Serien.
@@ -97,13 +109,19 @@ def parse_movie_release_name(value: str | Path) -> ParsedMovieReleaseName:
     name = source.name
     suffix = source.suffix if source.suffix.lower() in VIDEO_SUFFIXES else ""
     stem = source.stem if suffix else str(value)
+
+    stem, configured_groups = strip_configured_release_groups(stem)
     is_probable_series = bool(_SERIES_EPISODE_RE.search(stem))
-    release_group = ""
+    release_groups = list(configured_groups)
+
     group_match = _RELEASE_GROUP_RE.search(stem)
     if group_match:
-        release_group = group_match.group("group").strip(".-_ ")
+        detected = group_match.group("group").strip(".-_ ")
+        if detected and detected.casefold() not in {item.casefold() for item in release_groups}:
+            release_groups.append(detected)
         stem = stem[: group_match.start()].strip(".-_ ")
 
+    release_group = ", ".join(release_groups)
     normalized = _normalize_release_text(stem)
     edition_hints = _find_named_patterns(normalized, EDITION_PATTERNS)
     technical_tags = _find_named_patterns(normalized, TECHNICAL_TAG_PATTERNS)
@@ -128,7 +146,7 @@ def parse_movie_release_name(value: str | Path) -> ParsedMovieReleaseName:
     if edition_hints:
         warnings.append("Edition-Hinweis erkannt, wird nicht automatisch in den Zielnamen geschrieben.")
     if release_group:
-        warnings.append(f"Release-Gruppe erkannt: {release_group}")
+        warnings.append(f"Release-Gruppe erkannt/gefiltert: {release_group}")
     if is_probable_series:
         warnings.append("Serienmuster erkannt.")
 
@@ -146,16 +164,16 @@ def parse_movie_release_name(value: str | Path) -> ParsedMovieReleaseName:
 
 
 def parse_series_release_name(value: str | Path) -> ParsedSeriesReleaseName | None:
-    # DragonTools patch: series release normalization v1
+    # DragonTools patch: series release normalization v2
     source = Path(str(value))
     suffix = source.suffix if source.suffix.lower() in VIDEO_SUFFIXES else source.suffix
-    stem = source.stem if suffix else str(value)
+    original_stem = source.stem if suffix else str(value)
+    stem, configured_groups = strip_configured_release_groups(original_stem)
+    release_groups = list(configured_groups)
 
-    # Release-Gruppe bei Serien nur akzeptieren, wenn sie HINTER dem
-    # Episodenmarker liegt. Sonst wird bei Namen wie
-    # tvs-watson-eac3-51-ded-dl-18p-azhd-avc-s01e01
-    # der technische Teil faelschlich als Release-Gruppe interpretiert.
-    release_group = ""
+    # Heuristische Suffix-Gruppe weiterhin erkennen. Konfigurierte Gruppen
+    # werden vorher explizit an Anfang/Ende entfernt und können deshalb auch
+    # Prefix-Schemata wie STARS.Show.S01E01 sauber abdecken.
     episode_marker = _SERIES_EPISODE_RE.search(stem)
     group_match = _RELEASE_GROUP_RE.search(stem)
     if (
@@ -163,24 +181,44 @@ def parse_series_release_name(value: str | Path) -> ParsedSeriesReleaseName | No
         and episode_marker
         and _looks_like_series_release_group(stem, episode_marker, group_match)
     ):
-        release_group = group_match.group("group").strip(".-_ ")
+        detected = group_match.group("group").strip(".-_ ")
+        if detected and detected.casefold() not in {item.casefold() for item in release_groups}:
+            release_groups.append(detected)
         stem = stem[: group_match.start()].strip(".-_ ")
+
+    release_group = ", ".join(release_groups)
+    clean_name = f"{stem}{suffix}" if suffix else stem
 
     try:
         from ..rules.move_rules import parse_series_match_details
     except Exception:
         parse_series_match_details = None
 
-    details = parse_series_match_details(source.name) if parse_series_match_details else None
-    if not details or not details.get("series"):
-        return None
+    details = parse_series_match_details(clean_name) if parse_series_match_details else None
+    episode_only = _EPISODE_ONLY_RE.search(stem)
+    season_missing = False
 
-    # Die zentrale Metadaten-Normalisierung verwenden, statt den kompletten
-    # Block vor SxxExx direkt als Serientitel zu uebernehmen.
-    series_query = parse_series_query(source.name)
-    series = series_query.title or str(details.get("series") or "").strip()
-    season = int(details.get("season") or 0)
-    episode = int(details.get("episode") or 0)
+    series_query = parse_series_query(clean_name)
+    if details and details.get("series"):
+        series = series_query.title or str(details.get("series") or "").strip()
+        season = int(details.get("season") or 0)
+        episode = int(details.get("episode") or 0)
+    elif episode_only:
+        # EP01/EP1 enthält eine Episode, aber keine Staffel. Der Parser gibt
+        # die Folge bereits strukturiert zurück; die GUI fragt die Staffel vor
+        # der Provider-Suche explizit ab. Staffel 0 bleibt dadurch weiterhin
+        # ausschließlich ein bewusst gewählter Specials-Wert.
+        series = series_query.title.strip()
+        if not series:
+            prefix = stem[: episode_only.start()]
+            series = _cleanup_title(prefix)
+        if not series:
+            return None
+        season = 0
+        episode = int(episode_only.group("episode"))
+        season_missing = True
+    else:
+        return None
 
     match = _SERIES_EPISODE_RE.search(stem)
     episode_title = _cleanup_episode_title(stem[match.end():] if match else "")
@@ -194,7 +232,9 @@ def parse_series_release_name(value: str | Path) -> ParsedSeriesReleaseName | No
     technical_tags = _find_named_patterns(_normalize_release_text(stem), TECHNICAL_TAG_PATTERNS)
     warnings: list[str] = []
     if release_group:
-        warnings.append(f"Release-Gruppe erkannt: {release_group}")
+        warnings.append(f"Release-Gruppe erkannt/gefiltert: {release_group}")
+    if season_missing:
+        warnings.append("Staffel fehlt im EPxx-Muster und muss vor der Metadatensuche gewählt werden.")
     if not episode_title:
         warnings.append("Kein lokaler Episodentitel im Dateinamen erkannt.")
 
@@ -209,33 +249,9 @@ def parse_series_release_name(value: str | Path) -> ParsedSeriesReleaseName | No
         release_group=release_group,
         technical_tags=technical_tags,
         warnings=tuple(warnings),
+        season_missing=season_missing,
     )
 
-def release_style_warnings(value: str | Path) -> tuple[str, ...]:
-    """Erkennt typische noch nicht normalisierte Release-Dateinamen.
-
-    Die Funktion klassifiziert nur; sie benennt nichts um. Sie wird u. a. vom
-    Preflight verwendet, um frühzeitig die Metadatensuche hervorzuheben.
-    """
-    source = Path(value)
-    stem = source.stem
-    warnings: list[str] = []
-    separators = re.findall(r"(?<=[A-Za-z0-9])[._](?=[A-Za-z0-9])", stem)
-    if len(separators) >= 2:
-        warnings.append("Release-Trenner (Punkte/Unterstriche) erkannt")
-    parsed_series = parse_series_release_name(source)
-    if parsed_series is not None:
-        if parsed_series.release_group:
-            warnings.append(f"Release-Gruppe: {parsed_series.release_group}")
-        if parsed_series.technical_tags:
-            warnings.append("Technik-Tags: " + ", ".join(parsed_series.technical_tags[:4]))
-    else:
-        parsed_movie = parse_movie_release_name(source)
-        if parsed_movie.release_group:
-            warnings.append(f"Release-Gruppe: {parsed_movie.release_group}")
-        if parsed_movie.technical_tags:
-            warnings.append("Technik-Tags: " + ", ".join(parsed_movie.technical_tags[:4]))
-    return tuple(dict.fromkeys(warnings))
 
 def build_target_filename(title: str, year: int | None, suffix: str) -> str:
     safe_title = sanitize_filename_part(title).strip()

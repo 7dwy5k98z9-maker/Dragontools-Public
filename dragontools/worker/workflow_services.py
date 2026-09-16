@@ -99,13 +99,27 @@ class WorkflowServices:
         ctx.sidecar_paths = list(result.sidecar_paths)
         ctx.pipeline_verified_hdr10plus = bool(result.verified_hdr10plus)
         ctx.pipeline_verified_dolby_vision = bool(result.verified_dolby_vision)
+        ctx.pipeline_verified_dv_crop_alignment = bool(
+            getattr(result, "verified_dv_crop_alignment", False)
+        )
+        ctx.pipeline_final_rpu_checked = bool(getattr(result, "final_rpu_checked", False))
+        ctx.pipeline_final_rpu_present = bool(getattr(result, "final_rpu_present", False))
+        ctx.pipeline_final_rpu_matches_injected = getattr(result, "final_rpu_matches_injected", None)
+        ctx.pipeline_final_rpu_expected_sha256 = str(getattr(result, "final_rpu_expected_sha256", "") or "")
+        ctx.pipeline_final_rpu_actual_sha256 = str(getattr(result, "final_rpu_actual_sha256", "") or "")
+        ctx.pipeline_final_rpu_level5_offsets = tuple(getattr(result, "final_rpu_level5_offsets", ()) or ())
+        ctx.pipeline_final_rpu_level5_dynamic = bool(getattr(result, "final_rpu_level5_dynamic", False))
+        ctx.pipeline_final_rpu_message = str(getattr(result, "final_rpu_message", "") or "")
         if result.success:
             if request.pipeline == "dv" and bool(getattr(result, "effective_crop_known", False)):
+                ctx.effective_crop_filter = getattr(result, "effective_crop", None)
                 self._planning.refresh_media_contract(
                     ctx,
                     override,
-                    crop_filter=getattr(result, "effective_crop", None),
+                    crop_filter=ctx.effective_crop_filter,
                 )
+            elif getattr(ctx, "plan", None) is not None:
+                ctx.effective_crop_filter = getattr(ctx.plan, "crop", None)
             return
 
         failure_reason = result.failure_reason or self._temp_state.failure_reason

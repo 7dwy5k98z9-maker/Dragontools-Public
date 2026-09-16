@@ -25,7 +25,10 @@ class MovieRenamerResolveSearchMixin:
             if not path:
                 continue
             self.table_controller.prepare_manual_search(row, normalized_query, kind=kind)
-            jobs.append((row, path, kind, normalized_query, False))
+            jobs.append((
+                row, path, kind, normalized_query, False,
+                self.table_controller.row_season_override(row),
+            ))
         self.start_jobs(jobs, automatic=False)
 
     def resolve_all_candidates(self, rows: list[int]) -> None:
@@ -39,7 +42,10 @@ class MovieRenamerResolveSearchMixin:
             kind = self.table_controller.row_search_kind(row)
             query = self.table_controller.current_search_text([row], kind=kind)
             self.table_controller.prepare_manual_search(row, query, kind=kind)
-            jobs.append((row, path, kind, query, True))
+            jobs.append((
+                row, path, kind, query, True,
+                self.table_controller.row_season_override(row),
+            ))
         self.start_jobs(jobs, automatic=False)
 
     def _search_running(self) -> bool:

@@ -203,6 +203,15 @@ class DVPipelineStages:
             "" if success else self._temp_state.failure_stage,
             verified_hdr10plus=bool(success and state.verified_hdr10plus),
             verified_dolby_vision=bool(success and state.verified_dolby_vision),
+            verified_dv_crop_alignment=bool(success and state.verified_dv_crop_alignment),
+            final_rpu_checked=bool(state.final_rpu_checked),
+            final_rpu_present=bool(state.final_rpu_present),
+            final_rpu_matches_injected=state.final_rpu_matches_injected,
+            final_rpu_expected_sha256=str(state.final_rpu_expected_sha256 or ""),
+            final_rpu_actual_sha256=str(state.final_rpu_actual_sha256 or ""),
+            final_rpu_level5_offsets=tuple(state.final_rpu_level5_offsets or ()),
+            final_rpu_level5_dynamic=bool(state.final_rpu_level5_dynamic),
+            final_rpu_message=str(state.final_rpu_message or ""),
         )
 
     # Dünne Kompatibilitäts-Delegationen. Keine eigene Fachlogik ergänzen.

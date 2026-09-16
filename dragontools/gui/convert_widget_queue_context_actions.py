@@ -22,12 +22,23 @@ class ConvertWidgetQueueContextActionsMixin:
         menu = QMenu(self)
         menu.addAction("\U0001F6C8 Medieninfo", lambda: self._show_media_info(path))
         menu.addAction("\U0001F9EA Regel-/Profil-Simulator", lambda: self._show_rule_test(path))
+        selected_paths = self._context_selected_paths(path)
         if self._controller.is_file_active(path):
             menu.addSeparator()
             menu.addAction(
                 "⏹ FFmpeg für diese laufende Datei beenden",
                 lambda: self._terminate_current_ffmpeg_for_path(path),
             )
+        menu.addSeparator()
+        target_label = (
+            f"📁 Zielordner für Auswahl ({len(selected_paths)}) ändern …"
+            if len(selected_paths) > 1
+            else "📁 Zielordner ändern …"
+        )
+        menu.addAction(
+            target_label,
+            lambda paths=tuple(selected_paths): self._change_planned_target(paths),
+        )
         if self._is_queue_blocking_move_active():
             menu.exec(self._ui.file_list.mapToGlobal(pos))
             return
@@ -42,13 +53,6 @@ class ConvertWidgetQueueContextActionsMixin:
         strip_action.setCheckable(True)
         strip_action.setChecked(processing_mode == "strip_only")
         menu.addAction("⚙️ Datei-Einstellungen …", lambda: self._edit_override(path))
-        selected_paths = [
-            str(selected.data(Qt.ItemDataRole.UserRole))
-            for selected in self._ui.file_list.selectedItems()
-            if selected.data(Qt.ItemDataRole.UserRole)
-        ]
-        if path not in selected_paths:
-            selected_paths = [path]
         encoder_label = (
             f"🎛️ Encoder / Skalierung für Auswahl ({len(selected_paths)}) …"
             if len(selected_paths) > 1
@@ -64,6 +68,7 @@ class ConvertWidgetQueueContextActionsMixin:
         menu.addAction("\u26a0\ufe0f Quellbildprüfung übergehen", lambda: self._allow_suspicious_source(path))
         menu.addAction("\u2796 Entfernen", lambda: self._remove_path(path))
         menu.exec(self._ui.file_list.mapToGlobal(pos))
+
 
     def _terminate_current_ffmpeg_for_path(self, path: str) -> None:
         if not self._controller.is_file_active(path):
@@ -103,7 +108,6 @@ class ConvertWidgetQueueContextActionsMixin:
             codec=self.default_codec,
         )
         dlg.exec()
-
 
     def _rule_test_preview_options(self) -> dict:
         from ..core.encoder_profile_override import SCALE_LABELS_TO_MODE

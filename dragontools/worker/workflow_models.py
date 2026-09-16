@@ -88,6 +88,15 @@ class PipelineExecutionResult:
     tool: str = ""
     command: str = ""
     verified_dolby_vision: bool = False
+    verified_dv_crop_alignment: bool = False
+    final_rpu_checked: bool = False
+    final_rpu_present: bool = False
+    final_rpu_matches_injected: bool | None = None
+    final_rpu_expected_sha256: str = ""
+    final_rpu_actual_sha256: str = ""
+    final_rpu_level5_offsets: tuple[tuple[int, int, int, int], ...] = ()
+    final_rpu_level5_dynamic: bool = False
+    final_rpu_message: str = ""
     effective_crop: str | None = None
     effective_crop_known: bool = False
 
@@ -98,10 +107,12 @@ class PipelineExecutionResult:
         sidecar_paths: list[str] | tuple[str, ...] | None = None,
         verified_hdr10plus: bool = False,
         verified_dolby_vision: bool = False,
+        verified_dv_crop_alignment: bool = False,
     ) -> "PipelineExecutionResult":
         return cls(
             success=True,
             sidecar_paths=tuple(sidecar_paths or ()),
             verified_hdr10plus=bool(verified_hdr10plus),
             verified_dolby_vision=bool(verified_dolby_vision),
+            verified_dv_crop_alignment=bool(verified_dv_crop_alignment),
         )

@@ -84,6 +84,7 @@ class ParsedSeriesReleaseName:
     release_group: str = ""
     technical_tags: tuple[str, ...] = ()
     warnings: tuple[str, ...] = ()
+    season_missing: bool = False
 
     @property
     def query_title(self) -> str:

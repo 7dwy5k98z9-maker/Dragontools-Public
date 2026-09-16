@@ -25,7 +25,7 @@ class ConversionResultFinishMixin:
             if self._state.pending_postprocess_inputs:
                 if not self._state.finish_waiting_for_postprocess:
                     self._log(
-                        "🧩 Warte auf abgeschlossenes Post-Processing, bevor verschoben wird.",
+                        "✳️ Warte auf abgeschlossenes Post-Processing, bevor verschoben wird.",
                         "info",
                     )
                 self._state.finish_waiting_for_postprocess = True

@@ -1,20 +1,45 @@
 {
-  "patch": "DragonTools V9.8.3 public stability release",
-  "date": "2026-09-15",
-  "version": "9.8.3",
+  "version": "9.8.4",
+  "date": "2026-09-17",
+  "profile": "anonymized-public-source",
   "validation": {
-    "full_tests": "1390 passed, 0 failed, 0 skipped",
-    "release_validation_regressions": "12 passed",
-    "syntax": "compileall passed",
-    "ruff": "E9,F821,F822,F823 passed",
-    "public_build": "PyInstaller 6.22.2, Python 3.14.6; 0 bundle errors, 0 warnings before external media tools are excluded",
-    "details": "PATCH_MANIFEST.json"
+    "private_tests": "1449 passed, 0 failed, 0 skipped",
+    "public_tests": "1449 passed, 0 failed, 0 skipped",
+    "public_release_regressions": "14 passed after privacy-guard preservation",
+    "syntax": "857 Python source files parsed",
+    "build": "PyInstaller 6.22.2, Python 3.14.6; final app validation: 0 errors, 0 warnings"
   },
   "privacy": {
-    "source": "No user data or credential findings in reviewed source and documents. XML/PDF metadata scrubbed; all 368 PDF pages scanned.",
-    "frozen": "1155 modules and 27619 code objects checked; two deliberate privacy-detection regex constants classified separately.",
-    "distribution": "1224 files checked for private markers; external media tools excluded."
+    "source_findings": [],
+    "pdf_pages_scanned": 371,
+    "credential_literal_review": "Only setting keys, backup mode labels and UI messages; no credentials",
+    "frozen": {
+      "modules": 1165,
+      "code_objects": 27777,
+      "private_findings": [],
+      "expected_privacy_detector_patterns": [
+        {
+          "module": "dragontools.core.release_validation_package",
+          "kind": "privacy-detection regex, not user data"
+        },
+        {
+          "module": "dragontools.core.release_validation_package",
+          "kind": "privacy-detection regex, not user data"
+        }
+      ],
+      "required_modules_missing": []
+    },
+    "distribution": {
+      "files": 1240,
+      "size_bytes": 479958017,
+      "raw_private_markers": [],
+      "external_media_tools_included": false
+    }
   },
+  "limitations": [
+    "External media tools excluded from ZIP; install separately.",
+    "No clean-machine or complete interactive GUI/hardware-matrix acceptance."
+  ],
   "files": [
     {
       "path": ".github/workflows/tests.yml",
@@ -28,13 +53,13 @@
     },
     {
       "path": "Aenderungshistorie/CHANGELOG.json",
-      "size": 223495,
-      "sha256": "7d37a6a839591ea84e9523112678d14470dedd2b591573ae2ea1f5d60d47809a"
+      "size": 236962,
+      "sha256": "163b11f6ca78bb870c6edf5e5981007e06e37e686f02193308d46cbe76ea4ec5"
     },
     {
       "path": "Aenderungshistorie/CHANGELOG.txt",
-      "size": 218435,
-      "sha256": "c9800b521c9a0ebf6ceedac1242c15de23f0eaa148e353cf427c2aa938c9b1e4"
+      "size": 232615,
+      "sha256": "9acc374e0e3723565c835cd6d895774d2f39fb38519d582f2f997d323231b629"
     },
     {
       "path": "Aenderungshistorie/CHANGELOGV7.txt",
@@ -83,8 +108,8 @@
     },
     {
       "path": "DOCUMENTATION_UPDATE_NOTES.md",
-      "size": 2575,
-      "sha256": "69672d16a9ca1acccb27879fe5878393d5bedce6a2e4ae7b063f0a436758d689"
+      "size": 4921,
+      "sha256": "dcf1e932b302a6a63030f961f6524a4e4d01f45660fb43b7ee5a1127a0b18a60"
     },
     {
       "path": "dragontools/__init__.py",
@@ -108,8 +133,8 @@
     },
     {
       "path": "dragontools/config/default_renamer_rules.json",
-      "size": 1104,
-      "sha256": "8c9276beb84af36b02b49382ee757b622d4bdb33faac14197be0659ed29db5de"
+      "size": 1129,
+      "sha256": "c8061293a656523455a5d870784721e1579d9a0d006795038e8a87050f349876"
     },
     {
       "path": "dragontools/config/default_subtitle_rules.json",
@@ -229,7 +254,7 @@
     {
       "path": "dragontools/core/config_migration.py",
       "size": 11067,
-      "sha256": "213efa6a8fa36d8117929d99105aad1a837c4e8dae5061f0b96f8b3ae0f4c8da"
+      "sha256": "28ae096b363f62d8bb9a6e6c3b303d72a8aee88d9fe138abfa551aa95f902f69"
     },
     {
       "path": "dragontools/core/conversion_artifacts.py",
@@ -673,8 +698,8 @@
     },
     {
       "path": "dragontools/core/move_journal.py",
-      "size": 11197,
-      "sha256": "1c1db14fd2ba3dc825b24929ba03f398e0ab4f2e550ec84b633d90e066663f1d"
+      "size": 11735,
+      "sha256": "3157c8e8075c8447aaf9ecacd54775ddbc9a7d2b2a2b1336055de0cf897147f9"
     },
     {
       "path": "dragontools/core/move_journal_adapter.py",
@@ -738,8 +763,8 @@
     },
     {
       "path": "dragontools/core/movie_renamer.py",
-      "size": 10862,
-      "sha256": "f5c42d18a62b327950211fbed33ddcc9e20cb8fba5812d4f0ef25f0acd61aba8"
+      "size": 11507,
+      "sha256": "a4ede59813fb741cc2d4f9cdb9c97a86ec7b1ea5a0577939634254a9dbeb5957"
     },
     {
       "path": "dragontools/core/movie_renamer_candidate_mapping.py",
@@ -778,13 +803,23 @@
     },
     {
       "path": "dragontools/core/movie_renamer_models.py",
-      "size": 4302,
-      "sha256": "b024fdb9e4dc26d52cf1ba817f9f3ce696a576d34bdf17e0306d872b66cf2638"
+      "size": 4336,
+      "sha256": "1556b0ea3d9d0dd0e1aa8980626ad9787a8c6a501212d6d41714d89216e3654e"
     },
     {
       "path": "dragontools/core/movie_renamer_parsing.py",
-      "size": 13677,
-      "sha256": "d98cf49672f630a6a238f77ee329e03ab6404cc29947ac68d4140ff73806f1c2"
+      "size": 14098,
+      "sha256": "2c552c448f8519ce8869e5b8d983921f7c191cdebb5fde1d9844c0f0d48a3e2c"
+    },
+    {
+      "path": "dragontools/core/movie_renamer_release_warnings.py",
+      "size": 1380,
+      "sha256": "921257118ac336f9a7780523fdc317b654bdc957aa6350a80a1fdeebe3ca3eb6"
+    },
+    {
+      "path": "dragontools/core/movie_renamer_season_override.py",
+      "size": 1269,
+      "sha256": "c34ad4f7bd1c4b1ec5314062292e9245e9458c37029228f233eb4f1eef370c0b"
     },
     {
       "path": "dragontools/core/online_metadata.py",
@@ -813,8 +848,8 @@
     },
     {
       "path": "dragontools/core/online_metadata_parsing.py",
-      "size": 5784,
-      "sha256": "370077b6ff28f31f734ec0d7051d4e64fad2790f6f53884d8da34badd2fe1a67"
+      "size": 6469,
+      "sha256": "9a3a72e90fc433f8ad9dee743b383142edf35eb303bb6197ca8e499da0c30e74"
     },
     {
       "path": "dragontools/core/online_metadata_payload.py",
@@ -917,6 +952,11 @@
       "sha256": "c930ddd8e2b585d74cdce870977d01a51ebf36aa2ac1216ceabb33ae32d47f4d"
     },
     {
+      "path": "dragontools/core/planned_target_edit.py",
+      "size": 2928,
+      "sha256": "743ba072019131029ff9e695be37b268c5402e46a427652964b4beb06ea07941"
+    },
+    {
       "path": "dragontools/core/preflight_report.py",
       "size": 8208,
       "sha256": "02e78e14a8ab3771dcdae134e3377d9cdf0bb8e94cdc116767d735c9e7e666d6"
@@ -933,8 +973,8 @@
     },
     {
       "path": "dragontools/core/project_info.py",
-      "size": 7159,
-      "sha256": "21902aa2ce13a533359c0ceff66b890c8de8c4b3da93f2b93d24238bc0c1f0c4"
+      "size": 7188,
+      "sha256": "24ffcb398eee1baf00296cec4d6fe44bfca808af224a25807bc1a559165cff7e"
     },
     {
       "path": "dragontools/core/quality_tester.py",
@@ -973,13 +1013,13 @@
     },
     {
       "path": "dragontools/core/release_validation_package.py",
-      "size": 17064,
-      "sha256": "3c957ddb55128dbd49e5d3a8f79be18849068343a230a6d96e8384a4a4efa21a"
+      "size": 17066,
+      "sha256": "b80df91f036cf063973412abbaac1a1a8d87b6bd2c39111f313ae7eaea323880"
     },
     {
       "path": "dragontools/core/release_validation_smoke_modules.py",
-      "size": 5502,
-      "sha256": "1ccf7cb82595366699bcdebc668391fbf1de78f401d4a1155c6a23e0b08aaf7f"
+      "size": 5530,
+      "sha256": "69cbd7067464507663fe1c1f41e7c2aeef240d0266c8f086fb894366a47db840"
     },
     {
       "path": "dragontools/core/release_validation_source.py",
@@ -1008,8 +1048,8 @@
     },
     {
       "path": "dragontools/core/result_status.py",
-      "size": 381,
-      "sha256": "f9449a293d11ff68f10b38aad56fb5b77c499da0153866fdf26a7a533b34dee8"
+      "size": 776,
+      "sha256": "ef3f19b69f3d72571030afc3fb7343747145570a50ba76f764f43b6f3c53cf4f"
     },
     {
       "path": "dragontools/core/rules_preview.py",
@@ -1154,7 +1194,7 @@
     {
       "path": "dragontools/core/version.py",
       "size": 462,
-      "sha256": "ce5a4543d65163fa04d9d9dd1e066ef5e9751f4d5cae555b2c9fda3132c897bf"
+      "sha256": "496cd68b9f26d8a6ba95b709c695e9a7ceb156e3647897a5b5f24242d8ea64dc"
     },
     {
       "path": "dragontools/core/windows_restart_policy.py",
@@ -1228,8 +1268,8 @@
     },
     {
       "path": "dragontools/gui/conversion_progress_display.py",
-      "size": 3913,
-      "sha256": "a7be2d68e6d2baa0b8da3ec24a3e8774c08e42b2100ba0d8479969645bb4d665"
+      "size": 4390,
+      "sha256": "e53da4860265f34e92358e63820b95a8d364601427c9e54a711b70e641479c02"
     },
     {
       "path": "dragontools/gui/conversion_progress_focus.py",
@@ -1238,18 +1278,18 @@
     },
     {
       "path": "dragontools/gui/conversion_progress_presenter.py",
-      "size": 5831,
-      "sha256": "6995498f7fa3dbcd3007f2a10dea1e8f906e8e516cce8aa555abbe8db1e6e627"
+      "size": 6265,
+      "sha256": "7e444c73887ca7cc50f3efd6e2949ce16a576ad3b812f909e519d8d12c41ff62"
     },
     {
       "path": "dragontools/gui/conversion_result_file_events.py",
-      "size": 7761,
-      "sha256": "eb175913e04a3f1aea4aab46e7bed3e8da942c957321ab9ca62b10319fc21e5e"
+      "size": 7967,
+      "sha256": "aba353275cd81f824ce05cc40501989b3c13bd24c6334907927f78cb6f7d45df"
     },
     {
       "path": "dragontools/gui/conversion_result_finish.py",
-      "size": 4863,
-      "sha256": "0cbfc1facd71829bdeac8ebe9af1285cdf62f7a2afc32bc88c5eee17de68e8cb"
+      "size": 4865,
+      "sha256": "872d148a1d82752624809235f763f3b1d423b4e25456712105371fb3a053a514"
     },
     {
       "path": "dragontools/gui/conversion_result_service.py",
@@ -1388,8 +1428,8 @@
     },
     {
       "path": "dragontools/gui/convert_widget_queue_actions.py",
-      "size": 1452,
-      "sha256": "849ab0722a7be997652f6d8021c71c6395f9622080762c0dacaad3839130fd01"
+      "size": 1582,
+      "sha256": "7d69f698330fb48e0f52cd673298f734b694dd0068328ce5c08a23889ab4ec89"
     },
     {
       "path": "dragontools/gui/convert_widget_queue_add.py",
@@ -1403,8 +1443,8 @@
     },
     {
       "path": "dragontools/gui/convert_widget_queue_context_actions.py",
-      "size": 7794,
-      "sha256": "b220ca8f366a52a1d9cc2bcd8bd8d0eb5bbe6bea3c1c1dbf46050426816b8398"
+      "size": 7944,
+      "sha256": "1bf620742f3f52c069d85f563246cf5568c0d86895b78d3aa02d90311f482cd4"
     },
     {
       "path": "dragontools/gui/convert_widget_queue_dragdrop.py",
@@ -1425,6 +1465,11 @@
       "path": "dragontools/gui/convert_widget_queue_remove.py",
       "size": 6511,
       "sha256": "282023ea11b41467c4eb8735983a8332b8aaac351f1aee2739c55fb65c4b5670"
+    },
+    {
+      "path": "dragontools/gui/convert_widget_queue_target_actions.py",
+      "size": 6387,
+      "sha256": "cdc592556c002e30622851891702cae644c0c16b9a5c2c18865deec4e9561517"
     },
     {
       "path": "dragontools/gui/convert_widget_queue_window_actions.py",
@@ -1613,8 +1658,8 @@
     },
     {
       "path": "dragontools/gui/main_window_tabs.py",
-      "size": 14382,
-      "sha256": "cce73cd012bea82063677feec67e1d72e684f51dfb1bc61e14e072ada9547053"
+      "size": 15469,
+      "sha256": "4b56c17f9bf38c47540a30930adbdcd5294cdb5f379eeb0cddda2221aa75044e"
     },
     {
       "path": "dragontools/gui/media_info_dialog.py",
@@ -1758,28 +1803,33 @@
     },
     {
       "path": "dragontools/gui/movie_renamer_actions.py",
-      "size": 6809,
-      "sha256": "37523115e22dc231585e052f5463182b2f1ea8750e3437cd54051f20d2ab6854"
+      "size": 7020,
+      "sha256": "135ef2506c2c8b8405b951808e23d9b6c35987a720088c4def774518eccde83d"
     },
     {
       "path": "dragontools/gui/movie_renamer_resolve_search.py",
-      "size": 2083,
-      "sha256": "df83a7e9845970de7464a87615c981acf3d4b91836e47de19570a20751997aed"
+      "size": 2279,
+      "sha256": "cec191692a1e6e01e878a0a9150e87079cf18c558e42a8c61789cdd29808f526"
     },
     {
       "path": "dragontools/gui/movie_renamer_resolver.py",
-      "size": 7409,
-      "sha256": "3f0dc8a31ec59a2d39f194d777e89e2dc8a7e1acf8abf46074ab2bc44e2c224c"
+      "size": 7764,
+      "sha256": "379c415ba95c1a795f09d343bd0f1d428797d1dc03b005df8a7fbd1f9038e5b0"
     },
     {
       "path": "dragontools/gui/movie_renamer_search_actions.py",
-      "size": 2880,
-      "sha256": "a230b1c75d5f0bf2482a6a47d487fde1b9be513a3f022a472e567226d3ac9d0c"
+      "size": 3147,
+      "sha256": "5c9fc35885dc260b99525d615e5062de31890ce77e069eddb06d4ca0c636f371"
+    },
+    {
+      "path": "dragontools/gui/movie_renamer_season_prompt.py",
+      "size": 2399,
+      "sha256": "9c57f0c521ab02120ba632699cd5d390c4d566321cba6825a715a063b18bb091"
     },
     {
       "path": "dragontools/gui/movie_renamer_table_controller.py",
-      "size": 12433,
-      "sha256": "e7068d28d7ce40d8ac56225c5374587e8bea27e603e0574de62cdb15e1070bf1"
+      "size": 14522,
+      "sha256": "0f5d7dd80be026be1f02679b9ab1d87f3c1ff796bd7224e061d4fe1293bb1607"
     },
     {
       "path": "dragontools/gui/movie_renamer_table_search.py",
@@ -1788,13 +1838,18 @@
     },
     {
       "path": "dragontools/gui/movie_renamer_view.py",
-      "size": 7055,
-      "sha256": "14deefc7c9093801b9c291701214f0d0914fd4382436600c202099551365b843"
+      "size": 7502,
+      "sha256": "08fd5636eb4f5f58cb9302d0ed77ba9279084245d377003e05723b8207db25a7"
+    },
+    {
+      "path": "dragontools/gui/movie_renamer_view_state.py",
+      "size": 4259,
+      "sha256": "706833e00c6b6eb73384ba5fcd9918a7d3e2e5f4f4c991a9b8b54c5ad4c93219"
     },
     {
       "path": "dragontools/gui/movie_renamer_widget.py",
-      "size": 4785,
-      "sha256": "c329d166e9c91b49f4da6256eef197deaeefdd49ba8f64a080fcaa6ce21e6688"
+      "size": 4876,
+      "sha256": "b594cde7e60f30c9cc1ba775110a7e9e0da38d2700c3de83cfbfdcdd8530f885"
     },
     {
       "path": "dragontools/gui/mp4_remux_widget.py",
@@ -2003,8 +2058,8 @@
     },
     {
       "path": "dragontools/gui/rules_renamer_tab.py",
-      "size": 9570,
-      "sha256": "38becafa3c4999fe80319416b2ea2653e6e2d3d4a1e80d2295ef952dda3f5354"
+      "size": 11880,
+      "sha256": "5224d3fbc484a9dafdc11f12ae23966bd7ecaf637c1738837597068788fec6b1"
     },
     {
       "path": "dragontools/gui/rules_series_tab.py",
@@ -2188,8 +2243,8 @@
     },
     {
       "path": "dragontools/rules/move_series_detection.py",
-      "size": 4148,
-      "sha256": "60d57edb793a5bb0aaa6dd91cf624c4cbfb91361f7a839ef264a830ab0ecdad2"
+      "size": 4352,
+      "sha256": "244e5f223f8557c57010ee16c89ec35f5deb9790f135fb928e96eff0f0cc8151"
     },
     {
       "path": "dragontools/rules/move_series_directories.py",
@@ -2213,8 +2268,8 @@
     },
     {
       "path": "dragontools/rules/renamer_rules.py",
-      "size": 10998,
-      "sha256": "594d95e522b66c73d30642117eb3abcd7d09949e8ae3067067e96c2623ca8967"
+      "size": 14221,
+      "sha256": "2fe2b24852a8bd3fffa1e335ac2052fcdd2e2ab05acf185e44268c49f1786682"
     },
     {
       "path": "dragontools/rules/rule_loader.py",
@@ -2337,6 +2392,11 @@
       "sha256": "216d4d762d669ae7a12ad2e1f8080f64f33a6b26b1ee68914d8659702ac27d17"
     },
     {
+      "path": "dragontools/tests/test_autocrop_authority_and_target_races.py",
+      "size": 6435,
+      "sha256": "a5cb721449124d825e4e519119d1c35366717f833124a4d1847bab053b1e5e76"
+    },
+    {
       "path": "dragontools/tests/test_auxiliary_workers.py",
       "size": 18240,
       "sha256": "c0999217c7277a3ea8db9fccab2884b3edc444d5705c1e61995d5f0524ff9a6f"
@@ -2394,7 +2454,7 @@
     {
       "path": "dragontools/tests/test_config_migration.py",
       "size": 12522,
-      "sha256": "4c5586a7defb09cfa2dbd2217440572f72eb4d8601813dcdc909be8b75ad7f1e"
+      "sha256": "19bc9ad8fa65befb02293b6eddcfc3d42ba9e2be9e4691accddb84209dd48d2b"
     },
     {
       "path": "dragontools/tests/test_conversion_controller_architecture.py",
@@ -2403,13 +2463,13 @@
     },
     {
       "path": "dragontools/tests/test_conversion_controller_start.py",
-      "size": 13110,
-      "sha256": "392df85a6e81af60130433df6a5efb6c54b9138133f0ef465b86531ddfd4e5c7"
+      "size": 14435,
+      "sha256": "82af360fd3d854c39274e608aaace2f9fd1c8b9afcc9ba74b471f52117c20c79"
     },
     {
       "path": "dragontools/tests/test_conversion_result_service.py",
-      "size": 11146,
-      "sha256": "51818da160cd3e0da0eb71dba3f61e22d07b1cd04611de032b76c2593758dd23"
+      "size": 11642,
+      "sha256": "f88adfe56e1dda80bf7c4a6ef566528342fc8bd5013b045619433c321d554429"
     },
     {
       "path": "dragontools/tests/test_convert_widget_architecture.py",
@@ -2418,8 +2478,8 @@
     },
     {
       "path": "dragontools/tests/test_convert_widget_queue_actions_architecture.py",
-      "size": 6367,
-      "sha256": "45764c91cb743ce39fa0fb0b763599d41a153bca33cdaaf66e4bc73d63c73e13"
+      "size": 6743,
+      "sha256": "09f634a1524a7b4170f658315b893496f1af41638793bdf645a882276e710983"
     },
     {
       "path": "dragontools/tests/test_convert_widget_services.py",
@@ -2440,6 +2500,11 @@
       "path": "dragontools/tests/test_crash_guard_cleanup.py",
       "size": 1704,
       "sha256": "41836822dfef6e7486d408cd5f8bd000615463b38573e93258629c8a434feb04"
+    },
+    {
+      "path": "dragontools/tests/test_crop_geometry_normalization.py",
+      "size": 4123,
+      "sha256": "4ef6313cabf2fb604fbbb6f29713ad469c1c3e028df35540afb199ac79c55a99"
     },
     {
       "path": "dragontools/tests/test_current_ffmpeg_abort.py",
@@ -2488,8 +2553,8 @@
     },
     {
       "path": "dragontools/tests/test_dv_regressions.py",
-      "size": 47434,
-      "sha256": "9734b629cc2241bf30f7d713e0fb024ace667c8c4b8b86d9cde308fceecd90f0"
+      "size": 49790,
+      "sha256": "85f9211a59bf138771023e5b4408978ac11090b4cff45527902b3e7aa068b8e4"
     },
     {
       "path": "dragontools/tests/test_dv_remux_abort_fix.py",
@@ -2560,6 +2625,11 @@
       "path": "dragontools/tests/test_facade_split_architecture.py",
       "size": 2142,
       "sha256": "b30ae3c41fa7860b1fcbad790d0c25f82e4e369176ba77ea0519d0f4aab288f4"
+    },
+    {
+      "path": "dragontools/tests/test_final_rpu_presence_guard.py",
+      "size": 4920,
+      "sha256": "8ad02a52a72b59368c6742a434932cf3d64866f418ee1488b4556139b466648d"
     },
     {
       "path": "dragontools/tests/test_fix_20260906_iso_renamer.py",
@@ -2643,8 +2713,8 @@
     },
     {
       "path": "dragontools/tests/test_main_window_architecture.py",
-      "size": 3150,
-      "sha256": "9180a2c879fe51fed638c46b3e425732ca62d1b501f8011ef688df52f265d288"
+      "size": 4961,
+      "sha256": "92c3fbb4c5e14436a8077a6c0ccf03cc4d8a4db529e23b02e95261d3f5e00754"
     },
     {
       "path": "dragontools/tests/test_main_window_tab_visibility.py",
@@ -2713,8 +2783,8 @@
     },
     {
       "path": "dragontools/tests/test_move_journal.py",
-      "size": 17887,
-      "sha256": "971d549763e60fc84db34eafe9dde53cc8b4b46df666f5ce864291242e84cb65"
+      "size": 18844,
+      "sha256": "db43262eace270a0ad733e18fc957e2cba929dc7673d25b31a4d64c95d0bd44e"
     },
     {
       "path": "dragontools/tests/test_move_progress_callback_safety.py",
@@ -2872,6 +2942,16 @@
       "sha256": "df1327b440e56d22759478fbb70bf9d079fb6ef767cb8b7d172ac6dbb6945977"
     },
     {
+      "path": "dragontools/tests/test_pixel_verification_tolerance.py",
+      "size": 17923,
+      "sha256": "bcfa310bb58d62ffee64e98fe0666f6d9e83d2f475131b3485c6b2b6e8ee8591"
+    },
+    {
+      "path": "dragontools/tests/test_planned_target_edit.py",
+      "size": 1537,
+      "sha256": "ca8a7bef977e995975c7546ae0dfb45c1a7c09f1774c64ceb211548165af5a42"
+    },
+    {
       "path": "dragontools/tests/test_postprocess_move_sidecars.py",
       "size": 6796,
       "sha256": "3cbfd6d363cc7b751d722ce250675169b9bca40698462efa09e8456fa3b99666"
@@ -2993,8 +3073,8 @@
     },
     {
       "path": "dragontools/tests/test_refactor_runtime_connections.py",
-      "size": 4823,
-      "sha256": "e71e8aa909a8ae62626df3ec3c914e191021a34d2ff51f6755867d9a80712496"
+      "size": 4891,
+      "sha256": "abe436a247c5cf6984cecb31abea2c44e73381c1b76e67c02e9c8916792d91d7"
     },
     {
       "path": "dragontools/tests/test_release_artifact_e2e.py",
@@ -3009,12 +3089,17 @@
     {
       "path": "dragontools/tests/test_release_validation.py",
       "size": 27791,
-      "sha256": "b5223b676725e1eebf4803b40b430d196b0ee6364d816ae4fbec1d6d3ed8be2f"
+      "sha256": "319e16949e820e36864b653561e7cf756b8f94d611890981bbeacf26676be808"
     },
     {
       "path": "dragontools/tests/test_renamer_fallback_and_simulator.py",
       "size": 3758,
       "sha256": "7fea7b304c1ffd98beb154b0ed023653d117095fb8f09a701c2361a2966d00ee"
+    },
+    {
+      "path": "dragontools/tests/test_renamer_release_groups_episode_formats.py",
+      "size": 5258,
+      "sha256": "7b8795b33ed8521de8169888e4d7bc78f880ef956a1fea45642713d21a513902"
     },
     {
       "path": "dragontools/tests/test_replacement_reminders.py",
@@ -3203,8 +3288,8 @@
     },
     {
       "path": "dragontools/tests/test_v97_four_patches.py",
-      "size": 8311,
-      "sha256": "9682a68fc5d9364e07f42b5e131de3f7a7412029f9a50708aa38e54f7e3d7dae"
+      "size": 8345,
+      "sha256": "a1127f6433e54a9712db7869ee69df301c8328b468cdd4c23597e22b1899abea"
     },
     {
       "path": "dragontools/tests/test_verbose_cleanup.py",
@@ -3338,8 +3423,8 @@
     },
     {
       "path": "dragontools/worker/converter_detection.py",
-      "size": 8904,
-      "sha256": "535f87a50b2390ac3ae61d2a7845aec6eac869bf379ab3d109f6ec052791aac9"
+      "size": 9577,
+      "sha256": "b8119572bc76bd188c72ec093bb9c267a660d2d0580e5bf71306add7a0192a81"
     },
     {
       "path": "dragontools/worker/converter_file_executor.py",
@@ -3348,8 +3433,8 @@
     },
     {
       "path": "dragontools/worker/converter_lifecycle.py",
-      "size": 5286,
-      "sha256": "5f48d1139bb381a14981951e61ec99448feca4f0d6b631870c4ded1d9d3517e9"
+      "size": 5288,
+      "sha256": "00dc8b117d05466653bdea2303038f20a1936f1caee87b9d3287344cc6bebda4"
     },
     {
       "path": "dragontools/worker/converter_media_probe.py",
@@ -3428,8 +3513,8 @@
     },
     {
       "path": "dragontools/worker/converter_thread.py",
-      "size": 12063,
-      "sha256": "f6249a936e1e35545ab2a9c67edeab6184aab0b2838341b92d23b916cd0dcb40"
+      "size": 12150,
+      "sha256": "1dfc9dbe8bc6f13486570fbdc486291ecd22d53603f7e6ca46f5fee3a18f0df1"
     },
     {
       "path": "dragontools/worker/converter_thread_bootstrap.py",
@@ -3455,6 +3540,11 @@
       "path": "dragontools/worker/converter_video_filter_args.py",
       "size": 1010,
       "sha256": "12c096616acca4ca7278b87ea48700f6a63f44c7e9c45260093e458dae73b2d6"
+    },
+    {
+      "path": "dragontools/worker/crop_geometry.py",
+      "size": 4396,
+      "sha256": "7082220649165672b5ccba4cf6728e0dadcb259857c92c51b1a9e735dd9f0b3b"
     },
     {
       "path": "dragontools/worker/duration_remux_service.py",
@@ -3568,8 +3658,8 @@
     },
     {
       "path": "dragontools/worker/dv_crop_reconcile.py",
-      "size": 11069,
-      "sha256": "62b197a078de79756aecc23bacd68fc86982bd7ffd35768425332b18e0f957d5"
+      "size": 12047,
+      "sha256": "ed7b1c2927195afc4f9ca02757125803f490616835ce33c51ea37127fddc885c"
     },
     {
       "path": "dragontools/worker/dv_dynamic_metadata_service.py",
@@ -3588,8 +3678,8 @@
     },
     {
       "path": "dragontools/worker/dv_final_metadata_verifier.py",
-      "size": 7023,
-      "sha256": "31fda5d9317737a73e2c259828cca585ea8be52cd7e2d50d437bb3d3910883fd"
+      "size": 11309,
+      "sha256": "40773f0bdb97ae0b344dcaa64503578db766ea1e1d29818690cd159c0ebcb5c9"
     },
     {
       "path": "dragontools/worker/dv_final_mux_service.py",
@@ -3603,8 +3693,8 @@
     },
     {
       "path": "dragontools/worker/dv_level5_editor.py",
-      "size": 7269,
-      "sha256": "126391fc8a89074e8808e458a828561c6c12f0ada870f99c995f2bdfe32ef67b"
+      "size": 7929,
+      "sha256": "2225f9fbc1f6029c3eb7d3dca2286a04723d3b8b8a869315eb1de23a2978ba6d"
     },
     {
       "path": "dragontools/worker/dv_mkv_muxer.py",
@@ -3623,18 +3713,18 @@
     },
     {
       "path": "dragontools/worker/dv_pipeline_compat.py",
-      "size": 2142,
-      "sha256": "0390c6665fabf40ce56ffe2e34f2772cec371308c6ebfaf6e113364aeadf526d"
+      "size": 3439,
+      "sha256": "a8465a807faf8dea500923400b56f2fa444ac50a59a40f487795a5a3720ae207"
     },
     {
       "path": "dragontools/worker/dv_pipeline_context.py",
-      "size": 5083,
-      "sha256": "e85b911515aae0b5a8ccddbb50351cfc48de4564bed65417bc16fc7d9644a728"
+      "size": 5889,
+      "sha256": "eb41cbaa358e56c3da070c2bc4fc671e681986a19437bf4d9d47ca18a5b9f0a6"
     },
     {
       "path": "dragontools/worker/dv_pipeline_runtime.py",
-      "size": 8366,
-      "sha256": "5eb73c5d3cf61d56abb03bd3bd9fa770c4ae1a9774cfa996101183bf54e6b7df"
+      "size": 10032,
+      "sha256": "d6de76b75d0a218ea8f4d97c71b5aa2d5f6ff208775ff05e138537e51a50695d"
     },
     {
       "path": "dragontools/worker/dv_pipeline_stage_factory.py",
@@ -3643,8 +3733,8 @@
     },
     {
       "path": "dragontools/worker/dv_pipeline_stages.py",
-      "size": 14650,
-      "sha256": "acdd9e529a0df0fe761760aba4c8d8a12c494b26b36b7080eaadf5e94725cc82"
+      "size": 15328,
+      "sha256": "f6ef04833d7606e56dbac8ad9504246a95f067a9f04716f78da7e2ac7c13e833"
     },
     {
       "path": "dragontools/worker/dv_pipeline_timeouts.py",
@@ -3758,8 +3848,8 @@
     },
     {
       "path": "dragontools/worker/dv_workflow_pipeline_adapter.py",
-      "size": 2943,
-      "sha256": "26db15719e1c3229b9e8d4e921e676d7525de5b0b355d304757596ea5a4587e5"
+      "size": 3932,
+      "sha256": "b05fa97ce8288a97e6d99252339a5aaa9e35bf568660cb3113edc72bdd9b5f7d"
     },
     {
       "path": "dragontools/worker/encode_plan.py",
@@ -3768,8 +3858,8 @@
     },
     {
       "path": "dragontools/worker/encode_plan_service.py",
-      "size": 6922,
-      "sha256": "96d6a46e18c8a5941a9d706efa4febefd822c7942e7b621e9c1e8714d74c8677"
+      "size": 7693,
+      "sha256": "a6fe2842a506f4bf350f634d2d1c32d9471a86218db83d2fd54c6bb91381a8ea"
     },
     {
       "path": "dragontools/worker/encoder_args.py",
@@ -3938,13 +4028,13 @@
     },
     {
       "path": "dragontools/worker/move_batch_executor.py",
-      "size": 7059,
-      "sha256": "624e8d28ca492cf926473e8982c73dcb009a65ff20d100352305e9d8fd827698"
+      "size": 7500,
+      "sha256": "484a9dc8850080607979b57d30a680e8fa67900847d07ba62a4f35f5828feaf6"
     },
     {
       "path": "dragontools/worker/move_batch_lifecycle.py",
-      "size": 4825,
-      "sha256": "cad8aab004ef1bf87ed0ad956207ea26fb91106bf7b93e80e5fd3bf2edccd9bc"
+      "size": 5159,
+      "sha256": "6942597862785a22ec4316876425f3c84a187cd028cea904479ffd64d502b4b1"
     },
     {
       "path": "dragontools/worker/move_completion_service.py",
@@ -3958,8 +4048,8 @@
     },
     {
       "path": "dragontools/worker/move_runtime_control.py",
-      "size": 2410,
-      "sha256": "08d2d90b77e61c14d448dbcc72c392b9662e78ce54d538f1fe40338bae3e9736"
+      "size": 3019,
+      "sha256": "c1910fb61296b9b5b4d5bdc7487afd5a66dfc6f1b8c74f3cd823155fc10be8da"
     },
     {
       "path": "dragontools/worker/move_thread.py",
@@ -4008,13 +4098,13 @@
     },
     {
       "path": "dragontools/worker/output_contract_verifier.py",
-      "size": 1827,
-      "sha256": "604740d9457ad1bf3571cae5333a2786ab3f2d398dc6e4c590ebd8ccb6fb2921"
+      "size": 2690,
+      "sha256": "31c974e9edec88a0f170e7021737384abb752cdbe974def1ee2742179592621d"
     },
     {
       "path": "dragontools/worker/output_contract_video.py",
-      "size": 2549,
-      "sha256": "8fd12ea7603a51b93e4c025f3f229a5da154aacf3514f9b21b001ba065451445"
+      "size": 5426,
+      "sha256": "77ddc38845f4781fb50b44a110bc4242bd18a62645f91854cd934f6287579158"
     },
     {
       "path": "dragontools/worker/output_path_service.py",
@@ -4030,6 +4120,11 @@
       "path": "dragontools/worker/output_size_policy.py",
       "size": 5085,
       "sha256": "73dae0c4512062db303bd4fa1173fbf0c8c1ed22078e007b1f2c06a2d2873d1c"
+    },
+    {
+      "path": "dragontools/worker/output_verification_archive.py",
+      "size": 21811,
+      "sha256": "aa2561c7cfc7af4e3c99e0ff96ac679344374d020ce9e201154b23dd5791c968"
     },
     {
       "path": "dragontools/worker/output_verifier.py",
@@ -4083,8 +4178,8 @@
     },
     {
       "path": "dragontools/worker/postprocess_async.py",
-      "size": 10780,
-      "sha256": "386c2392b2b428475a92b177c5a39bc6c59c2b3649885c1ff6deccd1402147a2"
+      "size": 10786,
+      "sha256": "795c346b0e4c47d5ecb2e23f0e35233a4a6fde343e33ef72f3c00d2d5384c522"
     },
     {
       "path": "dragontools/worker/postprocess_config.py",
@@ -4262,9 +4357,14 @@
       "sha256": "f0399e911796057fec4efe4ac3dbef2ca37a83b0f31ec6afbe62860a0a16f3f0"
     },
     {
+      "path": "dragontools/worker/workflow_duration_repair.py",
+      "size": 3280,
+      "sha256": "639c811d0599ef943153632fb195a17d84b019897434129eab11d9ec37c5fb36"
+    },
+    {
       "path": "dragontools/worker/workflow_engine.py",
-      "size": 6144,
-      "sha256": "d69905ed448fe14dc9b512343c9aaf2eb60845ff804864d6f55f71a10004151c"
+      "size": 7488,
+      "sha256": "231e7491f7b5f23316df029a6fc21862cc8e56ba02d99cd78e841c0c2004c2c0"
     },
     {
       "path": "dragontools/worker/workflow_factory.py",
@@ -4272,14 +4372,19 @@
       "sha256": "93e8e08bf745611a50b745b2baf0fa5d2ad5705930a4f76163d6b68a067e5271"
     },
     {
+      "path": "dragontools/worker/workflow_geometry_validation.py",
+      "size": 12252,
+      "sha256": "80c337fc7650e8fba367e21b4414aacb9c8b32b6fb3f968364bc4d43092f82de"
+    },
+    {
       "path": "dragontools/worker/workflow_models.py",
-      "size": 3785,
-      "sha256": "9aa4d58d6d59851d347a0e496b8fcf5356fb1153da5d8c4e23fd3b1abc34d3e6"
+      "size": 4313,
+      "sha256": "ef2df5b1d8a1f0266b2f631b50aa800f4e20fd573934e2b7da2029ed5549bbfe"
     },
     {
       "path": "dragontools/worker/workflow_output_commit.py",
-      "size": 6263,
-      "sha256": "2bc4bf5909b6999e786661b44b1bd0640ea5dc0ff48fe981adc07b1505566a3d"
+      "size": 9258,
+      "sha256": "e4b29247f8e61e0b67260527258163306ffb90d0f9cf6a8b8e723c752c5e0df5"
     },
     {
       "path": "dragontools/worker/workflow_pipeline_executor.py",
@@ -4298,8 +4403,8 @@
     },
     {
       "path": "dragontools/worker/workflow_services.py",
-      "size": 7921,
-      "sha256": "96d9392fc7cd8ef072c020142005b9121c876fa5fcecfcb11d0036a3982d8360"
+      "size": 9074,
+      "sha256": "9624413dba715c6179a105699c9b4b5436c0ad7a2c650fa341047f94be617d42"
     },
     {
       "path": "dragontools/worker/workflow_sidecar_commit.py",
@@ -4308,8 +4413,8 @@
     },
     {
       "path": "dragontools/worker/workflow_verification_service.py",
-      "size": 6709,
-      "sha256": "750daf91a9ae72630dc99099e7d763396817624015fe21a7cec7fd17ca0c4365"
+      "size": 3154,
+      "sha256": "602aac82e8846b6d70fc73123fcca60fcb2f496fb7dea060d20f27b3de19c19e"
     },
     {
       "path": "DragonToolsV9.7.spec",
@@ -4322,9 +4427,9 @@
       "sha256": "7ecd07d2274cf34e408720bd91b884758a56740d259033e2f32f6e7362ad4456"
     },
     {
-      "path": "DragonToolsV9.8.3.spec",
+      "path": "DragonToolsV9.8.4.spec",
       "size": 2707,
-      "sha256": "d7ff1cdfede6336174c94638274dcab7d098548f3b9528b8a04a86d73db4c730"
+      "sha256": "6001561cba470e0b0af0db977ee70cd6c43080d47d74ecfb44941cac160c4bc2"
     },
     {
       "path": "DragonToolsV9.8.spec",
@@ -4338,8 +4443,8 @@
     },
     {
       "path": "DragonToolsV9_Dokumentation.docx",
-      "size": 270433,
-      "sha256": "ff710292dc7b888a4a40319742d0fa828608e55bb43ac8da810e472ecf1da43b"
+      "size": 273905,
+      "sha256": "980acbd2bef961f06a6ab45c1343772281fb2513ab6153a9d0e10bc18f0fd631"
     },
     {
       "path": "DV_HDR10plus_Fix_NOTES.txt",
@@ -4348,8 +4453,8 @@
     },
     {
       "path": "Handbuch/Handbuch.pdf",
-      "size": 6300388,
-      "sha256": "4b424cf7b138fd580410905dd7714fa9cf78f42dfc06821b6dd045f84a22ab7a"
+      "size": 6318475,
+      "sha256": "15d43adb7031083a43b8df3e7e57327ce4a02c4c56c362d3193b6ad1555f5cef"
     },
     {
       "path": "HDR10Plus_AnnexB_Fallback_PATCH_NOTES.txt",
@@ -4358,8 +4463,8 @@
     },
     {
       "path": "help.html",
-      "size": 196801,
-      "sha256": "7e5c49ab12ab4eb8df6ea1bf2afe290ae0a82d36acc3a7ed159cb97956cf9f8a"
+      "size": 205904,
+      "sha256": "596ed0b8f76ea1552bfa5c7979bffc9982af4373f4dba925374a98c3a82573c6"
     },
     {
       "path": "icon/Feuerdrache.ico",
@@ -4369,7 +4474,7 @@
     {
       "path": "Info.txt",
       "size": 2462,
-      "sha256": "93f08de31094891a2fa717f5778e82c3e224621dafcf5fdb6b1d033596afd756"
+      "sha256": "f3b67e4d683db578df9e69997c97ad0b082f4490ce6d3c5452dbdbf4a6d79780"
     },
     {
       "path": "INTEGRATION_TESTS.md",
@@ -4383,8 +4488,8 @@
     },
     {
       "path": "patch.md",
-      "size": 2226,
-      "sha256": "7ab48abeba38f28b283b2c08c6702f57b011191a226b4aade887589383bae505"
+      "size": 8399,
+      "sha256": "adf1dc2a5cb5602f63a621f7ee6dbe865d9b9f04b709200cae20729f573ed5d0"
     },
     {
       "path": "POST_REVIEW_PATCH_NOTES.md",
@@ -4393,8 +4498,8 @@
     },
     {
       "path": "PUBLIC_RELEASE_CHECKLIST.md",
-      "size": 2003,
-      "sha256": "4415e44d1c8c970ddf402b3aed79ed04e4eecadac0e5605640322b5287c0d79a"
+      "size": 2020,
+      "sha256": "a3ca3e73a7e79d979bab6b3e4c9161c2bc3a4350d875b3dbdfa0a8cb9b3d1a5e"
     },
     {
       "path": "pytest.ini",
@@ -4403,18 +4508,23 @@
     },
     {
       "path": "README.md",
-      "size": 21342,
-      "sha256": "dae83786f4c30175c725a8320f9f53cfcc6a06cb57fa94a802e0cc475d6ec625"
+      "size": 22953,
+      "sha256": "db90946b32439112952176a0b73729b4bd913ee694a0bb8d1655a231709d09f2"
     },
     {
       "path": "release_manifest.json",
       "size": 664,
-      "sha256": "9f3b4f990855f035bf38f929c315ae07f921f6b1977d5f286df9db80b69a49a9"
+      "sha256": "0cd29c712999662c06ab4e298f8c4b535ab04bbfac6d0a0ec5552066531999a0"
+    },
+    {
+      "path": "RELEASE_NOTES_v9.8.4.md",
+      "size": 3019,
+      "sha256": "883745751f48de41183b8e9d90d8e5859475c3dad4f31c39f2455a88e12da370"
     },
     {
       "path": "RELEASE_REVIEW_MANIFEST.json",
-      "size": 76968,
-      "sha256": "e72fb8b31d492f4bacb96b1b15a5bd019ef3b4d5cdc939dd0cee52ea34a29303"
+      "size": 76713,
+      "sha256": "a1814cf26b848c35bfa5242fe6bbf4a83abbf5838b135b6cb988f328d54420fc"
     },
     {
       "path": "RELEASE_REVIEW_MANIFEST.md",
@@ -4448,8 +4558,8 @@
     },
     {
       "path": "scripts/check_public_privacy.py",
-      "size": 3393,
-      "sha256": "5acf417da389c83e65eb2056617223fec5c1741b45ae209e6868a1827f869eb3"
+      "size": 3438,
+      "sha256": "5f2d41917511e600dd41aa2a5f72b4a537bb118c448f42557bbc1795296beb7b"
     },
     {
       "path": "TESTBERICHT_RENAMER_SIMULATOR_20260911.txt",

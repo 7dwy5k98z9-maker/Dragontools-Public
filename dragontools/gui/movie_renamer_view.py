@@ -6,10 +6,11 @@ not perform metadata lookup, filesystem renames, or proposal scoring.
 """
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import QSettings, Qt
 from PyQt6.QtWidgets import (
     QComboBox,
     QHBoxLayout,
+    QGridLayout,
     QHeaderView,
     QLabel,
     QPushButton,
@@ -20,6 +21,7 @@ from PyQt6.QtWidgets import (
 
 from ..core.version import APP_VERSION
 from .file_drop_widgets import FileDropTable
+from .movie_renamer_view_state import MovieRenamerViewStateMixin
 
 
 class RenameTable(FileDropTable):
@@ -54,7 +56,7 @@ class WideCandidateComboBox(QComboBox):
         super().showPopup()
 
 
-class MovieRenamerView:
+class MovieRenamerView(MovieRenamerViewStateMixin):
     """Builds and owns the visible controls of ``MovieRenamerWidget``."""
 
     COLUMN_HEADERS = (
@@ -72,9 +74,13 @@ class MovieRenamerView:
         "Hinweise",
     )
 
-    def __init__(self, owner: QWidget, columns) -> None:
+    _HEADER_STATE_KEY = "renamer/table_header_state_v1"
+
+    def __init__(self, owner: QWidget, columns, settings: QSettings | None = None) -> None:
         self.owner = owner
         self.columns = columns
+        self.settings = settings
+        self._column_actions = []
         self._build()
 
     def _build(self) -> None:
@@ -82,9 +88,15 @@ class MovieRenamerView:
         root.setContentsMargins(8, 8, 8, 8)
         root.setSpacing(8)
 
+        title_row = QHBoxLayout()
         title = QLabel(f"🎞 Renamer – Dragon Tools V{APP_VERSION}")
         title.setStyleSheet("font-weight:bold;font-size:15px;")
-        root.addWidget(title)
+        title_row.addWidget(title, 1)
+
+        self.columns_btn = QPushButton("⚙ Spalten")
+        self.columns_btn.setToolTip("Spalten ein-/ausblenden und Standardansicht wiederherstellen")
+        title_row.addWidget(self.columns_btn)
+        root.addLayout(title_row)
 
         hint = QLabel(
             "Dateien hinzufügen, Metadaten-Vorschläge laden, gewünschte Zeilen akzeptieren "
@@ -93,7 +105,15 @@ class MovieRenamerView:
         hint.setWordWrap(True)
         root.addWidget(hint)
 
-        toolbar = QHBoxLayout()
+        # Die frühere einzelne QHBoxLayout-Zeile enthielt 13 Buttons. Deren
+        # aufsummierte minimumSizeHint-Breiten wurden bis zum QMainWindow
+        # propagiert. Nachdem der Renamer einmal geladen war, ließ sich das
+        # gesamte Hauptfenster dadurch kaum noch verkleinern - selbst auf
+        # einem anderen Tab. Mehrere logische Reihen halten die Bedienung
+        # vollständig sichtbar, ohne eine riesige Mindestbreite zu erzwingen.
+        toolbar = QGridLayout()
+        toolbar.setHorizontalSpacing(6)
+        toolbar.setVerticalSpacing(6)
         self.add_files_btn = QPushButton("➕ Dateien")
         self.add_folder_btn = QPushButton("📁 Ordner")
         self.resolve_btn = QPushButton("🔎 Vorschläge suchen")
@@ -107,8 +127,18 @@ class MovieRenamerView:
         self.rename_btn = QPushButton("🏷 Umbenennen ausführen")
         self.remove_btn = QPushButton("➖ Entfernen")
         self.clear_btn = QPushButton("🗑 Alle")
-        for button in self.action_buttons:
-            toolbar.addWidget(button)
+
+        toolbar_rows = (
+            (self.add_files_btn, self.add_folder_btn, self.resolve_btn,
+             self.manual_series_search_btn, self.manual_movie_search_btn),
+            (self.show_all_candidates_btn, self.edit_search_btn,
+             self.accept_selected_btn, self.accept_safe_btn, self.reject_selected_btn),
+            (self.rename_btn, self.remove_btn, self.clear_btn),
+        )
+        for row_index, buttons in enumerate(toolbar_rows):
+            for column_index, button in enumerate(buttons):
+                toolbar.addWidget(button, row_index, column_index)
+        toolbar.setColumnStretch(5, 1)
         root.addLayout(toolbar)
 
         self.table = RenameTable()
@@ -121,61 +151,38 @@ class MovieRenamerView:
         self.table.verticalHeader().setVisible(False)
 
         header = self.table.horizontalHeader()
-        for column in (self.columns.ACCEPT, self.columns.STATUS, self.columns.TYPE):
-            header.setSectionResizeMode(column, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(self.columns.SOURCE, QHeaderView.ResizeMode.Stretch)
-        header.setSectionResizeMode(self.columns.QUERY, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(self.columns.SERIES, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(self.columns.YEAR, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(self.columns.MATCH, QHeaderView.ResizeMode.Stretch)
-        header.setSectionResizeMode(self.columns.PROVIDER, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(self.columns.SCORE, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(self.columns.TARGET, QHeaderView.ResizeMode.Stretch)
-        header.setSectionResizeMode(self.columns.HINTS, QHeaderView.ResizeMode.Stretch)
+        header.setSectionsMovable(True)
+        header.setMinimumSectionSize(36)
+        header.setStretchLastSection(False)
+        # Alle Spalten sind bewusst interaktiv. So kann keine
+        # ResizeToContents-/Stretch-Kombination die Fensterbreite diktieren und
+        # der Nutzer kann jede sichtbare Spalte frei größer oder kleiner ziehen.
+        header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+
+        self._default_column_widths = {
+            self.columns.ACCEPT: 48,
+            self.columns.STATUS: 88,
+            self.columns.TYPE: 72,
+            self.columns.SOURCE: 330,
+            self.columns.QUERY: 150,
+            self.columns.SERIES: 210,
+            self.columns.YEAR: 70,
+            self.columns.MATCH: 340,
+            self.columns.PROVIDER: 115,
+            self.columns.SCORE: 95,
+            self.columns.TARGET: 340,
+            self.columns.HINTS: 260,
+        }
+        for column, width in self._default_column_widths.items():
+            self.table.setColumnWidth(column, width)
+
+        self._setup_column_menu()
+        self._restore_header_state()
+        header.sectionResized.connect(self._save_header_state)
+        header.sectionMoved.connect(self._save_header_state)
         root.addWidget(self.table, 1)
 
         self.status_lbl = QLabel("Bereit. Dateien oder Ordner können auch auf die Tabelle gezogen werden.")
         self.status_lbl.setStyleSheet("color:#555;")
         root.addWidget(self.status_lbl)
 
-    @property
-    def action_buttons(self) -> tuple[QPushButton, ...]:
-        return (
-            self.add_files_btn,
-            self.add_folder_btn,
-            self.resolve_btn,
-            self.manual_series_search_btn,
-            self.manual_movie_search_btn,
-            self.show_all_candidates_btn,
-            self.edit_search_btn,
-            self.accept_selected_btn,
-            self.accept_safe_btn,
-            self.reject_selected_btn,
-            self.rename_btn,
-            self.remove_btn,
-            self.clear_btn,
-        )
-
-    @property
-    def lockable_buttons(self) -> tuple[QPushButton, ...]:
-        return (
-            self.resolve_btn,
-            self.manual_series_search_btn,
-            self.manual_movie_search_btn,
-            self.show_all_candidates_btn,
-            self.edit_search_btn,
-            self.accept_selected_btn,
-            self.accept_safe_btn,
-            self.reject_selected_btn,
-            self.rename_btn,
-            self.remove_btn,
-            self.clear_btn,
-        )
-
-    def set_busy(self, busy: bool) -> None:
-        # Adding files remains possible while metadata is resolved. Removing or
-        # reordering rows is blocked so worker row indices remain stable.
-        self.add_files_btn.setEnabled(True)
-        self.add_folder_btn.setEnabled(True)
-        for button in self.lockable_buttons:
-            button.setEnabled(not busy)

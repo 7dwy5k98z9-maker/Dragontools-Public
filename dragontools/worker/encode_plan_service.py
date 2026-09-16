@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+from .crop_geometry import normalize_crop_filter
 from .encode_plan import EncodePlan
 from .encoder_args import _scale
 from .hdr10_color import (
@@ -109,6 +110,22 @@ class EncodePlanService:
                 _safe_int(active_options.get("autocrop_probe_interval_s"), 600) or 600,
                 duration_s,
             )
+            if crop and src_width > 0 and src_height > 0:
+                raw_crop = crop
+                try:
+                    crop = normalize_crop_filter(
+                        crop,
+                        source_width=src_width,
+                        source_height=src_height,
+                    )
+                except ValueError as exc:
+                    self._log(f"⚠️ Auto-Crop konnte nicht normalisiert werden: {exc}", "warn")
+                    crop = None
+                else:
+                    if crop != raw_crop:
+                        self._logger.info(
+                            f"Auto-Crop vor Encode normalisiert: {raw_crop} → {crop}."
+                        )
             if not crop:
                 self._logger.info("Auto-Crop: Keine schwarzen Balken erkannt.")
             elif pipeline == "dv" or str(pipeline).lower() == "pipeline.dv" or getattr(pipeline, "value", None) == "dv" or getattr(pipeline, "name", "").lower() == "dv":

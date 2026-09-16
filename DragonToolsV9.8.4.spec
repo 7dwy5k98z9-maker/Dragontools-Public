@@ -44,7 +44,7 @@ exe = EXE(
     splash,
     [],
     exclude_binaries=True,
-    name='DragonToolsV9.8.3',
+    name='DragonToolsV9.8.4',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -66,5 +66,5 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name='DragonToolsV9.8.3',
+    name='DragonToolsV9.8.4',
 )

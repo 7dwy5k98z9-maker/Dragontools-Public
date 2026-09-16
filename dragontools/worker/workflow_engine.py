@@ -50,6 +50,14 @@ class WorkflowVerifyResult:
     has_dolby_vision: bool = False
     has_hdr10plus: bool = False
     messages: list[str] | None = None
+    warnings: list[str] | None = None
+    expected_width: int | None = None
+    expected_height: int | None = None
+    actual_width: int | None = None
+    actual_height: int | None = None
+    geometry_max_delta: int = 0
+    geometry_severity: str = "exact"
+    contract_non_geometry_ok: bool = True
 
     @property
     def ok(self) -> bool:
@@ -99,6 +107,16 @@ class WorkflowContext:
     expected_media_contract: Any = None
     pipeline_verified_hdr10plus: bool = False
     pipeline_verified_dolby_vision: bool = False
+    pipeline_verified_dv_crop_alignment: bool = False
+    pipeline_final_rpu_checked: bool = False
+    pipeline_final_rpu_present: bool = False
+    pipeline_final_rpu_matches_injected: bool | None = None
+    pipeline_final_rpu_expected_sha256: str = ""
+    pipeline_final_rpu_actual_sha256: str = ""
+    pipeline_final_rpu_level5_offsets: tuple[tuple[int, int, int, int], ...] = ()
+    pipeline_final_rpu_level5_dynamic: bool = False
+    pipeline_final_rpu_message: str = ""
+    effective_crop_filter: str | None = None
     verify_result: WorkflowVerifyResult | None = None
     duration_repair_attempted: bool = False
     duration_after_ffmpeg_s: float | None = None
@@ -113,6 +131,17 @@ class WorkflowContext:
     duration_repair_archive_path: str | None = None
     duration_repair_failed_closed: bool = False
     keep_failed_output: bool = False
+    verification_archive_required: bool = False
+    verification_archive_with_postprocess: bool = False
+    verification_archive_reason: str = ""
+    verification_archive_tier: str = ""
+    verification_archive_path: str | None = None
+    verification_report_path: str | None = None
+    verification_csv_path: str | None = None
+    dv_rpu_alignment_checked: bool = False
+    dv_rpu_alignment_ok: bool | None = None
+    dv_rpu_alignment_message: str = ""
+    dv_rpu_alignment_match_mode: str = ""
     replacement_blocked: bool = False
     replacement_block_reason: str = ""
     replacement_archived_path: str | None = None

@@ -5,7 +5,7 @@
   "app_version": "9.8.3",
   "baseline_archive": "dragontools(20260912-165602).zip",
   "current_archive": null,
-  "release_manifest_note": "Anonymized public source 9.8.3; Windows build succeeded on 2026-09-15. External media tools are excluded from the public ZIP.",
+  "release_manifest_note": "Current private source; build contract in release_manifest.json. No 9.8.3 binary build created. Historical baselines retained.",
   "line_reductions": [
     {
       "file": "dragontools/core/media_library_db.py",
@@ -1873,11 +1873,6 @@
     ]
   },
   "validation": {
-    "full_tests": "1390 passed, 0 failed, 0 skipped",
-    "release_validation_regressions": "12 passed",
-    "syntax": "compileall passed",
-    "ruff": "E9,F821,F822,F823 passed",
-    "public_build": "PyInstaller 6.22.2, Python 3.14.6; 0 bundle errors, 0 warnings before external media tools are excluded",
-    "details": "PATCH_MANIFEST.json"
+    "stability_patch": "See PATCH_MANIFEST.json; 9.8.3 regression and full-suite validation"
   }
 }

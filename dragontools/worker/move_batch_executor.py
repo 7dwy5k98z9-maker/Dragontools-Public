@@ -136,6 +136,13 @@ class MoveBatchExecutor:
                 invoke_callback(self._file_counted, files_done, total_files)
                 continue
 
+            # Transaction boundary BEFORE resolving the destination.  Runtime
+            # target edits are allowed only while the journal row is queued.
+            # Marking the file running first makes target acceptance and target
+            # consumption linearizable: either the edit wins before this point
+            # and route() sees it, or the edit is rejected afterwards.
+            self._journal.start_file(path)
+
             target = self._router.route(path)
             if not target:
                 self._mark_file_error(path, "Kein gültiges Verschiebeziel ermittelt", "übersprungen")
@@ -144,12 +151,12 @@ class MoveBatchExecutor:
                 invoke_callback(self._file_counted, files_done, total_files)
                 continue
 
-            self._log(f"Move: {Path(path).name}\n   -> {str(target).replace('/', chr(92))}", "info")
-            self._journal.start_file(
+            self._journal.set_destination(
                 path,
                 target_dir=str(target),
                 dest_path=str(Path(target) / Path(path).name),
             )
+            self._log(f"Move: {Path(path).name}\n   -> {str(target).replace('/', chr(92))}", "info")
 
             original_source = self._companion_resume_sources.get(path, path)
             if original_source != path:

@@ -34,6 +34,7 @@ def test_queue_actions_facade_contains_no_business_methods():
         "ConvertWidgetQueueManagementMixin",
         "ConvertWidgetQueueWindowActionsMixin",
         "ConvertWidgetQueueContextActionsMixin",
+        "ConvertWidgetQueueTargetActionsMixin",
         "ConvertWidgetQueueOverrideActionsMixin",
         "ConvertWidgetQueueBadgesMixin",
         "ConvertWidgetSourceVisualActionsMixin",
@@ -46,6 +47,7 @@ def test_queue_action_collaborators_are_bounded_and_single_owner():
         "convert_widget_queue_management.py": 90,
         "convert_widget_queue_window_actions.py": 100,
         "convert_widget_queue_context_actions.py": 190,
+        "convert_widget_queue_target_actions.py": 170,
         "convert_widget_queue_override_actions.py": 190,
         "convert_widget_queue_badges.py": 140,
         "convert_widget_source_visual_actions.py": 120,
@@ -62,7 +64,7 @@ def test_queue_action_collaborators_are_bounded_and_single_owner():
             assert method.name not in owners, f"{method.name} duplicated in {filename} and {owners[method.name]}"
             owners[method.name] = filename
 
-    assert len(owners) == 40
+    assert len(owners) == 46
 
 
 def test_queue_action_mixins_keep_unique_aggregation_surface():
@@ -85,6 +87,12 @@ def test_queue_action_mixins_keep_unique_aggregation_surface():
         "_refresh_queue_window",
         "_apply_queue_window_order",
         "_ctx_menu",
+        "_context_selected_paths",
+        "_planned_target_storage_key",
+        "_target_edit_rows",
+        "_choose_replacement_targets",
+        "_apply_replacement_targets",
+        "_change_planned_target",
         "_terminate_current_ffmpeg_for_path",
         "_show_media_info",
         "_rule_test_preview_options",
@@ -115,6 +123,7 @@ def test_queue_action_mixins_keep_unique_aggregation_surface():
         "convert_widget_queue_management.py",
         "convert_widget_queue_window_actions.py",
         "convert_widget_queue_context_actions.py",
+        "convert_widget_queue_target_actions.py",
         "convert_widget_queue_override_actions.py",
         "convert_widget_queue_badges.py",
         "convert_widget_source_visual_actions.py",

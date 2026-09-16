@@ -338,8 +338,8 @@ def _check_forbidden_release_artifacts(root: Path) -> ReleaseCheck:
 _PRIVATE_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("lokaler Benutzerpfad", re.compile(r"C:\\Users\\[^\\\r\n]+", re.IGNORECASE)),
     ("persönlicher Name", re.compile(r"\bMarkus\b|\bMarku\b", re.IGNORECASE)),
-    ("Arbeitsordner-Pfad", re.compile(r"Arbeitsordner " r"codex", re.IGNORECASE)),
-    ("Netzwerk-Medienpfad", re.compile(r"\\\\medien" r"speicher", re.IGNORECASE)),
+    ("Arbeitsordner-Pfad", re.compile(r"Arbeitsordner " + "codex", re.IGNORECASE)),
+    ("Netzwerk-Medienpfad", re.compile(r"\\\\medien" + "speicher", re.IGNORECASE)),
     ("temporärer Codex-Pfad", re.compile(r"AppData\\Local\\Temp\\codex-", re.IGNORECASE)),
     ("möglicher API-Key", re.compile(r"(api[_-]?key|read[_-]?access[_-]?token)\s*[:=]\s*['\"][^'\"\s]{8,}", re.IGNORECASE)),
 )

@@ -133,7 +133,7 @@ class AsyncPostProcessCoordinator:
             ).start()
 
         # Logging is intentionally last and fail-soft.
-        self._info(f"🧩 Post-Processing im Hintergrund gestartet: {Path(output_path).name}")
+        self._info(f"✳️ Post-Processing im Hintergrund gestartet: {Path(output_path).name}")
         return True
 
     def wait_for_all(self) -> None:
@@ -143,7 +143,7 @@ class AsyncPostProcessCoordinator:
                 return
             self._shutdown = True
         if futures:
-            self._info(f"🧩 Warte auf {len(futures)} Post-Processing-Auftrag/Aufträge ...")
+            self._info(f"✳️ Warte auf {len(futures)} Post-Processing-Auftrag/Aufträge ...")
             wait(futures)
         self._executor.shutdown(wait=True)
 
@@ -212,7 +212,7 @@ class AsyncPostProcessCoordinator:
             if errors:
                 self._warn(f"⚠️ Post-Processing mit Fehlern beendet: {Path(output_path).name}")
             else:
-                self._info(f"🧩 Post-Processing abgeschlossen: {Path(output_path).name}")
+                self._info(f"✳️ Post-Processing abgeschlossen: {Path(output_path).name}")
         finally:
             # File completion belongs to the conversion workflow and must not
             # be skipped because bookkeeping or logging above failed.

@@ -29,12 +29,12 @@ class ProjectStatistics:
 # Wird bei Dokumentations-/Release-Pflege aktualisiert und dient nur als
 # Fallback, wenn ein Frozen-Build keine .py-Quellen enthält.
 RELEASE_STATISTICS = ProjectStatistics(
-    python_files=841,
-    total_lines=125072,
-    code_lines=105764,
-    test_package_files=185,
-    test_files=182,
-    static_tests=1347,
+    python_files=857,
+    total_lines=128481,
+    code_lines=108628,
+    test_package_files=191,
+    test_files=188,
+    static_tests=1397,
     dynamic=False,
 )
 
@@ -111,8 +111,8 @@ def build_about_html(root: str | Path | None = None) -> str:
     return (
         f"<b>Dragon Tools V{APP_VERSION}</b><br>"
         "Dragon Tools ist ein modulares Medienwerkzeug für Konvertierung, Remux, Analyse, Metadaten, Mediathek, Validierung, Reparatur und Nachbearbeitung in einer PyQt6-Oberfläche.<br><br>"
-        "<b>Stabilität 9.8.3</b><br>"
-        "Terminale Warnungen/Fehler sperren Auto-Move; auftragsbezogene Prozesssteuerung; MP4-Abbruchprüfung vor Commit und Original-Cleanup.<br><br>"
+        "<b>Neuerungen 9.8.4</b><br>"
+        "Normalisierter AutoCrop als verbindliche DV-Crop-Quelle; finaler RPU-Nachweis sperrt unsicheres Replace; sichere Laufzeit-Zieländerung; erweiterte Renamer-Regeln und frei skalierbare Fenster/Spalten.<br><br>"
         "<b>Video &amp; HDR</b><br>"
         "H.264 · H.265/HEVC · AV1 · NVENC · QSV · AMF · CPU/x265 · SVT-AV1<br>"
         "DV- und HDR10+-Erhalt · Dolby-Vision-RPU-Prüfung · Auto-Crop · IMAX · Downscale-only<br>"
@@ -136,7 +136,7 @@ def build_about_html(root: str | Path | None = None) -> str:
         f"{_fmt_int(stats.code_lines)} Codezeilen<br>"
         f"Tests-Paket: {stats.test_package_files} Python-Dateien · {stats.test_files} test_*.py · "
         f"{stats.static_tests} statisch erkannte Tests<br>"
-        "Aktueller Dokumentations-/Review-Stand: 14.09.2026 · Refactoring-/Stabilitätsblöcke 1-12 dokumentiert.<br>"
+        "Aktueller Dokumentations-/Review-Stand: 16.09.2026 · Version 9.8.4.<br>"
         "Gezielte Regressionen, compileall, Architekturgrenzen und Release-Smoke sichern die geänderten Bereiche; "
         "bekannte Review-Host-Probleme werden getrennt von fachlichen Regressionen geführt.<br><br>"
         "Entwicklungszeit gesamt: rund 6.000 Stunden<br>"

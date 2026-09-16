@@ -37,7 +37,7 @@ class MovieRenamerWidget(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.settings = QSettings(APP_ORG, APP_NAME)
-        self._view = MovieRenamerView(self, RenamerColumns)
+        self._view = MovieRenamerView(self, RenamerColumns, self.settings)
         self._bind_view_attributes()
         self._table_controller = MovieRenamerTableController(self.table)
         self._resolver = MovieRenamerResolveCoordinator(
@@ -72,6 +72,7 @@ class MovieRenamerWidget(QWidget):
             "clear_btn",
             "table",
             "status_lbl",
+            "columns_btn",
         ):
             setattr(self, name, getattr(self._view, name))
 
@@ -96,6 +97,7 @@ class MovieRenamerWidget(QWidget):
         self._actions.add_paths(paths)
 
     def resolve_proposals(self) -> None:
+        self._actions.prompt_missing_seasons()
         self._resolver.resolve_all()
 
     def accept_selected(self) -> None:

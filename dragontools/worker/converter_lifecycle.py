@@ -109,7 +109,7 @@ class ConverterLifecycleService:
             coordinator.wait_for_all()
         except Exception as exc:
             worker.log(
-                f"🧩 Post-Processing konnte nicht vollständig abgewartet werden: {exc}",
+                f"✳️ Post-Processing konnte nicht vollständig abgewartet werden: {exc}",
                 "warn",
             )
 

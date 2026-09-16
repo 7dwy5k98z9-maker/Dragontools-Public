@@ -6,6 +6,7 @@ import time
 from pathlib import Path
 from typing import Callable
 
+from ..core.result_status import POSTPROCESS_PENDING_ICON
 from .conversion_progress_display import ConversionProgressDisplay, eta_text as _eta
 from .conversion_progress_focus import ConversionProgressFocusController, PROGRESS_FOCUS_ACTIVE_TOTAL
 
@@ -53,7 +54,18 @@ class ConversionProgressPresenter:
         pct = max(0, min(100, int(pct or 0)))
         self._mark_file_started(path_str)
         eta_str = self.format_eta(eta_s)
-        self._set_file_list_item_text(path_str, f"⏳ {eta_str}  {Path(path_str).name}" if eta_str else f"⏳ {Path(path_str).name}")
+        postprocess_pending = pct >= 100 and path_str in getattr(
+            state, "pending_postprocess_inputs", set()
+        )
+        if postprocess_pending:
+            self._set_file_list_item_text(
+                path_str, f"{POSTPROCESS_PENDING_ICON}  {Path(path_str).name}"
+            )
+        else:
+            self._set_file_list_item_text(
+                path_str,
+                f"⏳ {eta_str}  {Path(path_str).name}" if eta_str else f"⏳ {Path(path_str).name}",
+            )
         if pct >= 100:
             state.active_file_progress.pop(path_str, None); state.active_file_eta.pop(path_str, None)
             if state.progress_focus_path == path_str: state.progress_focus_path = None

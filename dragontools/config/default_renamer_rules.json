@@ -1,5 +1,5 @@
 {
-  "_schema_version": 2,
+  "_schema_version": 3,
   "character_replacements": [
     {
       "character": "*",
@@ -47,6 +47,7 @@
     }
   ],
   "title_exceptions": [],
+  "release_groups": [],
   "matching": {
     "minimum_candidate_score": 0.6,
     "manual_review_below": 0.72,

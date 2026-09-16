@@ -217,6 +217,47 @@ def test_parallel_file_progress_defaults_to_combined_display_and_can_focus_file(
     assert "a.mkv" in ui.file_lbl.text
 
 
+def test_100_percent_progress_does_not_overwrite_postprocess_star_with_hourglass():
+    from dragontools.gui.conversion_progress_presenter import ConversionProgressPresenter
+
+    path = "/in/episode.mkv"
+    rendered = []
+    ui = SimpleNamespace(
+        file_lbl=_Label(),
+        file_focus_combo=_Combo(),
+        file_bar=_Bar(),
+        eta_lbl=_Label(),
+        total_lbl=_Label(),
+        progress_bar=_Bar(),
+        file_list=SimpleNamespace(count=lambda: 1),
+        curlog_btn=_Button(),
+    )
+    state = SimpleNamespace(
+        total_files=1,
+        completed_inputs=set(),
+        pending_postprocess_inputs={path},
+        thread=None,
+        last_total_pct=0,
+        active_file_progress={},
+        active_file_eta={},
+        progress_focus_path=None,
+        current_log_path=None,
+    )
+    presenter = ConversionProgressPresenter(
+        state=state,
+        ui=ui,
+        log=lambda *_a, **_k: None,
+        refresh_queue=lambda: None,
+        set_file_list_item_text=lambda p, text: rendered.append((p, text)),
+    )
+
+    presenter.on_file_progress(path, 100, None)
+
+    assert rendered[-1] == (path, "✳️  episode.mkv")
+    assert ui.file_lbl.text == "✳️ episode.mkv"
+    assert ui.eta_lbl.text == "Video fertig · NFO/Trickplay wird erstellt"
+
+
 def test_single_initial_file_still_uses_parallel_thread_when_limit_is_above_one(monkeypatch):
     from dragontools.gui.conversion_worker_factory import ConversionConfigBuilder, ConversionWorkerFactory
 

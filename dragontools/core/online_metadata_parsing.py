@@ -8,6 +8,7 @@ from pathlib import Path
 from .online_metadata_types import (
     MovieMetadataSuggestion, ParsedMovieQuery, ParsedSeriesQuery, SeriesMetadataSuggestion,
 )
+from ..rules.renamer_rules import strip_configured_release_groups
 
 _VIDEO_EXTENSIONS = {".mkv", ".mp4", ".avi", ".m4v", ".mov", ".ts", ".m2ts", ".wmv"}
 
@@ -22,6 +23,7 @@ def _metadata_input_stem(value: str | Path) -> tuple[str, str]:
 
 def parse_movie_query(value: str | Path) -> ParsedMovieQuery:
     raw, text = _metadata_input_stem(value)
+    text, _configured_groups = strip_configured_release_groups(text)
     text = re.sub(r"[_\s]?(H264|H265|AV1|HEVC|x265|x264)$", "", text, flags=re.I).strip()
     text = text.replace("_", " ").replace(".", " ")
     text = re.sub(r"\s+", " ", text).strip()
@@ -45,16 +47,28 @@ def parse_movie_query(value: str | Path) -> ParsedMovieQuery:
 
 
 def parse_series_query(value: str | Path) -> ParsedSeriesQuery:
-    # DragonTools patch: series release normalization v1
+    # DragonTools patch: series release normalization v2
     raw, text = _metadata_input_stem(value)
+    text, _configured_groups = strip_configured_release_groups(text)
 
     # Normale Trenner vereinheitlichen. Bindestriche bleiben zunaechst erhalten,
     # damit Scene-/Release-Schemata wie "tvs-watson-eac3-..." erkennbar bleiben.
     text = text.replace("_", " ").replace(".", " ")
 
     # Episodenmarker und alles dahinter fuer die Serien-Suchanfrage entfernen.
-    text = re.sub(r"\bS\d{1,2}E\d{1,3}(?:[-_ ]?E?\d{1,3})*\b.*$", "", text, flags=re.I)
-    text = re.sub(r"\b\d{1,2}x\d{1,3}\b.*$", "", text, flags=re.I)
+    # Neben S01E02 und 1x02 werden auch Release-Schemata wie E02S01 sowie
+    # EP02 erkannt. EPxx enthaelt absichtlich keine Staffel; diese wird im
+    # Renamer vor der Metadatensuche interaktiv nachgefragt.
+    text = re.sub(
+        r"(?<!\w)S\s*\d{1,4}[.\-_\s]*E\s*\d{1,4}(?:[.\-_\s]*E?\s*\d{1,4})*(?!\d).*$",
+        "", text, flags=re.I,
+    )
+    text = re.sub(
+        r"(?<!\w)E\s*\d{1,4}[.\-_\s]*S\s*\d{1,4}(?!\d).*$",
+        "", text, flags=re.I,
+    )
+    text = re.sub(r"(?<!\w)EP(?:ISODE)?[.\-_\s]*\d{1,4}(?!\d).*$", "", text, flags=re.I)
+    text = re.sub(r"\b\d{1,4}x\d{1,4}\b.*$", "", text, flags=re.I)
     text = re.sub(r"\s+", " ", text).strip()
 
     year: int | None = None

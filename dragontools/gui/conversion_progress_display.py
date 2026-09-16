@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from ..core.result_status import POSTPROCESS_PENDING_ICON
+
 
 def eta_text(seconds) -> str:
     if not seconds or seconds <= 0:
@@ -58,10 +60,19 @@ class ConversionProgressDisplay:
         if path is None or pct is None:
             return
         pct = max(0, min(100, int(pct)))
-        self._ui.file_lbl.setText(f"⏳ {Path(path).name}")
+        postprocess_pending = (
+            pct >= 100
+            and str(path) in getattr(self._state, "pending_postprocess_inputs", set())
+        )
+        if postprocess_pending:
+            self._ui.file_lbl.setText(f"{POSTPROCESS_PENDING_ICON} {Path(path).name}")
+        else:
+            self._ui.file_lbl.setText(f"⏳ {Path(path).name}")
         self._ui.file_bar.setValue(pct)
         eta_str = self.format_eta(eta)
-        if eta_str:
+        if postprocess_pending:
+            self._ui.eta_lbl.setText("Video fertig · NFO/Trickplay wird erstellt")
+        elif eta_str:
             self._ui.eta_lbl.setText(f"Restdauer aktuelle Datei: {eta_str}")
         elif pct >= 100:
             self._ui.eta_lbl.setText("✅ Datei abgeschlossen")

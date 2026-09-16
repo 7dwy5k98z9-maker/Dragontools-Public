@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Callable
 
 from .converter_utils import _parse_crop, _physical_crop_level5_json
+from .crop_geometry import normalize_crop_filter
 
 
 class DVLevel5Editor:
@@ -44,6 +45,23 @@ class DVLevel5Editor:
         if not (sw and sh):
             self._log(
                 "DV: Quellauflösung unbekannt - RPU-Crop nicht möglich. Abbruch.",
+                "error",
+            )
+            return None
+
+        try:
+            normalized_crop = normalize_crop_filter(
+                crop,
+                source_width=int(sw),
+                source_height=int(sh),
+            )
+        except ValueError as exc:
+            self._log(f"DV: Crop-Geometrie ist ungültig: {exc}", "error")
+            return None
+        if normalized_crop != crop:
+            self._log(
+                "DV: Inkonsistente Crop-Geometrie vor RPU-Edit erkannt: "
+                f"{crop} -> {normalized_crop}. Abbruch statt RPU/Video-Divergenz.",
                 "error",
             )
             return None

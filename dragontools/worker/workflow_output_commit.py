@@ -7,6 +7,11 @@ from ..core.sidecar_journal import SidecarJournal
 from ..core.sidecar_transaction import SidecarCommitError, SidecarCommitTransaction
 from .workflow_postprocess_commit import WorkflowPostprocessCommitService
 from .workflow_sidecar_commit import WorkflowSidecarCommitService
+from .output_verification_archive import (
+    preserve_failed_verification_output,
+    write_verification_archive_csv,
+    write_verification_archive_report,
+)
 
 
 class WorkflowOutputCommitCoordinator:
@@ -41,6 +46,10 @@ class WorkflowOutputCommitCoordinator:
         )
 
     def replace(self, ctx) -> None:
+        if bool(getattr(ctx, "verification_archive_required", False)):
+            self._archive_geometry_candidate(ctx)
+            return
+
         # Source-based trickplay must be rendered before destructive overwrite.
         # It targets the final video stem directly; because it is rendered from
         # the still-intact original it remains valid even if the video replace
@@ -95,6 +104,61 @@ class WorkflowOutputCommitCoordinator:
             ctx.postprocess_pending = False
         else:
             ctx.postprocess_pending = self.start_postprocess(ctx)
+
+    def _archive_geometry_candidate(self, ctx) -> None:
+        result = getattr(ctx, "verify_result", None)
+        if result is None:
+            raise RuntimeError("Geometrie-Archivierung ohne Verifikationsergebnis ist unzulaessig.")
+
+        archived = preserve_failed_verification_output(ctx, result, logger=self._logger)
+        if archived:
+            ctx.final_output_path = str(archived)
+            ctx.replacement_archived_path = str(archived)
+        else:
+            # Fail-safe: preserve_failed_verification_output set keep_failed_output
+            # before touching the filesystem. If the move failed, keep the working
+            # candidate and still block replacement.
+            ctx.final_output_path = str(getattr(ctx, "output_path", "") or "")
+            ctx.replacement_archived_path = ctx.final_output_path
+
+        created_before = set(str(p) for p in (getattr(ctx, "sidecar_paths", None) or []))
+        if archived and bool(getattr(ctx, "verification_archive_with_postprocess", False)):
+            # The archived candidate is deliberately postprocessed synchronously.
+            # Source-mode trickplay reads the intact original but targets the
+            # archive stem; output-mode trickplay reads the archived candidate.
+            self._run_postprocess(ctx)
+        created_after = [
+            str(p) for p in (getattr(ctx, "sidecar_paths", None) or [])
+            if str(p) not in created_before
+        ]
+
+        diagnostic_path = archived or str(getattr(ctx, "final_output_path", "") or "")
+        if diagnostic_path and Path(diagnostic_path).exists():
+            csv_report = write_verification_archive_csv(
+                ctx,
+                result,
+                archived_path=diagnostic_path,
+                postprocess_paths=created_after,
+            )
+            report = write_verification_archive_report(
+                ctx,
+                result,
+                archived_path=diagnostic_path,
+                postprocess_paths=created_after,
+            )
+            sidecars = list(getattr(ctx, "sidecar_paths", None) or [])
+            for diagnostic in (csv_report, report):
+                if diagnostic and diagnostic not in sidecars:
+                    sidecars.append(diagnostic)
+            ctx.sidecar_paths = sidecars
+
+        ctx.replacement_blocked = True
+        ctx.replacement_block_reason = str(
+            getattr(ctx, "verification_archive_reason", "")
+            or "Output-Geometrie weicht vom normalisierten Soll ab; Original wurde nicht ersetzt."
+        )
+        ctx.keep_failed_output = True
+        ctx.postprocess_pending = False
 
     def _raise_if_aborted(self, stage: str) -> None:
         check = self._abort_check
