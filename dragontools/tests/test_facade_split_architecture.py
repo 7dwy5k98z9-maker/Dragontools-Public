@@ -46,6 +46,7 @@ def test_settings_is_compatibility_facade_and_production_uses_domain_modules():
         "settings_metadata",
         "settings_media_library",
         "settings_postprocess",
+        "settings_jellyfin",
     ):
         assert f"from .{module} import *" in source
         assert (CORE / f"{module}.py").is_file()

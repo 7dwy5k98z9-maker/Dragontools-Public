@@ -35,6 +35,7 @@ def _internal_subtitles(
     *,
     subtitle_planner,
     mp4_storage_planner,
+    externalized_subtitle_stream_indices=(),
 ):
     plan = subtitle_planner(
         list(getattr(media_info, "subtitle_streams", []) or []),
@@ -44,17 +45,21 @@ def _internal_subtitles(
         container_copy_supported=True,
         media_duration_s=getattr(media_info, "duration_s", None),
     )
+    excluded = {int(index) for index in (externalized_subtitle_stream_indices or ())}
     target_container = str(container or "").lower()
     if target_container == "mp4":
-        return list(
-            mp4_storage_planner(
-                plan,
-                subtitle_rules=subtitle_rules,
-                preserve_burn_candidate=bool(strip_only),
-            ).internal_streams
-        )
+        return [
+            stream for stream in list(
+                mp4_storage_planner(
+                    plan,
+                    subtitle_rules=subtitle_rules,
+                    preserve_burn_candidate=bool(strip_only),
+                ).internal_streams
+            )
+            if int(stream.index) not in excluded
+        ]
     if not strip_only:
-        return list(plan.keep_streams)
+        return [stream for stream in plan.keep_streams if int(stream.index) not in excluded]
 
     candidates = ([plan.burn_sub] if plan.burn_sub is not None else []) + list(plan.keep_streams)
     seen: set[int] = set()
@@ -64,7 +69,7 @@ def _internal_subtitles(
         if index not in seen:
             seen.add(index)
             streams.append(stream)
-    return streams
+    return [stream for stream in streams if int(stream.index) not in excluded]
 
 
 def _build_subtitle_tracks(
@@ -77,6 +82,7 @@ def _build_subtitle_tracks(
     subtitle_planner,
     mp4_storage_planner,
     subtitle_codec_family,
+    externalized_subtitle_stream_indices=(),
 ):
     target_container = str(container or "").lower()
     streams = _internal_subtitles(
@@ -87,10 +93,19 @@ def _build_subtitle_tracks(
         subtitle_rules,
         subtitle_planner=subtitle_planner,
         mp4_storage_planner=mp4_storage_planner,
+        externalized_subtitle_stream_indices=externalized_subtitle_stream_indices,
     )
     return tuple(
         ExpectedSubtitleTrack(
-            codec="mov_text" if target_container == "mp4" else subtitle_codec_family(getattr(stream, "codec", "")),
+            codec=(
+                "mov_text"
+                if target_container == "mp4"
+                else (
+                    "subrip"
+                    if str(getattr(stream, "codec", "") or "").strip().lower() in {"mov_text", "tx3g"}
+                    else subtitle_codec_family(getattr(stream, "codec", ""))
+                )
+            ),
             language=canonical_lang(getattr(stream, "language", None)),
             forced=bool(getattr(stream, "forced", False)),
         )
@@ -125,6 +140,8 @@ def _video_requirements(
     strip_only: bool,
     target_codec: str,
     effective_preserve_hdrplus: bool,
+    generate_hdr10plus: bool = False,
+    force_hdr_output: bool = False,
 ):
     primary = getattr(media_info, "primary_video", None)
     source_has_dv = bool(getattr(media_info, "has_dv", False))
@@ -142,9 +159,13 @@ def _video_requirements(
     pipeline_name = str(getattr(pipeline, "value", pipeline) or "").strip().lower()
     require_dv = pipeline_name in {"dv", "av1_dv"}
     require_hdr10plus = pipeline_name in {"hdrplus", "av1_hdrplus"} or (
-        pipeline_name == "dv" and source_has_hdr10plus and bool(effective_preserve_hdrplus)
+        pipeline_name == "dv"
+        and (
+            (source_has_hdr10plus and bool(effective_preserve_hdrplus))
+            or bool(generate_hdr10plus)
+        )
     )
-    require_hdr = bool(require_dv or require_hdr10plus)
+    require_hdr = bool(require_dv or require_hdr10plus or force_hdr_output)
     normalized_target = normalize_video_codec(target_codec)
     if not require_hdr and normalized_target in {"hevc", "av1"}:
         require_hdr = source_has_hdr10_base(media_info)
@@ -161,9 +182,12 @@ def build_media_contract(
     strip_only: bool,
     effective_codec: str,
     effective_preserve_hdrplus: bool,
-    subtitle_rules: dict | None,
+    generate_hdr10plus: bool = False,
+    force_hdr_output: bool = False,
+    subtitle_rules: dict | None = None,
     effective_scale_mode: str | None,
     crop_filter: str | None,
+    externalized_subtitle_stream_indices=(),
     audio_planner: Callable[..., Any],
     subtitle_planner: Callable[..., Any],
     mp4_storage_planner: Callable[..., Any],
@@ -186,6 +210,7 @@ def build_media_contract(
         subtitle_planner=subtitle_planner,
         mp4_storage_planner=mp4_storage_planner,
         subtitle_codec_family=subtitle_codec_family,
+        externalized_subtitle_stream_indices=externalized_subtitle_stream_indices,
     )
     primary = getattr(media_info, "primary_video", None)
     source_codec = normalize_video_codec(getattr(primary, "codec", ""))
@@ -197,6 +222,8 @@ def build_media_contract(
         strip_only=strip_only,
         target_codec=target_codec,
         effective_preserve_hdrplus=effective_preserve_hdrplus,
+        generate_hdr10plus=generate_hdr10plus,
+        force_hdr_output=force_hdr_output,
     )
     return ExpectedMediaContract(
         container=str(container or "").lower(),

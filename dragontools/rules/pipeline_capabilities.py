@@ -27,6 +27,7 @@ def pipeline_capability_error(
     source_codec: str,
     target_codec: str,
     media_info: MediaInfo,
+    generated_hdr10plus: bool = False,
 ) -> str | None:
     """Return the reason an explicitly selected pipeline cannot execute."""
     if pipeline == Pipeline.STANDARD:
@@ -42,6 +43,8 @@ def pipeline_capability_error(
     if pipeline == Pipeline.HDRPLUS:
         if target_codec != TargetCodec.H265.value:
             return "HEVC-HDR10+-Pipeline benötigt Zielcodec H.265."
+        if generated_hdr10plus:
+            return None
         if source_codec != "hevc":
             return "HEVC-HDR10+-Pipeline benötigt eine HEVC/H.265-Quelle."
         if not media_info.has_hdrplus:

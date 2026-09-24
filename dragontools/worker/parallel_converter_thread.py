@@ -32,7 +32,7 @@ class ParallelConverterThread(
     file_progress = pyqtSignal(str, int, object)
     file_result = pyqtSignal(str, str, str)
     log_line = pyqtSignal(str)
-    event = pyqtSignal(object)
+    worker_event = pyqtSignal(object)
     dv_crop_decision_requested = pyqtSignal(object)
     finished = pyqtSignal()
 
@@ -117,7 +117,7 @@ class ParallelConverterThread(
             abort_requested=self.abort_requested,
             abort_type=self.abort_type,
             log_emit=self.log_line.emit,
-            event_emit=self.event.emit,
+            event_emit=self.worker_event.emit,
             relay_crop_decision=self._relay_dv_crop_decision,
             on_file_progress=self._on_child_file_progress,
             on_file_result=self._on_child_file_result,

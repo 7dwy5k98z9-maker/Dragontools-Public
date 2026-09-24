@@ -29,6 +29,9 @@ LOG_ENABLED_KEYS = (SET_KEY_LOG_ENABLED, SET_KEY_H264_LOG_ENABLED, SET_KEY_AV1_L
 SET_KEY_VERBOSE_LOG_ROOT = "logging/verbose_log_root"
 SET_KEY_VERBOSE_LOG_ENABLED = "logging/verbose_log_enabled"
 
+SET_KEY_WHISPER_MODEL_DIR = "tools/whisper/model_dir"
+SET_KEY_WHISPER_USE_LOCAL_MODEL = "tools/whisper/use_local_model"
+
 TOOL_KEYS: dict[str, tuple[str, str]] = {
     "ffmpeg": ("tools/ffmpeg/use_custom", "tools/ffmpeg/dir"),
     "mkv": ("tools/mkv/use_custom", "tools/mkv/dir"),
@@ -38,7 +41,11 @@ TOOL_KEYS: dict[str, tuple[str, str]] = {
     "mediainfo": ("tools/mediainfo/use_custom", "tools/mediainfo/dir"),
     "dovi_tool": ("tools/dovi_tool/use_custom", "tools/dovi_tool/dir"),
     "hdr10plus_tool": ("tools/hdr10plus_tool/use_custom", "tools/hdr10plus_tool/dir"),
+    "hdr10plus_generator": ("tools/hdr10plus_generator/use_custom", "tools/hdr10plus_generator/dir"),
+    "davinci_resolve": ("tools/davinci_resolve/use_custom", "tools/davinci_resolve/dir"),
+    "comfyui": ("tools/comfyui/use_custom", "tools/comfyui/dir"),
     "mp4box": ("tools/mp4box/use_custom", "tools/mp4box/dir"),
+    "tesseract": ("tools/tesseract/use_custom", "tools/tesseract/dir"),
 }
 
 SET_KEY_ACTIVE_ALL_TV = "move/active_tv"
@@ -47,6 +54,9 @@ SET_KEY_ACTIVE_ALL_FILME = "move/active_filme"
 SET_KEY_SERIES_DEFAULT_TYPE = "move/series_default_type"
 SET_KEY_SHUTDOWN_COUNTDOWN = "move/shutdown_countdown_seconds"
 SET_KEY_MOVE_CONFLICT = "move/conflict_mode"
+SET_KEY_EPISODE_REPLACEMENT_MODE = "move/episode_replacement_mode"
+DEFAULT_EPISODE_REPLACEMENT_MODE = "auto"
+EPISODE_REPLACEMENT_MODES = ("auto", "ask", "never")
 SET_KEY_PREFLIGHT_SAVE_REPORT = "preflight/save_report"
 
 SET_KEY_PARALLEL_CPU_JOBS = "parallel/cpu_jobs"

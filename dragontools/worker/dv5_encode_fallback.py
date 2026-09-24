@@ -70,7 +70,7 @@ class DV5EncodeFallbackRunner:
                 child, source, output, status
             )
         )
-        child.event.connect(lambda event: self._forward_event(child, event))
+        child.worker_event.connect(lambda event: self._forward_event(child, event))
         if hasattr(self.worker, "dv_crop_decision_requested"):
             child.dv_crop_decision_requested.connect(self.worker.dv_crop_decision_requested.emit)
         try:
@@ -104,7 +104,7 @@ class DV5EncodeFallbackRunner:
             self._sync_child_state(child, input_path=path)
             if path:
                 mark_dv_terminal(self.worker, path, str(getattr(event, "status", "")))
-        self.worker.event.emit(event)
+        self.worker.worker_event.emit(event)
 
     def _sync_child_state(self, child, *, input_path: str = "") -> None:
         """Publish one coherent child artifact snapshot on the outer DV worker."""

@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
+import logging
 
 import faulthandler
 import json
@@ -13,6 +14,8 @@ from typing import Any
 
 from .json_io import atomic_write_json
 from .logger import log_base_from_settings, make_log_dir
+
+_LOG = logging.getLogger(__name__)
 
 _STATE_FILE_NAME = "crash_state.json"
 
@@ -75,8 +78,11 @@ def install_crash_guard(app_version: str = "") -> Path | None:
             },
         )
         return _state_dir
-    except Exception:
-        # Crash-Diagnose darf den Programmstart niemals verhindern.
+    except Exception as exc:
+        # Crash-Diagnose darf den Programmstart niemals verhindern, ein Ausfall
+        # des Schutzmechanismus darf aber nicht unsichtbar bleiben.
+        _LOG.debug("CrashGuard konnte nicht initialisiert werden.", exc_info=True)
+        _fallback_diagnostic("CrashGuard konnte nicht initialisiert werden", exc)
         return None
 
 
@@ -155,7 +161,7 @@ def _handle_unhandled_exception(exc_type, exc_value, exc_tb) -> None:
     try:
         write_manual_crash_note("Unbehandelte Ausnahme im Hauptthread.", traceback_text=tb)
     except Exception:
-        pass
+        logging.getLogger(__name__).debug("Unterdrückte Best-Effort-Ausnahme in _handle_unhandled_exception.", exc_info=True)
     if _old_excepthook:
         _old_excepthook(exc_type, exc_value, exc_tb)
 
@@ -171,7 +177,7 @@ def _handle_thread_exception(args) -> None:
             traceback_text=tb,
         )
     except Exception:
-        pass
+        logging.getLogger(__name__).debug("Unterdrückte Best-Effort-Ausnahme in _handle_thread_exception.", exc_info=True)
     if _old_threading_excepthook:
         _old_threading_excepthook(args)
 
@@ -206,7 +212,7 @@ def _report_unclean_previous_run(app_version: str) -> None:
     try:
         _state_file.unlink(missing_ok=True)
     except Exception:
-        pass
+        logging.getLogger(__name__).debug("Unterdrückte Best-Effort-Ausnahme in _report_unclean_previous_run.", exc_info=True)
 
 
 def _build_report_text(
@@ -266,7 +272,7 @@ def _cleanup_empty_fatal_log() -> None:
         if faulthandler.is_enabled():
             faulthandler.disable()
     except Exception:
-        pass
+        logging.getLogger(__name__).debug("Unterdrückte Best-Effort-Ausnahme in _cleanup_empty_fatal_log.", exc_info=True)
 
     handle = _fatal_log_handle
     _fatal_log_handle = None
@@ -275,10 +281,10 @@ def _cleanup_empty_fatal_log() -> None:
             try:
                 handle.flush()
             except Exception:
-                pass
+                logging.getLogger(__name__).debug("Unterdrückte Best-Effort-Ausnahme in _cleanup_empty_fatal_log.", exc_info=True)
             handle.close()
     except Exception:
-        pass
+        logging.getLogger(__name__).debug("Unterdrückte Best-Effort-Ausnahme in _cleanup_empty_fatal_log.", exc_info=True)
 
     _remove_empty_fatal_log_path(_fatal_log_file)
 
@@ -298,7 +304,7 @@ def _remove_empty_fatal_log_path(path_value: str | Path | None) -> None:
         if path.name.endswith("_fatal_runtime.txt") and path.exists() and path.stat().st_size == 0:
             path.unlink(missing_ok=True)
     except Exception:
-        pass
+        logging.getLogger(__name__).debug("Unterdrückte Best-Effort-Ausnahme in _remove_empty_fatal_log_path.", exc_info=True)
 
 
 def _read_state() -> dict[str, Any]:
@@ -306,7 +312,9 @@ def _read_state() -> dict[str, Any]:
         return {}
     try:
         return json.loads(_state_file.read_text(encoding="utf-8") or "{}")
-    except Exception:
+    except Exception as exc:
+        _LOG.warning("CrashGuard-Zustand konnte nicht gelesen werden: %s", _state_file, exc_info=True)
+        _fallback_diagnostic("CrashGuard-Zustand konnte nicht gelesen werden", exc)
         return {}
 
 
@@ -318,6 +326,7 @@ def _normalize_command(command: list[Any] | str | None) -> list[str] | str:
     try:
         return [str(part) for part in command]
     except Exception:
+        _LOG.debug("CrashGuard-Kommando konnte nicht elementweise normalisiert werden.", exc_info=True)
         return str(command)
 
 

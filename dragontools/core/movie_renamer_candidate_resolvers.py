@@ -56,10 +56,16 @@ def _resolve_series_results(
     if client is None:
         return ()
 
-    if hasattr(client, "resolve_episode_candidates"):
+    resolver_name = (
+        "resolve_renamer_episode_candidates"
+        if hasattr(client, "resolve_renamer_episode_candidates")
+        else "resolve_episode_candidates"
+    )
+    if hasattr(client, resolver_name):
+        resolve_candidates = getattr(client, resolver_name)
         for query in queries:
             lookup = _series_lookup_path(parsed, query)
-            suggestions = client.resolve_episode_candidates(lookup, limit=6)
+            suggestions = resolve_candidates(lookup, limit=6)
             if suggestions:
                 return refresh_if_episode_title_fallback(client, lookup, suggestions, parsed.episode)
 

@@ -37,6 +37,9 @@ class MainWindowSettingsActionsMixin:
     def _open_settings_postprocess(self):
         self._exec_settings_dialog(visible_sections=("postprocess",))
 
+    def _open_settings_jellyfin(self):
+        self._exec_settings_dialog(visible_sections=("jellyfin_api",))
+
     def _open_settings_source_visual(self):
         self._exec_settings_dialog(visible_sections=("source_visual",))
 
@@ -48,6 +51,18 @@ class MainWindowSettingsActionsMixin:
 
     def _open_settings_imax(self):
         self._exec_settings_dialog(visible_sections=("imax",))
+
+    def _open_settings_sdr_hdr(self):
+        self._exec_settings_dialog(
+            visible_sections=("sdr_hdr",),
+            window_title="SDR → HDR / ComfyUI",
+        )
+
+    def _open_settings_hdr10plus_generator(self):
+        self._exec_settings_dialog(
+            visible_sections=("hdr10plus_generator",),
+            window_title="Dragon HDR10+ Generator",
+        )
 
     def _open_settings_validation(self):
         self._exec_settings_dialog(visible_sections=("validation",))
@@ -115,6 +130,8 @@ class MainWindowSettingsActionsMixin:
         dlg.exec()
 
     def _reload_all_paths(self):
+        from .watch_folder_main_window_bridge import refresh_watch_folder_controller
+        refresh_watch_folder_controller(self)
         for i in range(self.tabs.count()):
             w = self.tabs.widget(i)
             if hasattr(w, "reload_paths"):

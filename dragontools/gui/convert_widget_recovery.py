@@ -49,6 +49,7 @@ class ConvertWidgetRecoveryService:
         sidecar_outputs_by_video: dict | None = None,
         target_paths: dict | None = None,
         conflict_mode: str | None = None,
+        episode_replacement_mode: str | None = None,
         journal_path: str | None = None,
         companion_resume_sources: dict | None = None,
     ) -> dict[str, int]:
@@ -82,6 +83,7 @@ class ConvertWidgetRecoveryService:
                 sidecar_outputs_by_video=sidecar_outputs_by_video,
                 target_paths=target_paths,
                 conflict_mode=conflict_mode,
+                episode_replacement_mode=episode_replacement_mode,
                 journal_path=journal_path,
                 companion_resume_sources=companion_resume_sources,
             )
@@ -100,6 +102,7 @@ class ConvertWidgetRecoveryService:
         sidecar_outputs_by_video,
         target_paths,
         conflict_mode,
+        episode_replacement_mode,
         journal_path,
         companion_resume_sources,
     ) -> None:
@@ -118,6 +121,7 @@ class ConvertWidgetRecoveryService:
         self.state.restored_move_context = {
             "target_paths": dict(target_paths or {}),
             "conflict_mode": str(conflict_mode or ""),
+            "episode_replacement_mode": str(episode_replacement_mode or ""),
             "journal_path": str(journal_path or ""),
             "companion_resume_sources": {
                 str(key): str(value)
@@ -127,7 +131,7 @@ class ConvertWidgetRecoveryService:
         }
         if planned or sidecars or target_paths:
             self.log(
-                "🚚 Move-Wiederaufnahme: gespeicherte Ziele, Sidecars und Konfliktmodus übernommen.",
+                "🚚 Move-Wiederaufnahme: gespeicherte Ziele, Sidecars und Konfliktregeln übernommen.",
                 "info",
             )
 

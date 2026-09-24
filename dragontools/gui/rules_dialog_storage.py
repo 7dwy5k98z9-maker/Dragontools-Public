@@ -3,7 +3,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ..core.config_migration import sanitize_config_for_persistence, write_json_atomic
+from ..core.config_migration import (
+    ensure_config_write_compatible,
+    sanitize_config_for_persistence,
+    write_json_atomic,
+)
 from ..core.audit_log import append_audit_event
 from ..rules import audio_rules as _ar
 from ..rules import move_rules as _mr
@@ -17,6 +21,12 @@ def _rules_dir() -> Path:
     p.mkdir(parents=True, exist_ok=True)
     return p
 
+
+
+
+def _assert_writable(name: str) -> None:
+    if name in {"audio_rules", "subtitle_rules", "move_rules", "renamer_rules"}:
+        ensure_config_write_compatible(_rules_dir() / f"{name}.json", name)
 
 def _load(name: str) -> dict:
     if name == "audio_rules":
@@ -35,6 +45,7 @@ def _load(name: str) -> dict:
 
 
 def _save(name: str, data: dict) -> None:
+    _assert_writable(name)
     if name == "audio_rules":
         data = _ar.migrate_audio_rules(data)
     elif name == "subtitle_rules":

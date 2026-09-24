@@ -7,8 +7,13 @@ from PyQt6.QtCore import QSettings
 
 from ..core.callback_dispatch import invoke_callback
 from ..core.settings_app import APP_NAME, APP_ORG
-from ..core.settings_storage import SET_KEY_MOVE_CONFLICT
+from ..core.settings_storage import (
+    DEFAULT_EPISODE_REPLACEMENT_MODE,
+    SET_KEY_EPISODE_REPLACEMENT_MODE,
+    SET_KEY_MOVE_CONFLICT,
+)
 from .move_lifecycle_helpers import format_move_eta, merge_restored_target_paths, retire_move_thread
+from .jellyfin_refresh_dispatch import dispatch_after_move
 
 
 class RegularMoveLifecycle:
@@ -45,11 +50,13 @@ class RegularMoveLifecycle:
             restored_context = self._restored_context(finished_thread)
             paths = merge_restored_target_paths(self._get_target_paths(), restored_context)
             conflict_mode = self._conflict_mode(restored_context)
+            episode_replacement_mode = self._episode_replacement_mode(restored_context)
             move_thread = self._create_thread(
                 files,
                 finished_thread=finished_thread,
                 paths=paths,
                 conflict_mode=conflict_mode,
+                episode_replacement_mode=episode_replacement_mode,
                 restored_context=restored_context,
             )
             self._wire_thread(move_thread, files, finished_thread)
@@ -78,6 +85,16 @@ class RegularMoveLifecycle:
             APP_ORG, APP_NAME
         ).value(SET_KEY_MOVE_CONFLICT, "skip", type=str)
 
+    @staticmethod
+    def _episode_replacement_mode(restored_context: dict) -> str:
+        return str(restored_context.get("episode_replacement_mode") or "") or QSettings(
+            APP_ORG, APP_NAME
+        ).value(
+            SET_KEY_EPISODE_REPLACEMENT_MODE,
+            DEFAULT_EPISODE_REPLACEMENT_MODE,
+            type=str,
+        )
+
     def _create_thread(
         self,
         files: list[str],
@@ -85,6 +102,7 @@ class RegularMoveLifecycle:
         finished_thread,
         paths: dict,
         conflict_mode: str,
+        episode_replacement_mode: str,
         restored_context: dict,
     ):
         state = self._state
@@ -97,6 +115,7 @@ class RegularMoveLifecycle:
             shutdown_getter=lambda: self._ui.shut_cb.isChecked(),
             planned_targets=dict(state.planned_targets),
             conflict_mode=conflict_mode,
+            episode_replacement_mode=episode_replacement_mode,
             log_file_path=getattr(finished_thread, "log_file_path", None),
             sidecar_outputs_by_video=state.sidecars_for_move(),
             supersedes_journal_path=str(restored_context.get("journal_path") or ""),
@@ -157,6 +176,9 @@ class RegularMoveLifecycle:
             if move_log_path and not getattr(finished_thread, "log_file_path", None):
                 state.current_log_path = move_log_path
                 ui.curlog_btn.setEnabled(True)
+
+            if move_ok:
+                dispatch_after_move(list(move_log or []), self._log)
 
             user_declined = bool(move_thread and getattr(move_thread, "user_declined_shutdown", False))
             shutdown_handled = aborted or user_declined

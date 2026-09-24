@@ -47,4 +47,4 @@ Das GitHub-Repository zunächst leer anlegen: ohne README, `.gitignore` oder Liz
 6. ZIP, Prüfsumme und verständliche Release-Hinweise anhängen.
 7. Das Release darf weder Entwurf noch Vorabversion sein, wenn es von der normalen Updateprüfung gefunden werden soll.
 
-Die aktuelle Anwendungsversion ist `9.8.4`. Ein veröffentlichtes Release mit dieser Version löst bei älteren Versionen einschließlich V9.8.3 den Updatehinweis aus. Ein Git-Push allein veröffentlicht noch kein GitHub Release.
+Die aktuelle Anwendungsversion ist `9.8.6`. Ein veröffentlichtes Release mit dieser Version löst bei älteren Versionen einschließlich V9.8.5 den Updatehinweis aus. Ein Git-Push allein veröffentlicht noch kein GitHub Release.

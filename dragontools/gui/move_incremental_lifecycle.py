@@ -8,8 +8,14 @@ from PyQt6.QtCore import QSettings
 from PyQt6.QtWidgets import QMessageBox
 
 from ..core.callback_dispatch import invoke_callback
+from ..core.move_source_probe import probe_companions, probe_move_source
 from ..core.settings_app import APP_NAME, APP_ORG
-from ..core.settings_storage import SET_KEY_MOVE_CONFLICT
+from ..core.settings_storage import (
+    DEFAULT_EPISODE_REPLACEMENT_MODE,
+    SET_KEY_EPISODE_REPLACEMENT_MODE,
+    SET_KEY_MOVE_CONFLICT,
+)
+from .jellyfin_refresh_dispatch import dispatch_after_move
 from .move_lifecycle_helpers import (
     input_paths_for_output,
     retire_move_thread,
@@ -79,20 +85,42 @@ class IncrementalMoveLifecycle:
 
     def collect_candidates(self) -> list[str]:
         files: list[str] = []
-        missing: list[str] = []
+        sidecars = self._state.sidecars_for_move()
         for path in sorted(self._state.fertig):
             if not path:
                 continue
-            (files if Path(path).exists() else missing).append(path)
-
-        for path in missing:
-            self._state.fertig.discard(path)
-            self._state.sidecar_outputs_by_video.pop(path, None)
-            self._log(
-                f"⚠️ Fertige Datei nicht mehr gefunden, aus Zwischenverschieben entfernt: {Path(path).name}",
-                "warn",
-            )
+            probe = probe_move_source(path)
+            if probe.available:
+                files.append(path)
+                continue
+            self._log_unavailable_candidate(path, probe, sidecars.get(path, []))
         return files
+
+    def _log_unavailable_candidate(self, path: str, probe, companions: list[str]) -> None:
+        planned = self._state.planned_targets.get(path)
+        companion_status = probe_companions(companions)
+        parent_text = (
+            "ja" if probe.parent_available is True
+            else "nein" if probe.parent_available is False
+            else "unbekannt"
+        )
+        lines = [
+            f"⚠️ Fertige Datei aktuell nicht erreichbar – bleibt für späteres Verschieben vorgemerkt: {Path(path).name}",
+            f"   Quelle: {path}",
+            "   Quelle erreichbar: nein",
+            f"   Prüfung: {probe.attempts} Versuch(e), letzter Fehler: {probe.error_text or 'unbekannt'}",
+            f"   Elternordner erreichbar: {parent_text}",
+            f"   Dateigröße: {probe.size_bytes if probe.size_bytes is not None else 'unbekannt'}",
+            f"   Geplantes Ziel: {planned if planned else 'nicht gesetzt'}",
+            f"   Companion-Dateien: {len(companion_status)}",
+        ]
+        if probe.parent_error_text:
+            lines.append(f"   Elternordner-Fehler: {probe.parent_error_text}")
+        for companion, available, error in companion_status:
+            marker = "✅" if available else "⚠️"
+            suffix = "" if available else f" ({error})"
+            lines.append(f"      {marker} {companion}{suffix}")
+        self._log("\n".join(lines), "warn")
 
     def start(self, files: list[str]) -> None:
         state = self._state
@@ -104,7 +132,13 @@ class IncrementalMoveLifecycle:
             return
 
         paths = self._get_target_paths()
-        conflict_mode = QSettings(APP_ORG, APP_NAME).value(SET_KEY_MOVE_CONFLICT, "skip", type=str)
+        settings = QSettings(APP_ORG, APP_NAME)
+        conflict_mode = settings.value(SET_KEY_MOVE_CONFLICT, "skip", type=str)
+        episode_replacement_mode = settings.value(
+            SET_KEY_EPISODE_REPLACEMENT_MODE,
+            DEFAULT_EPISODE_REPLACEMENT_MODE,
+            type=str,
+        )
         log_file_path = getattr(conversion_thread, "log_file_path", None) or state.current_log_path or None
         state.incremental_move_active = True
         self._log(f"📦 Zwischenverschieben: {len(files)} fertige Datei(en) …", "info")
@@ -117,6 +151,7 @@ class IncrementalMoveLifecycle:
             planned_targets=dict(state.planned_targets),
             all_video_files=list(getattr(ui.file_list, "get_paths", lambda: [])()),
             conflict_mode=conflict_mode,
+            episode_replacement_mode=episode_replacement_mode,
             log_file_path=log_file_path,
             sidecar_outputs_by_video=state.sidecars_for_move(),
         )
@@ -147,6 +182,8 @@ class IncrementalMoveLifecycle:
             state.move_ok_count += move_ok
             state.move_error_count += move_errors
             self._consume_moved_outputs(move_log)
+            if move_ok:
+                dispatch_after_move(move_log, self._log)
 
             state.incremental_move_active = False
             if state.move_thread is move_thread:

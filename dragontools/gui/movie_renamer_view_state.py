@@ -86,6 +86,7 @@ class MovieRenamerViewStateMixin:
             self.manual_movie_search_btn,
             self.show_all_candidates_btn,
             self.edit_search_btn,
+            self.edit_season_btn,
             self.accept_selected_btn,
             self.accept_safe_btn,
             self.reject_selected_btn,
@@ -95,23 +96,31 @@ class MovieRenamerViewStateMixin:
         )
 
     @property
-    def lockable_buttons(self) -> tuple:
+    def blocked_during_search(self) -> tuple:
         return (
             self.resolve_btn,
-            self.manual_series_search_btn,
-            self.manual_movie_search_btn,
-            self.show_all_candidates_btn,
-            self.edit_search_btn,
             self.accept_selected_btn,
             self.accept_safe_btn,
             self.reject_selected_btn,
             self.rename_btn,
+        )
+
+    @property
+    def available_during_search(self) -> tuple:
+        return (
+            self.add_files_btn,
+            self.add_folder_btn,
+            self.manual_series_search_btn,
+            self.manual_movie_search_btn,
+            self.show_all_candidates_btn,
+            self.edit_search_btn,
+            self.edit_season_btn,
             self.remove_btn,
             self.clear_btn,
         )
 
     def set_busy(self, busy: bool) -> None:
-        self.add_files_btn.setEnabled(True)
-        self.add_folder_btn.setEnabled(True)
-        for button in self.lockable_buttons:
+        for button in self.available_during_search:
+            button.setEnabled(True)
+        for button in self.blocked_during_search:
             button.setEnabled(not busy)

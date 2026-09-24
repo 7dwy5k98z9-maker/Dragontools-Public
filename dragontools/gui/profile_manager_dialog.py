@@ -24,6 +24,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ..core.audit_log import append_audit_event
+from ..core.config_migration import UnsupportedConfigSchemaError
 from .ui_helpers import install_persistent_window_geometry
 
 
@@ -117,7 +118,17 @@ class ProfileManagerDialog(QDialog):
             QMessageBox.StandardButton.No,
         )
         if res == QMessageBox.StandardButton.Yes:
-            self._pm.delete(key)
+            try:
+                self._pm.delete(key)
+            except UnsupportedConfigSchemaError as exc:
+                QMessageBox.critical(
+                    self,
+                    "Profil nicht gelöscht",
+                    "Die Profil-Datei wurde mit einer neueren DragonTools-Version erstellt "
+                    "und wird zum Schutz vor Datenverlust nicht ueberschrieben.\n\n"
+                    f"{exc}",
+                )
+                return
             self._pm_widget.log_message(f"🗑 Profil '{display}' gelöscht.")
             append_audit_event("Profil gelöscht", f"{display} | Schlüssel: {key}")
             self._refresh()

@@ -21,6 +21,7 @@ from .media_library_dialog_view import (
 )
 from .media_library_maintenance_controller import MediaLibraryMaintenanceController
 from .media_library_mapping_controller import MediaLibraryMappingController
+from .media_library_fix_actions import MediaLibraryFixActionsMixin
 from .media_library_scan_controller import MediaLibraryScanCoordinator
 from .media_library_nfo_controller import MediaLibraryNfoController
 from .media_library_search_controller import MediaLibrarySearchController
@@ -35,7 +36,7 @@ __all__ = [
 ]
 
 
-class MediaLibraryDialog(QDialog):
+class MediaLibraryDialog(MediaLibraryFixActionsMixin, QDialog):
     """Orchestriert spezialisierte Mediathek-GUI-Komponenten.
 
     Businesslogik, Tabellenaufbereitung und QThread-Lifecycle liegen bewusst
@@ -43,7 +44,7 @@ class MediaLibraryDialog(QDialog):
     über seine View zu und exponiert keine gespiegelte Legacy-Widgetoberfläche.
     """
 
-    TAB_KEYS = {"status": 0, "import": 0, "mapping": 1, "search": 2, "sql": 3}
+    TAB_KEYS = {"status": 0, "import": 0, "mapping": 1, "search": 2, "sql": 3, "fix": 4}
 
     def __init__(self, parent: QWidget | None = None, initial_tab: str = "status") -> None:
         super().__init__(parent)
@@ -103,8 +104,9 @@ class MediaLibraryDialog(QDialog):
             get_db_path=self._db_path,
             save_state=self._save_without_popup,
             refresh_stats=self._refresh_stats,
-            is_storage_scan_running=lambda: self._scan.is_running,
+            is_storage_scan_running=lambda: self._scan.is_running or self._fix.is_running,
         )
+        self._init_fix_controller()
 
     # ── Settings / Fenster-Lifecycle ────────────────────────────────
 
@@ -133,6 +135,7 @@ class MediaLibraryDialog(QDialog):
 
     def _save_without_popup(self) -> None:
         self._service.save_state(self.settings, self._current_state())
+        self._fix.save_settings()
 
     def save(self) -> None:
         self._save_without_popup()
@@ -143,11 +146,11 @@ class MediaLibraryDialog(QDialog):
         self.reject()
 
     def closeEvent(self, event) -> None:
-        if self._scan.is_running or self._nfo.is_running:
+        if self._scan.is_running or self._nfo.is_running or self._fix.is_running:
             QMessageBox.information(
                 self,
-                "Mediathek-Scan läuft",
-                "Ein Mediathek-Scan läuft noch. Bitte zuerst abbrechen oder vollständig abschließen.",
+                "Mediathek-Aufgabe läuft",
+                "Eine Mediathek-Aufgabe läuft noch. Bitte zuerst abbrechen oder vollständig abschließen.",
             )
             event.ignore()
             return
@@ -245,7 +248,7 @@ class MediaLibraryDialog(QDialog):
     # ── Speicherpfad-Scan ───────────────────────────────────────────
 
     def scan_storage_paths(self) -> None:
-        if self._scan.is_running or self._nfo.is_running:
+        if self._scan.is_running or self._nfo.is_running or self._fix.is_running:
             return
         scan_roots = self._storage_scan_roots()
         if not scan_roots:

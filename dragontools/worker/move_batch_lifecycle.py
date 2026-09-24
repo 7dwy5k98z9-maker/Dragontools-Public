@@ -26,6 +26,7 @@ class MoveBatchLifecycleMixin:
                 planned_targets=dict(self.planned_targets),
                 sidecar_outputs_by_video=dict(self._sidecar_outputs_by_video),
                 conflict_mode=self.conflict_mode,
+                episode_replacement_mode=self.episode_replacement_mode,
                 log_file=self.log_file_path,
                 root=self._move_journal_root,
                 on_write_error=lambda msg: self._log(
@@ -48,6 +49,9 @@ class MoveBatchLifecycleMixin:
             companion_resume_sources=dict(self._companion_resume_sources),
             wait=self._wait,
             abort_type=lambda: self.abort_type if self.abort_requested else None,
+            prepare_move=self._prepare_move,
+            stage_sidecars=self._stage_sidecars_before_video,
+            rollback_staged_sidecars=self._rollback_staged_sidecars,
             move=self._move,
             get_last_move_result=lambda: dict(getattr(self, "_last_move_result", None) or {}),
             set_last_move_result=lambda result: setattr(self, "_last_move_result", result),
@@ -55,6 +59,8 @@ class MoveBatchLifecycleMixin:
             log=self._log,
             progress_hook=progress.update,
             file_counted=self.file_counted.emit,
+            diagnostic_target_for=self._planned_target_for,
+            diagnostic_sidecars_for=lambda path: list(self._sidecar_outputs_by_video.get(path, [])),
         )
         try:
             return executor.run()

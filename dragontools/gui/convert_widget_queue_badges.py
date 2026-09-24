@@ -28,6 +28,10 @@ class ConvertWidgetQueueBadgesMixin:
             tags.append(f"Sub:{ov.get('subtitle_mode')}")
         if ov.get("imax"):
             tags.append("IMAX")
+        if ov.get("sdr_hdr") is True:
+            tags.append("SDR→HDR")
+        elif ov.get("sdr_hdr") is False:
+            tags.append("SDR→HDR:aus")
         if ov.get("allow_suspicious_source"):
             tags.append("Quellbild erlaubt")
         profile = ov.get("encoder_profile")

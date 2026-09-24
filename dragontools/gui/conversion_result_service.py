@@ -34,6 +34,7 @@ class ConversionResultService(
         confirm_shutdown: Callable,
         parent_widget=None,
         requeue_files: Callable[[list[str]], None] | None = None,
+        notifications=None,
     ) -> None:
         self._state = state
         self._ui = ui
@@ -46,10 +47,20 @@ class ConversionResultService(
         self._confirm_shutdown = confirm_shutdown
         self._parent_widget = parent_widget
         self._requeue_files = requeue_files
+        self._notifications = notifications
         self._on_file_progress_impl: Callable | None = None
+        self._terminal_result_handler: Callable[[str, str, str], None] | None = None
 
     def set_file_progress_handler(self, handler: Callable) -> None:
         self._on_file_progress_impl = handler
+
+    def set_terminal_result_handler(self, handler: Callable[[str, str, str], None] | None) -> None:
+        self._terminal_result_handler = handler
+
+    def notify_terminal_result(self, input_path: str, output_path: str, status: str) -> None:
+        handler = self._terminal_result_handler
+        if handler is not None:
+            handler(input_path, output_path, status)
 
     def on_file_progress(self, path: str, pct: int, eta_s) -> None:
         if self._on_file_progress_impl is not None:

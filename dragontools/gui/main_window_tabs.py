@@ -2,6 +2,9 @@
 """Tab-, Lazy-Loading- und Converter-Handoff-Logik des MainWindow."""
 from __future__ import annotations
 
+import logging
+import traceback
+
 from PyQt6.QtCore import QSize, Qt
 from PyQt6.QtWidgets import (
     QLabel,
@@ -9,10 +12,15 @@ from PyQt6.QtWidgets import (
     QSizePolicy,
     QTabBar,
     QTabWidget,
+    QVBoxLayout,
     QWidget,
 )
 
 from .tab_manager import TabManagerDialog, get_visible_tabs
+from .tab_lazy_loading import find_tab_index, replace_tab_content, show_tab_load_error
+
+
+_LOG = logging.getLogger(__name__)
 
 
 class _TabBar(QTabBar):
@@ -104,7 +112,6 @@ class MainWindowTabsMixin:
         lbl = QLabel(f"🐉  {label} wird geladen …")
         lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lbl.setStyleSheet("font-size:16px;color:#888;")
-        from PyQt6.QtWidgets import QVBoxLayout
         v = QVBoxLayout(w); v.addWidget(lbl)
         return w
 
@@ -112,23 +119,34 @@ class MainWindowTabsMixin:
         self._ensure_tab_loaded(idx)
 
     def _ensure_tab_loaded(self, idx: int) -> None:
-        """Lädt das Widget für einen Tab wenn es noch nicht geladen ist."""
+        """Lädt einen Tab fail-soft und lässt fehlgeschlagene Initialisierung erneut zu."""
         if idx < 0 or idx >= self.tabs.count():
             return
         key = self.tabs.tabBar().tabData(idx)
         if key is None:
             return
         if self._tab_widgets.get(key) is not None:
-            return   # schon geladen
+            return   # schon erfolgreich geladen
 
-        widget = self._create_tab_widget(key)
-        if widget is None:
+        label = self._tab_label(key)
+        try:
+            widget = self._create_tab_widget(key)
+        except Exception as exc:
+            show_tab_load_error(
+                self, idx=idx, key=str(key), label=label, error=exc,
+                traceback_text=traceback.format_exc(), logger=_LOG,
+                retry_callback=lambda _checked=False, tab_key=str(key): self._ensure_tab_loaded(
+                    find_tab_index(self, tab_key)
+                ),
+            )
             return
+
+        if widget is None:
+            _LOG.error("Unbekannter Lazy-Tab-Key '%s' – Factory lieferte kein Widget", key)
+            return
+
         self._tab_widgets[key] = widget
-        self.tabs.removeTab(idx)
-        self.tabs.insertTab(idx, widget, self.tabs.tabText(idx) if False else self._tab_label(key))
-        self.tabs.tabBar().setTabData(idx, key)
-        self.tabs.setCurrentIndex(idx)
+        replace_tab_content(self, idx, widget, str(key), label)
 
     def _tab_label(self, key: str) -> str:
         return {
@@ -146,41 +164,36 @@ class MainWindowTabsMixin:
         }.get(key, key)
 
     def _create_tab_widget(self, key: str) -> QWidget | None:
-        """Factory: erzeugt das echte Widget für einen Tab-Key."""
-        try:
-            if key in ("h265", "h264", "av1"):
-                from .convert_widget import ConvertWidget
-                return ConvertWidget(key)
-            elif key == "iso":
-                from .iso_widget import ISOWidget
-                widget = ISOWidget()
-                widget.handoff_requested.connect(self._handoff_iso_to_converter)
-                return widget
-            elif key == "merge":
-                from .merge_widget import MergeWidget
-                return MergeWidget()
-            elif key == "mp4_remux":
-                from .mp4_remux_widget import MP4RemuxWidget
-                return MP4RemuxWidget()
-            elif key == "audio_muxer":
-                from .audio_muxer_widget import AudioMuxerWidget
-                return AudioMuxerWidget()
-            elif key == "audio_video_matcher":
-                from .audio_video_matcher_widget import AudioVideoMatcherWidget
-                return AudioVideoMatcherWidget()
-            elif key == "subtitle":
-                from .subtitle_widget import SubtitleWidget
-                return SubtitleWidget()
-            elif key == "movie_renamer":
-                from .movie_renamer_widget import MovieRenamerWidget
-                return MovieRenamerWidget()
-            elif key == "quality_tester":
-                from .quality_tester_widget import QualityTesterWidget
-                return QualityTesterWidget()
-        except Exception as e:
-            lbl = QLabel(f"Fehler beim Laden: {e}")
-            lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            return lbl
+        """Factory: erzeugt das echte Widget; Fehler behandelt der Lifecycle-Aufrufer."""
+        if key in ("h265", "h264", "av1"):
+            from .convert_widget import ConvertWidget
+            return ConvertWidget(key)
+        elif key == "iso":
+            from .iso_widget import ISOWidget
+            widget = ISOWidget()
+            widget.handoff_requested.connect(self._handoff_iso_to_converter)
+            return widget
+        elif key == "merge":
+            from .merge_widget import MergeWidget
+            return MergeWidget()
+        elif key == "mp4_remux":
+            from .mp4_remux_widget import MP4RemuxWidget
+            return MP4RemuxWidget()
+        elif key == "audio_muxer":
+            from .audio_muxer_widget import AudioMuxerWidget
+            return AudioMuxerWidget()
+        elif key == "audio_video_matcher":
+            from .audio_video_matcher_widget import AudioVideoMatcherWidget
+            return AudioVideoMatcherWidget()
+        elif key == "subtitle":
+            from .subtitle_widget import SubtitleWidget
+            return SubtitleWidget()
+        elif key == "movie_renamer":
+            from .movie_renamer_widget import MovieRenamerWidget
+            return MovieRenamerWidget()
+        elif key == "quality_tester":
+            from .quality_tester_widget import QualityTesterWidget
+            return QualityTesterWidget()
         return None
 
     def _on_tab_close(self, idx: int):

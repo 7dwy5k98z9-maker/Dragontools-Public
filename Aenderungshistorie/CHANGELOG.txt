@@ -2,10 +2,6 @@ Dragon Tools V9 – Änderungshistorie
 
 === 📋 Überblick ===
 
-[16.09.2026] V9.8.4: Validierter Quellstand
-Normalisierter FFmpeg-AutoCrop ist die verbindliche physische DV-Crop-Quelle. Finaler RPU-Nachweis schützt das Original auch bei exakter Geometrie. Zieländerungen während laufender Aufträge sind an der Move-Transaktionsgrenze abgesichert. Renamer unterstützt Releasegruppen, E05S06 und EPxx mit Staffelwahl; Fenster und Spalten sind flexibel skalierbar.
-857 Python-Dateien, 128.481 Gesamtzeilen und 108.628 Codezeilen (nichtleer, keine reinen Kommentarzeilen). Testpaket: 191 Python-Dateien, 188 test_*.py und 1.397 statisch erkannte Testfunktionen.
-
 Dragon Tools V9 – allgemeine Änderungshistorie
 - Die Historie ist dauerhaft nach Fachbereichen gegliedert.
 - Version und Datum stehen am jeweiligen Änderungspunkt; es gibt keinen separaten Abschnitt „Version X – aktueller Stand“.
@@ -19,6 +15,53 @@ Legacy-Historie
 - Im Programm: Hilfe → Änderungshistorie V9 / Legacy V8 / Legacy V7.
 
 === 📦 01 Release, Build & Packaging ===
+
+Release-Konsolidierung und Dokumentationsabgleich (V9.8.6 · 24.09.2026)
+- Zentrale App-Version, Build-Metadaten, Versionsanzeige und Über-Dialog sind auf 9.8.6 angehoben.
+- Help, DOCX-Handbuch, PDF-Handbuch und V9-Änderungshistorie tragen denselben Release-Stand.
+- Die Aktualisierung verändert keine bestehenden Verarbeitungsabläufe; der dokumentierte Funktionsstand von 9.8.5 bleibt unverändert erhalten.
+
+HDR-Direktzugriffe, Help-Ausbau und Dokumentationssync (V9.8.5 · 23.09.2026)
+- Einstellungen bietet den Dragon HDR10+ Generator zusätzlich als eigenen Direkteintrag; der Generatorbereich kann ohne globales Einstellungsfenster geöffnet werden.
+- Die Help-Datei besitzt jetzt 66 Hauptpunkte. Neu: SDR→HDR mit ComfyUI/HDRTVDM, Dragon HDR10+ Generator sowie HDR-Erkennung/Datei-Overrides/Strip-Only.
+- README, COMFYUI-HDR-Setup, Integrationstests, DOCX/PDF-Handbuch und Help sind auf den aktuellen HDR-/Queue-/Erkennungsstand synchronisiert.
+- Aktueller Projektumfang: 986 Python-Dateien/Programme, 150.125 Gesamtzeilen, 126.908 Codezeilen; 229 test_*.py mit 1.736 statisch erkannten Tests.
+
+Dokumentation, Projektstatistik und Dragon-HDR10+-Generator-Inventur (V9.8.5 · 22.09.2026)
+- Help, README, DOCX-Handbuch, PDF-Handbuch, COMFYUI-HDR-Setup und Integrationstest-Dokumentation sind auf Patch AQ/AR synchronisiert.
+- Aktueller Quellumfang einschließlich des eigenständigen Dragon-HDR10+-Generators: 984 Python-Dateien/Programme, 149.473 Gesamtzeilen und 126.368 Codezeilen.
+- Produktivcode ohne Tests: 752 Dateien, 105.329 Gesamtzeilen und 90.676 Codezeilen. Kombinierte Testpakete: 232 Python-Dateien, 228 test_*.py und 1.722 statisch erkannte Tests.
+- Hilfe → Über zählt im Entwicklungs-/Onedir-Stand jetzt auch `dragon_hdr10plus_generator/src` und `dragon_hdr10plus_generator/tests`; Frozen-Builds verwenden dieselben verifizierten Fallbackwerte. Lokale build-/dist-Artefakte werden nicht mitgezählt.
+- Der SDR→HDR-Infotext beschreibt ComfyUI/HDRTVDM als ausführbaren Backend-Pfad statt nur als Vorbereitung und nennt den gemessenen 1080p-Praxiswert auf RTX 4080 SUPER von ungefähr 4:1 Konvertierungsdauer zu Filmdauer.
+
+Review-Hardening Source-ZIP/Secrets/Qt (V9.8.5 · 20.09.2026)
+- Source-ZIP-Vertrag erzwingt die benötigten Integrations-/Release-Dokumente und lässt generierte PyInstaller-Specs weg.
+- API-Secrets werden unter Windows in realen QSettings per DPAPI geschützt; Backups bleiben über die bestehende Passwortverschlüsselung portabel.
+- HTTP-Jellyfin-Adressen erzeugen beim erstmaligen Speichern/Aktivieren eine Transportwarnung, bleiben für bewusst interne Konfigurationen aber zulässig.
+- Das starre 380-Zeilen-Limit des Release-Paketprüfers wurde durch Kohäsions-/Komplexitätsprüfungen ersetzt.
+- Patches V/W sichern Qt-Signal-Callbacks über `.emit()` ab und vermeiden die Kollision mit `QObject.event()` durch `worker_event`.
+- Vollständig stumme `except Exception: pass`-Blöcke im Produktcode wurden durch Debug-Protokollierung ersetzt.
+
+
+Projektstatistik nach den Fachpatches N–P (V9.8.5 · 19.09.2026)
+- Aktueller Quellumfang: 924 Python-Dateien einschließlich DragonToolsV9.py, 140.276 Gesamtzeilen und 118.657 Codezeilen.
+- Produktivcode ohne Testpaket: 716 Dateien, 99.828 Gesamtzeilen und 85.943 Codezeilen.
+- Testpaket: 208 Python-Dateien, 205 test_*.py und 1.565 statisch erkannte Tests.
+
+Source-free-Build und Whisper-Paketierung (V9.8.5 · 17.09.2026)
+- Manifest und aktive Build-Texte verwenden 9.8.5; der Batch-Builder entfernt den separat ausgelieferten Daten\Python-Quellbaum.
+- faster-whisper/CTranslate2 werden vor PyInstaller geprüft und bei Bedarf in der Build-Umgebung installiert; Paketdaten und Metadaten werden eingesammelt.
+- Das ausgewählte Whisper-Modell wird erst bei erster Verwendung heruntergeladen und lokal gecacht.
+
+Versionierte Whisper-Buildabhängigkeiten (V9.8.5 · 18.09.2026)
+- requirements-whisper.txt trennt faster-whisper/CTranslate2 von NumPy/OpenCV. Der Builder prüft Importierbarkeit und Versionsbereiche (faster-whisper >=1.1,<2; CTranslate2 >=4.4,<5).
+- Die Reparaturinstallation verwendet nur requirements-whisper.txt. Der Validator verfolgt -r-Includes und prüft den neuen Vertrag.
+- Das historische Reviewmanifest liegt als RELEASE_REVIEW_MANIFEST_9.8.3.json vor. Die frühere zweite Patch-Historie unter dragontools/PATCH.md wurde entfernt; maßgeblich ist ausschließlich die Root-Datei PATCH.md.
+
+Release-/Dokumentationsstand A–M (V9.8.5 · 17.09.2026)
+- Zentrale App-Version auf 9.8.5 angehoben; About-Fallbackwerte auf 917 Python-Dateien, 138.042 Gesamtzeilen und 116.731 Codezeilen aktualisiert.
+- Help, Handbuch/PDF und V9-Changelog dokumentieren den Patchstand A–M und die neuen optionalen Laufzeitkomponenten.
+- Testpaket: 206 Python-Dateien, 203 test_*.py, 1.531 statisch erkannte Tests; Reviewlauf 1.548 bestanden, 18 übersprungen, 0 fehlgeschlagen.
 
 [14.09.2026] V9.8.3: Release-Prüfungen und Public-Paketvertrag
 - CI und Release-Prüfungen erzwingen Syntax-, Qt-, Paketstruktur-, Bytecode- und Manifest-Prüfungen; reale DV/HDR-Roundtrips bleiben auf dem vorgesehenen Windows-Runner aktiv.
@@ -91,6 +134,21 @@ V9.5-01) Release- und Dokumentationsstand auf Dragon Tools V9.5 synchronisiert
 
 === 📚 02 Dokumentation & Hilfe ===
 
+Dokumentation thematisch auf den Stand vom 19.09.2026 gebracht (V9.8.5 · 19.09.2026)
+- VFR-Original-Timeline, Jellyfin-Pfadvalidierung/Metadatenanalyse, Live-Werkzeugpfade und Whisper-/NFO-Sprachsync sind in die vorhandenen Fachkapitel einsortiert.
+- Versionsspezifische Sammelkapitel im Handbuch wurden entfernt; die technische Dokumentation endet wieder in der regulären thematischen Struktur.
+- help.html wurde auf 63 fachliche Punkte erweitert: Timestamp/VFR, Jellyfin-Integration und Spracherkennung/Metadaten-Synchronisierung sind eigenständige Nachschlagepunkte.
+
+Themenbezogene Hilfe und Historie (V9.8.5 · 18.09.2026)
+- Versionssammelblock aus der Hilfe entfernt; Inhalte unter Queue, Encoder, HDR, Untertitel, Mediathek, Provider, GUI, Diagnose und Regeln eingeordnet.
+- Gemischte Hardening-Notizen in die passenden Changelog-Fachbereiche aufgeteilt. Datum/Version bleiben am einzelnen Änderungspunkt.
+- Datenschutzangaben um Watch-Folder, Jellyfin und Whisper-Modell-Download ergänzt; widersprüchliche Dateizahl in der Hilfe korrigiert. Offene Reviewbefunde als Grenzen dokumentiert.
+
+Dokumentation auf Patchstand A–M aktualisiert (V9.8.5 · 17.09.2026)
+- Hilfe und Handbuch dokumentieren Watch-Folder, Jellyfin-API, Fix Queue, Spracherkennung/OCR, VMAF-Zielsuche, Windows-Benachrichtigungen und SDR→HDR.
+- Der Über-Dialog zeigt aktuelle Release-Fallbackwerte und berechnet im Quell-/Onedir-Betrieb weiterhin live aus den vorhandenen Python-Dateien.
+- Versionierte Sammelkapitel sind nicht Teil des aktuellen Handbuchaufbaus; historische Versionsangaben bleiben ausschließlich dort erhalten, wo sie für die Änderungshistorie oder eine datierte Abnahme fachlich nötig sind.
+
 [15.09.2026] V9.8.3: Dokumentation final konsolidiert
 - Das aktuelle 9.8.3-Handbuch wurde vollständig gegen das ältere 9.8.2-PDF gegengeprüft. Die geringere Seitenzahl entsteht überwiegend durch kompakteren Satz; der 9.8.3-Stand enthält insgesamt nicht weniger Fachtext.
 - Historische V9.7/V9.8.2-Aussagen werden als historische Abnahmen gekennzeichnet; aktuelle Build-, Projekt- und Qualitätsangaben sind auf 9.8.3 aktualisiert.
@@ -161,6 +219,18 @@ V9.5-03) Help-Datei sprachlich geglättet und Handbuch-Nachtrag ergänzt
 
 === 🛠️ 03 Externe Tools, Systemprüfung & Prozessinfrastruktur ===
 
+Live-Werkzeugprüfung und lokales faster-whisper-Modell (V9.8.5 · 19.09.2026)
+- Einstellungen → Werkzeugpfade besitzt „Eingaben prüfen“ und verwendet dabei direkt die noch nicht gespeicherten Feldwerte.
+- F9 prüft zusätzlich mkvpropedit, Tesseract sowie faster-whisper/CTranslate2 einschließlich Runtime-/Modellstatus.
+- Optional kann ein lokaler CTranslate2-Modellordner mit model.bin/config.json verwendet werden. Ein ungültig konfigurierter Ordner fällt nicht still auf einen Download zurück.
+- faster-whisper bleibt eine Python-/CTranslate2-Komponente; es wird kein künstlicher whisper.exe-Pfad eingeführt.
+
+Optionale Analyse-/OCR-/HDR-Komponenten (V9.8.5 · 17.09.2026)
+- Tesseract ist als optionaler externer OCR-Pfad für PGS/VobSub eingebunden.
+- faster-whisper/CTranslate2 wird im offiziellen Build vor PyInstaller geprüft und bei Bedarf in die Build-Umgebung installiert; die Runtime lädt die Bibliothek lazy, das Modell beim ersten Einsatz.
+- libvmaf wird für die automatische Qualitätsziel-Suche benötigt; libplacebo wird für SDR→HDR nicht nur in der Filterliste, sondern mit einem echten Mini-Frame auf Runtime-Funktion geprüft.
+- Fehlt eine optionale Komponente, bleibt Dragon Tools startfähig und deaktiviert nur die zugehörige Zusatzfunktion.
+
 [14.09.2026] V9.8.3: DV-/HDR-Werkzeuge flexibler aufgelöst
 - Benötigte DV-/HDR-Werkzeuge werden aus PATH, bekannten lokalen Toolordnern oder expliziten Umgebungsvariablen erkannt.
 - Reale Roundtrip-Tests laufen regulär mit, wenn Werkzeuge und Referenzmedien verfügbar sind.
@@ -224,6 +294,11 @@ V9.5-Blockfix 19) Prozess- und Worker-Helfer entkoppelt
      - Windows-Shutdown verwendet ntpath für Windows-Pfade und bleibt damit auch bei plattformneutralen Tests hostunabhängig
 
 === 🎬 04 Konverter, Encoder & Profile ===
+
+Automatisches VMAF-Qualitätsziel (V9.8.5 · 17.09.2026)
+- Optionaler Modus testet repräsentative SDR-Segmente und sucht adaptiv nach dem höchsten CQ/CRF/Q/QP-Wert, der das konfigurierte Ziel-VMAF erreicht.
+- Der gefundene Wert gilt nur für die aktuelle Datei; feste Profilwerte bleiben Standard und Fallback.
+- HDR/DV/HLG und SDR→HDR verwenden bewusst keine direkte automatische VMAF-Entscheidung.
 
 [14.09.2026] V9.8.3: weitere Aufteilung der Konvertierungsfachlogik
 - Converter-, Parallel-Worker-, Audio-Mux- und Ausgabevalidierungsabläufe sind weiter in Plan-, Runner-, Output- und Verifier-Services gegliedert.
@@ -312,6 +387,18 @@ V9.5-Blockfix 19) Prozess- und Worker-Helfer entkoppelt
      - globale Metadaten sowie Audio-/Untertitel-Metadaten bleiben unverändert erhalten
 
 === 🌈 05 HDR, Dolby Vision, HDR10+ & Farbraum ===
+
+Dragon HDR10+ Generator 0.2.0 und automatische HDR10+-Erzeugung (V9.8.5 · 22.09.2026)
+- Der eigenständige Generator scannt PQ/ST2084 + BT.2020 zeitlich framegenau, erkennt Szenen und erzeugt ein hdr10plus_tool-kompatibles ST-2094-40-Profile-A-JSON.
+- Direkte PowerShell-Nutzung ist dokumentiert: `HDRPlusGenerator.exe analyze --input <video> --output <hdr10plus.json>`; Analysebreite, Szenenschwelle, Mindest-Szenenlänge sowie ffmpeg-/ffprobe-Pfade sind optional steuerbar.
+- Bei SDR→HDR wird erst der finale PQ/BT.2020-HEVC-Stream erzeugt und danach analysiert; die SDR-Quelle wird nicht zur HDR10+-Messung verwendet.
+- Vorhandene HDR10-HEVC-Dateien ohne HDR10+ können nach Strip-Only/Remux ohne Video-Re-Encode analysiert, injiziert, neu gemuxt und verifiziert werden.
+- Die HDR10+-Erzeugung ist global und als Tri-State-Datei-Override verfügbar.
+
+Experimentelles SDR→HDR-Enhancement (V9.8.5 · 17.09.2026)
+- Eindeutig erkanntes SDR BT.709 kann optional über FFmpeg/libplacebo per Inverse Tone Mapping/Range Expansion nach 10-Bit BT.2020/PQ überführt werden.
+- Keine künstlichen DV/HDR10+- oder erfundenen Mastering-Metadaten; H.264, bestehendes HDR/DV/HLG und unklare Farbraumquellen werden ausgeschlossen.
+- Ein realer libplacebo-Runtime-Smoke-Test schützt vor dem Fall „Filter vorhanden, Vulkan/Backend nicht initialisierbar“; dann fällt der Job automatisch auf den normalen SDR-Encode zurück.
 
 [16.09.2026] V9.8.3: Finaler RPU-Nachweis unabhängig von der Geometrie abgesichert
 - Fehlgeschlagene oder leere finale RPU-Extraktion sperrt das Original-Replace auch bei exakter Videogeometrie. Frühere DV-/Crop-Bestätigungen werden zurückgesetzt.
@@ -613,6 +700,20 @@ V9.5-05) DV+HDR10+ Finalverifikation: MediaInfo zuerst, Bitstream als Fallback
 
 === 💬 07 Untertitel & Burn-In ===
 
+OCR-Dateischutz (V9.8.5 · 18.09.2026)
+- Review-Berichte sind an den Medienauftrag und die zugehörigen Pending-Pfade gebunden. Verknüpfungen, ungültige Sprach-Tags und während der Prüfung geänderte Berichte werden abgelehnt.
+- Pending-Dateien und finale SRT-Dateien werden exklusiv angelegt; konkurrierende Dateien werden nicht überschrieben. Bei einer fehlgeschlagenen Pending-Erzeugung werden nur die selbst angelegten Dateien zurückgenommen.
+
+Offene OCR-Sicherheitsgrenzen (V9.8.5 · 18.09.2026)
+- Die manuelle Bestätigung ist keine Pfadvalidierung: draft_path aus einem veränderten Bericht kann eine fremde Datei löschen.
+- Die SRT-Namensprüfung ist noch nicht atomar mit dem Schreiben; ein gleichzeitig entstandenes Sidecar kann überschrieben werden.
+- Beide Punkte sind bestätigt und noch nicht behoben; keine fremden/geänderten OCR-Berichte verwenden.
+
+Untertitel-Injection und Bitmap-OCR gehärtet (V9.8.5 · 17.09.2026)
+- FFmpeg-/MP4/MOV-Injection übernimmt den Forced-Status; MKV-Fallback adressiert den neu angehängten Track nach ffprobe-Streamzählung statt vorhandene Untertitel zu überschreiben.
+- PGS/VobSub können optional über FFmpeg + Tesseract OCR verarbeitet werden. Das Ergebnis entsteht zuerst als .pending-Entwurf mit Confidence-Bericht und muss im Review-Dialog bestätigt werden.
+- Original-Bitmapspuren und vorhandene SRTs werden nicht automatisch gelöscht oder überschrieben.
+
 42) Output-Validierung für unbestimmte Sprachkennungen korrigiert
 - ISO-639 'und' und ein vollständig fehlendes Sprach-Tag werden bei der Endprüfung als derselbe Zustand 'Sprache unbestimmt' behandelt.
 - Eine kopierte Audiospur ohne bekannte Quellsprache verursacht dadurch keinen falschen Validierungsabbruch mehr.
@@ -701,6 +802,19 @@ V9.5-05) DV+HDR10+ Finalverifikation: MediaInfo zuerst, Bitstream als Fallback
      - typische Dezimalwerte wie 23.976 werden als rationale Werte wie 24000/1001 dargestellt
 
 === 📊 09 Queue, Parallelverarbeitung, Jobsteuerung & Shutdown ===
+
+Watch-Herkunft und Auto-Start (V9.8.5 · 18.09.2026)
+- Auto-Start berücksichtigt die konkrete vom Watch-Folder erzeugte Queue-Zeile. Manuelle Einträge werden auch bei gleichem Pfad nicht übernommen; nach Entfernen und manuellem Wiedereinfügen gilt die alte Freigabe nicht mehr.
+
+Watch-Folder-Erfolg und Shutdown (V9.8.5 · 17.09.2026)
+- Eine Dateisignatur wird erst bei terminalem Erfolg bestätigt; Fehler/Skip bleiben erneut versuchbar.
+- Eine geänderte Quelle wird nicht durch das Ergebnis ihrer alten Signatur bestätigt. Der Shutdown wartet auf den laufenden Watch-Scan.
+- Offener Reviewbefund 18.09.2026: Auto-Start kann bestehende manuelle Queue-Einträge übernehmen; die Trennung der Herkunft ist noch nicht vollständig.
+
+Queue-Index, Reorder und Watch-Folder (V9.8.5 · 17.09.2026)
+- Normalisierte Pfadindizes beschleunigen Duplikatprüfungen in GUI-, Single- und Parallel-Queue.
+- Neue Aktionen verschieben Mehrfachauswahl eine Position, direkt hinter laufende Jobs oder ans Queue-Ende; aktive Jobs bleiben geschützt und die Reihenfolge wird im Journal persistiert.
+- Optionale Watch-Folder überwachen mehrere Quellen, warten auf stabile Dateigröße/mtime und reihen Dateien über die bestehende Queue/Preflight-Pipeline ein statt eine zweite Verarbeitungskette aufzubauen.
 
 [16.09.2026] V9.8.3: Race-Conditions bei Laufzeit-Zieländerungen geschlossen
 - Der Move-Worker markiert eine Datei vor dem Lesen des geplanten Ziels als `running`; Zielübernahme und Transaktionsbeginn sind damit linearisiert. Eine später eintreffende Änderung wird sicher abgelehnt statt angenommen und anschließend ignoriert.
@@ -872,13 +986,26 @@ V9.5-Blockfix 21) JobJournal-Start und Abschluss fail-closed gemacht
 
 === ✅ 10 Preflight, Output-Validierung, Reparatur & Verschieben ===
 
+VFR-Timestamp-Reparatur mit Original-Timeline (V9.8.5 · 19.09.2026)
+- Bleibt eine MKV-Laufzeit nach normalem Remux unplausibel und liegt echte VFR vor, kann die noch vorhandene Originaldatei als framegenaue Zeitbasis dienen.
+- Dragon Tools liest die Original-PTS pro Videoframe und erzeugt eine MKVToolNix-Timestamp-v2-Datei; übernommen wird nur bei exakt identischer Frameanzahl.
+- Original- und Reparaturkandidat werden auf Video-/Audio-Start, Dauer und Synchronität geprüft. Unsichere Fälle bleiben fail-closed; es gibt keinen blinden CFR-Zwang.
+
+SxxExx-Ersetzung konfigurierbar (V9.8.5 · 17.09.2026)
+- Reine Episodenidentitäts-Konflikte können automatisch ersetzt, vor Ersetzung bestätigt oder vollständig von automatischer Ersetzung ausgeschlossen werden.
+- Normale Dateinamen-/Containerkonflikte bleiben unter der bestehenden Konfliktlogik; die gewählte Policy wird im Move-Journal für Resume beibehalten.
+
+[16.09.2026] V9.8.3: RPU-Prüfung nur bei tatsächlicher Video-Geometrieabweichung
+- Exakt passende finale Video-Geometrie wird als normaler Erfolg akzeptiert; ein abweichender finaler RPU-Hash allein erzeugt keinen Archivfall.
+- Nur wenn die finale Video-Geometrie vom normalisierten Soll-Crop abweicht, wird Level 5 zusätzlich gegen Soll und Ist geprüft.
+- Beispiel Soll 3840x1606 / Ist 3840x1608: sowohl RPU-Active-Area 3840x1606 als auch 3840x1608 sind zulässig.
+- Passt die RPU bei einer 1–2-Pixel-Abweichung zu keiner der beiden Geometrien oder kann Level 5 nicht sicher bewertet werden, wird das Original nicht ersetzt und der Kandidat mit NFO/Trickplay sowie VALIDIERUNG.csv/.txt archiviert.
+- Der RPU-Hash bleibt Diagnoseinformation; die geometrische Plausibilität entscheidet.
+
 [16.09.2026] V9.8.3: Crop-Geometrie normalisiert, Abschlussprüfung wieder exakt und Fehleroutputs fail-safe erhalten
 - Auto-Crop- und DV/RPU-Crop-Geometrien werden vor dem Encode zentral auf gerade 4:2:0-Koordinaten und Bildmaße normalisiert. Ungerade Kanten werden bevorzugt nach außen erweitert; z. B. wird eine erkannte Höhe 1607 bei ausreichender Quellfläche zu 1608 statt 1606.
 - Dolby-Vision-RPU/Level-5-Abgleich verwendet bereits die normalisierte Geometrie; vor dem RPU-Edit wird zusätzlich fail-closed geprüft, dass Video-Crop und RPU-Pfad nicht auseinanderlaufen.
-- Der normalisierte Crop bleibt verbindliches Soll. Die Abschlussprüfung ist nun bewusst gestuft: 1–2 Pixel Differenz erzeugen eine Warnung und dürfen weiterlaufen; bei physischem Dolby-Vision-Crop nur, wenn die finale RPU byteidentisch zur verifizierten L5=0-Crop-RPU ist.
-- 3–4 Pixel Differenz blockieren das automatische Ersetzen. Der Kandidat wird mit aktiviertem NFO-/Trickplay-Postprocessing nach `Archiv` gelegt. Mehr als 4 Pixel blockieren ebenfalls und werden ohne verpflichtendes Postprocessing als Diagnosekandidat archiviert.
-- Jeder Archivfall erhält eine `VALIDIERUNG.csv` mit Soll/Ist-Geometrie, getrennten Pixel-Deltas, RPU-Hashvergleich, Level-5-Offsets/Active-Area, RPU-vs.-Video-Differenz und konkreten ffprobe-/dovi_tool-Prüfschritten; die `VALIDIERUNG.txt` bleibt als lesbare Kurzfassung erhalten.
-- Eine abweichende oder nicht sicher extrahierbare finale Dolby-Vision-RPU ist kein Löschgrund mehr. Der fertige Videokandidat wird erhalten, das Original nicht ersetzt und der Fall zur manuellen Entscheidung über RPU-Nachcrop/Erweiterung archiviert.
+- Der normalisierte Crop bleibt verbindliches Soll. Die Abschlussprüfung ist gestuft: 1–2 Pixel = Warnung und Weiterverarbeitung; bei DV+physischem Crop nur mit bestätigtem byteidentischem L5=0-RPU-Abgleich. 3–4 Pixel = kein Ersetzen, Archiv mit NFO/Trickplay. >4 Pixel = Diagnosearchiv. Archivfälle erhalten eine VALIDIERUNG.csv mit Soll/Ist-Werten, getrennten Pixel-Deltas, RPU-Hashvergleich, Level-5-Offsets/Active-Area und manuellen ffprobe-/dovi_tool-Prüfschritten; die VALIDIERUNG.txt bleibt zusätzlich bestehen. Eine abweichende oder nicht sicher extrahierbare finale Dolby-Vision-RPU verwirft den fertigen Videokandidaten nicht mehr, sondern blockiert das Ersetzen und führt zu einem Diagnosearchiv.
 - Ein vollständig erzeugter Output wird bei einem finalen Verifikationsfehler nicht mehr vom allgemeinen Fehler-Cleanup gelöscht.
 - Fehlerhafte Kandidaten werden nach Möglichkeit in `Archiv` neben der Quelle verschoben. Kann die Archivierung nicht abgeschlossen werden, bleibt der Output am Arbeitsort erhalten; `keep_failed_output` schützt ihn vor Cleanup.
 - Die Archivierung unterstützt auch unterschiedliche Laufwerke: bei nicht möglichem atomaren Move wird sicher kopiert, die Dateigröße verifiziert und erst danach das Arbeitsartefakt entfernt.
@@ -1035,6 +1162,15 @@ V9.5-Blockfix 20) MoveJournal-Recovery konservativ fail-closed gemacht
      - Restore- und Journalwrite-Fehler werden gezielt getestet und führen nicht zu stiller Recovery-Bereinigung
 
 === 🌐 11 Online-Metadaten, Renamer & Benennung ===
+
+Asynchrone Provideraktionen und begrenzte Wartezeiten (V9.8.5 · 17.09.2026)
+- Manuelle Suche und Provider-Verbindungstests laufen außerhalb des GUI-Threads; der Shutdown wartet auf noch laufende Metadatenaktionen.
+- Retry-After-Wartezeiten sind bei Metadaten- und Jellyfin-Aufrufen auf zehn Sekunden begrenzt.
+
+TMDB/TheTVDB Retry/Backoff (V9.8.5 · 17.09.2026)
+- Temporäre HTTP-/Netzwerkfehler werden bis zu drei Gesamtversuche mit Backoff/Jitter wiederholt; 429 respektiert Retry-After.
+- 401/403 brechen sofort als Authentifizierungsfehler ab.
+- Bei mehreren Providern unterscheidet der Resolver jetzt klar zwischen „erfolgreich, aber kein Treffer“ und „alle Provider technisch fehlgeschlagen“.
 
 [15.09.2026] V9.8.3: Renamer - konfigurierbare Releasegruppen und flexible Episodenmuster
 - Bekannte Scene-/P2P-Gruppen wie STARS oder NIMA4K können unter Regeln -> Renamer-Regeln in einer eigenen Liste gepflegt werden. Exakt konfigurierte Gruppen werden nur am Anfang oder Ende des Release-Namens entfernt; gleichlautende Wörter innerhalb echter Titel bleiben erhalten.
@@ -1320,6 +1456,24 @@ Der Renamer bewahrt offizielle abschließende Punkte in Serientiteln, wenn im fe
 
 === 🖼️ 12 Jellyfin NFO, Trickplay & Sidecars ===
 
+Gezielte Jellyfin-Erkennung mit Serverpfad-Prüfung (V9.8.5 · 19.09.2026)
+- Vor /Library/Media/Updated liest Dragon Tools /Library/PhysicalPaths und akzeptiert nur Zielpfade innerhalb der von Jellyfin tatsächlich gesehenen Roots.
+- Mediathek-DB-Mappings liefern den externen Jellyfin-Pfad; aktuelle lokale Zielpfade bleiben für die lokale Mapping-Seite maßgeblich.
+- Neue Dateien melden zusätzlich ihren Parent-Ordner als Modified, damit Jellyfin den bekannten Film-/Staffelordner aktualisiert und die Datei normal analysiert.
+- Ungemappte Windows-/UNC-Pfade werden nicht mehr still als Erfolg behandelt; der optionale Full-Scan-Fallback bleibt erhalten. Der Verbindungstest zeigt die vom Server gemeldeten Roots.
+
+Jellyfin beim Programmende (V9.8.5 · 18.09.2026)
+- Refresh- und Verbindungstest-Threads werden beim Shutdown berücksichtigt. Ein noch aktiver Netzwerkaufruf hält das betroffene Fenster offen; nach Abschluss kann erneut geschlossen werden.
+- Der Einstellungsdialog wartet ebenfalls auf seinen Verbindungstest. Ergebnisrückmeldungen greifen nicht auf einen bereits zerstörten Dialog zu.
+
+Offene Shutdown-Einbindung (V9.8.5 · 18.09.2026)
+- Jellyfin-Refresh-Threads fehlen weiterhin in der zentralen Beenden-Prüfung; der isolierte Gate-Test bestätigt die Lücke. Erfolgreiche Medienjobs bleiben davon unabhängig.
+
+Optionale Jellyfin-API-Integration (V9.8.5 · 17.09.2026)
+- Nach erfolgreichem Move/Rename kann Dragon Tools Jellyfin gezielt über Media-Update informieren; Full-Library-Scan bleibt optional/Fallback.
+- Bei SxxExx-Ersetzung werden alte Pfade als Deleted und der neue Pfad als Created gemeldet.
+- Jellyfin-Aufrufe laufen best-effort; ein API-Ausfall macht einen bereits erfolgreichen Medienjob nicht nachträglich fehlerhaft.
+
 [14.09.2026] V9.8.3: Trickplay-/Sidecar-Sicherheit an Ersetzungsgrenzen
 - Quell-Trickplay wird vor destruktivem Ersetzen vorbereitet.
 - Recovery- und Begleitdateipfade folgen umbenannten Videozielen konsistent; Sidecar- und Postprocessing-Ergebnisse bleiben strukturiert dem jeweiligen Job zugeordnet.
@@ -1501,6 +1655,10 @@ V9.5-Blockfix 22) Trickplay-Erzeugung transaktional und timeoutfähig gemacht
 
 === 🧪 14 Qualitätstester ===
 
+Qualitätstester als Basis der automatischen VMAF-Zielsuche (V9.8.5 · 17.09.2026)
+- Repräsentative Testsegmente werden encodiert, per ffprobe geprüft und gegen die passend skalierte Referenz mit VMAF verglichen.
+- Fehlt libvmaf oder kann ein Kandidat nicht sicher bewertet werden, bleibt der bisherige feste Qualitätswert aktiv.
+
 37) Review-Patchset: Prozessgrenzen, Fail-Safe-Pfade und GUI-Refactoring abgeschlossen
 - ToolRunner und ConverterProgress schließen stdout/stderr-Pipes deterministisch; ResourceWarning-Regressionstests sichern lange Tool-Sessions ab.
 - Qualitätstester nutzt den zentralen ToolRunner mit konfigurierbarem Hard-Timeout (Standard 3600 s), Prozessbaum-Abbruch und einheitlicher Timeout-/Abort-Klassifizierung.
@@ -1561,6 +1719,18 @@ Normaler MP4-Remux prüft Abbruch erneut nach Sidecar-Arbeit und unmittelbar in 
      - Logmeldung verweist auf DV-Remux bzw. Standard-Converter mit Metadaten-Erhalt
 
 === ⚙️ 16 Regeln, Einstellungen, Migration & Backup ===
+
+Forward-Schema-Schutz (V9.8.5 · 17.09.2026)
+- Neuere unbekannte Regel-/Profil-Schemata bleiben erhalten; keine automatische Herabstufung oder Überschreibung.
+
+Erneute Schema-Prüfung vor GUI-Saves (V9.8.5 · 18.09.2026)
+- Profil-Speichern/-Ändern/-Löschen und Regel-Saves prüfen die aktuelle Datei erneut; Future-Schemata blockieren den Schreibzugriff mit sichtbarer Meldung.
+- Der Regeln-Dialog prüft alle Ziele vorab, bevor er mit den einzelnen Saves beginnt. Dies ist keine vollständige Mehrdatei-Transaktion gegen gleichzeitige externe Änderungen.
+- Neue Tests prüfen neuere Profil-/Regeldateien und einen externen Dateiaustausch nach dem Laden.
+
+Neue optionale Einstellungen (V9.8.5 · 17.09.2026)
+- Eigene Bereiche für Watch-Folder, Jellyfin-API, VMAF-Zielsuche, Windows-Benachrichtigungen, OCR/Whisper und experimentelles SDR→HDR.
+- Alle neuen Automatisierungen sind standardmäßig deaktiviert bzw. konservativ konfiguriert und beeinflussen bestehende Profile erst nach expliziter Aktivierung.
 
 [14.09.2026] V9.8.3: sichere Backups bleiben Standard
 - Standard-Backups schließen Secrets aus.
@@ -1659,6 +1829,10 @@ Der Bereich „Ausgabecontainer“ ist sowohl im globalen Einstellungsfenster al
 
 === 📝 17 Logging, Diagnose, Job-Journal & Berichte ===
 
+GUI-Fehlerberichte und Queue-Reihenfolge im Journal (V9.8.5 · 17.09.2026)
+- Fehlgeschlagene Lazy-Tab-Initialisierung wird nicht als geladen gecacht, kann über „Erneut versuchen“ wiederholt werden und schreibt einen vollständigen Traceback nach Logging/<Jahr>/<Monat>/ErrorReports/GUI.
+- Das Job-Journal persistiert die manuelle Queue-Reihenfolge; bewusst entfernte wartende Dateien werden bei Resume nicht wieder eingeschleust.
+
 21) GUI-Architektur: MediaLibraryDialog in View, Services und Controller zerlegt
      - media_library_dialog.py von rund 1.011 auf rund 337 Dateizeilen reduziert und auf Dialog-Orchestrierung beschränkt
      - View-Aufbau, Wartung/Import/Export, Pfad-Mapping, Suche/CSV/SQL, Scan-Lifecycle und Ergebnisdarstellung besitzen getrennte Owner
@@ -1739,6 +1913,11 @@ V9.5-Blockfix 23) JobJournal-Schreib- und Archivfehler sichtbar gemacht
 - Dateivalidierungs- und Toolfehler übernehmen den zuletzt bekannten Tool-/Command-Kontext, damit auch fehlende oder 0-Byte-Zwischenartefakte nachvollziehbar bleiben.
 
 === 🎨 18 GUI, Bedienung & Performance ===
+
+Bedienung und Benachrichtigungen (V9.8.5 · 17.09.2026)
+- Queue erhält Buttons für ⤒/↑/↓/⤓ mit stabiler Mehrfachauswahl und Schutz aktiver Jobs.
+- Lazy-Tabs zeigen bei Initialisierungsfehlern eine Retry-Ansicht statt eines dauerhaft gecachten Fehlerlabels.
+- Optionale native Windows-Benachrichtigungen melden Queue-Abschluss, Fehler und auf Wunsch einzelne erfolgreiche Dateien; Notification-Fehler beeinflussen keinen Jobstatus.
 
 [15.09.2026] V9.8.3: Hauptfenster und Renamer wieder kompakt skalierbar
 - Die vielen langen Haupt-Tabs dürfen ihre aufsummierte Breite nicht mehr als Mindestbreite des QMainWindow erzwingen; Scrollbuttons, Text-Elide und eine begrenzte minimumSizeHint halten alle Tabs erreichbar.
@@ -1863,6 +2042,34 @@ V9.5-Blockfix 17) ConvertWidget-God-Class weiter aufgelöst
      - bestehende Methoden und Properties wie restore_job_files(), tv_path/anime_path/filme_path sowie Start/Pause/Abort-Delegates bleiben kompatibel
 
 === ✅ 19 Tests & Qualitätssicherung ===
+
+Fokussierte Abnahme der Fachpatches N–P (V9.8.5 · 19.09.2026)
+- Patch N: 45/45 fokussierte Duration-/Workflow-/Architekturtests; zusätzlich 40 bestanden und 1 übersprungen im angrenzenden Satz.
+- Patch O: 116/116 für Jellyfin, Release-/Architektur sowie Mediathek-/Mapping-Regressions.
+- Patch P: 41/41 fokussierte Tool-/Whisper-/Settings-Tests; zusätzliche Mediathek-/Fix-/Release-nahe Prüfungen liefen erfolgreich, soweit die Containerumgebung keine PyQt6-/Repository-Root-Voraussetzung benötigte.
+- Aktueller statischer Testbestand: 205 test_*.py mit 1.565 erkannten Testfunktionen; compileall wurde für den bereitgestellten aktuellen Paketstand erfolgreich ausgeführt.
+
+Schutztests für Review-Befunde (V9.8.5 · 18.09.2026)
+- Die bisherigen Fehler-Charakterisierungen wurden durch regulär laufende Schutz-Regressionsprüfungen ersetzt: OCR-Pfade und Konkurrenz, Watch-Zeilenherkunft, Sprache, Abbruch, veraltete Tracks und Jellyfin-Shutdown.
+- Aktuelle Gesamtergebnisse und Validierungsgrenzen stehen im Patch-Abschlussbericht; ältere datierte Prüfwerte bleiben als Historie erhalten.
+
+Erneuter Review des überschriebenen Arbeitsstands (V9.8.5 · 18.09.2026)
+- Erster vollständiger Windows-Lauf: 1.584 bestanden, eine neue Architekturregression (Paketprüfer 386 statt maximal 380 Zeilen).
+- Sechs neue Moduleinträge in das vorhandene Smoke-Modulverzeichnis verschoben; alle 474 Einträge bleiben exakt erhalten, Testlimit unverändert. 47 gezielte Architektur-/Release-/Hardening-Tests bestanden.
+- Die acht damaligen Fehlernachweise bestätigten zu diesem Zeitpunkt R1–R7 des internen Reviews; spätere V9.8.5-Patches haben diese Punkte separat bearbeitet und mit Regressionstests abgesichert.
+- Aktuelle Quellstatistik nach der Korrektur: 917 Python-Dateien, 138.035 Gesamtzeilen, 116.725 Codezeilen; 203 Testdateien und 1.531 statische Tests. About-Fallbackwerte und Hilfetabellen angepasst.
+- Abschließender Gesamtlauf: 1.585 bestanden, keine Fehler oder Skips, 56,25 Sekunden; Qt und reale DV/HDR-Integration verpflichtend.
+
+Lokaler Gesamt- und Grenzfallreview (V9.8.5 · 18.09.2026)
+- Vollständige Testsuite mit verpflichtenden Qt-/DV-/HDR-Integrationstests: 1.585 bestanden, keine übersprungen.
+- Acht isolierte Charakterisierungstests bestätigen sieben Fehlergruppen: Watch-Auto-Start, OCR-Berichtspfade, OCR-Schreibkollision, Sprachheuristik, Abbruch vor Headeränderung, veraltete Trackdaten und fehlende Jellyfin-Shutdown-Einbindung. Das sind Fehlernachweise, keine bestandenen Sicherheitsregressionen.
+- Quellumfang unverändert: 917 Python-Dateien, 138.035 Gesamtzeilen, 116.725 Codezeilen; 206 Testpaket-Dateien / 203 test_*.py / 1.531 statische Testfunktionen.
+- Aus diesem damaligen Review wurde keine EXE-Abnahme oder allgemeine Release-Freigabe abgeleitet; spätere Korrekturen sind in der regulären PATCH-/Änderungshistorie dokumentiert.
+
+Patch-A–M-Regression (V9.8.5 · 17.09.2026)
+- Finaler Reviewstand: 1.548 Tests bestanden, 18 übersprungen, 0 fehlgeschlagen. Die zuvor paketbedingten Release-/CI-Baselinefehler sind im vollständigen 9.8.5-Quellpaket behoben.
+- Neue Regressionen decken Untertitel-Injection, Lazy-Loading, Queue-Reorder, Provider-Retry, Episoden-Ersetzung, Jellyfin, Watch-Folder, Fix Queue, Sprach-/OCR-Pfade, VMAF, Notifications und SDR→HDR ab.
+- Reale Windows-/CUDA-/PGS/VobSub-/libvmaf-/libplacebo-Smoke-Tests bleiben Teil der finalen Release-Abnahme.
 
 [15.09.2026] V9.8.3: Regression gegen überbreites Hauptfenster und Renamer ergänzt
 - Architekturtests schützen die schrumpfbare Tab-Leiste: Scrollbuttons, Text-Elide und eine begrenzte minimumSizeHint verhindern, dass die Summe aller Tab-Titel wieder die Mindestbreite des Hauptfensters bestimmt.
@@ -2009,6 +2216,27 @@ V9.5-Produktionsfix DV/HDR10+) Regressionsteststand v5
 - Statische Inventarisierung: 102 Python-Dateien im Testpaket, 100 test_*.py-Dateien und 746 statisch erkennbare test_*-Funktionen.
 
 === 🗄️ 20 Mediathek-Datenbank, SQLite & Bestandssuche ===
+
+Whisper-Sprachreparatur synchronisiert MKV, NFO und Datenbank (V9.8.5 · 19.09.2026)
+- Sichere Whisper-Ergebnisse setzen in MKV sowohl language als auch language-ietf per mkvpropedit.
+- Eine vorhandene NFO mit fileinfo/streamdetails wird auf derselben Audio-/Untertitel-Typordinalzahl mit dem ISO-639-2-Sprachtag aktualisiert. Beschädigte oder uneindeutige NFOs blockieren den Teil-Commit fail-closed.
+- Nach dem Commit wird die Mediendatei neu analysiert; die Datenbank übernimmt den tatsächlich geschriebenen Tracktag.
+- Interne Streams speichern den echten Container-/ffprobe-Index statt eines typenlokalen Indexes, damit FFmpeg, MKVToolNix und Fix Queue dieselbe Spur adressieren.
+
+Sprach- und Trackkorrektur abgesichert (V9.8.5 · 18.09.2026)
+- Kyrillisch, arabische Schrift und Han-Zeichen gelten allein nicht mehr als eindeutiger Sprachnachweis. Kurze fremdsprachige Einschübe dominieren die Erkennung nicht.
+- Abbruch verwirft auch bereits gesammelte Sprachproben. Analysewerkzeuge verwenden die auftragseigene Prozesssteuerung.
+- Dateisignatur, Trackposition, Streamindex, Codec, Sprache, Titel, Forced-Status und vorhandene Kanalangaben werden vor dem Schreiben geprüft. Veraltete Einträge erfordern eine erneute Analyse/Auswahl.
+- MKV-Metadaten werden auf einer isolierten Kopie bearbeitet. Vor dem Replace werden Quelle und Abbruch erneut geprüft; Abbruchanforderung und Commit sind synchronisiert. Zusätzlicher freier Speicher ungefähr in Größe der Mediendatei erforderlich.
+
+Historischer Zwischenstand der Sprach-/Trackkorrektur (V9.8.5 · 18.09.2026; später behoben)
+- Der damalige Reviewstand zeigte noch zu breite Schriftsystem-Heuristiken, einen fehlenden erneuten Abbruchcheck vor dem Header-Schreiben und eine unvollständige Snapshot-Prüfung der Trackidentität.
+- Diese Punkte sind durch den nachfolgenden Eintrag „Sprach- und Trackkorrektur abgesichert“ überholt: Abbruch, Dateisignatur, Trackposition, Streamindex, Codec, Sprache, Titel, Forced-Status und Kanalangaben werden vor dem Commit geprüft.
+
+Mediathek Fix Queue und Spracherkennung (V9.8.5 · 17.09.2026)
+- Neuer Fix-Queue-Bereich sammelt zunächst Probleme und führt NFO-, Trickplay- und Analyse-Reparaturen seriell aus; ein Einzelfehler stoppt die restliche Queue nicht.
+- Audio-Sprache kann über mehrere kurze faster-whisper-Samples mit Confidence/Konsens ermittelt werden; Textuntertitel werden direkt sprachlich analysiert.
+- Sichere MKV-Metadatenkorrektur setzt Language/Language-IETF und generische Tracktitel nur bei ausreichender Sicherheit; benutzerdefinierte Titel bleiben unangetastet. MP4 bleibt für automatische In-place-Sprachkorrektur fail-closed.
 
 [14.09.2026] V9.8.3: Mediathek- und Jellyfin-Pfade weiter modularisiert und gehärtet
 - Mediathek- und Jellyfin-Verarbeitung ist weiter in Parser-, Repository-, Such-, NFO- und Metadaten-Fachmodule getrennt.
@@ -2341,10 +2569,3 @@ V9.5-Blockfix 11) Mediathek-GUI auf die bereits modularisierte Core-Schicht ausg
      - die neu aufgebaute DragonTools-Staging-DB wird vor dem finalen os.replace nochmals per Online Backup API konsolidiert
      - bei Snapshot-/I/O-Fehlern bleibt ein vorhandenes Ziel unverändert; die originale Jellyfin-Datenbank wird nicht beschrieben
      - backup_database() verwendet kollisionssichere Namen mit Mikrosekunden und UUID-Anteil
-
-[16.09.2026] V9.8.3: RPU-Prüfung an tatsächliche Video-Geometrieabweichung gekoppelt
-- Exakt passende finale Video-Geometrie wird als normaler Erfolg akzeptiert; ein abweichender finaler RPU-Hash allein erzeugt keinen Archivfall.
-- Nur wenn die finale Video-Geometrie vom normalisierten Soll-Crop abweicht, wird die Level-5-Active-Area zusätzlich gegen Soll und Ist geprüft.
-- Beispiel Soll 3840x1606 / Ist 3840x1608: sowohl RPU-Active-Area 3840x1606 (2 Pixel Rand außerhalb der Active Area) als auch 3840x1608 (RPU auf finales Frame erweitert) sind zulässig.
-- Passt die RPU bei einer 1–2-Pixel-Videoabweichung zu keiner der beiden Geometrien oder kann Level 5 nicht sicher bewertet werden, wird das Original nicht ersetzt und der Kandidat mit NFO/Trickplay sowie VALIDIERUNG.csv/.txt archiviert.
-- Der RPU-Hash bleibt Diagnoseinformation; die geometrische Plausibilität entscheidet.

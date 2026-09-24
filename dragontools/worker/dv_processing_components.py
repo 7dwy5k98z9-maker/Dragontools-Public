@@ -13,6 +13,7 @@ from .dv_mkv_muxer import DVMKVMuxer
 from .dv_rpu_service import DVRpuService
 from .dv_subtitle_mux_service import DVSubtitleMuxService
 from .hdr10plus_bitstream_service import HDR10PlusBitstreamService
+from .hdr10plus_generator_client import HDR10PlusGeneratorClient
 from .subtitle_sidecar_service import SubtitleSidecarService
 
 
@@ -23,6 +24,7 @@ class DVProcessingComponents:
     mkv_muxer: DVMKVMuxer
     rpu_service: DVRpuService
     hdr10plus_service: HDR10PlusBitstreamService
+    generator_client: HDR10PlusGeneratorClient
     level5_editor: DVLevel5Editor
     subtitle_service: SubtitleSidecarService
     subtitle_mux_service: DVSubtitleMuxService
@@ -70,6 +72,11 @@ def build_dv_processing_components(
         hdr10plus_service=HDR10PlusBitstreamService(
             hdr10plus_tool_path=tools.hdr10plus_tool,
             log=detail_log,
+        ),
+        generator_client=HDR10PlusGeneratorClient(
+            str(getattr(tools, "hdr10plus_generator", "HDRPlusGenerator.exe")),
+            worker=worker,
+            log=log,
         ),
         level5_editor=DVLevel5Editor(dovi_tool_path=tools.dovi_tool, log=detail_log),
         subtitle_service=SubtitleSidecarService(

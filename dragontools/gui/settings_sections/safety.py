@@ -143,6 +143,21 @@ class SafetyValidationSection(SettingsSection):
             "  → Mehrere Versionen werden nebeneinander gespeichert, nichts geht verloren.\n"
             "Bei Videodateien zählt gleicher Name vor der Endung als Konflikt, z.B. Film.mp4 ↔ Film.mkv."
         ), 1, 2)
+
+        mc.addWidget(QLabel("SxxExx-Ersetzung:"), 2, 0)
+        d.episode_replacement_combo = QComboBox()
+        d.episode_replacement_combo.addItem("Automatisch ersetzen", "auto")
+        d.episode_replacement_combo.addItem("Vor Ersetzung nachfragen", "ask")
+        d.episode_replacement_combo.addItem("Nie automatisch ersetzen", "never")
+        mc.addWidget(d.episode_replacement_combo, 2, 1)
+        mc.addWidget(InfoButton(
+            "Gilt nur, wenn im Zielordner eine anders benannte Videodatei mit derselben "
+            "Staffel-/Episodenkennung gefunden wird, z. B. zwei verschiedene Titel für S01E03.\n"
+            "Nachfragen: Vor jeder solchen Ersetzung bestätigen.\n"
+            "Automatisch: Bisheriges Verhalten – alte Episode samt veralteter NFO/Trickplay-Artefakte sicher ersetzen.\n"
+            "Nie: Neue Datei wird bei einem reinen SxxExx-Konflikt nicht verschoben. "
+            "Normale Namens-/Containerkonflikte verwenden weiterhin den Konfliktmodus oben."
+        ), 2, 2)
         vl.addWidget(mc_grp)
         d.save_allow_larger_cb.toggled.connect(d.save_allow_larger_percent_spin.setEnabled)
         d.save_min_output_cb.toggled.connect(d.save_min_output_percent_spin.setEnabled)
@@ -165,6 +180,13 @@ class SafetyValidationSection(SettingsSection):
         values = ["skip", "delete_first", "overwrite", "rename"]
         conflict = s.value(cfg.SET_KEY_MOVE_CONFLICT, "skip", type=str)
         d.move_conflict_combo.setCurrentIndex(values.index(conflict) if conflict in values else 0)
+        episode_mode = s.value(
+            cfg.SET_KEY_EPISODE_REPLACEMENT_MODE,
+            cfg.DEFAULT_EPISODE_REPLACEMENT_MODE,
+            type=str,
+        )
+        idx = d.episode_replacement_combo.findData(episode_mode)
+        d.episode_replacement_combo.setCurrentIndex(idx if idx >= 0 else 0)
 
     def save(self) -> bool:
         d, s = self.dialog, self.settings
@@ -180,6 +202,10 @@ class SafetyValidationSection(SettingsSection):
         s.setValue(cfg.SET_KEY_REPAIR_DURATION_TIMESTAMP_ENABLED, d.repair_timestamp_cb.isChecked())
         values = ["skip", "delete_first", "overwrite", "rename"]
         s.setValue(cfg.SET_KEY_MOVE_CONFLICT, values[d.move_conflict_combo.currentIndex()])
+        s.setValue(
+            cfg.SET_KEY_EPISODE_REPLACEMENT_MODE,
+            d.episode_replacement_combo.currentData() or cfg.DEFAULT_EPISODE_REPLACEMENT_MODE,
+        )
         return True
 
     def open_timeout_settings(self) -> None:

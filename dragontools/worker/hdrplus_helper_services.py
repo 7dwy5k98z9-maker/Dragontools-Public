@@ -7,6 +7,7 @@ from typing import Callable
 from .dv_runtime_models import DVTempState
 from .dv_subtitle_mux_service import DVSubtitleMuxService
 from .hdr10plus_bitstream_service import HDR10PlusBitstreamService
+from .hdr10plus_generator_client import HDR10PlusGeneratorClient
 from .hdrplus_encode_service import HDRPlusEncodeService
 from .hdrplus_mux_service import HDRPlusMuxService
 from .hdrplus_pipeline_coordinator import HDRPlusPipelineCoordinator
@@ -22,6 +23,7 @@ class HDRPlusHelperServices:
     subtitle_service: SubtitleSidecarService
     subtitle_mux_service: DVSubtitleMuxService
     hdr10plus_service: HDR10PlusBitstreamService
+    generator_client: HDR10PlusGeneratorClient
     tool_runner: HDRPlusToolRunner
     mux_service: HDRPlusMuxService
     encode_service: HDRPlusEncodeService
@@ -63,6 +65,12 @@ def build_hdrplus_helper_services(
         hdr10plus_tool_path=tools.hdr10plus_tool,
         log=log,
     )
+    generator_client = HDR10PlusGeneratorClient(
+        str(getattr(tools, "hdr10plus_generator", "HDRPlusGenerator.exe")),
+        worker=worker,
+        log=log,
+        run_tool_fn=run_tool_fn,
+    )
     tool_runner = HDRPlusToolRunner(
         run_tool_fn=run_tool_fn,
         log_tool_failure_fn=log_tool_failure_fn,
@@ -94,6 +102,7 @@ def build_hdrplus_helper_services(
         subtitle_service=subtitle_service,
         subtitle_mux_service=subtitle_mux_service,
         hdr10plus_service=hdr10plus_service,
+        generator_client=generator_client,
         tool_runner=tool_runner,
         mux_service=mux_service,
         encode_service=encode_service,

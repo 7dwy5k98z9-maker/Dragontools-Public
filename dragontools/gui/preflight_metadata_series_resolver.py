@@ -59,13 +59,23 @@ class SeriesMetadataResolver:
     def resolve(self) -> Any:
         library_match = self.database.lookup(self.desired_year)
         direct = database_payload(library_match, self.series_name)
-        if direct:
+        library_warning = (
+            direct
+            if isinstance(direct, dict) and "__library_path_warning__" in direct
+            else None
+        )
+        # Ein nicht erreichbarer/staler DB-Treffer ist nur ein Hinweis. Er darf
+        # die eigentliche Ordner- und Online-Metadatensuche (inkl. Serienjahr)
+        # nicht vorzeitig beenden. Nur ein nutzbarer DB-Pfad ist terminal.
+        if direct and library_warning is None:
             return direct
 
         early_suggestion = self._resolve_ambiguous_database_year(library_match)
         direct = self._retry_database_after_online_year(early_suggestion)
-        if direct:
+        if direct and "__library_path_warning__" not in direct:
             return direct
+        if isinstance(direct, dict) and "__library_path_warning__" in direct:
+            library_warning = direct
 
         by_year = self._resolve_folders_for_known_year()
         if by_year is not None:
@@ -77,8 +87,13 @@ class SeriesMetadataResolver:
             return local
 
         if self.online_enabled:
-            return early_suggestion or self.online.lookup(self.desired_year)
-        return {"__local_series_missing__": True}
+            suggestion = early_suggestion or self.online.lookup(self.desired_year)
+            if suggestion is not None and library_warning is not None:
+                result = dict(library_warning)
+                result["__online_series_suggestion__"] = suggestion
+                return result
+            return suggestion or library_warning
+        return library_warning or {"__local_series_missing__": True}
 
     def _resolve_ambiguous_database_year(self, library_match: dict | None):
         if not (

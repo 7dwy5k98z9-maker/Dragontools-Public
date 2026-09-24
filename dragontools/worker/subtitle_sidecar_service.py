@@ -266,6 +266,17 @@ class SubtitleSidecarService:
             aborted=aborted,
         )
 
+    def export_mov_text_backup_result(
+        self, *, input_path: str, output_base: "str | Path", streams,
+        abort_check: "Callable[[], bool] | None" = None,
+    ) -> SubtitleExportResult:
+        """Sichert mov_text/tx3g nur im Fehlerfall verlustfrei als Subtitle-only-MP4."""
+        from .subtitle_movtext_backup import export_mov_text_backup
+        return export_mov_text_backup(
+            ffmpeg_path=self._ffmpeg_path, input_path=input_path, output_base=output_base,
+            streams=streams, abort_check=abort_check, worker=self._worker, log=self._log,
+        )
+
     def _sidecar_reason(self, container: str, selection) -> str:
         target_container = str(container or "mkv").lower()
         reasons: list[str] = []
@@ -277,7 +288,8 @@ class SubtitleSidecarService:
         if additional_sidecars_enabled(self._subtitle_rules):
             reasons.append("zusätzliche Sidecar-Regel")
         if getattr(selection, "ass_srt_streams", ()):
-            reasons.append("Text-Untertitel zusätzlich als SRT")
+            if text_to_srt_sidecar_enabled(self._subtitle_rules):
+                reasons.append("Text-Untertitel zusätzlich als SRT")
         return ", ".join(dict.fromkeys(reasons)) or "Regelwerk"
 
     def _log_empty_selection(self, storage, *, container: str = "mp4") -> None:

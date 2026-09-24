@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
+import logging
 
 import sys
 from datetime import datetime
@@ -31,7 +32,7 @@ def verbose_log_dir_from_settings(settings=None) -> Path:
         if normal_root:
             return make_verbose_log_dir(normal_root)
     except Exception:
-        pass
+        logging.getLogger(__name__).debug("Unterdrückte Best-Effort-Ausnahme in verbose_log_dir_from_settings.", exc_info=True)
     return make_verbose_log_dir(Path.home() / "Documents" / "DragonTools")
 
 
@@ -42,7 +43,7 @@ def _cleanup_verbose_dir(log_dir: Path) -> None:
         while len(txts) >= _VERBOSE_MAX_FILES:
             txts.pop(0).unlink(missing_ok=True)
     except Exception:
-        pass
+        logging.getLogger(__name__).debug("Unterdrückte Best-Effort-Ausnahme in _cleanup_verbose_dir.", exc_info=True)
 
 
 class VerboseLogger:
@@ -87,7 +88,7 @@ class VerboseLogger:
             with open(self.log_file, "a", encoding="utf-8") as f:
                 f.write(f"[{ts}] {msg}\n")
         except Exception:
-            pass
+            logging.getLogger(__name__).debug("Unterdrückte Best-Effort-Ausnahme in write.", exc_info=True)
 
     def discard(self) -> bool:
         """Entfernt den Verbose-Log, wenn er fuer die Diagnose nicht benoetigt wird."""

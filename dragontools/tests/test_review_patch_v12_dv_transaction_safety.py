@@ -52,7 +52,7 @@ def _worker(**overrides):
         _sidecar_outputs={},
         _postprocess_outputs={},
         _failure_details={},
-        event=_Signal(),
+        worker_event=_Signal(),
         file_result=_Signal(),
         file_progress=_Signal(),
         log=lambda *_a: None,

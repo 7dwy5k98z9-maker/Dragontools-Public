@@ -88,7 +88,8 @@ def _nvenc_args(codec, crf, encoder_options):
         raise ValueError(f"NVENC: nicht unterstützter Ziel-Codec: {codec!r}")
     enc = em[codec]
     o = encoder_options
-    cq = _int_option(o, "cq", int(crf))
+    cq_max = 63 if codec == "av1" else 51
+    cq = _bounded_int_option(o, "cq", int(crf), 0, cq_max)
     args = [
         "-c:v", enc,
         "-preset", str(value_or_default(o.get("preset"), "p6")),
@@ -96,13 +97,18 @@ def _nvenc_args(codec, crf, encoder_options):
         "-cq", str(cq),
         "-b:v", "0",
     ]
+    # Use the canonical FFmpeg/NVENC spellings.  Older FFmpeg releases
+    # accepted underscore aliases as well, but current builds expose only the
+    # hyphenated names for Spatial/Temporal AQ.  Keeping the canonical form
+    # makes the same argument builder safe for Standard, DV, HDR10+ and
+    # per-file override paths.
     if _safe_bool(value_or_default(o.get("spatial_aq"), True), True):
         args += [
-            "-spatial_aq", "1",
-            "-aq-strength", str(value_or_default(o.get("aq_strength"), 8)),
+            "-spatial-aq", "1",
+            "-aq-strength", str(_bounded_int_option(o, "aq_strength", 8, 1, 15)),
         ]
     if _safe_bool(value_or_default(o.get("temporal_aq"), False), False):
-        args += ["-temporal_aq", "1"]
+        args += ["-temporal-aq", "1"]
     bf = _int_option(o, "bf", 0)
     lookahead = _int_option(o, "rc_lookahead", 32)
     if bf > 0 and lookahead > 0:
@@ -115,7 +121,7 @@ def _nvenc_args(codec, crf, encoder_options):
     multipass = _text_option(o, "multipass", {"disabled", "qres", "fullres"})
     if multipass is not None:
         args += ["-multipass", multipass]
-    bref = str(value_or_default(o.get("bref_mode"), "disabled") or "disabled").strip().lower()
+    bref = _text_option(o, "bref_mode", {"disabled", "each", "middle"}) or "disabled"
     if bf > 0 and bref != "disabled" and codec in ("h264", "h265"):
         args += ["-b_ref_mode", bref]
     if codec == "h265":
@@ -130,15 +136,33 @@ def _qsv_args(codec, crf, encoder_options):
     if codec not in em:
         raise ValueError(f"QSV: nicht unterstützter Ziel-Codec: {codec!r}")
     o = encoder_options
+    quality = _bounded_int_option(o, "q", int(crf), 1, 51)
+    lookahead_depth = _bounded_int_option(o, "lookahead_depth", 40, 1, 100)
     args = [
         "-c:v", em[codec],
         "-preset", str(value_or_default(o.get("preset"), "medium")),
-        "-q", str(_int_option(o, "q", int(crf))),
+        # QSV quality modes are selected through global_quality.  Using -q
+        # sets the generic QSCALE flag (CQP); combining that with look_ahead
+        # is rejected by FFmpeg as two simultaneous RC modes.
+        "-global_quality", str(quality),
     ]
-    args += [
-        "-look_ahead", "1",
-        "-look_ahead_depth", str(_bounded_int_option(o, "lookahead_depth", 40, 1, 100)),
-    ]
+
+    if codec == "h264":
+        # h264_qsv exposes the classic look_ahead switch. Together with
+        # global_quality this selects LA_ICQ instead of conflicting with CQP.
+        args += [
+            "-look_ahead", "1",
+            "-look_ahead_depth", str(lookahead_depth),
+        ]
+    else:
+        # Current hevc_qsv/av1_qsv no longer expose the h264-only
+        # ``look_ahead`` AVOption. Their documented lookahead depth is tied to
+        # ExtBRC, so use only options those encoders actually expose.
+        args += [
+            "-extbrc", "1",
+            "-look_ahead_depth", str(lookahead_depth),
+        ]
+
     if codec == "h265":
         args += _h265_10bit_args("qsv")
     elif codec == "av1" and encoder_options.get("_force_10bit"):
@@ -151,14 +175,17 @@ def _amf_args(codec, crf, encoder_options):
     if codec not in em:
         raise ValueError(f"AMF: nicht unterstützter Ziel-Codec: {codec!r}")
     o = encoder_options
-    qp = _int_option(o, "qp", int(crf))
+    qp_max = 255 if codec == "av1" else 51
+    qp = _bounded_int_option(o, "qp", int(crf), 0, qp_max)
     args = [
         "-c:v", em[codec],
         "-quality", str(value_or_default(o.get("quality"), "balanced")),
         "-qp_i", str(qp),
         "-qp_p", str(qp),
     ]
-    if codec != "av1":
+    # FFmpeg AMF exposes qp_b for H.264 and AV1, but not for HEVC.  Passing
+    # -qp_b to hevc_amf therefore fails at option parsing on current builds.
+    if codec in {"h264", "av1"}:
         args += ["-qp_b", str(qp)]
     if codec == "h265":
         args += _h265_10bit_args("amf")

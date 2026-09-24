@@ -7,6 +7,7 @@ from dragontools.core.encoder_profile_override import (
     scoped_encoder_options,
 )
 from dragontools.core.models import TargetCodec, normalize_override_dict
+from dragontools.worker.encoder_args import _vid_args
 
 
 def test_profile_to_override_rejects_wrong_codec():
@@ -201,3 +202,81 @@ def test_manual_override_accepts_legacy_float_string_quality():
 
     assert normalized is not None
     assert normalized["quality"] == 19
+
+
+def _assert_current_nvenc_aq_spelling(args: list[str]) -> None:
+    assert "-spatial-aq" in args
+    assert "-temporal-aq" in args
+    assert "-spatial_aq" not in args
+    assert "-temporal_aq" not in args
+
+
+def test_nvenc_canonical_aq_options_apply_to_global_profile_and_manual_override():
+    """Der Fehler darf nicht davon abhängen, wie NVENC ausgewählt wurde.
+
+    Alle drei Auswahlpfade enden im selben Encoder-Argument-Builder.
+    """
+    base_nvenc = {
+        "encoder": "nvenc",
+        "preset": "p6",
+        "cq": 23,
+        "bf": 4,
+        "rc_lookahead": 32,
+        "spatial_aq": True,
+        "temporal_aq": True,
+        "aq_strength": 8,
+    }
+
+    global_settings = effective_encoder_settings(
+        default_codec="h265",
+        default_crf=23,
+        default_preset="medium",
+        default_scale_mode="original",
+        default_encoder_options=base_nvenc,
+        file_override=None,
+    )
+    profile_settings = effective_encoder_settings(
+        default_codec="h265",
+        default_crf=23,
+        default_preset="medium",
+        default_scale_mode="original",
+        default_encoder_options={"encoder": "cpu"},
+        file_override={
+            "encoder_profile": {
+                "key": "film_nvenc",
+                "label": "Film NVENC",
+                "codec": "h265",
+                "crf": 23,
+                "preset": "medium",
+                "scale": "original",
+                "encoder_options": dict(base_nvenc),
+            }
+        },
+    )
+    manual_settings = effective_encoder_settings(
+        default_codec="h265",
+        default_crf=23,
+        default_preset="medium",
+        default_scale_mode="original",
+        default_encoder_options={"encoder": "cpu"},
+        file_override={
+            "encoder_override": {
+                "codec": "h265",
+                "encoder": "nvenc",
+                "quality": 23,
+                "preset": "p6",
+                "scale_mode": "original",
+                "encoder_options": dict(base_nvenc),
+            }
+        },
+    )
+
+    for settings in (global_settings, profile_settings, manual_settings):
+        assert settings["encoder_options"]["encoder"] == "nvenc"
+        args = _vid_args(
+            settings["codec"],
+            settings["crf"],
+            settings["preset"],
+            settings["encoder_options"],
+        )
+        _assert_current_nvenc_aq_spelling(args)

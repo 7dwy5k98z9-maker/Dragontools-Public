@@ -42,7 +42,9 @@ def build_resume_plan(
     resume_files: list[str] = []
     counts = {"ok": 0, "skipped": 0, "failed": 0, "running": 0, "queued": 0, "unknown": 0}
 
-    for path, row in files.items():
+    # Statuszaehler bleiben historisch vollstaendig, auch wenn eine wartende
+    # Datei spaeter bewusst aus der sichtbaren Queue entfernt wurde.
+    for row in files.values():
         item = row if isinstance(row, dict) else {}
         status = normalize_status(str(item.get("status") or "queued"))
         if status == "ok":
@@ -51,17 +53,38 @@ def build_resume_plan(
             counts["skipped"] += 1
         elif status in TERMINAL_PROBLEM_STATUSES:
             counts["failed"] += 1
+        elif status in RUNNING_STATUSES:
+            counts["running"] += 1
+        elif status in PENDING_STATUSES:
+            counts["queued"] += 1
+        else:
+            counts["unknown"] += 1
+
+    queue_order = data.get("queue_order")
+    if isinstance(queue_order, list):
+        # Seit Format v1+Patch C ist diese Liste die autoritative sichtbare
+        # Queue. Dadurch tauchen bewusst entfernte queued-Dateien bei einem
+        # Crash nicht wieder auf.
+        ordered_paths = dedupe_preserve_order(
+            [str(path) for path in queue_order if str(path or "")]
+        )
+    else:
+        # Rueckwaertskompatibilitaet fuer Journale vor Patch C.
+        ordered_paths = [str(path) for path in files]
+
+    for path in ordered_paths:
+        row = files.get(path, {})
+        item = row if isinstance(row, dict) else {}
+        status = normalize_status(str(item.get("status") or "queued"))
+        if status in TERMINAL_PROBLEM_STATUSES:
             if retry_failed:
                 resume_files.append(str(path))
         elif status in RUNNING_STATUSES:
-            counts["running"] += 1
             if retry_running:
                 resume_files.append(str(path))
         elif status in PENDING_STATUSES:
-            counts["queued"] += 1
             resume_files.append(str(path))
-        else:
-            counts["unknown"] += 1
+        elif status not in {"ok", "skipped"}:
             resume_files.append(str(path))
 
     return {

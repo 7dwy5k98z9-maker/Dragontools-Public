@@ -1,0 +1,1 @@
+"""Picture analysis primitives."""

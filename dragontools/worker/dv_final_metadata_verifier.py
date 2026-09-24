@@ -20,7 +20,11 @@ class DVFinalMetadataVerifier:
         req = state.request
         self._vlog("[DV][VERIFY] Finale Datei mit MediaInfo prüfen")
         inspection = inspect_dynamic_hdr(req.output_path, self._tools)
-        require_hdr10plus = bool(req.preserve_dv_hdr10plus_combo)
+        require_hdr10plus = bool(
+            getattr(req, "requires_hdr10plus", False)
+            or getattr(req, "preserve_dv_hdr10plus_combo", False)
+            or getattr(req, "generate_hdr10plus", False)
+        )
         strict_crop = bool(getattr(state, "effective_crop", None))
         missing_dv, missing_hdr = True, require_hdr10plus
         if inspection.conclusive:

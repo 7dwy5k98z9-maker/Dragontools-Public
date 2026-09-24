@@ -46,9 +46,9 @@ class DVRemuxFileDispatcher:
             "success",
         )
         w.file_progress.emit(input_path, 100, None)
-        w.event.emit(progress_event(input_path, 100, None))
+        w.worker_event.emit(progress_event(input_path, 100, None))
         mark_dv_terminal(w, input_path, "✅")
-        w.event.emit(result_event(input_path, output_path, "✅"))
+        w.worker_event.emit(result_event(input_path, output_path, "✅"))
         w.file_result.emit(input_path, output_path, "✅")
 
     def run(self, input_path: str) -> bool:
@@ -76,9 +76,9 @@ class DVRemuxFileDispatcher:
         if decision.should_skip:
             w.log(f"⏭️ {Path(input_path).name}: {decision.reason}", "warn")
             w.file_progress.emit(input_path, 100, None)
-            w.event.emit(progress_event(input_path, 100, None))
+            w.worker_event.emit(progress_event(input_path, 100, None))
             mark_dv_terminal(w, input_path, "⏭️")
-            w.event.emit(result_event(input_path, input_path, "⏭️"))
+            w.worker_event.emit(result_event(input_path, input_path, "⏭️"))
             w.file_result.emit(input_path, input_path, "⏭️")
             return False
         if decision.should_encode:

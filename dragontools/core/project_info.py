@@ -29,12 +29,12 @@ class ProjectStatistics:
 # Wird bei Dokumentations-/Release-Pflege aktualisiert und dient nur als
 # Fallback, wenn ein Frozen-Build keine .py-Quellen enthält.
 RELEASE_STATISTICS = ProjectStatistics(
-    python_files=857,
-    total_lines=128481,
-    code_lines=108628,
-    test_package_files=191,
-    test_files=188,
-    static_tests=1397,
+    python_files=986,
+    total_lines=150125,
+    code_lines=126908,
+    test_package_files=233,
+    test_files=229,
+    static_tests=1736,
     dynamic=False,
 )
 
@@ -50,6 +50,19 @@ def _source_files(root: Path) -> list[Path]:
             p for p in package.rglob("*.py")
             if "__pycache__" not in p.parts
         )
+
+    # Der eigenständige Dragon-HDR10+-Generator ist ein eigenes CLI/EXE,
+    # gehört aber fachlich und statistisch zum DragonTools-Projekt. Gezählt
+    # werden ausschließlich seine gepflegten Python-Quellen und Tests, nicht
+    # etwaige lokale build-/dist-Artefakte.
+    generator = root / "dragon_hdr10plus_generator"
+    for relative in ("src", "tests"):
+        folder = generator / relative
+        if folder.is_dir():
+            files.extend(
+                p for p in folder.rglob("*.py")
+                if "__pycache__" not in p.parts
+            )
     return sorted(set(files))
 
 
@@ -89,8 +102,16 @@ def collect_project_statistics(root: str | Path | None = None) -> ProjectStatist
             if line.strip() and not line.lstrip().startswith("#")
         )
 
-    tests_dir = base / "dragontools" / "tests"
-    package_test_files = sorted(tests_dir.glob("*.py")) if tests_dir.is_dir() else []
+    test_dirs = (
+        base / "dragontools" / "tests",
+        base / "dragon_hdr10plus_generator" / "tests",
+    )
+    package_test_files = sorted(
+        p
+        for tests_dir in test_dirs
+        if tests_dir.is_dir()
+        for p in tests_dir.glob("*.py")
+    )
     test_files = [p for p in package_test_files if p.name.startswith("test_")]
     static_tests = sum(_count_static_tests(path) for path in test_files)
 
@@ -107,43 +128,26 @@ def collect_project_statistics(root: str | Path | None = None) -> ProjectStatist
 
 def build_about_html(root: str | Path | None = None) -> str:
     stats = collect_project_statistics(root)
-    source_note = "live aus dem Programmverzeichnis" if stats.dynamic else "verifizierte Release-Fallbackwerte"
+    source_note = (
+        "live aus dem Programmverzeichnis"
+        if stats.dynamic
+        else "verifizierte Release-Fallbackwerte"
+    )
     return (
         f"<b>Dragon Tools V{APP_VERSION}</b><br>"
-        "Dragon Tools ist ein modulares Medienwerkzeug für Konvertierung, Remux, Analyse, Metadaten, Mediathek, Validierung, Reparatur und Nachbearbeitung in einer PyQt6-Oberfläche.<br><br>"
-        "<b>Neuerungen 9.8.4</b><br>"
-        "Normalisierter AutoCrop als verbindliche DV-Crop-Quelle; finaler RPU-Nachweis sperrt unsicheres Replace; sichere Laufzeit-Zieländerung; erweiterte Renamer-Regeln und frei skalierbare Fenster/Spalten.<br><br>"
+        "Modulares Medienwerkzeug für Konvertierung, Remux, Analyse und automatisierte Nachbearbeitung in einer PyQt6-Oberfläche.<br><br>"
         "<b>Video &amp; HDR</b><br>"
         "H.264 · H.265/HEVC · AV1 · NVENC · QSV · AMF · CPU/x265 · SVT-AV1<br>"
-        "DV- und HDR10+-Erhalt · Dolby-Vision-RPU-Prüfung · Auto-Crop · IMAX · Downscale-only<br>"
-        "Der HDR10+-Workflow nutzt den direkten 5-Schritt-Pfad; MP4Box und mkvmerge/mkvextract sichern die jeweiligen MP4-/MKV-Spezialpfade ab.<br><br>"
-        "<b>Workflow &amp; Sicherheit</b><br>"
-        "Per-Datei-Overrides · Audio-/Untertitelregeln · Sidecars · ISO/BDMV · Remux · Merge · Audio-Mux<br>"
-        "Audio-Video-Matcher · Qualitätstester · Timestamp-Reparatur mit +genpts/+igndts-Fallback · transaktionaler Output-Commit · Move-Recovery<br>"
-        "Qt-sicheres Async-Postprocessing · exactly-once NFO/Trickplay-Scheduling · transaktionaler Trickplay-Commit<br>"
-        "Move-Journal-Archivierung fail-closed · Journal-Finalisierung zählt als Move-Fehler statt als sauberer Abschluss<br><br>"
-        "<b>Metadaten &amp; Mediathek</b><br>"
-        "TMDB · TheTVDB · Renamer-Regeln · mehrstufiges Fuzzy-Matching · Jellyfin-NFO · Trickplay<br>"
-        "SQLite-Mediathek Schema 6 · Jellyfin-Import · indexierter Serien-Lookup · asynchrone Suche · NFO-Lightscan<br>"
-        "DB-first Preflight · frische Batch-Metadaten für finale Rename-/NFO-Läufe · TheTVDB-Sprachfallback<br>"
-        "Generische Episodentitel wie Folge XX werden bei Bedarf frisch geprüft statt dauerhaft aus dem Cache übernommen.<br><br>"
-        "<b>Architektur</b><br>"
-        "Zwölf Refactoring-/Stabilitätsblöcke trennen große GUI-, Core- und Worker-Abläufe in fokussierte Fachmodule.<br>"
-        "Schmale Fassaden halten bestehende Importpfade stabil; der Release-Smoke deckt alle im Review-Manifest neu eingeführten Produktivmodule ab.<br>"
-        "Die Quellbildprüfung bündelt mehrere Probezeitpunkte pro FFmpeg-Prozess und reduziert damit Prozessstarts deutlich.<br><br>"
-        f"<b>Projektumfang ({source_note})</b><br>"
-        f"{_fmt_int(stats.python_files)} Python-Dateien · {_fmt_int(stats.total_lines)} Gesamtzeilen · "
-        f"{_fmt_int(stats.code_lines)} Codezeilen<br>"
-        f"Tests-Paket: {stats.test_package_files} Python-Dateien · {stats.test_files} test_*.py · "
-        f"{stats.static_tests} statisch erkannte Tests<br>"
-        "Aktueller Dokumentations-/Review-Stand: 16.09.2026 · Version 9.8.4.<br>"
-        "Gezielte Regressionen, compileall, Architekturgrenzen und Release-Smoke sichern die geänderten Bereiche; "
-        "bekannte Review-Host-Probleme werden getrennt von fachlichen Regressionen geführt.<br><br>"
-        "Entwicklungszeit gesamt: rund 6.000 Stunden<br>"
-        "V8 → V9: rund 2.000 Stunden · V9 → V9.8: rund 2.000 Stunden · V7 → V8: rund 1.600 Stunden<br>"
-        "Testzeit: V1–V7 knapp 150h · V8 rund 400h · V9 bisher rund 140h praktische Felderprobung<br><br>"
-        "Vorherige Version V8: 111 Programme · 25.800 Zeilen · 21.200 Codezeilen.<br>"
-        "Vorherige Version V7: 6 Programme · 26.568 Zeilen · 19.880 Codezeilen.<br><br>"
-        "Shortcuts: F1=Hilfe · F2=Handbuch · F9=Werkzeuge · F11=Legacy V8 · F12=Changelog V9<br>"
-        "Strg+W=Tab schließen · Strg+Shift+T=Tab öffnen · Strg+R=Standardwerte · Entf=Datei entfernen"
+        "Dolby Vision · HDR10+ · HLG · SDR · RPU-Prüfung · Auto-Crop · IMAX · Downscale und optionales SDR→HDR-Enhancement<br><br>"
+        "<b>Projektumfang (DragonTools + Dragon HDR10+ Generator)</b><br>"
+        f"{_fmt_int(stats.python_files)} Python-Dateien/Programme · "
+        f"{_fmt_int(stats.total_lines)} Gesamtzeilen · "
+        f"{_fmt_int(stats.code_lines)} Codezeilen ({source_note})<br>"
+        f"Tests: {stats.test_files} test_*.py · {_fmt_int(stats.static_tests)} statisch erkannte Tests<br><br>"
+        "<b>Integrierte Zusatzkomponente</b><br>"
+        "Dragon HDR10+ Generator (separate EXE/CLI, im Projektumfang enthalten)<br><br>"
+        "<b>Externe Werkzeuge &amp; optionale Komponenten</b><br>"
+        "FFmpeg/ffprobe · MKVToolNix/mkvmerge · MediaInfo · MakeMKV · dovi_tool · "
+        "hdr10plus_tool · MP4Box · HandBrake · RMTS · Tesseract<br>"
+        "Optional: ComfyUI · DaVinci Resolve · faster-whisper/CTranslate2 · lokale Whisper-Modelle · libvmaf · libplacebo"
     )

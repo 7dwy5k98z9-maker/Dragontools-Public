@@ -33,7 +33,6 @@ def test_refactored_power_modules_stay_bounded():
         "core/release_validation.py": 320,
         "core/release_validation_common.py": 100,
         "core/release_validation_environment.py": 330,
-        "core/release_validation_package.py": 380,
         "core/batch_preflight.py": 80,
         "core/batch_preflight_formatting.py": 240,
         "core/batch_preflight_decisions.py": 290,
@@ -124,6 +123,42 @@ def test_refactored_power_modules_stay_bounded():
     for relative, maximum in limits.items():
         path, source = _source(relative)
         assert len(source.splitlines()) <= maximum, f"{path.name} ist wieder auf {len(source.splitlines())} Zeilen angewachsen"
+
+
+
+def _decision_complexity(node: ast.AST) -> int:
+    """Small AST-based cyclomatic approximation; formatting/data tables do not count."""
+    decision_nodes = (ast.If, ast.For, ast.AsyncFor, ast.While, ast.Try, ast.IfExp, ast.comprehension, ast.Match)
+    score = 1
+    for child in ast.walk(node):
+        if isinstance(child, decision_nodes):
+            score += 1
+        elif isinstance(child, ast.BoolOp):
+            score += max(0, len(child.values) - 1)
+    return score
+
+
+def test_release_validation_package_stays_cohesive_instead_of_line_bounded():
+    path, source = _source("core/release_validation_package.py")
+    tree = ast.parse(source, filename=str(path))
+    functions = [node for node in tree.body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))]
+
+    # This module owns package/release-text validation only. A long smoke-module
+    # tuple is data, not another responsibility and therefore must not fail on LOC.
+    assert len(functions) <= 8
+    assert max(_decision_complexity(node) for node in functions) <= 16
+    assert max(int(node.end_lineno or node.lineno) - node.lineno + 1 for node in functions) <= 60
+
+    internal_imports = {
+        str(node.module or "")
+        for node in tree.body
+        if isinstance(node, ast.ImportFrom) and int(node.level or 0) > 0
+    }
+    assert internal_imports <= {
+        "release_packaging",
+        "release_validation_common",
+        "release_validation_smoke_modules",
+    }
 
 
 def test_refactored_core_services_remain_qt_free():

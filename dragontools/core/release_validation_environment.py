@@ -7,14 +7,26 @@ from pathlib import Path
 
 from .release_validation_common import ReleaseCheck
 
-def _requirement_names(path: Path) -> set[str]:
-    """Liest normalisierte Paketnamen aus einer pip requirements-Datei."""
+def _requirement_names(path: Path, *, _seen: set[Path] | None = None) -> set[str]:
+    """Liest Paketnamen rekursiv aus pip-Requirements inklusive ``-r``."""
+    path = path.resolve()
     if not path.is_file():
         return set()
+    seen = _seen if _seen is not None else set()
+    if path in seen:
+        return set()
+    seen.add(path)
+
     names: set[str] = set()
     for raw_line in path.read_text(encoding="utf-8", errors="replace").splitlines():
         line = raw_line.split("#", 1)[0].strip()
-        if not line or line.startswith("-"):
+        if not line:
+            continue
+        include = re.match(r"^-r\s*([^\s]+)$", line, flags=re.IGNORECASE)
+        if include:
+            names.update(_requirement_names(path.parent / include.group(1), _seen=seen))
+            continue
+        if line.startswith("-"):
             continue
         match = re.match(r"([A-Za-z0-9_.-]+)", line)
         if match:
@@ -52,10 +64,10 @@ def _check_optional_environment(root: Path) -> ReleaseCheck:
         return ReleaseCheck(
             "warn",
             "Optionale Abhängigkeiten",
-            "requirements-optional.txt fehlt; optionale Bildanalyse-Abhängigkeiten sind nicht dokumentiert.",
+            "requirements-optional.txt fehlt; optionale Bildanalyse-/Whisper-Abhängigkeiten sind nicht dokumentiert.",
         )
     declared = _requirement_names(requirements)
-    expected = {"numpy", "opencv-python-headless"}
+    expected = {"numpy", "opencv-python-headless", "faster-whisper", "ctranslate2"}
     missing = sorted(expected - declared)
     if missing:
         return ReleaseCheck(
@@ -66,7 +78,7 @@ def _check_optional_environment(root: Path) -> ReleaseCheck:
     return ReleaseCheck(
         "ok",
         "Optionale Abhängigkeiten",
-        "NumPy/OpenCV sind als optionale Audio-/Video-Matcher-Abhängigkeiten dokumentiert.",
+        "NumPy/OpenCV sowie faster-whisper/CTranslate2 sind als optionale Laufzeit-/Build-Abhängigkeiten dokumentiert.",
     )
 
 
@@ -74,11 +86,12 @@ def _check_build_environment(root: Path) -> ReleaseCheck:
     """Prueft die reproduzierbare PyInstaller-Buildumgebung."""
     runtime_requirements = root / "requirements-runtime.txt"
     optional_requirements = root / "requirements-optional.txt"
+    whisper_requirements = root / "requirements-whisper.txt"
     requirements = root / "requirements-build.txt"
     build_script = root / "build_v9.bat"
     missing_files = [
         path.name
-        for path in (runtime_requirements, optional_requirements, requirements, build_script)
+        for path in (runtime_requirements, optional_requirements, whisper_requirements, requirements, build_script)
         if not path.is_file()
     ]
     if missing_files:
@@ -114,17 +127,57 @@ def _check_build_environment(root: Path) -> ReleaseCheck:
         )
 
     build_text = build_script.read_text(encoding="utf-8", errors="replace").casefold()
-    if "defusedxml" not in build_text:
+    required_build_tokens = (
+        "defusedxml",
+        "faster_whisper",
+        "ctranslate2",
+        "requirements-whisper.txt",
+        "pip install -r requirements-whisper.txt",
+        "from importlib.metadata import version",
+        "--collect-all faster_whisper",
+        "--collect-all ctranslate2",
+        "--copy-metadata faster-whisper",
+    )
+    missing_tokens = [token for token in required_build_tokens if token not in build_text]
+    if missing_tokens:
         return ReleaseCheck(
             "error",
             "Build-Umgebung",
-            "build_v9.bat prueft die zwingende Runtime-Abhaengigkeit defusedxml nicht fail-fast.",
+            "build_v9.bat bildet den Runtime-/Whisper-Vertrag nicht vollstaendig ab: "
+            + ", ".join(missing_tokens),
+        )
+
+    optional_declared = _requirement_names(optional_requirements)
+    whisper_declared = _requirement_names(whisper_requirements)
+    missing_whisper = sorted({"faster-whisper", "ctranslate2"} - whisper_declared)
+    if missing_whisper:
+        return ReleaseCheck(
+            "error",
+            "Build-Umgebung",
+            "requirements-whisper.txt deklariert die fuer den offiziellen EXE-Build benoetigten Whisper-Pakete nicht: "
+            + ", ".join(missing_whisper),
+        )
+    if not {"faster-whisper", "ctranslate2"} <= optional_declared:
+        return ReleaseCheck(
+            "error",
+            "Build-Umgebung",
+            "requirements-optional.txt bindet requirements-whisper.txt nicht wirksam ein.",
+        )
+
+    whisper_text = whisper_requirements.read_text(encoding="utf-8", errors="replace").casefold().replace(" ", "")
+    expected_constraints = ("faster-whisper>=1.1,<2", "ctranslate2>=4.4,<5")
+    missing_constraints = [item for item in expected_constraints if item not in whisper_text]
+    if missing_constraints:
+        return ReleaseCheck(
+            "error",
+            "Build-Umgebung",
+            "Whisper-Versionsgrenzen fehlen/abweichend: " + ", ".join(missing_constraints),
         )
 
     return ReleaseCheck(
         "ok",
         "Build-Umgebung",
-        "PyInstaller, Hooks sowie Runtime-/OpenCV-Abhaengigkeiten sind reproduzierbar deklariert.",
+        "PyInstaller, Hooks und Runtime-/OpenCV-Abhaengigkeiten sind deklariert; Whisper/CTranslate2 besitzen getrennte Versionsgrenzen, werden vor dem Build validiert/repariert und von PyInstaller gesammelt.",
     )
 
 

@@ -16,6 +16,7 @@ from PyQt6.QtWidgets import (
 from ..core.path_syntax import user_path_name
 from .preflight_series_choices import hide_series_folder_choices, install_series_folder_choice
 from .preflight_widget_common import _fmt_path
+from ..core.callback_dispatch import invoke_callback, is_callback_like
 
 
 class SeriesWidgetViewMixin:
@@ -141,8 +142,8 @@ class SeriesWidgetViewMixin:
         if self.__dict__.get("_folder_choice_combo") is not None:
             hide_series_folder_choices(self)
         self._series_edit.setText(query)
-        if callable(self._metadata_refresh_callback):
-            self._metadata_refresh_callback(self)
+        if is_callback_like(self._metadata_refresh_callback):
+            invoke_callback(self._metadata_refresh_callback, self)
 
     def _update_preview(self) -> None:
         target = self._preview_target_dir()

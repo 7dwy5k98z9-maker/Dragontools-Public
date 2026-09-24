@@ -85,7 +85,7 @@ class ConvertWidgetOverrideDialogHelper(ConvertOverrideGroupBuilderMixin):
         bc, subtitle_status, subtitle_panel, spl, subtitle_rows, imax_cb = self._build_subtitle_group(
             cv, subtitle_mode_value, ov
         )
-        dv_combo, hdp_combo = self._build_hdr_policy_group(cv, ov)
+        dv_combo, hdp_combo, sdr_hdr_combo = self._build_hdr_policy_group(cv, ov)
         cv.addStretch(1)
 
         def _refresh_panels():
@@ -173,6 +173,7 @@ class ConvertWidgetOverrideDialogHelper(ConvertOverrideGroupBuilderMixin):
             "imax_cb": imax_cb,
             "dv_combo": dv_combo,
             "hdrplus_combo": hdp_combo,
+            "sdr_hdr_combo": sdr_hdr_combo,
         }
         self._persist_override_result(path, state, ov, controls)
 
@@ -191,6 +192,7 @@ class ConvertWidgetOverrideDialogHelper(ConvertOverrideGroupBuilderMixin):
         imax_cb = controls["imax_cb"]
         dv_combo = controls["dv_combo"]
         hdp_combo = controls["hdrplus_combo"]
+        sdr_hdr_combo = controls["sdr_hdr_combo"]
 
         processing_mode = processing_combo.currentData()
         if processing_mode == "strip_only":
@@ -247,6 +249,12 @@ class ConvertWidgetOverrideDialogHelper(ConvertOverrideGroupBuilderMixin):
             ov.pop("preserve_hdrplus", None)
         else:
             ov["preserve_hdrplus"] = hdp_val
+
+        sdr_hdr_val = sdr_hdr_combo.currentData()
+        if sdr_hdr_val is None:
+            ov.pop("sdr_hdr", None)
+        else:
+            ov["sdr_hdr"] = bool(sdr_hdr_val)
 
         thread = state.thread
         if thread and hasattr(thread, "update_override"):

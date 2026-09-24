@@ -69,7 +69,7 @@ class DVRemuxThread(QThread):
     file_progress = pyqtSignal(str, int, object)
     file_result   = pyqtSignal(str, str, str)  # (input_path, output_path, status)
     log_line      = pyqtSignal(str)
-    event         = pyqtSignal(object)
+    worker_event  = pyqtSignal(object)
     dv_crop_decision_requested = pyqtSignal(object)
 
     def __init__(self, files: list[str], *, overwrite_original: bool = False,
@@ -290,7 +290,7 @@ class DVRemuxThread(QThread):
     # ==================================================================
 
     def log(self, msg, level="info"):
-        self.event.emit(log_event(str(msg), severity=level))
+        self.worker_event.emit(log_event(str(msg), severity=level))
         getattr(self._logger, level, self._logger.info)(msg)
 
     # ==================================================================

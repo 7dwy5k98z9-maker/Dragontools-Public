@@ -18,7 +18,7 @@ def build_mapping_tab(owner, actions) -> QWidget:
     layout = QVBoxLayout(page)
     hint = QLabel(
         "Pfad-Mapping übersetzt Jellyfin-Pfade in deine Windows-/NAS-Pfade, z. B. /Anime -> "
-        "\\\\media-server\\video\\Serien\\Anime. Die Einträge sind frei anpassbar."
+        "\\\\MediaServer\\video\\Serien\\Anime. Die Einträge sind frei anpassbar."
     )
     hint.setWordWrap(True)
     layout.addWidget(hint)

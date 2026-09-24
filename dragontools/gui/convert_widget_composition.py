@@ -9,6 +9,8 @@ from PyQt6.QtCore import QTimer
 from ..core.profile_manager import ProfileManager
 from .conversion_controller import ConversionController
 from .conversion_result_service import ConversionResultService
+from ..core.conversion_notifications import ConversionNotificationService
+from .windows_notification_backend import WindowsNotificationBackend
 from .convert_widget_file_queue import ConvertWidgetFileQueueHelper
 from .convert_widget_layout import ConvertWidgetLayoutBuilder, ConvertWidgetUI
 from .convert_widget_override_dialog import ConvertWidgetOverrideDialogHelper
@@ -148,6 +150,12 @@ class ConvertWidgetComposition:
             remove_queued_files=owner._file_queue.remove_paths,
             preflight_rows_builder=owner._build_preflight_report_rows,
         )
+        owner._notification_backend = WindowsNotificationBackend(owner)
+        owner._notifications = ConversionNotificationService(
+            settings=owner.settings,
+            emit=owner._notification_backend.show,
+            log=owner._log,
+        )
         owner._result_service = ConversionResultService(
             state=owner._state,
             ui=owner._ui,
@@ -160,6 +168,7 @@ class ConvertWidgetComposition:
             confirm_shutdown=owner._confirm_shutdown,
             parent_widget=owner,
             requeue_files=owner._requeue_paths,
+            notifications=owner._notifications,
         )
         owner._controller = ConversionController(
             state=owner._state,
@@ -177,6 +186,7 @@ class ConvertWidgetComposition:
             qt_parent=owner,
         )
         owner._result_service.set_file_progress_handler(owner._controller.on_file_progress)
+        owner._result_service.set_terminal_result_handler(owner._watch_on_file_result)
 
     def connect_signals(self) -> None:
         owner = self.owner
@@ -196,6 +206,10 @@ class ConvertWidgetComposition:
         owner.add_folder_btn.clicked.connect(owner._add_folder)
         owner.remove_btn.clicked.connect(owner.remove_selected_files)
         owner.clear_btn.clicked.connect(owner._clear)
+        owner.queue_front_btn.clicked.connect(owner._queue_move_front)
+        owner.queue_up_btn.clicked.connect(owner._queue_move_up)
+        owner.queue_down_btn.clicked.connect(owner._queue_move_down)
+        owner.queue_back_btn.clicked.connect(owner._queue_move_back)
 
         owner.assist_prof.clicked.connect(owner._profile_assistant)
         owner.save_prof.clicked.connect(owner._save_profile)

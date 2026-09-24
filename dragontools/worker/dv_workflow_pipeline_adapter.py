@@ -41,6 +41,7 @@ class DVPipelineExecutorAdapter:
             crop=plan.crop,
             ov=request.override,
             preserve_hdrplus=request.preserve_hdrplus,
+            generate_hdr10plus=request.generate_hdr10plus,
             container=request.container,
         )
         return PipelineExecutionResult(

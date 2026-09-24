@@ -297,3 +297,40 @@ def test_preflight_dialog_report_checkbox_controls_save_flag(monkeypatch):
 
     dlg._save_report_cb = None
     assert dlg.should_save_report() is False
+
+
+def test_incremental_missing_candidate_stays_queued_with_diagnostics(monkeypatch, tmp_path):
+    controller, state, _ui, _queue_calls, _start_calls, _refreshes = _controller(monkeypatch)
+    import dragontools.gui.move_incremental_lifecycle as lifecycle_module
+
+    missing = str(tmp_path / "Mushoku Tensei - S03E09.mkv")
+    nfo = str(tmp_path / "Mushoku Tensei - S03E09.nfo")
+    state.fertig.add(missing)
+    state.sidecar_outputs_by_video[missing] = [nfo]
+    state.planned_targets[missing] = r"Z:\Anime\Mushoku Tensei\Staffel 03"
+    logs: list[tuple[str, str]] = []
+    controller._log = lambda message, level="info": logs.append((str(message), str(level)))
+
+    probe = SimpleNamespace(
+        available=False,
+        attempts=3,
+        error_text="FileNotFoundError: transient",
+        parent_available=True,
+        size_bytes=None,
+        parent_error_text="",
+    )
+    monkeypatch.setattr(lifecycle_module, "probe_move_source", lambda _path: probe)
+    monkeypatch.setattr(
+        lifecycle_module,
+        "probe_companions",
+        lambda _paths: [(nfo, True, "")],
+    )
+
+    assert controller.collect_finished_move_candidates() == []
+    assert missing in state.fertig
+    assert state.sidecar_outputs_by_video[missing] == [nfo]
+    text = "\n".join(message for message, _level in logs)
+    assert "bleibt für späteres Verschieben vorgemerkt" in text
+    assert missing in text
+    assert "Geplantes Ziel:" in text
+    assert nfo in text

@@ -203,8 +203,11 @@ def test_build_validator_requires_defusedxml_in_build_script(tmp_path):
     (tmp_path / "requirements-runtime.txt").write_text(
         "PyQt6>=6\ncryptography>=42\ndefusedxml>=0.7.1\n", encoding="utf-8"
     )
+    (tmp_path / "requirements-whisper.txt").write_text(
+        "faster-whisper>=1.1,<2\nctranslate2>=4.4,<5\n", encoding="utf-8"
+    )
     (tmp_path / "requirements-optional.txt").write_text(
-        "numpy>=1\nopencv-python-headless>=4\n", encoding="utf-8"
+        "numpy>=1\nopencv-python-headless>=4\n-r requirements-whisper.txt\n", encoding="utf-8"
     )
     (tmp_path / "requirements-build.txt").write_text(
         "-r requirements-runtime.txt\n-r requirements-optional.txt\nPyInstaller>=6\npyinstaller-hooks-contrib>=2025\n",

@@ -175,6 +175,7 @@ def normalize_override_dict(file_override: dict[str, Any] | None) -> dict[str, A
         "imax": _safe_bool(override.get("imax", False), False),
         "preserve_dv": _tristate(override, "preserve_dv"),
         "preserve_hdrplus": _tristate(override, "preserve_hdrplus"),
+        "sdr_hdr": _tristate(override, "sdr_hdr"),
         "encoder_profile": _dict_override(override, "encoder_profile"),
         "encoder_override": _dict_override(override, "encoder_override"),
         "audio_drc": _audio_processing_override(override, "audio_drc", "scale", 1.0),

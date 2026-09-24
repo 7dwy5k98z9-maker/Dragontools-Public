@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Textaufbereitung für den Medieninfo-Dialog ohne Qt-Abhängigkeit."""
 from __future__ import annotations
+import logging
 
 from typing import Any
 
@@ -80,7 +81,7 @@ def _fps_label(value: Any) -> str:
             if den > 0:
                 return f"{num}/{den} ({num / den:.3f} fps)"
     except Exception:
-        pass
+        logging.getLogger(__name__).debug("Unterdrückte Best-Effort-Ausnahme in _fps_label.", exc_info=True)
     return raw
 
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol
 
+from ..core.secret_settings import read_secret, write_secret
 from ..core.settings_metadata import DEFAULT_METADATA_CACHE_DAYS, DEFAULT_METADATA_CACHE_ENABLED, DEFAULT_METADATA_FALLBACK_LANGUAGE, DEFAULT_METADATA_LANGUAGE, DEFAULT_METADATA_MOVIE_PROVIDER, DEFAULT_METADATA_MOVIE_PREFERRED_PROVIDER, DEFAULT_METADATA_SERIES_PROVIDER, DEFAULT_METADATA_SERIES_PREFERRED_PROVIDER, SET_KEY_METADATA_CACHE_DAYS, SET_KEY_METADATA_CACHE_ENABLED, SET_KEY_METADATA_FALLBACK_LANGUAGE, SET_KEY_METADATA_LANGUAGE, SET_KEY_METADATA_MOVIE_PROVIDER, SET_KEY_METADATA_MOVIE_PREFERRED_PROVIDER, SET_KEY_METADATA_SERIES_PROVIDER, SET_KEY_METADATA_SERIES_PREFERRED_PROVIDER, SET_KEY_METADATA_TMDB_API_KEY, SET_KEY_METADATA_TMDB_ENABLED, SET_KEY_METADATA_TMDB_READ_TOKEN, SET_KEY_METADATA_TVDB_API_KEY, SET_KEY_METADATA_TVDB_BEARER_TOKEN, SET_KEY_METADATA_TVDB_ENABLED, SET_KEY_METADATA_TVDB_PIN
 
 
@@ -51,12 +52,12 @@ def load_online_metadata_settings(settings: SettingsStore) -> OnlineMetadataSett
             type=str,
         ),
         tmdb_enabled=settings.value(SET_KEY_METADATA_TMDB_ENABLED, False, type=bool),
-        tmdb_read_token=settings.value(SET_KEY_METADATA_TMDB_READ_TOKEN, "", type=str),
-        tmdb_api_key=settings.value(SET_KEY_METADATA_TMDB_API_KEY, "", type=str),
+        tmdb_read_token=read_secret(settings, SET_KEY_METADATA_TMDB_READ_TOKEN),
+        tmdb_api_key=read_secret(settings, SET_KEY_METADATA_TMDB_API_KEY),
         tvdb_enabled=settings.value(SET_KEY_METADATA_TVDB_ENABLED, False, type=bool),
-        tvdb_api_key=settings.value(SET_KEY_METADATA_TVDB_API_KEY, "", type=str),
-        tvdb_pin=settings.value(SET_KEY_METADATA_TVDB_PIN, "", type=str),
-        tvdb_bearer_token=settings.value(SET_KEY_METADATA_TVDB_BEARER_TOKEN, "", type=str),
+        tvdb_api_key=read_secret(settings, SET_KEY_METADATA_TVDB_API_KEY),
+        tvdb_pin=read_secret(settings, SET_KEY_METADATA_TVDB_PIN),
+        tvdb_bearer_token=read_secret(settings, SET_KEY_METADATA_TVDB_BEARER_TOKEN),
         language=settings.value(SET_KEY_METADATA_LANGUAGE, DEFAULT_METADATA_LANGUAGE, type=str),
         fallback_language=settings.value(
             SET_KEY_METADATA_FALLBACK_LANGUAGE, DEFAULT_METADATA_FALLBACK_LANGUAGE, type=str
@@ -80,12 +81,7 @@ def save_online_metadata_settings(
         (SET_KEY_METADATA_MOVIE_PREFERRED_PROVIDER, state.movie_preferred_provider),
         (SET_KEY_METADATA_SERIES_PREFERRED_PROVIDER, state.series_preferred_provider),
         (SET_KEY_METADATA_TMDB_ENABLED, state.tmdb_enabled),
-        (SET_KEY_METADATA_TMDB_READ_TOKEN, state.tmdb_read_token),
-        (SET_KEY_METADATA_TMDB_API_KEY, state.tmdb_api_key),
         (SET_KEY_METADATA_TVDB_ENABLED, state.tvdb_enabled),
-        (SET_KEY_METADATA_TVDB_API_KEY, state.tvdb_api_key),
-        (SET_KEY_METADATA_TVDB_PIN, state.tvdb_pin),
-        (SET_KEY_METADATA_TVDB_BEARER_TOKEN, state.tvdb_bearer_token),
         (SET_KEY_METADATA_LANGUAGE, state.language),
         (SET_KEY_METADATA_FALLBACK_LANGUAGE, state.fallback_language),
         (SET_KEY_METADATA_CACHE_ENABLED, state.cache_enabled),
@@ -93,4 +89,9 @@ def save_online_metadata_settings(
     )
     for key, value in values:
         settings.setValue(key, value)
+    write_secret(settings, SET_KEY_METADATA_TMDB_READ_TOKEN, state.tmdb_read_token)
+    write_secret(settings, SET_KEY_METADATA_TMDB_API_KEY, state.tmdb_api_key)
+    write_secret(settings, SET_KEY_METADATA_TVDB_API_KEY, state.tvdb_api_key)
+    write_secret(settings, SET_KEY_METADATA_TVDB_PIN, state.tvdb_pin)
+    write_secret(settings, SET_KEY_METADATA_TVDB_BEARER_TOKEN, state.tvdb_bearer_token)
     settings.sync()

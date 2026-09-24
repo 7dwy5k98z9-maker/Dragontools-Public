@@ -1,4 +1,4 @@
-Dragon Tools V9.8.4 - Build-Hinweise
+Dragon Tools V9.8.6 - Build-Hinweise
 =====================================
 
 Diese Hinweise gelten für den aktuellen DragonTools-Quellstand unter Windows 10/11.
@@ -19,7 +19,8 @@ Installation für einen vollständigen Build
 
 Die Abhängigkeiten sind getrennt dokumentiert:
 - requirements-runtime.txt: Programmstart
-- requirements-optional.txt: optionale Bildanalyse
+- requirements-optional.txt: optionale Bildanalyse; bindet Whisper-Anforderungen ein
+- requirements-whisper.txt: faster-whisper/CTranslate2 mit freigegebenen Versionsgrenzen
 - requirements-test.txt: Tests
 - requirements-build.txt: Windows-Build
 
@@ -35,9 +36,15 @@ Den Build aus einer Eingabeaufforderung im Projektordner starten:
 
    build_v9.bat
 
+Der Builder prüft vor PyInstaller faster_whisper und ctranslate2 inklusive Versionsgrenzen.
+Fehlen die Pakete oder liegen sie außerhalb der freigegebenen Constraints, installiert/repariert
+er ausschließlich requirements-whisper.txt per pip und prüft danach erneut. PyInstaller sammelt beide Pakete anschließend ein. Auf dem Benutzer-PC wird
+nichts per pip nachinstalliert; nur das Whisper-Modell wird beim ersten Einsatz heruntergeladen
+und danach lokal gecacht.
+
 Das fertige Programm liegt anschließend unter:
 
-   dist\DragonToolsV9.8.4\
+   dist\DragonToolsV9.8.6\
 
 Prüfung vor einer Veröffentlichung
 ----------------------------------
@@ -54,5 +61,6 @@ Wichtige Sicherheitshinweise
 ----------------------------
 - API-Schlüssel, lokale Einstellungen, Logs, Datenbanken und Medien gehören nicht in Git.
 - build, dist, Caches und externe Programme bleiben außerhalb der Git-Historie.
+- Der fertige 9.8.6-Build enthält keinen separat ausgelieferten Daten\Python-Quellbaum.
 - Die öffentliche Fassung verwendet ausschließlich Dragon Developer als Entwicklername.
 - Bei einer fehlgeschlagenen Timestamp- oder Streamprüfung ersetzt oder verschiebt DragonTools die Quelldatei nicht.

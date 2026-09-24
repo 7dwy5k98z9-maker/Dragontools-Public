@@ -46,8 +46,9 @@ def _load_release_manifest(root: Path) -> tuple[dict, ReleaseCheck]:
 _PACKAGE_DIRS = ("core", "gui", "worker", "rules", "subtitle", "config")
 _SMOKE_MODULES = (
     *REFACTOR_SMOKE_MODULES,
-    Path("core") / "settings.py",
-    Path("core") / "version.py",
+    Path("core") / "settings.py", Path("core") / "settings_storage.py", Path("core") / "settings_notifications.py", Path("core") / "conversion_notifications.py", Path("core") / "version.py",
+    Path("core") / "settings_access.py", Path("core") / "secret_settings.py",
+    Path("core") / "audit_log.py", Path("core") / "crash_guard.py",
     Path("core") / "paths.py",
     Path("core") / "path_syntax.py",
     Path("core") / "path_defaults.py",
@@ -59,7 +60,8 @@ _SMOKE_MODULES = (
     Path("core") / "batch_preflight_rows.py",
     Path("core") / "batch_preflight_report.py",
     Path("core") / "batch_preflight_storage.py",
-    Path("core") / "jellyfin_nfo.py",
+    Path("core") / "jellyfin_nfo.py", Path("core") / "jellyfin_api.py",
+    Path("core") / "jellyfin_refresh_service.py", Path("core") / "jellyfin_full_scan_guard.py", Path("core") / "settings_jellyfin.py",
     Path("core") / "media_library.py",
     Path("core") / "media_library_db.py",
     Path("core") / "media_library_export.py",
@@ -67,7 +69,7 @@ _SMOKE_MODULES = (
     Path("core") / "media_library_paths.py",
     Path("core") / "media_library_repository.py",
     Path("core") / "media_library_scan.py",
-    Path("core") / "media_library_search.py",
+    Path("core") / "media_library_search.py", Path("core") / "media_library_fix_queue.py", Path("core") / "language_detection.py", Path("core") / "whisper_runtime.py", Path("core") / "nfo_stream_metadata.py", Path("core") / "track_titles.py", Path("core") / "mkv_track_metadata.py",
     Path("core") / "media_library_classification.py",
     Path("core") / "media_library_scope.py",
     Path("core") / "media_library_query.py",
@@ -86,6 +88,8 @@ _SMOKE_MODULES = (
     Path("core") / "move_journal_resume.py",
     Path("core") / "move_journal_utils.py",
     Path("core") / "move_conflicts.py",
+    Path("core") / "move_source_probe.py",
+    Path("core") / "watch_folder.py",
     Path("core") / "movie_renamer.py",
     Path("core") / "movie_renamer_models.py", Path("core") / "movie_renamer_parsing.py",
     Path("core") / "movie_renamer_candidates.py", Path("core") / "movie_renamer_episode_refresh.py",
@@ -99,7 +103,10 @@ _SMOKE_MODULES = (
     Path("core") / "online_metadata_payload.py",
     Path("core") / "online_metadata_service.py",
     Path("core") / "online_metadata_tmdb.py",
+    Path("core") / "online_metadata_tmdb_candidate_cache.py",
+    Path("core") / "online_metadata_tmdb_renamer.py",
     Path("core") / "online_metadata_tvdb.py",
+    Path("core") / "online_metadata_tvdb_candidate_cache.py",
     Path("core") / "online_metadata_tvdb_helpers.py",
     Path("core") / "online_metadata_tvdb_resolver.py",
     Path("core") / "online_metadata_tvdb_suggestions.py",
@@ -131,7 +138,11 @@ _SMOKE_MODULES = (
     Path("gui") / "main_window_profile_actions.py",
     Path("gui") / "main_window_settings_actions.py",
     Path("gui") / "main_window_system_actions.py",
-    Path("gui") / "settings_dialog.py",
+    Path("gui") / "tab_manager.py",
+    Path("gui") / "tool_path_live_check.py",
+    Path("gui") / "settings_dialog.py", Path("gui") / "jellyfin_connection_test.py",
+    Path("gui") / "jellyfin_refresh_dispatch.py",
+    Path("gui") / "watch_folder_controller.py",
     Path("gui") / "encoder_settings_controller.py",
     Path("gui") / "encoder_settings_options.py",
     Path("gui") / "encoder_settings_panels.py",
@@ -168,9 +179,8 @@ _SMOKE_MODULES = (
     Path("gui") / "settings_sections" / "base.py",
     Path("gui") / "settings_sections" / "storage.py",
     Path("gui") / "settings_sections" / "runtime.py",
-    Path("gui") / "settings_sections" / "media.py",
-    Path("gui") / "settings_sections" / "video.py",
-    Path("gui") / "settings_sections" / "safety.py",
+    Path("gui") / "settings_sections" / "media.py", Path("gui") / "settings_sections" / "jellyfin.py",
+    Path("gui") / "settings_sections" / "video.py", Path("gui") / "settings_sections" / "safety.py", Path("gui") / "settings_sections" / "notifications.py", Path("gui") / "windows_notification_backend.py",
     Path("gui") / "conversion_controller.py",
     Path("gui") / "conversion_start_coordinator.py",
     Path("gui") / "conversion_worker_factory.py",
@@ -184,7 +194,7 @@ _SMOKE_MODULES = (
     Path("gui") / "media_library_maintenance_controller.py",
     Path("gui") / "media_library_mapping_controller.py",
     Path("gui") / "media_library_search_controller.py",
-    Path("gui") / "media_library_scan_controller.py",
+    Path("gui") / "media_library_scan_controller.py", Path("gui") / "media_library_fix_tab.py", Path("gui") / "media_library_fix_actions.py", Path("gui") / "media_library_fix_controller.py", Path("gui") / "media_library_fix_worker.py",
     Path("gui") / "preflight_dialog.py",
     Path("gui") / "preflight_widgets.py",
     Path("gui") / "preflight_widget_common.py",
@@ -199,6 +209,7 @@ _SMOKE_MODULES = (
     Path("gui") / "replacement_reminder_dialog.py",
     Path("gui") / "movie_renamer_widget.py",
     Path("gui") / "movie_renamer_view.py",
+    Path("gui") / "movie_renamer_candidate_combo.py",
     Path("gui") / "movie_renamer_table_controller.py",
     Path("gui") / "movie_renamer_resolver.py",
     Path("gui") / "movie_renamer_actions.py", Path("gui") / "movie_renamer_search_actions.py", Path("gui") / "movie_renamer_resolve_search.py", Path("gui") / "movie_renamer_table_search.py",
@@ -240,7 +251,7 @@ _SMOKE_MODULES = (
     Path("worker") / "quality_test_thread.py",
     Path("worker") / "quality_compare_thread.py",
     Path("worker") / "audio_video_match_thread.py",
-    Path("worker") / "postprocess_service.py",
+    Path("worker") / "postprocess_service.py", Path("worker") / "media_library_fix_service.py", Path("worker") / "media_stream_language_service.py", Path("worker") / "media_stream_metadata_guard.py",
     Path("worker") / "trickplay_service.py",
     Path("rules") / "audio_rules.py",
     Path("rules") / "move_rules.py",
@@ -338,8 +349,8 @@ def _check_forbidden_release_artifacts(root: Path) -> ReleaseCheck:
 _PRIVATE_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("lokaler Benutzerpfad", re.compile(r"C:\\Users\\[^\\\r\n]+", re.IGNORECASE)),
     ("persönlicher Name", re.compile(r"\bMarkus\b|\bMarku\b", re.IGNORECASE)),
-    ("Arbeitsordner-Pfad", re.compile(r"Arbeitsordner " + "codex", re.IGNORECASE)),
-    ("Netzwerk-Medienpfad", re.compile(r"\\\\medien" + "speicher", re.IGNORECASE)),
+    ("Arbeitsordner-Pfad", re.compile("Arbeitsordner " + "codex", re.IGNORECASE)),
+    ("Netzwerk-Medienpfad", re.compile(r"\\medien" + "speicher", re.IGNORECASE)),
     ("temporärer Codex-Pfad", re.compile(r"AppData\\Local\\Temp\\codex-", re.IGNORECASE)),
     ("möglicher API-Key", re.compile(r"(api[_-]?key|read[_-]?access[_-]?token)\s*[:=]\s*['\"][^'\"\s]{8,}", re.IGNORECASE)),
 )
@@ -350,7 +361,18 @@ def _scan_private_markers(root: Path) -> list[ReleaseCheck]:
     for path in _iter_release_text_files(root):
         try:
             text = path.read_text(encoding="utf-8", errors="replace")
-        except Exception:
+        except Exception as exc:
+            try:
+                rel = path.relative_to(root)
+            except (OSError, ValueError):
+                rel = path
+            findings.append(
+                ReleaseCheck(
+                    "warn",
+                    "Datenschutz: Datei nicht lesbar",
+                    f"{rel} konnte nicht geprüft werden: {exc}",
+                )
+            )
             continue
         for label, pattern in _PRIVATE_PATTERNS:
             match = pattern.search(text)

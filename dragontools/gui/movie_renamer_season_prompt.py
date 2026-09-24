@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PyQt6.QtWidgets import QInputDialog
+from PyQt6.QtWidgets import QInputDialog, QMessageBox
 
 from ..core.movie_renamer import parse_series_release_name
 
@@ -55,3 +55,63 @@ class MovieRenamerSeasonPromptMixin:
                 self.table_controller.set_row_season_override(row, season)
 
         return all_resolved
+
+    def edit_selected_season(self) -> None:
+        """Manually override the season for selected series rows.
+
+        Unlike the EPxx prompt this is intentionally available for every
+        parsed series row, including SxxExx and inferred bare E19 releases.
+        """
+        rows = self.table_controller.selected_rows()
+        if not rows:
+            QMessageBox.information(
+                self.owner,
+                "Staffel ändern",
+                "Bitte zuerst eine oder mehrere Serien-Zeilen markieren.",
+            )
+            return
+
+        series_rows: list[int] = []
+        detected_seasons: set[int] = set()
+        for row in rows:
+            if self.table_controller.row_item(row, self.table_controller.columns.TYPE).text() != "Serie":
+                continue
+            series_rows.append(row)
+            override = self.table_controller.row_season_override(row)
+            if override is not None:
+                detected_seasons.add(override)
+                continue
+            parsed = parse_series_release_name(self.table_controller.row_path(row))
+            if parsed is not None:
+                detected_seasons.add(int(parsed.season))
+
+        if not series_rows:
+            QMessageBox.information(
+                self.owner,
+                "Staffel ändern",
+                "Die markierte Auswahl enthält keine als Serie erkannten Dateien.",
+            )
+            return
+
+        default_season = next(iter(detected_seasons)) if len(detected_seasons) == 1 else 1
+        season, ok = QInputDialog.getInt(
+            self.owner,
+            "Staffel ändern",
+            f"Staffel für {len(series_rows)} ausgewählte Serien-Datei(en):",
+            default_season,
+            0,
+            9999,
+            1,
+        )
+        if not ok:
+            return
+
+        for row in series_rows:
+            self.table_controller.set_row_season_override(row, season)
+
+        rerun = getattr(self.resolver, "rerun_rows", None)
+        if callable(rerun):
+            rerun(series_rows)
+        self.view.status_lbl.setText(
+            f"Staffel {season} für {len(series_rows)} Serien-Datei(en) gesetzt; Metadaten werden neu gesucht."
+        )

@@ -17,6 +17,7 @@ from .online_metadata_common import (
     normalize_episode_metadata_title,
     parse_series_query,
 )
+from .online_metadata_tmdb_candidate_cache import collect_episode_candidate_records
 
 
 class TmdbSuggestionMixin:
@@ -106,36 +107,13 @@ class TmdbSuggestionMixin:
         search_terms: list[str] | tuple[str, ...],
         retry_without_year: bool,
     ) -> list[dict[str, Any]]:
-        records: list[dict[str, Any]] = []
-        seen_ids: set[int] = set()
-        exact_terms = search_terms[:2]
-        fuzzy_terms = search_terms[2:]
-
-        def collect(term: str, search_year: int | None) -> None:
-            try:
-                found = self.search_tv(term, year=search_year)
-                if not found and self.config.fallback_language != self.config.language:
-                    found = self.search_tv(
-                        term,
-                        year=search_year,
-                        language=self.config.fallback_language,
-                    )
-            except OnlineMetadataError:
-                found = []
-            for record in found or []:
-                record_id = _int_or_none(record.get("id"))
-                if record_id is None or record_id in seen_ids:
-                    continue
-                seen_ids.add(record_id)
-                records.append(record)
-
-        for term in exact_terms:
-            collect(term, year)
-            if year is not None and retry_without_year:
-                collect(term, None)
-        for term in fuzzy_terms:
-            collect(term, None)
-        return records
+        return collect_episode_candidate_records(
+            self,
+            query,
+            year=year,
+            search_terms=search_terms,
+            retry_without_year=retry_without_year,
+        )
 
     @staticmethod
     def _episode_candidate_rank(

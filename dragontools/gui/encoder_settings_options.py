@@ -1,10 +1,24 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-from ..core.settings_conversion import DEFAULT_AUTOCROP_MODE, DEFAULT_AUTOCROP_PROBE_DURATION_S, DEFAULT_AUTOCROP_PROBE_INTERVAL_S, DEFAULT_AUTOCROP_PROBE_START_S, DEFAULT_IMAX_MIN_HITS, DEFAULT_IMAX_MIN_VARIANCE_PERCENT, DEFAULT_IMAX_PROBE_DURATION_S, DEFAULT_IMAX_PROBE_INTERVAL_S, SET_KEY_AUTOCROP_MODE, SET_KEY_AUTOCROP_PROBE_DURATION, SET_KEY_AUTOCROP_PROBE_INTERVAL, SET_KEY_AUTOCROP_PROBE_START, SET_KEY_IMAX_MIN_HITS, SET_KEY_IMAX_MIN_VARIANCE_PERCENT, SET_KEY_IMAX_PROBE_DURATION, SET_KEY_IMAX_PROBE_INTERVAL
-from ..core.settings_access import settings_int
-
-
+from ..core.settings_conversion import (
+    DEFAULT_AUTOCROP_MODE, DEFAULT_AUTOCROP_PROBE_DURATION_S, DEFAULT_AUTOCROP_PROBE_INTERVAL_S,
+    DEFAULT_AUTOCROP_PROBE_START_S, DEFAULT_IMAX_MIN_HITS, DEFAULT_IMAX_MIN_VARIANCE_PERCENT,
+    DEFAULT_IMAX_PROBE_DURATION_S, DEFAULT_IMAX_PROBE_INTERVAL_S,
+    DEFAULT_QUALITY_TARGET_ENABLED, DEFAULT_QUALITY_TARGET_MAX, DEFAULT_QUALITY_TARGET_MIN,
+    DEFAULT_QUALITY_TARGET_SAMPLE_DURATION_S, DEFAULT_QUALITY_TARGET_SAMPLES, DEFAULT_QUALITY_TARGET_VMAF,
+    DEFAULT_SDR_HDR_BACKEND, DEFAULT_SDR_HDR_CONTRAST_RECOVERY, DEFAULT_SDR_HDR_ENABLED,
+    DEFAULT_HDR10PLUS_GENERATOR_ENABLED,
+    SET_KEY_AUTOCROP_MODE, SET_KEY_AUTOCROP_PROBE_DURATION, SET_KEY_AUTOCROP_PROBE_INTERVAL,
+    SET_KEY_AUTOCROP_PROBE_START, SET_KEY_IMAX_MIN_HITS, SET_KEY_IMAX_MIN_VARIANCE_PERCENT,
+    SET_KEY_IMAX_PROBE_DURATION, SET_KEY_IMAX_PROBE_INTERVAL,
+    SET_KEY_QUALITY_TARGET_ENABLED, SET_KEY_QUALITY_TARGET_MAX, SET_KEY_QUALITY_TARGET_MIN,
+    SET_KEY_QUALITY_TARGET_SAMPLE_DURATION, SET_KEY_QUALITY_TARGET_SAMPLES, SET_KEY_QUALITY_TARGET_VMAF,
+    SET_KEY_SDR_HDR_BACKEND, SET_KEY_SDR_HDR_CONTRAST_RECOVERY, SET_KEY_SDR_HDR_ENABLED,
+    SET_KEY_HDR10PLUS_GENERATOR_ENABLED,
+)
+from ..core.settings_access import settings_bool, settings_float, settings_int
+from ..core.comfyui_hdr_models import collect_comfyui_hdr_options
 class EncoderSettingsOptionsMixin:
     def collect_enc_opts(self) -> dict:
             widgets = self._ui.widgets
@@ -99,8 +113,40 @@ class EncoderSettingsOptionsMixin:
                 minimum=2,
                 maximum=50,
             )
+            opts["quality_target_enabled"] = settings_bool(
+                self._settings, SET_KEY_QUALITY_TARGET_ENABLED, DEFAULT_QUALITY_TARGET_ENABLED
+            )
+            opts["quality_target_vmaf"] = settings_float(
+                self._settings, SET_KEY_QUALITY_TARGET_VMAF, DEFAULT_QUALITY_TARGET_VMAF,
+                minimum=70.0, maximum=100.0,
+            )
+            opts["quality_target_samples"] = self._settings_int(
+                SET_KEY_QUALITY_TARGET_SAMPLES, DEFAULT_QUALITY_TARGET_SAMPLES,
+                minimum=1, maximum=10,
+            )
+            opts["quality_target_sample_duration_s"] = self._settings_int(
+                SET_KEY_QUALITY_TARGET_SAMPLE_DURATION, DEFAULT_QUALITY_TARGET_SAMPLE_DURATION_S,
+                minimum=2, maximum=60,
+            )
+            low = self._settings_int(SET_KEY_QUALITY_TARGET_MIN, DEFAULT_QUALITY_TARGET_MIN, minimum=0, maximum=63)
+            high = self._settings_int(SET_KEY_QUALITY_TARGET_MAX, DEFAULT_QUALITY_TARGET_MAX, minimum=0, maximum=63)
+            opts["quality_target_min"], opts["quality_target_max"] = sorted((low, high))
+            opts["sdr_hdr_enabled"] = settings_bool(
+                self._settings, SET_KEY_SDR_HDR_ENABLED, DEFAULT_SDR_HDR_ENABLED
+            )
+            opts["sdr_hdr_contrast_recovery"] = settings_float(
+                self._settings, SET_KEY_SDR_HDR_CONTRAST_RECOVERY, DEFAULT_SDR_HDR_CONTRAST_RECOVERY,
+                minimum=0.0, maximum=3.0,
+            )
+            opts["sdr_hdr_backend"] = self._settings_text(
+                SET_KEY_SDR_HDR_BACKEND, DEFAULT_SDR_HDR_BACKEND,
+                allowed={"ffmpeg", "davinci_free", "comfyui"},
+            )
+            opts.update(collect_comfyui_hdr_options(self._settings))
+            opts["hdr10plus_generator_enabled"] = settings_bool(
+                self._settings, SET_KEY_HDR10PLUS_GENERATOR_ENABLED, DEFAULT_HDR10PLUS_GENERATOR_ENABLED
+            )
             return opts
-
     @staticmethod
     def _combo_value(combo) -> str:
             if combo is None:
@@ -122,9 +168,7 @@ class EncoderSettingsOptionsMixin:
             )
 
     def _settings_text(self, key: str, default: str, *, allowed: set[str]) -> str:
-            try:
-                value = str(self._settings.value(key, default, type=str) or default)
-            except TypeError:
-                value = str(self._settings.value(key, default) or default)
+            try: value = str(self._settings.value(key, default, type=str) or default)
+            except TypeError: value = str(self._settings.value(key, default) or default)
             value = value.strip().lower()
             return value if value in allowed else default

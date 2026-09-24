@@ -53,14 +53,21 @@ class ConversionRunFinalizerMixin:
                     move_errors=total_move_errors,
                 )
 
+            aborted = bool(getattr(finished_thread, "abort_requested", False))
             self._finish_job_journal(
                 finished_thread,
-                status=(
-                    "aborted"
-                    if bool(getattr(finished_thread, "abort_requested", False))
-                    else "completed"
-                ),
+                status="aborted" if aborted else "completed",
             )
+            notifications = getattr(self, "_notifications", None)
+            if notifications is not None and not retry_files:
+                notifications.on_run_finished(
+                    self._build_run_summary(
+                        finished_thread,
+                        move_ok=total_move_ok,
+                        move_errors=total_move_errors,
+                    ),
+                    aborted=aborted,
+                )
             self._clear()
             if retry_files and self._requeue_files:
                 self._requeue_files(retry_files)
@@ -73,8 +80,12 @@ class ConversionRunFinalizerMixin:
             if shutdown_requested and not did_shutdown:
                 self._confirm_shutdown()
         except Exception:
+            details = traceback.format_exc()
+            notifications = getattr(self, "_notifications", None)
+            if notifications is not None:
+                notifications.on_internal_error("Dragon Tools Abschlussfehler", details)
             self._log("❌ Unbehandelte Ausnahme in finalize_run()", "error")
-            self._log(traceback.format_exc(), "error")
+            self._log(details, "error")
 
     def _show_replacement_reminders(self) -> None:
         try:

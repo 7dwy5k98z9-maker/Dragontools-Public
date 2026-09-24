@@ -12,6 +12,7 @@ from .media_analyzer_io import (
     _run_ffprobe_json,
     _run_mediainfo_json,
 )
+from .media_analyzer_dynamic_hdr import apply_hdr10plus_frame_fallback
 from .media_analyzer_metadata import collect_video_metadata, log_video_metadata
 from .media_analyzer_result import build_media_info
 from .media_analyzer_streams import (
@@ -107,9 +108,16 @@ def analyze_media(path: str, tools: ToolPaths | None = None) -> MediaInfo:
     fp_subtitles = _fp_streams_by_type(fp_json, "subtitle")
 
     video_streams = _build_video_streams(mi_videos, fp_videos, mi_json, warnings)
+    frame_hdr_fallback = apply_hdr10plus_frame_fallback(
+        path, resolved_tools, video_streams, warnings
+    )
+    if frame_hdr_fallback:
+        analysis_source += " + ffprobe-Frame-HDR"
     audio_streams = _build_audio_streams(mi_audios, fp_audios)
     subtitle_streams = _build_subtitle_streams(mi_texts, fp_subtitles)
-    metadata = collect_video_metadata(video_streams, mi_videos, fp_videos)
+    metadata = collect_video_metadata(
+        video_streams, mi_videos, fp_videos, analysis_warnings=warnings
+    )
     log_video_metadata(
         analysis_source=analysis_source,
         video_streams=video_streams,

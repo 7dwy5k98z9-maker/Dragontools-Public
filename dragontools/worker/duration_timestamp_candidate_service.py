@@ -21,7 +21,8 @@ class TimestampCandidateService:
 
     def attempt(self, *, out: Path, tmp: Path, base_dir: Path | None = None, command: list[str], label: str,
                 method: str, container: str, before: MediaTimingInfo, before_ffprobe: StreamInventory,
-                before_mediainfo: StreamInventory, expected_duration_ms: int | None, source_has_audio: bool,
+                before_mediainfo: StreamInventory, before_mkvmerge: StreamInventory | None = None,
+                expected_duration_ms: int | None = None, source_has_audio: bool = False,
                 timing_summary: list[str], expected_contract=None, verified_hdr10plus: bool = False,
                 verified_dolby_vision: bool = False) -> TimestampRepairResult:
         run = self._runtime.run_tool(command, label=label)
@@ -41,6 +42,7 @@ class TimestampCandidateService:
             before=before,
             before_ffprobe=before_ffprobe,
             before_mediainfo=before_mediainfo,
+            before_mkvmerge=before_mkvmerge,
             expected_duration_ms=expected_duration_ms,
             source_has_audio=source_has_audio,
             expected_contract=expected_contract,
@@ -66,7 +68,10 @@ class TimestampCandidateService:
             return None
         detail_lines = (run.stderr or run.stdout or "").strip().splitlines()
         detail = detail_lines[-1] if detail_lines else f"Returncode {run.returncode}"
-        tolerated = method.startswith("FFmpeg +genpts") and self._is_tolerated_genpts_returncode(run.returncode)
+        tolerated = (
+            (method.startswith("FFmpeg +genpts") and self._is_tolerated_genpts_returncode(run.returncode))
+            or (method.startswith("MKVToolNix") and int(run.returncode) == 1)
+        )
         if not candidate_exists or not tolerated:
             self._runtime.log(f"❌ {label} fehlgeschlagen: {detail}", "error")
             self._archive.archive(tmp, out=out, base_dir=base_dir, label=label, reason=f"{label} fehlgeschlagen: {detail}")

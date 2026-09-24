@@ -33,6 +33,14 @@ def apply_metadata_result(widget, suggestion) -> None:
             )
         return
     if isinstance(suggestion, dict) and "__library_path_warning__" in suggestion:
+        online_suggestion = suggestion.get("__online_series_suggestion__")
+        if online_suggestion is not None and hasattr(widget, "apply_online_metadata_suggestion"):
+            # Den DB-Hinweis zuerst nur merken; die Online-Metadaten bleiben
+            # fachlich führend für Titel/Jahr und hängen den Hinweis danach an.
+            if hasattr(widget, "mark_library_path_warning"):
+                widget.mark_library_path_warning(str(suggestion.get("__library_path_warning__") or ""))
+            widget.apply_online_metadata_suggestion(online_suggestion)
+            return
         if hasattr(widget, "apply_unusable_library_series_match"):
             widget.apply_unusable_library_series_match(
                 message=str(suggestion.get("__library_path_warning__") or ""),

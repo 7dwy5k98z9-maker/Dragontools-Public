@@ -59,12 +59,17 @@ _SERIES_EPISODE_RE = re.compile(
     r"S\s*\d{1,4}[.\-_\s]*E\s*\d{1,4}(?:[-_ ]?E?\d{1,4})*"
     r"|E\s*\d{1,4}[.\-_\s]*S\s*\d{1,4}"
     r"|EP(?:ISODE)?[.\-_\s]*\d{1,4}"
+    r"|E\s*\d{1,4}"
     r"|\d{1,4}\s*x\s*\d{1,4}"
     r")(?!\d)",
     re.IGNORECASE,
 )
 _EPISODE_ONLY_RE = re.compile(
     r"(?<!\w)EP(?:ISODE)?[.\-_\s]*(?P<episode>\d{1,4})(?!\d)",
+    re.IGNORECASE,
+)
+_BARE_EPISODE_ONLY_RE = re.compile(
+    r"(?<!\w)E\s*(?P<episode>\d{1,4})(?!\d)(?![.\-_\s]*S\s*\d)",
     re.IGNORECASE,
 )
 
@@ -196,7 +201,9 @@ def parse_series_release_name(value: str | Path) -> ParsedSeriesReleaseName | No
 
     details = parse_series_match_details(clean_name) if parse_series_match_details else None
     episode_only = _EPISODE_ONLY_RE.search(stem)
+    bare_episode_only = _BARE_EPISODE_ONLY_RE.search(stem)
     season_missing = False
+    season_inferred = False
 
     series_query = parse_series_query(clean_name)
     if details and details.get("series"):
@@ -217,6 +224,19 @@ def parse_series_release_name(value: str | Path) -> ParsedSeriesReleaseName | No
         season = 0
         episode = int(episode_only.group("episode"))
         season_missing = True
+    elif bare_episode_only:
+        # Scene-/P2P-Namen verwenden haeufig nur E19 statt S01E19. Fuer den
+        # Renamer ist Staffel 1 der sichere praktische Standard, soll aber
+        # jederzeit ueber die manuelle Staffelwahl ueberschreibbar bleiben.
+        series = series_query.title.strip()
+        if not series:
+            prefix = stem[: bare_episode_only.start()]
+            series = _cleanup_title(prefix)
+        if not series:
+            return None
+        season = 1
+        episode = int(bare_episode_only.group("episode"))
+        season_inferred = True
     else:
         return None
 
@@ -235,6 +255,10 @@ def parse_series_release_name(value: str | Path) -> ParsedSeriesReleaseName | No
         warnings.append(f"Release-Gruppe erkannt/gefiltert: {release_group}")
     if season_missing:
         warnings.append("Staffel fehlt im EPxx-Muster und muss vor der Metadatensuche gewählt werden.")
+    if season_inferred:
+        warnings.append(
+            f"Nur E{episode:02d} erkannt; Staffel 1 wurde als Standard angenommen und kann im Renamer manuell geändert werden."
+        )
     if not episode_title:
         warnings.append("Kein lokaler Episodentitel im Dateinamen erkannt.")
 

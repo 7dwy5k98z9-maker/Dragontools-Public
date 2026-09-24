@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
 """Globaler Settings-Dialog als schlanke Orchestrierungs-Fassade."""
 from __future__ import annotations
+import logging
 
 from PyQt6.QtCore import QSettings
 from PyQt6.QtWidgets import (
     QDialog, QDialogButtonBox, QFileDialog, QGridLayout, QLabel, QLineEdit,
-    QScrollArea, QVBoxLayout, QWidget,
+    QScrollArea, QVBoxLayout, QWidget, QMessageBox,
 )
 
 from ..core.audit_log import log_qsettings_changes, snapshot_qsettings
@@ -13,7 +14,7 @@ from ..core.settings_app import APP_NAME, APP_ORG
 from ..core.version import APP_VERSION
 from .info_button import InfoButton
 from .settings_sections import (
-    MediaPostprocessSection, RuntimeToolsSection, SafetyValidationSection,
+    JellyfinIntegrationSection, MediaPostprocessSection, RuntimeToolsSection, SafetyValidationSection,
     StorageLoggingSection, VideoAnalysisSection,
 )
 from .ui_helpers import install_persistent_window_geometry
@@ -29,10 +30,16 @@ class SettingsDialog(QDialog):
         "parallel": "Parallele Bearbeitung",
         "media_library": "Mediathek-Datenbank",
         "postprocess": "Jellyfin NFO / Trickplay",
+        "jellyfin_api": "Jellyfin API",
+        "watch_folders": "Automatisierung / Watch-Folder",
+        "notifications": "Windows-Benachrichtigungen",
         "source_visual": "Quellbildprüfung",
         "containers": "Ausgabecontainer",
         "autocrop": "Auto-Crop",
         "imax": "IMAX Auto-Erkennung",
+        "quality_target": "Automatisches VMAF-Qualitätsziel",
+        "sdr_hdr": "SDR → HDR Enhancement (experimentell)",
+        "hdr10plus_generator": "Dragon HDR10+ Generator",
         "save": "Speichereinstellungen",
         "validation": "Output-Validierung / Reparatur",
         "move_conflict": "Verschieben – Konfliktverhalten",
@@ -53,11 +60,12 @@ class SettingsDialog(QDialog):
         self._storage_section = StorageLoggingSection(self)
         self._runtime_section = RuntimeToolsSection(self)
         self._media_section = MediaPostprocessSection(self)
+        self._jellyfin_section = JellyfinIntegrationSection(self)
         self._video_section = VideoAnalysisSection(self)
         self._safety_section = SafetyValidationSection(self)
         self._sections = (
             self._storage_section, self._runtime_section, self._media_section,
-            self._video_section, self._safety_section,
+            self._jellyfin_section, self._video_section, self._safety_section,
         )
 
         self._init_ui()
@@ -115,6 +123,14 @@ class SettingsDialog(QDialog):
         for section in self._sections:
             section.load()
 
+    def done(self, result: int) -> None:
+        from .application_shutdown import shutdown_workers
+        thread = getattr(self, "_jellyfin_connection_test_thread", None)
+        if not shutdown_workers([thread], timeout_ms=8000).ok:
+            QMessageBox.warning(self, "Jellyfin", "Verbindungstest läuft noch. Bitte anschließend erneut schließen.")
+            return
+        super().done(result)
+
     def _save(self) -> None:
         before_settings = snapshot_qsettings(self.settings)
         for section in self._sections:
@@ -129,7 +145,7 @@ class SettingsDialog(QDialog):
             )
         except Exception:
             # Audit-Logging ist best effort und darf das Speichern der Einstellungen nicht verhindern.
-            pass
+            logging.getLogger(__name__).debug("Unterdrückte Best-Effort-Ausnahme in _save.", exc_info=True)
         self.accept()
 
     # Öffentliche Callback-Grenze für die fokussierten Settings-Sections.

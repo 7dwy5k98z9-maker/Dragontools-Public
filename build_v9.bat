@@ -73,8 +73,38 @@ for %%F in (
   )
 )
 
+REM faster-whisper/CTranslate2 werden fuer die offizielle EXE mitgebuendelt.
+REM Nicht nur die Importierbarkeit, sondern auch die freigegebenen Versionen
+REM werden geprueft. Fehlt ein Paket oder liegt es ausserhalb der Constraints,
+REM repariert die BAT ausschliesslich requirements-whisper.txt.
+if not exist "requirements-whisper.txt" (
+  echo [FEHLER] Whisper-Requirements fehlen: requirements-whisper.txt
+  goto :BUILD_FAILED
+)
+echo [INFO] Pruefe faster-whisper / CTranslate2 inklusive Versionsgrenzen ...
+"%PYTHON_EXE%" -c "from importlib.metadata import version; import re; vt=lambda n: tuple(int(x) for x in re.findall(r'\d+', version(n))[:3]); fw=vt('faster-whisper'); ct=vt('ctranslate2'); import faster_whisper, ctranslate2; print('[INFO] faster-whisper:', version('faster-whisper')); print('[INFO] CTranslate2:', version('ctranslate2')); raise SystemExit(0 if (fw >= (1,1) and fw < (2,) and ct >= (4,4) and ct < (5,)) else 2)"
+if errorlevel 1 (
+  echo [INFO] Whisper-Pakete fehlen oder liegen ausserhalb der freigegebenen Versionen.
+  echo [INFO] Installiere/repariere nur requirements-whisper.txt ...
+  "%PYTHON_EXE%" -m pip --version >nul 2>nul
+  if errorlevel 1 (
+    echo [FEHLER] pip ist in der verwendeten Build-Umgebung nicht verfuegbar.
+    goto :BUILD_FAILED
+  )
+  "%PYTHON_EXE%" -m pip install -r requirements-whisper.txt
+  if errorlevel 1 (
+    echo [FEHLER] faster-whisper/CTranslate2 konnten nicht installiert werden.
+    goto :BUILD_FAILED
+  )
+)
+"%PYTHON_EXE%" -c "from importlib.metadata import version; import re; vt=lambda n: tuple(int(x) for x in re.findall(r'\d+', version(n))[:3]); fw=vt('faster-whisper'); ct=vt('ctranslate2'); import faster_whisper, ctranslate2; print('[INFO] faster-whisper:', version('faster-whisper')); print('[INFO] CTranslate2:', version('ctranslate2')); raise SystemExit(0 if (fw >= (1,1) and fw < (2,) and ct >= (4,4) and ct < (5,)) else 2)"
+if errorlevel 1 (
+  echo [FEHLER] faster-whisper/CTranslate2 sind nach der Installation nicht in den freigegebenen Versionen verfuegbar.
+  goto :BUILD_FAILED
+)
+
 REM Python-/Build-Abhaengigkeiten aus derselben Umgebung wie die App.
-for %%M in (PyInstaller PyQt6 numpy cv2 cryptography defusedxml) do (
+for %%M in (PyInstaller PyQt6 numpy cv2 cryptography defusedxml faster_whisper ctranslate2) do (
   "%PYTHON_EXE%" -c "import %%M" >nul 2>nul
   if errorlevel 1 (
     echo [FEHLER] Python-Modul %%M fehlt in der verwendeten Umgebung.
@@ -170,7 +200,7 @@ if errorlevel 1 (
 )
 
 REM Versionsinfo fuer reproduzierbare Build-Logs.
-"%PYTHON_EXE%" -c "import sys, PyInstaller, PyQt6, cv2, numpy, cryptography, defusedxml; print('[INFO] App:', '%BUILD_NAME%'); print('[INFO] Python:', sys.version.split()[0]); print('[INFO] PyInstaller:', PyInstaller.__version__); print('[INFO] PyQt6:', getattr(PyQt6, '__version__', 'installiert')); print('[INFO] OpenCV:', cv2.__version__); print('[INFO] NumPy:', numpy.__version__); print('[INFO] cryptography:', cryptography.__version__); print('[INFO] defusedxml:', getattr(defusedxml, '__version__', 'installiert'))"
+"%PYTHON_EXE%" -c "import sys, PyInstaller, PyQt6, cv2, numpy, cryptography, defusedxml, ctranslate2; print('[INFO] App:', '%BUILD_NAME%'); print('[INFO] Python:', sys.version.split()[0]); print('[INFO] PyInstaller:', PyInstaller.__version__); print('[INFO] PyQt6:', getattr(PyQt6, '__version__', 'installiert')); print('[INFO] OpenCV:', cv2.__version__); print('[INFO] NumPy:', numpy.__version__); print('[INFO] CTranslate2:', getattr(ctranslate2, '__version__', 'installiert')); print('[INFO] cryptography:', cryptography.__version__); print('[INFO] defusedxml:', getattr(defusedxml, '__version__', 'installiert'))"
 
 "%PYTHON_EXE%" -m PyInstaller ^
   --onedir ^
@@ -192,6 +222,12 @@ REM Versionsinfo fuer reproduzierbare Build-Logs.
   --collect-submodules cryptography ^
   --collect-binaries cryptography ^
   --collect-data cryptography ^
+  --hidden-import faster_whisper ^
+  --hidden-import ctranslate2 ^
+  --collect-all faster_whisper ^
+  --collect-all ctranslate2 ^
+  --copy-metadata faster-whisper ^
+  --copy-metadata ctranslate2 ^
   --add-data "icon\Feuerdrache.ico;icon" ^
   --add-data "help.html;." ^
   --add-data "Handbuch\Handbuch.pdf;Handbuch" ^
@@ -206,8 +242,6 @@ REM Versionsinfo fuer reproduzierbare Build-Logs.
   --add-data "dragontools\config;dragontools\config" ^
   --add-data "third_party\MKVToolNix;Programme\mkvtoolnix" ^
   --add-data "third_party\MakeMKV;Programme\MakeMKV" ^
-  --add-data "dragontools;Python\dragontools" ^
-  --add-data "DragonToolsV9.py;Python" ^
   --add-binary "third_party\FFmpeg\ffmpeg.exe;Programme" ^
   --add-binary "third_party\FFmpeg\ffprobe.exe;Programme" ^
   --add-binary "third_party\GPAC\mp4box.exe;Programme" ^
@@ -221,6 +255,27 @@ if errorlevel 1 (
   goto :BUILD_FAILED
 )
 
+REM Qt 6 verwendet unter Windows die ICU-Systembibliothek aus System32.
+REM PyInstaller kann auf Entwicklungsrechnern stattdessen eine gleichnamige,
+REM inkompatible ICU-Kopie aus einer fremden Tool-/Poppler-Umgebung einsammeln.
+REM Diese Kopie ueberschattet die Windows-DLL und fuehrt beim Start zu:
+REM   DLL load failed while importing QtCore: Prozedur wurde nicht gefunden.
+REM Nur die beiden automatisch in die Wurzel des Datenordners gelegten Kopien
+REM entfernen; Qt- oder Anwendungsdateien in Unterordnern bleiben unangetastet.
+for %%F in (
+  "%DATA_ROOT%\icuuc.dll"
+  "%DATA_ROOT%\icudt78.dll"
+) do (
+  if exist %%F (
+    echo [INFO] Entferne inkompatible, von PyInstaller eingesammelte ICU-Kopie: %%~F
+    del /Q %%F
+  )
+  if exist %%F (
+    echo [FEHLER] Inkompatible ICU-Kopie konnte nicht aus dem Build entfernt werden: %%~F
+    goto :BUILD_FAILED
+  )
+)
+
 REM Der Abschlusscheck verwendet exakt denselben dynamischen Buildnamen.
 if not exist "%DIST_ROOT%\%BUILD_NAME%.exe" (
   echo [FEHLER] Build-EXE fehlt: %DIST_ROOT%\%BUILD_NAME%.exe
@@ -232,13 +287,18 @@ for %%F in (
   "%DATA_ROOT%\Aenderungshistorie\CHANGELOG.json"
   "%DATA_ROOT%\dragontools\config\default_profiles.json"
   "%DATA_ROOT%\dragontools\config\default_renamer_rules.json"
-  "%DATA_ROOT%\Python\dragontools\__init__.py"
-  "%DATA_ROOT%\Python\DragonToolsV9.py"
 ) do (
   if not exist %%F (
     echo [FEHLER] Build-Artefakt fehlt: %%~F
     goto :BUILD_FAILED
   )
+)
+
+REM Source-free Release-Vertrag: lesbare Projektquellen duerfen nicht separat
+REM unter Daten\Python ausgeliefert werden. PyInstaller enthaelt den Code intern.
+if exist "%DATA_ROOT%\Python" (
+  echo [FEHLER] Unerwarteter Python-Quellordner im Build: %DATA_ROOT%\Python
+  goto :BUILD_FAILED
 )
 
 REM App-Bundle mit derselben Release-Pruefung validieren.

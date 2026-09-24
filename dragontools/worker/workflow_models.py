@@ -46,6 +46,8 @@ class PipelineExecutionRequest:
     preset: str
     encoder_options: dict[str, Any] = field(default_factory=dict)
     preserve_hdrplus: bool = False
+    generate_hdr10plus: bool = False
+    generate_hdr10plus_postprocess: bool = False
 
     @classmethod
     def from_context(cls, ctx: Any, override: dict[str, Any]) -> "PipelineExecutionRequest":
@@ -72,6 +74,10 @@ class PipelineExecutionRequest:
             preset=str(getattr(ctx, "effective_preset", "") or ""),
             encoder_options=dict(getattr(ctx, "effective_encoder_options", None) or {}),
             preserve_hdrplus=bool(getattr(ctx, "effective_preserve_hdrplus", False)),
+            generate_hdr10plus=bool(getattr(ctx, "generate_hdr10plus", False)),
+            generate_hdr10plus_postprocess=bool(
+                getattr(ctx, "generate_hdr10plus_postprocess", False)
+            ),
         )
 
 
@@ -99,6 +105,7 @@ class PipelineExecutionResult:
     final_rpu_message: str = ""
     effective_crop: str | None = None
     effective_crop_known: bool = False
+    externalized_subtitle_stream_indices: tuple[int, ...] = ()
 
     @classmethod
     def succeeded(
@@ -108,6 +115,7 @@ class PipelineExecutionResult:
         verified_hdr10plus: bool = False,
         verified_dolby_vision: bool = False,
         verified_dv_crop_alignment: bool = False,
+        externalized_subtitle_stream_indices: tuple[int, ...] | list[int] | None = None,
     ) -> "PipelineExecutionResult":
         return cls(
             success=True,
@@ -115,4 +123,5 @@ class PipelineExecutionResult:
             verified_hdr10plus=bool(verified_hdr10plus),
             verified_dolby_vision=bool(verified_dolby_vision),
             verified_dv_crop_alignment=bool(verified_dv_crop_alignment),
+            externalized_subtitle_stream_indices=tuple(int(i) for i in (externalized_subtitle_stream_indices or ())),
         )

@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
+import logging
 import os
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QPixmap
@@ -13,8 +14,9 @@ from .drop_path_extractor import (
 from ..core.path_syntax import display_name, display_path, is_video_file, normalize_user_path, path_compare_key, strip_long_path_prefix, to_long_path
 from .convert_widget_queue_add import ConvertWidgetQueueAddMixin, VIDEO_FILE_DIALOG_PATTERNS
 from .convert_widget_queue_remove import ConvertWidgetQueueRemoveMixin
+from .file_list_queue_index import FileListQueueIndexMixin
 
-class FileListWidget(QListWidget):
+class FileListWidget(FileListQueueIndexMixin, QListWidget):
     """
     Dateiliste mit zwei Drag-&-Drop-Modi:
       1. Dateien/Ordner von außerhalb hineinziehen -> neue Dateien hinzufügen
@@ -38,7 +40,9 @@ class FileListWidget(QListWidget):
         self._dragging_internal = False
         self._edit_locked = False
         self._allow_reorder_when_locked = False
+        # O(1)-Index über den normalisierten Vergleichsschlüssel.
         self._path_items: dict[str, QListWidgetItem] = {}
+        self._active_path_checker = None
 
         # Leerer Zustand: Banner direkt in der Liste anzeigen.
         # Sobald Dateien geladen sind, wird das Overlay ausgeblendet und die
@@ -86,18 +90,14 @@ class FileListWidget(QListWidget):
         if not is_video_file(path):
             return False
         key = path_compare_key(path)
-        if key in {
-            path_compare_key(item.data(Qt.ItemDataRole.UserRole))
-            for item in self._path_items.values()
-            if item is not None
-        }:
+        if key in self._path_items:
             return False
 
         item = QListWidgetItem(display_name(path))
         item.setToolTip(display_path(path, max_len=220))
         item.setData(Qt.ItemDataRole.UserRole, path)
         self.addItem(item)
-        self._path_items[path] = item
+        self._path_items[key] = item
         self.update_empty_banner()
         return True
 
@@ -106,7 +106,7 @@ class FileListWidget(QListWidget):
         _debug_mime_data(log_fn, "FileListWidget.dragEnterEvent", e.mimeData())
         if e.source() is self:
             self._dragging_internal = True
-            if self._reorder_locked():
+            if self._reorder_locked() or self._selected_contains_active_path():
                 e.ignore()
                 return
             e.acceptProposedAction()
@@ -126,7 +126,7 @@ class FileListWidget(QListWidget):
         log_fn = _resolve_drop_logger(self)
         _debug_mime_data(log_fn, "FileListWidget.dragMoveEvent", e.mimeData())
         if e.source() is self:
-            if self._reorder_locked():
+            if self._reorder_locked() or self._selected_contains_active_path():
                 e.ignore()
                 return
             e.acceptProposedAction()
@@ -146,10 +146,26 @@ class FileListWidget(QListWidget):
         _debug_mime_data(log_fn, "FileListWidget.dropEvent", e.mimeData())
 
         if e.source() is self:
-            if self._reorder_locked():
+            if self._reorder_locked() or self._selected_contains_active_path():
                 e.ignore()
                 return
+            before_order = self.get_paths()
+            active_positions = {
+                path_compare_key(path): idx
+                for idx, path in enumerate(before_order)
+                if self._is_active_path(path)
+            }
             super().dropEvent(e)
+            if active_positions:
+                after_order = self.get_paths()
+                after_positions = {
+                    path_compare_key(path): idx
+                    for idx, path in enumerate(after_order)
+                    if path_compare_key(path) in active_positions
+                }
+                if after_positions != active_positions:
+                    self.apply_path_order(before_order)
+                    return
             self.order_changed.emit()
             return
 
@@ -194,37 +210,19 @@ class FileListWidget(QListWidget):
     def get_paths(self) -> list[str]:
         return [self.item(i).data(Qt.ItemDataRole.UserRole) for i in range(self.count())]
 
-    def rebuild_path_index(self) -> None:
-        self._path_items = {}
-        for i in range(self.count()):
-            item = self.item(i)
-            if item is None:
-                continue
-            path = item.data(Qt.ItemDataRole.UserRole)
-            if path:
-                self._path_items[str(path)] = item
-
-    def item_for_path(self, path: str):
-        key = str(path)
-        item = self._path_items.get(key)
-        if item is not None and item.data(Qt.ItemDataRole.UserRole) == path:
-            return item
-        self.rebuild_path_index()
-        return self._path_items.get(key)
-
     def remove_path(self, path: str) -> bool:
         cached = self.item_for_path(path)
         if cached is not None:
             row = self.row(cached)
             if row >= 0:
                 self.takeItem(row)
-                self._path_items.pop(str(path), None)
+                self._path_items.pop(path_compare_key(path), None)
                 self.update_empty_banner()
                 return True
         for i in range(self.count()):
             if self.item(i).data(Qt.ItemDataRole.UserRole) == path:
                 self.takeItem(i)
-                self._path_items.pop(str(path), None)
+                self._path_items.pop(path_compare_key(path), None)
                 self.update_empty_banner()
                 return True
         return False
@@ -289,6 +287,25 @@ class ConvertWidgetFileQueueHelper(ConvertWidgetQueueAddMixin, ConvertWidgetQueu
         self.maybe_preflight_new_files = maybe_preflight_new_files
         self.reset_progress_ui = reset_progress_ui
         self.update_label = update_label
+        self.file_list.set_active_path_checker(self._is_active_path)
+
+    def remove_rejected_from_gui(self, paths: list[str]) -> None:
+        self._remove_rejected_from_gui(paths)
+
+    def refresh_labels(self, paths: list[str]) -> None:
+        self._refresh_labels(paths)
+
+    def sync_total_files(self) -> None:
+        self._sync_total_files()
+
+    def _is_active_path(self, path: str) -> bool:
+        thread = self.state.thread
+        if thread is None or not hasattr(thread, "is_current"):
+            return False
+        try:
+            return bool(thread.is_current(path))
+        except (AttributeError, RuntimeError, TypeError, ValueError):
+            return False
 
     def _sync_total_files(self) -> None:
         self.state.total_files = self.file_list.count()
@@ -301,4 +318,4 @@ class ConvertWidgetFileQueueHelper(ConvertWidgetQueueAddMixin, ConvertWidgetQueu
             try:
                 updater(path)
             except Exception:
-                pass
+                logging.getLogger(__name__).debug("Unterdrückte Best-Effort-Ausnahme in _refresh_labels.", exc_info=True)

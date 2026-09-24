@@ -38,6 +38,10 @@ class TheTvdbClient(TvdbResolverMixin, TvdbSuggestionMixin, TvdbEpisodeDataMixin
         self._episode_batch_fresh: set[tuple[int, str, str]] = set()
         self._series_details_batch_cache: dict[tuple[int, bool], dict[str, Any]] = {}
         self._series_details_batch_fresh: set[tuple[int, bool]] = set()
+        # Higher-level renamer search cache. TheTVDB already caches the full
+        # episode list per series; this also avoids rebuilding identical series
+        # searches for every SxxExx row.
+        self._renamer_search_cache: dict[tuple, list[dict[str, Any]]] = {}
         self._episode_batch_lock = RLock()
         self._auth_lock = RLock()
         self._request_cache_lock = RLock()

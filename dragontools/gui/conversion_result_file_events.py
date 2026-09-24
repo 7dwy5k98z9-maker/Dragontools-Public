@@ -60,6 +60,13 @@ class ConversionResultFileEventsMixin:
         state.artifacts_by_input[input_path] = bundle
         self._record_terminal_result(input_path, output_path, status)
         self._record_journal_result(input_path, output_path, status)
+        notify_terminal = getattr(self, "notify_terminal_result", None)
+        if callable(notify_terminal):
+            notify_terminal(input_path, output_path, status)
+        notifications = getattr(self, "_notifications", None)
+        if notifications is not None:
+            row = state.run_results.get(input_path, {})
+            notifications.on_file_result(input_path, status, str(row.get("message") or ""))
 
         if input_path in state.pending_remove_paths:
             state.pending_remove_paths.discard(input_path)

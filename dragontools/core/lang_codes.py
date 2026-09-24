@@ -220,6 +220,23 @@ def canonical_lang(code: str | None) -> str:
     return _LANGUAGE_ALIAS_TO_CODE.get(iso1, iso1)
 
 
+
+_PREFERRED_ISO_639_2: dict[str, str] = {
+    "de": "deu", "en": "eng", "ja": "jpn", "fr": "fra", "es": "spa",
+    "it": "ita", "ko": "kor", "zh": "zho", "pt": "por", "ru": "rus",
+    "pl": "pol", "nl": "nld", "sv": "swe", "no": "nor", "da": "dan",
+    "fi": "fin", "tr": "tur", "cs": "ces", "hu": "hun", "el": "ell",
+    "ar": "ara",
+}
+
+
+def mkv_language_tags(code: str | None) -> tuple[str, str]:
+    """Return ``(legacy ISO-639-2, IETF)`` tags for Matroska metadata."""
+    canonical = canonical_lang(code)
+    if not canonical:
+        return "und", "und"
+    return _PREFERRED_ISO_639_2.get(canonical, canonical), canonical
+
 def language_aliases(code: str | None) -> set[str]:
     """Alle bekannten Schreibweisen für eine Sprache."""
     canonical = canonical_lang(code)

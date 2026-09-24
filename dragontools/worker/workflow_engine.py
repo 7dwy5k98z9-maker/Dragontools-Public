@@ -95,7 +95,13 @@ class WorkflowContext:
     effective_encoder_options: dict[str, Any] | None = None
     effective_preserve_dv: bool = False
     effective_preserve_hdrplus: bool = False
+    generate_hdr10plus: bool = False
     encoder_profile_label: str = ""
+    quality_target_attempted: bool = False
+    quality_target_applied: bool = False
+    quality_target_selected: int | None = None
+    quality_target_vmaf: float | None = None
+    quality_target_reason: str = ""
     file_override: dict[str, Any] | None = None
 
     base_dir: Path | None = None

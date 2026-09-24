@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Qt-independent state models for parallel conversion coordination."""
 from __future__ import annotations
+import logging
 
 from dataclasses import dataclass, field
 
@@ -17,6 +18,7 @@ class ParallelQueueState:
     terminal_inputs: set[str] = field(default_factory=set)
     postprocessing_inputs: set[str] = field(default_factory=set)
     display_index_by_path: dict[str, int] = field(default_factory=dict)
+    file_keys: set[str] = field(default_factory=set)
     display_total: int = 0
 
     def __post_init__(self) -> None:
@@ -26,6 +28,7 @@ class ParallelQueueState:
 
     def rebuild_display_positions(self) -> None:
         self.display_total = len(self.files)
+        self.file_keys = {path_compare_key(path) for path in self.files}
         self.display_index_by_path = {
             path_compare_key(path): index
             for index, path in enumerate(self.files, start=1)
@@ -179,7 +182,7 @@ class ParallelWorkerRegistry:
                     result.append(worker.diagnostic_snapshot())
                     continue
                 except Exception:
-                    pass
+                    logging.getLogger(__name__).debug("Unterdrückte Best-Effort-Ausnahme in diagnostic_workers.", exc_info=True)
             result.append(
                 {
                     "type": "converter",

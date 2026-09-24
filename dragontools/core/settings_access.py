@@ -2,10 +2,13 @@
 """Typed, defensive access helpers for QSettings-like objects."""
 from __future__ import annotations
 
+import logging
 from typing import Any, Iterable
 
 from .settings_app import APP_NAME, APP_ORG
 from .type_utils import _safe_bool, _safe_float, _safe_int
+
+_LOG = logging.getLogger(__name__)
 
 SET_KEY_UI_SECTION_PREFIX = "ui/sections"
 
@@ -25,6 +28,7 @@ def app_qsettings():
 
         return QSettings(APP_ORG, APP_NAME)
     except Exception:
+        _LOG.debug("Zentrale QSettings-Instanz konnte nicht erstellt werden.", exc_info=True)
         return None
 
 
@@ -40,8 +44,10 @@ def settings_value(settings, key: str, default: Any = None, *, value_type=None) 
         try:
             return settings.value(key, default)
         except Exception:
+            _LOG.debug("QSettings-Wert konnte nicht gelesen werden: %s", key, exc_info=True)
             return default
     except Exception:
+        _LOG.debug("QSettings-Wert konnte nicht gelesen werden: %s", key, exc_info=True)
         return default
 
 

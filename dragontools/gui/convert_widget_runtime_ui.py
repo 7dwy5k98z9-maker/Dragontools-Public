@@ -46,6 +46,11 @@ class ConvertWidgetRuntimeUI:
         owner.add_folder_btn.setEnabled(enabled)
         owner.remove_btn.setEnabled(enabled)
         owner.clear_btn.setEnabled(enabled)
+        reorder_enabled = bool(enabled or allow_reorder_when_locked)
+        for name in ("queue_front_btn", "queue_up_btn", "queue_down_btn", "queue_back_btn"):
+            button = getattr(owner, name, None)
+            if button is not None:
+                button.setEnabled(reorder_enabled)
         self.refresh_queue()
 
     def guard_queue_edit_allowed(self, action: str) -> bool:

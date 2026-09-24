@@ -148,4 +148,4 @@ class BaseWorker(QThread):
             if vlogger is not None:
                 vlogger.write(msg)
         except Exception:
-            pass
+            logging.getLogger(__name__).debug("Unterdrückte Best-Effort-Ausnahme in _vlog.", exc_info=True)

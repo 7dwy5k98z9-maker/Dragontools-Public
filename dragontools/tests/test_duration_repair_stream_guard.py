@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+from types import SimpleNamespace
+
 import pytest
 
 from dragontools.worker.duration_repair_stream_guard import RepairStreamGuard
@@ -35,6 +38,15 @@ def _mi(v=1, a=1, s=1):
     return {"media": {"track": tracks}}
 
 
+def _mkv(v=1, a=1, s=1):
+    tracks = (
+        [{"id": i, "type": "video"} for i in range(v)]
+        + [{"id": 10 + i, "type": "audio"} for i in range(a)]
+        + [{"id": 20 + i, "type": "subtitles"} for i in range(s)]
+    )
+    return {"tracks": tracks}
+
+
 @pytest.fixture(autouse=True)
 def _tools_available(monkeypatch):
     monkeypatch.setattr(
@@ -43,7 +55,7 @@ def _tools_available(monkeypatch):
     )
 
 
-def test_disagreeing_stream_tools_reject_candidate_fail_closed():
+def test_disagreeing_stream_tools_accept_when_one_tool_confirms_presence():
     analyzer = Analyzer(
         {"before": _ff(1, 2, 1), "after": _ff(1, 1, 1)},
         {"before": _mi(1, 2, 1), "after": _mi(1, 2, 1)},
@@ -61,12 +73,13 @@ def test_disagreeing_stream_tools_reject_candidate_fail_closed():
         candidate_path="after",
     )
 
-    assert result.ok is False
-    assert result.retry_recommended is True
-    assert any("widersprechen" in msg for msg in result.messages)
+    assert result.ok is True
+    assert result.retry_recommended is False
+    assert "audio" in result.confirmed_kinds
+    assert any("Parser-Widerspruch" in msg for msg in result.messages)
 
 
-def test_mediainfo_confirmed_stream_loss_forces_retry_and_reject():
+def test_missing_stream_is_not_declared_lost_until_all_three_tools_agree():
     analyzer = Analyzer(
         {"before": _ff(1, 2, 1), "after": _ff(1, 1, 0)},
         {"before": _mi(1, 2, 1), "after": _mi(1, 1, 0)},
@@ -84,7 +97,38 @@ def test_mediainfo_confirmed_stream_loss_forces_retry_and_reject():
         candidate_path="after",
     )
 
+    assert result.ok is True
+    assert any("Kein 3-von-3-Verlustnachweis" in msg for msg in result.messages)
+
+
+def test_all_three_tools_must_agree_before_stream_is_rejected():
+    analyzer = Analyzer(
+        {"before": _ff(1, 2, 1), "after": _ff(1, 1, 0)},
+        {"before": _mi(1, 2, 1), "after": _mi(1, 1, 0)},
+    )
+
+    def run_tool(cmd, *, label):
+        path = str(cmd[-1])
+        payload = _mkv(1, 2, 1) if path == "before" else _mkv(1, 1, 0)
+        return SimpleNamespace(returncode=0, stdout=json.dumps(payload), stderr="")
+
+    guard = RepairStreamGuard(
+        timing_analyzer=analyzer,
+        ffprobe_path="ffprobe",
+        mediainfo_path="mediainfo",
+        mkvmerge_path="mkvmerge",
+        run_tool_fn=run_tool,
+        log=lambda *_: None,
+    )
+    before_ff, before_mi, before_mkv = guard.inspect_all("before")
+    result = guard.validate(
+        before_ffprobe=before_ff,
+        before_mediainfo=before_mi,
+        before_mkvmerge=before_mkv,
+        candidate_path="after",
+    )
+
     assert result.ok is False
     assert result.retry_recommended is True
-    assert any("MediaInfo bestätigt fehlende Audiospuren" in msg for msg in result.messages)
-    assert any("MediaInfo bestätigt fehlende Untertitelspuren" in msg for msg in result.messages)
+    assert any("Alle drei Prüfwerkzeuge" in msg and "Audiospuren" in msg for msg in result.messages)
+    assert any("Alle drei Prüfwerkzeuge" in msg and "Untertitelspuren" in msg for msg in result.messages)

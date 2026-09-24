@@ -14,13 +14,18 @@ TOOL_VERSION_ARGS: dict[str, list[str]] = {
     "ffprobe": ["-hide_banner", "-version"],
     "mkvmerge": ["--version"],
     "mkvextract": ["--version"],
+    "mkvpropedit": ["--version"],
     "makemkvcon": ["--version"],
     "mediainfo": ["--Version"],
     "dovi_tool": ["--version"],
     "hdr10plus_tool": ["--version"],
+    "hdr10plus_generator": ["--version"],
+    "davinci_resolve": [],
+    "comfyui": [],
     "mp4box": ["-version"],
     "handbrake": ["--version"],
     "rmts": [],
+    "tesseract": ["--version"],
 }
 
 
@@ -28,13 +33,18 @@ TOOL_FEATURE_LABELS: dict[str, list[str]] = {
     "ffprobe": ["Analyse/JSON"],
     "mkvmerge": ["MKV-Mux"],
     "mkvextract": ["MKV-Extraktion"],
+    "mkvpropedit": ["MKV-Track-Metadaten"],
     "makemkvcon": ["ISO/Disc-Extraktion"],
     "mediainfo": ["MediaInfo-Analyse", "HDR/DV-Erkennung"],
     "dovi_tool": ["Dolby-Vision-RPU"],
     "hdr10plus_tool": ["HDR10+-Metadaten"],
+    "hdr10plus_generator": ["HDR10+-Analyse/JSON"],
+    "davinci_resolve": ["SDR→HDR10/PQ Backend (vorbereitet)"],
+    "comfyui": ["Lokales SDR→HDR-AI-Backend/API (vorbereitet)"],
     "mp4box": ["MP4/DV-Mux"],
-    "handbrake": ["Externe GUI/CLI"],
+    "handbrake": ["Externe HandBrake-GUI"],
     "rmts": ["Serien-Umbenennung"],
+    "tesseract": ["PGS/VobSub-OCR"],
 }
 
 
@@ -210,6 +220,11 @@ def format_tool_diagnostics(rows: list[dict[str, Any]]) -> str:
         path = str(row.get("path") or "")
         if not row.get("found"):
             lines.append(f"❌  {name}  (nicht gefunden)")
+            if path:
+                lines.append(f"   Pfad: {path}")
+            error = str(row.get("error") or "").strip()
+            if error:
+                lines.append(f"   Hinweis: {error}")
             continue
         lines.append(f"✅  {name}")
         lines.append(f"   Pfad: {path}")
@@ -220,7 +235,7 @@ def format_tool_diagnostics(rows: list[dict[str, Any]]) -> str:
         if features:
             lines.append(f"   Features: {', '.join(features)}")
         error = str(row.get("error") or "").strip()
-        if error and not version:
+        if error:
             lines.append(f"   Hinweis: {error}")
     return "\n".join(lines)
 

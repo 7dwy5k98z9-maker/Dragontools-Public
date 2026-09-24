@@ -5,10 +5,11 @@ from .tool_runner import run_tool
 
 
 class QualityProcessRunner:
-    def __init__(self, *, worker, log, prefix: str) -> None:
+    def __init__(self, *, worker, log, prefix: str, abort_on_request: bool = True) -> None:
         self._worker = worker
         self._log = log
         self._prefix = prefix
+        self._abort_on_request = bool(abort_on_request)
 
     def run(self, cmd: list[str], *, label: str) -> tuple[int, str, str]:
         result = run_tool(
@@ -17,7 +18,7 @@ class QualityProcessRunner:
             timeout_s=get_timeout("quality_test_process"),
             worker=self._worker,
             log=lambda message, _level="info": self._log(message),
-            abort_on_request=True,
+            abort_on_request=self._abort_on_request,
         )
         if result.aborted or bool(getattr(self._worker, "_abort", False)):
             raise RuntimeError("Abgebrochen")

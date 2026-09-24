@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Planning for lossless-video AudioMux jobs."""
 from __future__ import annotations
+import logging
 
 import subprocess
 from pathlib import Path
@@ -93,7 +94,7 @@ class AudioMuxPlanService:
         except Exception:
             # Video/audio/subtitle remain fail-closed; auxiliary stream counts
             # are enforced whenever source ffprobe can establish them.
-            pass
+            logging.getLogger(__name__).debug("Unterdrückte Best-Effort-Ausnahme in build_expected_contract.", exc_info=True)
         return ExpectedMediaContract(
             container="mkv",
             video_codec=normalize_video_codec(getattr(primary, "codec", "")),

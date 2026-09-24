@@ -11,6 +11,7 @@ from PyQt6.QtWidgets import (
 )
 
 from .convert_widget_file_queue import FileListWidget
+from .queue_ordering import MOVE_BACK, MOVE_DOWN, MOVE_FRONT, MOVE_UP, reorder_selected_paths
 from .ui_helpers import restore_window_geometry, save_window_geometry
 
 
@@ -70,11 +71,29 @@ class ConvertQueueWindow(QWidget):
 
         root = QVBoxLayout(self)
         self.file_list = QueueWindowListWidget(self)
+        self.file_list.set_active_path_checker(self._is_path_active)
         self.file_list.setMinimumHeight(420)
         self.file_list.order_changed.connect(self._on_order_changed)
         root.addWidget(self.file_list)
 
         buttons = QHBoxLayout()
+        self.front_btn = QPushButton("⤒")
+        self.up_btn = QPushButton("↑")
+        self.down_btn = QPushButton("↓")
+        self.back_btn = QPushButton("⤓")
+        self.front_btn.setToolTip("Auswahl direkt hinter aktuell laufende Dateien setzen")
+        self.up_btn.setToolTip("Auswahl eine Position nach oben verschieben")
+        self.down_btn.setToolTip("Auswahl eine Position nach unten verschieben")
+        self.back_btn.setToolTip("Auswahl ganz nach unten verschieben")
+        self.front_btn.clicked.connect(lambda: self._move_selected(MOVE_FRONT))
+        self.up_btn.clicked.connect(lambda: self._move_selected(MOVE_UP))
+        self.down_btn.clicked.connect(lambda: self._move_selected(MOVE_DOWN))
+        self.back_btn.clicked.connect(lambda: self._move_selected(MOVE_BACK))
+        buttons.addWidget(self.front_btn)
+        buttons.addWidget(self.up_btn)
+        buttons.addWidget(self.down_btn)
+        buttons.addWidget(self.back_btn)
+        buttons.addStretch(1)
         self.pause_btn = QPushButton("⏸ Pause")
         self.abort_btn = QPushButton("❌ Abbrechen")
         self.pause_btn.clicked.connect(self._on_pause_clicked)
@@ -185,6 +204,9 @@ class ConvertQueueWindow(QWidget):
             and hasattr(thread, "resume") and hasattr(thread, "_paused")
         self.pause_btn.setEnabled(can_pause)
         self.abort_btn.setEnabled(bool(thread))
+        reorder_enabled = not bool(self.is_queue_blocking_move_active())
+        for button in (self.front_btn, self.up_btn, self.down_btn, self.back_btn):
+            button.setEnabled(reorder_enabled)
         if can_pause and getattr(thread, "_paused", False):
             self.pause_btn.setText("▶ Fortsetzen")
         else:
@@ -195,6 +217,43 @@ class ConvertQueueWindow(QWidget):
         else:
             self.abort_btn.setText("❌ Abbrechen")
             self.abort_btn.setToolTip("Aktiven Vorgang abbrechen")
+
+    def _is_path_active(self, path: str) -> bool:
+        worker = self.active_worker()
+        if worker is None or not hasattr(worker, "is_current"):
+            return False
+        try:
+            return bool(worker.is_current(path))
+        except (AttributeError, RuntimeError, TypeError, ValueError):
+            return False
+
+    def _active_paths(self) -> list[str]:
+        worker = self.active_worker()
+        if worker is None or not hasattr(worker, "is_current"):
+            return []
+        result: list[str] = []
+        for path in self.file_list.get_paths():
+            try:
+                if worker.is_current(path):
+                    result.append(path)
+            except (AttributeError, RuntimeError, TypeError, ValueError):
+                continue
+        return result
+
+    def _move_selected(self, action: str) -> None:
+        if self.is_queue_blocking_move_active():
+            return
+        current = self.file_list.get_paths()
+        selected = self.file_list.selected_paths_in_order()
+        if not selected:
+            return
+        new_order = reorder_selected_paths(
+            current, selected, self._active_paths(), action=action
+        )
+        if new_order == current:
+            return
+        if self.file_list.apply_path_order(new_order):
+            self.apply_queue_order(new_order)
 
     def _on_order_changed(self) -> None:
         if self._syncing:

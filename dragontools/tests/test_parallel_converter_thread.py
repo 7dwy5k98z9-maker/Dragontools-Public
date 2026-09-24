@@ -72,7 +72,7 @@ class FakeWorker:
         self._failure_details = {}
 
         self.log_line = FakeSignal()
-        self.event = FakeSignal()
+        self.worker_event = FakeSignal()
         self.file_progress = FakeSignal()
         self.file_result = FakeSignal()
         self.progress = FakeSignal()

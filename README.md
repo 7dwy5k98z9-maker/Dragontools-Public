@@ -1,9 +1,11 @@
-# DragonTools V9.8.4
+# DragonTools V9.8.6
+
+> Die bestätigten Review-Befunde wurden in den nachfolgenden V9.8.5-Patches korrigiert und durch Schutz-Regressionsprüfungen abgesichert. Die aktuelle technische Historie steht in `PATCH.md`. Eine vollständige EXE-/Hardware-Abnahme bleibt davon getrennt.
 
 DragonTools ist eine Windows-Anwendung zur Analyse, Konvertierung und Verwaltung von Video-, Audio- und Untertiteldateien. Das Projekt bündelt die benötigten Drittanbieterprogramme nicht im Git-Repository. Sie müssen separat von den jeweiligen Projektseiten heruntergeladen werden.
 
 
-## Stand 9.8.4 – 16.09.2026
+## Stand 9.8.6 – 24.09.2026
 
 Normalisierter FFmpeg-AutoCrop ist die verbindliche physische DV-Crop-Quelle. Finaler RPU-Nachweis schützt das Original auch bei exakter Geometrie. Zieländerungen während laufender Aufträge sind an der Move-Transaktionsgrenze abgesichert. Renamer unterstützt Releasegruppen, E05S06 und EPxx mit Staffelwahl; Fenster und Spalten sind flexibel skalierbar.
 
@@ -12,10 +14,13 @@ Normalisierter FFmpeg-AutoCrop ist die verbindliche physische DV-Crop-Quelle. Fi
 - Normaler MP4-Remux prüft Abbruch erneut nach Sidecar-Arbeit und unmittelbar in der finalen Dateitransaktion. Vor dem Commit eingegangene Abbrüche erhalten das Original und rollen Sidecars zurück. Ein unvollständiger Rollback bewahrt Staging und Journal zur Recovery.
 - Die Haupt-Tab-Leiste und der Renamer erzwingen keine überbreite Mindestgröße mehr. Renamer-Aktionen sind mehrzeilig angeordnet; Tabellenspalten lassen sich frei skalieren, ein-/ausblenden und persistent speichern. OK, Typ und Hinweise sind in der Standardansicht ausgeblendet.
 - Renamer-Regeln Schema 3 ergänzt eine eigene Releasegruppen-Liste: bekannte Gruppen wie `STARS` können am Anfang/Ende des Release-Namens gefiltert werden. Serienmuster `E05S06` werden als Staffel 6 / Episode 5 erkannt; bei `EP01` ohne Staffel fragt DragonTools vor der Providerabfrage ausdrücklich nach der Staffel.
+- SDR→HDR über ComfyUI/HDRTVDM ist als Voll-Datei-Pfad nutzbar, kann ComfyUI bei Bedarf automatisch starten und lässt sich pro Datei über den Override aktivieren/deaktivieren. Ein gemessener 1080p-Praxiswert auf einer RTX 4080 SUPER liegt bei ungefähr **4:1 Konvertierungsdauer zu Filmdauer**; das ist ein Richtwert, keine Leistungszusage.
+- Der **Dragon HDR10+ Generator 0.2.0** analysiert vorhandene PQ/BT.2020-Videos framegenau, erzeugt ein `hdr10plus_tool`-kompatibles ST-2094-40-Profile-A-JSON und ist sowohl direkt per CLI als auch aus DragonTools nutzbar. DragonTools kann HDR10+ nach SDR→HDR sowie bei geeigneten HDR10-HEVC-Remux-/Strip-Only-Ausgaben erzeugen, injizieren und final verifizieren.
+- Die HDR-Einstellungen sind direkt erreichbar: **Einstellungen → 🌈 SDR → HDR / ComfyUI** sowie **Einstellungen → ✨ Dragon HDR10+ Generator**. Die Help-Datei besitzt dafür eigene Kapitel zu SDR→HDR/HDRTVDM, dem Generator sowie HDR-Erkennung/Datei-Overrides/Strip-Only.
 
 Abbruch ist kooperativ: Ein bereits abgeschlossenes atomares Dateisystem-Replace kann nicht rückwirkend verhindert werden. Die Prüfung liegt unmittelbar vor dem Commit und beim Containerwechsel nochmals vor dem Original-Cleanup; bei einem dort erkannten Abbruch wird die Installation zurückgerollt. Bereits sicher installierte Ausgaben werden nicht blind gelöscht.
 
-Aktueller Quellstand: 857 Python-Dateien, 128.481 Gesamtzeilen und 108.628 Codezeilen (nichtleer, keine reinen Kommentarzeilen). Testpaket: 191 Python-Dateien, 188 test_*.py und 1.397 statisch erkannte Testfunktionen. Vollständiger Nachreview: 1.449 Tests bestanden, ohne Fehler oder Skips. Die nachfolgende Bestandsbeschreibung dokumentiert den historischen Stand 9.8.2.
+Aktueller Quellstand einschließlich des eigenständigen Dragon-HDR10+-Generators: **986 Python-Dateien/Programme, 150.125 Gesamtzeilen und 126.908 Codezeilen** (nichtleer, keine reinen Kommentarzeilen). Die kombinierten Testpakete umfassen 233 Python-Dateien, davon 229 `test_*.py` mit 1.736 statisch erkannten Testfunktionen. Produktivcode einschließlich Einstiegspunkt und Generator-Source: 753 Python-Dateien, 105.564 Gesamtzeilen und 90.866 Codezeilen. Die nachfolgende Bestandsbeschreibung dokumentiert den historischen Stand 9.8.2.
 
 ## Historischer Entwicklungsstand 9.8.2 – 13.09.2026
 
@@ -45,7 +50,8 @@ Der aktuell vermessene Quellstand umfasst **787 Python-Dateien einschließlich `
 Die Python-Abhängigkeiten sind nach Einsatzzweck aufgeteilt:
 
 - `requirements-runtime.txt`: Anwendung starten
-- `requirements-optional.txt`: optionale Bildanalyse
+- `requirements-optional.txt`: optionale Bildanalyse; bindet die Whisper-Abhängigkeiten ein
+- `requirements-whisper.txt`: freigegebene `faster-whisper`-/CTranslate2-Versionen für Spracherkennung und EXE-Build
 - `requirements-test.txt`: Tests ausführen
 - `requirements-build.txt`: vollständigen Windows-Build erstellen
 
@@ -61,11 +67,13 @@ python -m pip install -r requirements-runtime.txt
 python DragonToolsV9.py
 ```
 
-Für die optionale Bildanalyse zusätzlich:
+Für optionale Bildanalyse und Audio-Spracherkennung bei einem Quellstart zusätzlich:
 
 ```powershell
 python -m pip install -r requirements-optional.txt
 ```
+
+Beim offiziellen Windows-Build prüft `build_v9.bat` vor PyInstaller `faster_whisper` und `ctranslate2` **inklusive der freigegebenen Versionsgrenzen**. Fehlen die Pakete oder liegen sie außerhalb der Constraints, installiert/repariert der Builder ausschließlich `requirements-whisper.txt` per `pip` und prüft danach erneut. NumPy/OpenCV werden dabei nicht verändert. PyInstaller sammelt beide Whisper-Pakete anschließend explizit ein. Die fertige EXE installiert beim Benutzer **keine Python-Pakete**. Nur das konfigurierte Whisper-Modell wird beim ersten tatsächlichen Einsatz heruntergeladen und danach aus dem lokalen Cache verwendet.
 
 ## Externe Werkzeuge
 
@@ -85,6 +93,35 @@ Die Programme werden bewusst nicht mit diesem Repository verteilt. Lade sie auss
 
 Nicht jede Funktion benötigt alle Werkzeuge. Fehlende optionale Werkzeuge deaktivieren oder begrenzen nur die zugehörigen Arbeitsabläufe. Der vollständige EXE-Build erwartet hingegen sämtliche oben genannten Ordner und Programme.
 
+Der eigenständige **Dragon HDR10+ Generator** ist ein DragonTools-Unterprojekt mit eigener EXE/CLI und wird im Projektumfang mitgezählt. Er wird bewusst getrennt vom Hauptprogramm gebaut, damit die Frameanalyse unabhängig getestet und auch direkt aus PowerShell genutzt werden kann. ComfyUI bleibt als optionaler lokaler SDR→HDR-AI-Dienst integriert. Als konkretes Modellprofil ist **HDRTVDM/LSN mit `method/params_3DM.pth`** für BT.709 → PQ/BT.2020 hinterlegt. Der Voll-Datei-Worker streamt CFR-Video frameweise über ComfyUI/HDRTVDM direkt in einen 10-Bit-PQ/BT.2020-Videostream und übernimmt danach die vorhandenen Audio-/Untertitelregeln; es wird keine komplette TIFF-/PNG-Sequenz materialisiert. Die benötigten Bridge-Nodes liegen unter `extras/comfyui/DragonTools_HDRTVDM`, eine genaue Installationsanleitung in `COMFYUI_HDR_SETUP.md`. AI-HDR wird nur bei expliziter BT.709-Colorimetry und vollständiger Readiness gestartet. Fehlen Colorimetry, ComfyUI/API, Modell, Nodes, Workflow oder eine unterstützte Framerate, wird der Grund geloggt und die Datei bleibt im normalen SDR-Encode. Fehler eines bereits gestarteten HDRTVDM-Jobs bleiben dagegen harte Auftragsfehler. Der bestehende FFmpeg/libplacebo-Pfad bleibt davon unberührt.
+
+### Dragon HDR10+ Generator direkt per PowerShell
+
+Der Generator akzeptiert einen normalen Video-Container wie MKV/MP4, prüft PQ/ST2084 und BT.2020, scannt jeden Frame zeitlich vollständig und schreibt nur die dynamische HDR10+-JSON. Injection und Remux sind bei direkter CLI-Nutzung separate Schritte.
+
+```powershell
+HDRPlusGenerator.exe analyze `
+  --input "D:\Videos\Film.mkv" `
+  --output "D:\Videos\Film_hdr10plus.json"
+```
+
+Optional können die Analysebreite, Szenenerkennung und konkrete FFmpeg-Pfade gesetzt werden:
+
+```powershell
+HDRPlusGenerator.exe analyze `
+  --input "D:\Videos\Film.mkv" `
+  --output "D:\Videos\Film_hdr10plus.json" `
+  --analysis-width 512 `
+  --scene-threshold 0.32 `
+  --min-scene-frames 6 `
+  --ffmpeg "C:\Tools\ffmpeg.exe" `
+  --ffprobe "C:\Tools\ffprobe.exe"
+```
+
+Defaults: `analysis-width=256`, `scene-threshold=0.32`, `min-scene-frames=6`. Höhere Analysebreiten erhöhen die räumliche Messgenauigkeit, nicht die zeitliche Abtastrate; jeder Frame wird weiterhin analysiert. Die Ausgabe ist ein klassisches ST-2094-40-**Profile-A**-JSON. Der Generator erfindet bewusst keine Profile-B-Knee-/Bezier-Kurven.
+
+In DragonTools kann die Erzeugung global oder per Datei (`HDR10+ erzeugen`) aktiviert werden. Der Bereich ist direkt über **Einstellungen → ✨ Dragon HDR10+ Generator** erreichbar; der EXE-Pfad bleibt zentral unter **Einstellungen → Werkzeugpfade**. Bei SDR→HDR wird erst der fertige PQ/BT.2020-HEVC-Stream erzeugt und danach analysiert. Bei einem vorhandenen HDR10-HEVC ohne HDR10+ kann derselbe Ablauf auch nach Strip-Only/Remux erfolgen, ohne das Video erneut zu encodieren.
+
 ## Alternative Werkzeugkonfiguration
 
 Beim Start aus dem Quellcode sucht DragonTools Werkzeuge in dieser Reihenfolge:
@@ -102,6 +139,7 @@ Dragontools/
 ├── DragonToolsV9.py
 ├── build_v9.bat
 ├── dragontools/
+├── dragon_hdr10plus_generator/
 ├── Handbuch/
 ├── Bilder/
 ├── icon/
@@ -196,7 +234,7 @@ Kontrolliere anschließend, dass alle externen Werkzeuge unter `third_party` vor
 build_v9.bat
 ```
 
-Der fertige Build wird unter `dist/DragonToolsV9.8.4/` abgelegt. `build/` und `dist/` sind lokale Ausgaben und werden nicht in Git gespeichert.
+Der fertige Build wird unter `dist/DragonToolsV9.8.6/` abgelegt. `build/` und `dist/` sind lokale Ausgaben und werden nicht in Git gespeichert.
 
 ## Programm-Updates über GitHub
 

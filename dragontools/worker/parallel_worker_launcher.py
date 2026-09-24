@@ -47,7 +47,7 @@ class ParallelWorkerLauncher:
         worker._display_index_by_path = self._queue_state.display_index_by_path
         worker._display_total = self._queue_state.display_total
         worker.log_line.connect(lambda message: invoke_callback(log_emit, message))
-        worker.event.connect(lambda event: invoke_callback(event_emit, event))
+        worker.worker_event.connect(lambda event: invoke_callback(event_emit, event))
         if hasattr(worker, "dv_crop_decision_requested"):
             worker.dv_crop_decision_requested.connect(
                 lambda payload: invoke_callback(relay_crop_decision, payload)

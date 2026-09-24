@@ -13,7 +13,7 @@ Dazu kommen die kleinen Helfer:
 """
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt, QRectF
+from PyQt6.QtCore import Qt, QRectF, QSize
 from PyQt6.QtGui import (
     QPixmap, QPainter, QColor, QLinearGradient, QPen, QPainterPath,
 )
@@ -76,6 +76,11 @@ class BannerLabel(QLabel):
     def setScaleMode(self, mode: str) -> None:
         self._scale_mode = mode if mode in {"contain", "fit_height"} else "contain"
         self._update_scaled()
+
+    def minimumSizeHint(self) -> QSize:
+        """Never let the source/scaled pixmap force the main-window width."""
+        hint = super().minimumSizeHint()
+        return QSize(0, hint.height())
 
     def sourceAspectRatio(self) -> float:
         if self._pix.isNull() or self._pix.height() <= 0:

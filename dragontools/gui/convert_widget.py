@@ -29,9 +29,10 @@ from .convert_widget_file_queue import FileListWidget
 from .convert_widget_host_actions import ConvertWidgetHostActions
 from .convert_widget_paths import ConvertWidgetTargetPathService
 from .convert_widget_queue_actions import ConvertWidgetQueueActionsMixin
+from .convert_widget_watch_intake import ConvertWidgetWatchMixin
 
 
-class ConvertWidget(ConvertWidgetQueueActionsMixin, QWidget):
+class ConvertWidget(ConvertWidgetWatchMixin, ConvertWidgetQueueActionsMixin, QWidget):
     """Thin Qt facade for the converter tab."""
 
     def __init__(self, default_codec: str = "h265", parent=None) -> None:

@@ -28,6 +28,7 @@ class HDRPlusPipelineHooks:
 
     extract_hevc_annexb: Callable[[str, str], bool]
     extract_metadata: Callable[[str, str], bool]
+    generate_metadata: Callable[[str, str], bool]
     inject_metadata: Callable[[str, str, str], bool]
     mux_output: Callable[..., bool]
     run_mux_tool: Callable[..., bool]
@@ -89,11 +90,18 @@ class HDRPlusPipelineCoordinator:
                 paths = HDRPlusPipelinePaths.create(Path(tmp))
                 self._log_start(context)
 
-                if not self._step_extract_metadata(context, paths, hooks):
-                    return self._failed_step(context, hooks, 1)
-                if not self._step_encode(context, paths):
-                    return self._failed_step(context, hooks, 2)
-                hooks.cleanup_tmp_sub(context.input_path)
+                if context.generate_hdr10plus:
+                    if not self._step_encode(context, paths):
+                        return self._failed_step(context, hooks, 1)
+                    hooks.cleanup_tmp_sub(context.input_path)
+                    if not self._step_generate_metadata(paths, hooks):
+                        return self._failed_step(context, hooks, 2)
+                else:
+                    if not self._step_extract_metadata(context, paths, hooks):
+                        return self._failed_step(context, hooks, 1)
+                    if not self._step_encode(context, paths):
+                        return self._failed_step(context, hooks, 2)
+                    hooks.cleanup_tmp_sub(context.input_path)
                 if not self._step_inject(paths, hooks):
                     return self._failed_step(context, hooks, 3)
 
@@ -144,6 +152,11 @@ class HDRPlusPipelineCoordinator:
             self._log("HDR10+: Abbruch statt Fallback, damit HDR10+ nicht still verloren geht.", "error")
             return False
 
+        if context.generate_hdr10plus:
+            # Generated metadata is measured from the freshly encoded HEVC stream,
+            # therefore no source-bitstream metadata extraction is required.
+            return True
+
         primary_video = context.media_info.primary_video
         source_codec = normalize_video_codec(getattr(primary_video, "codec", None))
         if source_codec == "hevc":
@@ -159,8 +172,9 @@ class HDRPlusPipelineCoordinator:
         return False
 
     def _log_start(self, context: HDRPlusExecutionContext) -> None:
+        mode = "Generator" if context.generate_hdr10plus else "Preserve"
         self._log(
-            f"HDR10+: Spezialpfad gestartet für {Path(context.input_path).name} (Quell-Codec: HEVC)",
+            f"HDR10+: Spezialpfad gestartet für {Path(context.input_path).name} (Modus: {mode})",
             "info",
         )
         if context.crop:
@@ -214,8 +228,9 @@ class HDRPlusPipelineCoordinator:
         return False
 
     def _step_encode(self, context: HDRPlusExecutionContext, paths: HDRPlusPipelinePaths) -> bool:
+        step = 1 if context.generate_hdr10plus else 2
         self._log(
-            "HDR10+: Schritt 2/5 -> direkt nach HEVC encodieren und Begleitstreams vorbereiten",
+            f"HDR10+: Schritt {step}/5 -> finalen HEVC-Videostream encodieren und Begleitstreams vorbereiten",
             "info",
         )
         subtitle_args = context.subtitle_args if context.container == "mkv" else ("-sn",)
@@ -230,6 +245,17 @@ class HDRPlusPipelineCoordinator:
             media_info=context.media_info,
             encoder=context.encoder,
         )
+
+    def _step_generate_metadata(
+        self,
+        paths: HDRPlusPipelinePaths,
+        hooks: HDRPlusPipelineHooks,
+    ) -> bool:
+        self._log(
+            "HDR10+: Schritt 2/5 -> finalen HEVC-Videostream analysieren und hdr10plus.json erzeugen",
+            "info",
+        )
+        return hooks.generate_metadata(str(paths.encoded_hevc), str(paths.metadata_json))
 
     def _step_inject(self, paths: HDRPlusPipelinePaths, hooks: HDRPlusPipelineHooks) -> bool:
         self._log("HDR10+: Schritt 3/5 -> HDR10+-Metadaten injizieren", "info")

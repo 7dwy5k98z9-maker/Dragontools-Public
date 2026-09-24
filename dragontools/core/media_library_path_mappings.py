@@ -234,6 +234,27 @@ def apply_path_mappings(path: str, mappings: Iterable[PathMapping]) -> str:
     return normalize_user_path(text)
 
 
+def map_local_to_external_path(path: str, mappings: Iterable[PathMapping]) -> str:
+    """Mappt einen DragonTools-Lokalpfad zurück auf den Jellyfin-Pfad.
+
+    Die längste lokale Prefix-Zuordnung gewinnt. Ohne Treffer bleibt der vom
+    Aufrufer gelieferte Pfad unverändert, damit gemeinsame Windows-/UNC-Pfade
+    nicht durch eine unnötige Normalisierung beschädigt werden.
+    """
+    if not path:
+        return ""
+    text = str(path)
+    for mapping in sorted(mappings, key=lambda m: len(_normalize_slashes(m.local_prefix)), reverse=True):
+        rest = _prefix_rest(text, mapping.local_prefix)
+        if rest is None:
+            continue
+        external = _normalize_slashes(mapping.external_prefix)
+        if not rest:
+            return external
+        return external.rstrip("/") + "/" + _normalize_slashes(rest).lstrip("/")
+    return text
+
+
 def _matches_any_mapping_prefix(path: str, mappings: Iterable[PathMapping]) -> bool:
     mappings_list = list(mappings)
     if not mappings_list:

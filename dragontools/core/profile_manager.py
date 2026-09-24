@@ -9,7 +9,9 @@ from typing import Any, Callable
 
 from .config_migration import (
     SCHEMA_VERSION_KEY,
+    UnsupportedConfigSchemaError,
     current_schema_version,
+    ensure_config_write_compatible,
     migrate_encoder_profile,
     migrate_profile_collection,
     sanitize_config_for_persistence,
@@ -167,11 +169,18 @@ class ProfileManager:
         # Migrations-/Programmierfehler werden absichtlich nicht verschluckt.
         # Ein Releasefehler soll sichtbar werden statt still alle Profile
         # scheinbar verschwinden zu lassen.
-        migrated = migrate_profile_collection(
-            raw,
-            default_codec=self._default_codec(),
-            source_path=self.path,
-        )
+        try:
+            migrated = migrate_profile_collection(
+                raw,
+                default_codec=self._default_codec(),
+                source_path=self.path,
+            )
+        except UnsupportedConfigSchemaError as exc:
+            self._report_warning(
+                f"Profil-Datei verwendet ein neueres Schema und bleibt unverändert: {self.path} | {exc}. "
+                "Dieser DragonTools-Stand verwendet dafür nur die eingebauten Standardprofile."
+            )
+            return {}
         if migrated.changed:
             write_json_atomic(
                 self.path,
@@ -182,7 +191,11 @@ class ProfileManager:
             if not str(k).startswith("_") and k not in _DEFAULTS and isinstance(v, dict)
         }
 
+    def _assert_writable(self) -> None:
+        ensure_config_write_compatible(self.path, "profiles")
+
     def save(self) -> None:
+        self._assert_writable()
         data = {
             SCHEMA_VERSION_KEY: current_schema_version("profiles"),
             **self._user,
@@ -200,6 +213,7 @@ class ProfileManager:
 
     def set(self, key: str, value: dict[str, Any]) -> bool:
         if key in _DEFAULTS: return False
+        self._assert_writable()
         value = dict(value); value.pop("builtin", None)
         value, _messages = migrate_encoder_profile(
             key,
@@ -259,7 +273,9 @@ class ProfileManager:
 
     def delete(self, key: str) -> bool:
         if key in _DEFAULTS: return False
-        if key in self._user: del self._user[key]; self.save(); return True
+        if key in self._user:
+            self._assert_writable()
+            del self._user[key]; self.save(); return True
         return False
 
     def is_builtin(self, key: str) -> bool: return key in _DEFAULTS

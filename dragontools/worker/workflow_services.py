@@ -111,15 +111,32 @@ class WorkflowServices:
         ctx.pipeline_final_rpu_level5_dynamic = bool(getattr(result, "final_rpu_level5_dynamic", False))
         ctx.pipeline_final_rpu_message = str(getattr(result, "final_rpu_message", "") or "")
         if result.success:
+            externalized_subs = tuple(getattr(result, "externalized_subtitle_stream_indices", ()) or ())
             if request.pipeline == "dv" and bool(getattr(result, "effective_crop_known", False)):
                 ctx.effective_crop_filter = getattr(result, "effective_crop", None)
-                self._planning.refresh_media_contract(
-                    ctx,
-                    override,
-                    crop_filter=ctx.effective_crop_filter,
-                )
-            elif getattr(ctx, "plan", None) is not None:
-                ctx.effective_crop_filter = getattr(ctx.plan, "crop", None)
+                if externalized_subs:
+                    self._planning.refresh_media_contract(
+                        ctx,
+                        override,
+                        crop_filter=ctx.effective_crop_filter,
+                        externalized_subtitle_stream_indices=externalized_subs,
+                    )
+                else:
+                    self._planning.refresh_media_contract(
+                        ctx,
+                        override,
+                        crop_filter=ctx.effective_crop_filter,
+                    )
+            else:
+                if getattr(ctx, "plan", None) is not None:
+                    ctx.effective_crop_filter = getattr(ctx.plan, "crop", None)
+                if externalized_subs:
+                    self._planning.refresh_media_contract(
+                        ctx,
+                        override,
+                        crop_filter=getattr(ctx, "effective_crop_filter", None),
+                        externalized_subtitle_stream_indices=externalized_subs,
+                    )
             return
 
         failure_reason = result.failure_reason or self._temp_state.failure_reason

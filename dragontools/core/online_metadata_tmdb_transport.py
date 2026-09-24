@@ -4,12 +4,13 @@ from __future__ import annotations
 import hashlib
 import json
 from typing import Any
-from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
-from urllib.request import Request, urlopen
+from urllib.request import Request
 
 from .online_metadata_cache import read_metadata_cache, write_metadata_cache
-from .online_metadata_common import TMDB_API_BASE, TMDB_TIMEOUT_S, OnlineMetadataError
+from .online_metadata_common import TMDB_API_BASE, TMDB_TIMEOUT_S
+from .online_metadata_http import request_json
+from .online_metadata_retry import retry_online_metadata_call
 from .version import APP_VERSION
 
 
@@ -68,7 +69,10 @@ class TmdbTransportMixin:
         url = f"{TMDB_API_BASE}{endpoint}"
         if query:
             url = f"{url}?{query}"
-        data = self._http_get(url, headers, TMDB_TIMEOUT_S)
+        data = retry_online_metadata_call(
+            lambda: self._http_get(url, headers, TMDB_TIMEOUT_S),
+            provider="TMDB",
+        )
         write_metadata_cache(
             self.cache_dir,
             cache_key,
@@ -91,20 +95,9 @@ class TmdbTransportMixin:
         timeout: int,
     ) -> dict[str, Any]:
         request = Request(url, headers=headers, method="GET")
-        try:
-            with urlopen(request, timeout=timeout) as response:
-                return json.loads(response.read().decode("utf-8"))
-        except HTTPError as exc:
-            detail = ""
-            try:
-                body = exc.read().decode("utf-8", errors="replace")
-                detail = f" ({body[:200]})" if body else ""
-            except Exception:
-                pass
-            raise OnlineMetadataError(f"TMDB meldet HTTP {exc.code}{detail}") from exc
-        except URLError as exc:
-            raise OnlineMetadataError(f"TMDB ist nicht erreichbar: {exc.reason}") from exc
-        except TimeoutError as exc:
-            raise OnlineMetadataError("TMDB-Abfrage hat zu lange gedauert.") from exc
-        except json.JSONDecodeError as exc:
-            raise OnlineMetadataError("TMDB-Antwort war kein gültiges JSON.") from exc
+        return request_json(
+            request,
+            timeout,
+            label="TMDB",
+            auth_error_template="TMDB lehnt die Zugangsdaten ab (HTTP {code}).",
+        )

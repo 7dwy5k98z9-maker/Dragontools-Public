@@ -65,6 +65,7 @@ class HDRPlusConversionHelper(HDRPlusCompatibilityMixin):
         self._subtitle_service = services.subtitle_service
         self._subtitle_mux_service = services.subtitle_mux_service
         self._hdr10plus_service = services.hdr10plus_service
+        self._generator_client = services.generator_client
         self._tool_runner = services.tool_runner
         self._mux_service = services.mux_service
         self._encode_service = services.encode_service
@@ -99,6 +100,20 @@ class HDRPlusConversionHelper(HDRPlusCompatibilityMixin):
             output_hevc=Path(injected_hevc),
         )
 
+    def _generate_hdr10plus_metadata(self, final_hevc: str, meta_json: str) -> bool:
+        result = self._generator_client.analyze(final_hevc, meta_json)
+        if result.success:
+            self._log(
+                "HDR10+ Generator: Analyse abgeschlossen"
+                + (f" ({result.frames} Frames, {result.scenes} Szenen)" if result.frames is not None and result.scenes is not None else ""),
+                "info",
+            )
+            return True
+        reason = result.message or result.error or f"Exitcode {result.returncode}"
+        self._temp_state.record_failure(reason=reason, stage="HDR10+ Generator")
+        self._log(f"❌ HDR10+ Generator: {reason}", "error")
+        return False
+
     def execute(self, request: PipelineExecutionRequest) -> PipelineExecutionResult:
         plan = request.plan
         if plan is None:
@@ -126,6 +141,7 @@ class HDRPlusConversionHelper(HDRPlusCompatibilityMixin):
             container=request.container,
             override=request.override,
             encoder=encoder,
+            generate_hdr10plus=bool(getattr(request, "generate_hdr10plus", False)),
         )
         failure_reason = self._temp_state.failure_reason
         failure_stage = self._temp_state.failure_stage
@@ -185,6 +201,7 @@ class HDRPlusConversionHelper(HDRPlusCompatibilityMixin):
         container: str,
         override,
         encoder: HDRPlusEncoderConfig,
+        generate_hdr10plus: bool = False,
     ):
         self.last_final_hdr10plus_verified = False
         self.last_sidecar_paths = []
@@ -201,10 +218,12 @@ class HDRPlusConversionHelper(HDRPlusCompatibilityMixin):
             container=container,
             override=override,
             encoder=encoder,
+            generate_hdr10plus=generate_hdr10plus,
         )
         hooks = HDRPlusPipelineHooks(
             extract_hevc_annexb=self._extract_hevc_annexb,
             extract_metadata=self._extract_hdr10plus_metadata,
+            generate_metadata=self._generate_hdr10plus_metadata,
             inject_metadata=self._inject_hdr10plus_metadata,
             mux_output=self._mux_hdrplus_output,
             run_mux_tool=self._run_mux_tool,

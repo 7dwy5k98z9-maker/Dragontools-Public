@@ -19,6 +19,7 @@ def try_duration_repair(ctx, result, source_has_audio: bool, repair_service):
         expected_contract=getattr(ctx, "expected_media_contract", None),
         verified_hdr10plus=bool(getattr(ctx, "pipeline_verified_hdr10plus", False)),
         verified_dolby_vision=bool(getattr(ctx, "pipeline_verified_dolby_vision", False)),
+        source_path=getattr(ctx, "input_path", None),
     )
     ctx.duration_repair_attempted = bool(getattr(outcome, "attempted", False))
     ctx.duration_after_ffmpeg_s = getattr(result, "duration_s", None)

@@ -1,4 +1,5 @@
 from __future__ import annotations
+import logging
 
 import os
 import re
@@ -53,12 +54,12 @@ def decode_windows_filename_payload(data: bytes, *, utf16: bool) -> list[str]:
         decoded = data.decode("utf-16-le", errors="ignore") if utf16 else data.decode(errors="ignore")
         decoded_variants.append(decoded.replace("\x00", "\n"))
     except Exception:
-        pass
+        logging.getLogger(__name__).debug("Unterdrückte Best-Effort-Ausnahme in decode_windows_filename_payload.", exc_info=True)
     if utf16:
         try:
             decoded_variants.append(data.decode(errors="ignore").replace("\x00", "\n"))
         except Exception:
-            pass
+            logging.getLogger(__name__).debug("Unterdrückte Best-Effort-Ausnahme in decode_windows_filename_payload.", exc_info=True)
 
     paths: list[str] = []
     for decoded in decoded_variants:

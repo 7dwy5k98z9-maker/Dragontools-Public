@@ -51,6 +51,7 @@ class DurationRepairOrchestrator:
         verified_dolby_vision: bool = False,
         normal_remux_enabled: bool = True,
         timestamp_repair_enabled: bool = True,
+        source_path: str | None = None,
     ) -> DurationRepairOutcome:
         out = Path(output_path)
         expected_s = expected_duration_ms / 1000.0 if expected_duration_ms else None
@@ -87,6 +88,7 @@ class DurationRepairOrchestrator:
             verified_hdr10plus=verified_hdr10plus,
             verified_dolby_vision=verified_dolby_vision,
             enabled=timestamp_repair_enabled,
+            source_path=source_path,
         )
         if timestamp.repaired:
             return self._timestamp_success(remux.duration_s, timestamp)

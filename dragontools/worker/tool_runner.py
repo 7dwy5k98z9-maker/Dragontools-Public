@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Callable, Iterable
 
 from ..core.process_runner import subprocess_no_window_kwargs as _no_window_kwargs
+from ..core.callback_dispatch import invoke_callback, is_callback_like
 from .log_dispatch import dispatch_log
 from .tool_process_lifecycle import (
     ProcessLifecycle,
@@ -89,7 +90,7 @@ def _dispatch_callbacks(
         except queue.Empty:
             return
         try:
-            callback(text)
+            invoke_callback(callback, text)
         except Exception as exc:
             dispatch_log(log, f"{label}: Ausgabe-Callback fehlgeschlagen: {exc}", "warn")
 
@@ -109,7 +110,7 @@ def _start_text_drain(
                 text = line.rstrip()
                 target.append(text)
                 lifecycle.note_activity()
-                if callable(callback):
+                if is_callback_like(callback):
                     callback_queue.put((callback, text))
         except (OSError, ValueError):
             return

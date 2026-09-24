@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
+from typing import Callable
 
 from ..core.process_runner import tool_available
 
@@ -24,27 +26,49 @@ class StreamGuardResult:
     messages: list[str] = field(default_factory=list)
     before_ffprobe: StreamInventory | None = None
     before_mediainfo: StreamInventory | None = None
+    before_mkvmerge: StreamInventory | None = None
     after_ffprobe: StreamInventory | None = None
     after_mediainfo: StreamInventory | None = None
+    after_mkvmerge: StreamInventory | None = None
+    confirmed_kinds: set[str] = field(default_factory=set)
 
 
 class RepairStreamGuard:
-    """Vergleicht Stream-Anzahlen unabhängig mit ffprobe und MediaInfo.
+    """Mehrfach abgesicherte Stream-Gegenprüfung für Reparaturkandidaten.
 
-    ffprobe bleibt die normale Pipeline-Prüfung. MediaInfo dient als zweite,
-    unabhängige Absicherung. Sobald ein Werkzeug einen möglichen Streamverlust
-    meldet oder beide Inventare einander widersprechen, wird der Kandidat
-    fail-closed verworfen und ein weiterer Reparaturversuch empfohlen.
+    ffprobe, MediaInfo und MKVToolNix werden bewusst als drei unabhängige
+    Beobachter behandelt. Ein erwarteter Video-/Audio-/Untertiteltyp gilt als
+    vorhanden, sobald *eines* der verfügbaren Werkzeuge die erwartete Anzahl
+    bestätigt. Als wirklich fehlend wird er nur bewertet, wenn alle drei Tools
+    erfolgreich analysieren konnten und alle drei den Stream als fehlend
+    melden. Dadurch kann ein einzelner Parserfehler (z. B. MediaInfo V=0/A=0/S=0
+    bei einem ansonsten lesbaren MKV) keinen intakten Reparaturkandidaten mehr
+    verwerfen.
     """
 
-    def __init__(self, *, timing_analyzer, ffprobe_path: str, mediainfo_path: str, log) -> None:
+    def __init__(
+        self,
+        *,
+        timing_analyzer,
+        ffprobe_path: str,
+        mediainfo_path: str,
+        log,
+        mkvmerge_path: str = "",
+        run_tool_fn: Callable | None = None,
+    ) -> None:
         self._timing_analyzer = timing_analyzer
         self._ffprobe_path = str(ffprobe_path or "")
         self._mediainfo_path = str(mediainfo_path or "")
+        self._mkvmerge_path = str(mkvmerge_path or "")
         self._log = log
+        self._run_tool_fn = run_tool_fn
 
     def inspect_pair(self, path: str) -> tuple[StreamInventory, StreamInventory]:
+        """Legacy-API: ffprobe + MediaInfo."""
         return self._inspect_ffprobe(path), self._inspect_mediainfo(path)
+
+    def inspect_all(self, path: str) -> tuple[StreamInventory, StreamInventory, StreamInventory]:
+        return self._inspect_ffprobe(path), self._inspect_mediainfo(path), self._inspect_mkvmerge(path)
 
     def validate(
         self,
@@ -53,72 +77,74 @@ class RepairStreamGuard:
         before_mediainfo: StreamInventory,
         candidate_path: str,
         expected_contract=None,
+        before_mkvmerge: StreamInventory | None = None,
     ) -> StreamGuardResult:
-        after_ffprobe, after_mediainfo = self.inspect_pair(candidate_path)
+        after_ffprobe, after_mediainfo, after_mkvmerge = self.inspect_all(candidate_path)
+        if before_mkvmerge is None:
+            before_mkvmerge = StreamInventory(
+                "MKVToolNix", False, error="Referenzinventar nicht vorab ermittelt"
+            )
         result = StreamGuardResult(
             before_ffprobe=before_ffprobe,
             before_mediainfo=before_mediainfo,
+            before_mkvmerge=before_mkvmerge,
             after_ffprobe=after_ffprobe,
             after_mediainfo=after_mediainfo,
+            after_mkvmerge=after_mkvmerge,
         )
-        expected = self._expected_counts(before_ffprobe, before_mediainfo, expected_contract)
+        expected = self._expected_counts(before_ffprobe, before_mediainfo, before_mkvmerge, expected_contract)
+        after = (after_ffprobe, after_mediainfo, after_mkvmerge)
 
         for kind in ("video", "audio", "subtitle"):
             needed = expected[kind]
             if needed <= 0:
                 continue
-            ff_missing = after_ffprobe.available and getattr(after_ffprobe, kind) < needed
-            mi_missing = after_mediainfo.available and getattr(after_mediainfo, kind) < needed
-
-            if mi_missing:
-                result.ok = False
-                result.retry_recommended = True
-                result.messages.append(
-                    f"MediaInfo bestätigt fehlende {self._label(kind)}: "
-                    f"erwartet {needed}, gefunden {getattr(after_mediainfo, kind)}."
-                )
+            confirming = [inv for inv in after if inv.available and getattr(inv, kind) >= needed]
+            if confirming:
+                result.confirmed_kinds.add(kind)
+                disagreeing = [inv for inv in after if inv.available and getattr(inv, kind) < needed]
+                if disagreeing:
+                    result.messages.append(
+                        f"Parser-Widerspruch bei {self._label(kind)}: "
+                        + ", ".join(f"{inv.source}={getattr(inv, kind)}" for inv in after if inv.available)
+                        + f"; erwartet {needed}. Vorhanden gilt, weil mindestens ein Werkzeug bestätigt."
+                    )
                 continue
-            if ff_missing and after_mediainfo.available:
+
+            all_three_available = all(inv.available for inv in after)
+            if all_three_available:
                 result.ok = False
                 result.retry_recommended = True
                 result.messages.append(
-                    f"ffprobe und MediaInfo widersprechen sich bei {self._label(kind)}: "
-                    f"erwartet {needed}, ffprobe={getattr(after_ffprobe, kind)}, "
-                    f"MediaInfo={getattr(after_mediainfo, kind)}. Der Kandidat wird sicherheitshalber verworfen."
+                    f"Alle drei Prüfwerkzeuge melden fehlende {self._label(kind)}: erwartet {needed}; "
+                    + ", ".join(f"{inv.source}={getattr(inv, kind)}" for inv in after)
+                    + "."
                 )
-                continue
-            if ff_missing:
-                result.ok = False
-                result.retry_recommended = True
+            else:
+                # Kein positives Signal, aber auch kein belastbarer 3-von-3-Nachweis.
+                # Fail-safe: nicht als 'wirklich weg' klassifizieren; die nachgelagerte
+                # Paket-/Vertragsprüfung entscheidet weiter.
                 result.messages.append(
-                    f"ffprobe meldet fehlende {self._label(kind)} und MediaInfo ist nicht verfügbar: "
-                    f"erwartet {needed}, gefunden {getattr(after_ffprobe, kind)}."
+                    f"{self._label(kind)} konnten nicht von allen drei Werkzeugen gegengeprüft werden; "
+                    f"erwartet {needed}. Kein 3-von-3-Verlustnachweis."
                 )
 
-        # Attachments sind bei MediaInfo nicht 1:1 zu ffprobe abbildbar (Menu != Attachment).
-        # Deshalb ausschließlich ffprobe-zu-ffprobe vergleichen.
+        # Attachments sind zwischen den Tools nicht 1:1 vergleichbar. Hier bleibt
+        # ffprobe die Referenz, sofern es vorher und nachher auswertbar ist.
         if before_ffprobe.available and after_ffprobe.available:
             if after_ffprobe.attachment < before_ffprobe.attachment:
                 result.ok = False
                 result.retry_recommended = True
-                result.messages.append(
-                    "ffprobe meldet nach der Reparatur weniger Attachments/Attachment-Streams."
-                )
+                result.messages.append("ffprobe meldet nach der Reparatur weniger Attachments/Attachment-Streams.")
 
-        if not after_ffprobe.available:
+        if not any(inv.available for inv in after):
             result.ok = False
             result.retry_recommended = True
-            result.messages.append(
-                "ffprobe konnte den Reparaturkandidaten nicht zuverlässig analysieren."
-            )
-        if not after_mediainfo.available and tool_available(self._mediainfo_path):
-            result.messages.append(
-                "MediaInfo war konfiguriert, konnte den Reparaturkandidaten aber nicht analysieren."
-            )
+            result.messages.append("Keines der drei Prüfwerkzeuge konnte den Reparaturkandidaten analysieren.")
         return result
 
     def _inspect_ffprobe(self, path: str) -> StreamInventory:
-        if not tool_available(self._ffprobe_path):
+        if not path or not tool_available(self._ffprobe_path):
             return StreamInventory("ffprobe", False, error="ffprobe nicht verfügbar")
         try:
             data = self._timing_analyzer.run_ffprobe_json(path, count_frames=False)
@@ -135,7 +161,7 @@ class RepairStreamGuard:
             return StreamInventory("ffprobe", False, error=str(exc))
 
     def _inspect_mediainfo(self, path: str) -> StreamInventory:
-        if not tool_available(self._mediainfo_path):
+        if not path or not tool_available(self._mediainfo_path):
             return StreamInventory("MediaInfo", False, error="MediaInfo nicht verfügbar")
         try:
             data = self._timing_analyzer.run_mediainfo_json(path)
@@ -152,12 +178,43 @@ class RepairStreamGuard:
         except Exception as exc:
             return StreamInventory("MediaInfo", False, error=str(exc))
 
+    def _inspect_mkvmerge(self, path: str) -> StreamInventory:
+        if not path or not tool_available(self._mkvmerge_path):
+            return StreamInventory("MKVToolNix", False, error="mkvmerge nicht verfügbar")
+        if self._run_tool_fn is None:
+            return StreamInventory("MKVToolNix", False, error="mkvmerge Runner nicht verfügbar")
+        try:
+            run = self._run_tool_fn([self._mkvmerge_path, "-J", str(path)], label="MKVToolNix-Streamanalyse")
+            if getattr(run, "returncode", 1) != 0:
+                detail = str(getattr(run, "stderr", "") or getattr(run, "stdout", "") or "mkvmerge -J fehlgeschlagen")
+                return StreamInventory("MKVToolNix", False, error=detail.strip())
+            data = json.loads(str(getattr(run, "stdout", "") or "{}"))
+            tracks = list(data.get("tracks") or [])
+            types = [str(track.get("type") or "").strip().casefold() for track in tracks]
+            return StreamInventory(
+                "MKVToolNix",
+                True,
+                video=sum(1 for kind in types if kind == "video"),
+                audio=sum(1 for kind in types if kind == "audio"),
+                subtitle=sum(1 for kind in types if kind in {"subtitles", "subtitle"}),
+                attachment=0,
+            )
+        except Exception as exc:
+            return StreamInventory("MKVToolNix", False, error=str(exc))
+
     @staticmethod
-    def _expected_counts(before_ffprobe: StreamInventory, before_mediainfo: StreamInventory, contract) -> dict[str, int]:
+    def _expected_counts(
+        before_ffprobe: StreamInventory,
+        before_mediainfo: StreamInventory,
+        before_mkvmerge: StreamInventory | None,
+        contract,
+    ) -> dict[str, int]:
+        before_all = [before_ffprobe, before_mediainfo]
+        if before_mkvmerge is not None:
+            before_all.append(before_mkvmerge)
         counts = {
-            "video": max(before_ffprobe.video if before_ffprobe.available else 0, before_mediainfo.video if before_mediainfo.available else 0),
-            "audio": max(before_ffprobe.audio if before_ffprobe.available else 0, before_mediainfo.audio if before_mediainfo.available else 0),
-            "subtitle": max(before_ffprobe.subtitle if before_ffprobe.available else 0, before_mediainfo.subtitle if before_mediainfo.available else 0),
+            kind: max((getattr(inv, kind) for inv in before_all if inv.available), default=0)
+            for kind in ("video", "audio", "subtitle")
         }
         if contract is not None:
             counts["video"] = max(counts["video"], int(getattr(contract, "video_stream_count", 0) or 0))

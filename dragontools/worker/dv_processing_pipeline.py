@@ -63,6 +63,7 @@ class DVProcessingPipeline(DVPipelineDiagnosticCompatibilityMixin):
         self._mkv_muxer = graph.mkv_muxer
         self._rpu_service = graph.rpu_service
         self._hdr10plus_service = graph.hdr10plus_service
+        self._generator_client = graph.generator_client
         self._level5_editor = graph.level5_editor
         self._subtitle_service = graph.subtitle_service
         self._subtitle_mux_service = graph.subtitle_mux_service
@@ -114,6 +115,7 @@ class DVProcessingPipeline(DVPipelineDiagnosticCompatibilityMixin):
             mkv_muxer=self._mkv_muxer,
             rpu_service=self._rpu_service,
             hdr10plus_service=self._hdr10plus_service,
+            generator_client=self._generator_client,
             level5_editor=self._level5_editor,
             subtitle_service=self._subtitle_service,
             subtitle_mux_service=self._subtitle_mux_service,
@@ -156,6 +158,7 @@ class DVProcessingPipeline(DVPipelineDiagnosticCompatibilityMixin):
         crop: str | None,
         ov: dict | None,
         preserve_hdrplus: bool,
+        generate_hdr10plus: bool,
         container: str,
     ) -> DVRunRequest:
         return DVRunRequest.create(
@@ -169,6 +172,7 @@ class DVProcessingPipeline(DVPipelineDiagnosticCompatibilityMixin):
             crop=crop,
             override=ov,
             preserve_hdrplus=preserve_hdrplus,
+            generate_hdr10plus=generate_hdr10plus,
             container=container,
         )
 
@@ -205,6 +209,7 @@ class DVProcessingPipeline(DVPipelineDiagnosticCompatibilityMixin):
         crop: str | None,
         ov: dict | None = None,
         preserve_hdrplus: bool = False,
+        generate_hdr10plus: bool = False,
         container: str = "mp4",
     ) -> bool:
         """Normalize request, perform preflight and delegate DV execution."""
@@ -222,6 +227,7 @@ class DVProcessingPipeline(DVPipelineDiagnosticCompatibilityMixin):
                 crop=crop,
                 ov=ov,
                 preserve_hdrplus=preserve_hdrplus,
+                generate_hdr10plus=generate_hdr10plus,
                 container=container,
             )
             if not self._preflight(request):

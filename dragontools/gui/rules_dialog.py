@@ -8,12 +8,13 @@ from __future__ import annotations
 from PyQt6.QtWidgets import QDialog, QDialogButtonBox, QMessageBox, QTabWidget, QVBoxLayout
 
 from .rules_audio_tab import _AudioTab
-from .rules_dialog_storage import _rules_dir, _save
+from .rules_dialog_storage import _assert_writable, _rules_dir, _save
 from .rules_flags_tab import _FlagsTab
 from .rules_renamer_tab import _RenamerTab
 from .rules_series_tab import _SeriesTab
 from .rules_subtitle_tab import _SubtitleTab
 from .ui_helpers import install_persistent_window_geometry
+from ..core.config_migration import UnsupportedConfigSchemaError
 from ..core.version import APP_VERSION
 
 
@@ -77,14 +78,33 @@ class RulesDialog(QDialog):
         install_persistent_window_geometry(self, f"rules_dialog/{geometry_scope}")
 
     def _save(self):
+        pending: list[tuple[str, object]] = []
         if self._s is not None:
-            _save("move_rules", self._s.get_data())
+            pending.append(("move_rules", self._s))
         if self._r is not None:
-            _save("renamer_rules", self._r.get_data())
+            pending.append(("renamer_rules", self._r))
         if self._a is not None:
-            _save("audio_rules", self._a.get_data())
+            pending.append(("audio_rules", self._a))
         if self._su is not None:
-            _save("subtitle_rules", self._su.get_data())
+            pending.append(("subtitle_rules", self._su))
+
+        try:
+            # Erst alle Ziele pruefen. Dadurch gibt es bei einem Future-Schema
+            # keinen partiellen Save der davor liegenden Tabs.
+            for name, _widget in pending:
+                _assert_writable(name)
+            for name, widget in pending:
+                _save(name, widget.get_data())
+        except UnsupportedConfigSchemaError as exc:
+            QMessageBox.critical(
+                self,
+                "Speichern blockiert",
+                "Eine Regeldatei wurde mit einer neueren DragonTools-Version erstellt "
+                "und wird zum Schutz vor Datenverlust nicht ueberschrieben.\n\n"
+                f"{exc}",
+            )
+            return
+
         QMessageBox.information(self, "Gespeichert",
             f"Regeln gespeichert:\n{_rules_dir()}")
         self.accept()

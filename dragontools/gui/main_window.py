@@ -17,12 +17,13 @@ from ..core.resource_paths import EXE_DIR, BASE
 from ..core.path_defaults import ensure_default_storage_dirs
 from ..core.tool_paths import get_tool_paths
 from .styles import STYLE_LIGHT
-from .application_shutdown import shutdown_loaded_widgets
 from .main_window_actions import MainWindowActionsMixin
 from .main_window_menus import MainWindowMenuMixin
 from .main_window_tabs import MainWindowTabsMixin
 from .main_window_recovery import MainWindowRecoveryMixin
 from .windows_restart_guard import install_windows_restart_guard
+from .watch_folder_main_window_bridge import start_watch_folder_controller
+from .main_window_shutdown import prepare_main_window_close
 
 
 class MainWindow(
@@ -64,6 +65,7 @@ class MainWindow(
         self._init_tabs()
         self._init_shortcuts()
         self._restore()
+        start_watch_folder_controller(self)
         install_windows_restart_guard(self)
         # Fenster beim Start immer sichtbar in den Vordergrund holen.
         # QTimer.singleShot(0) stellt sicher, dass das Fenster erst vollständig
@@ -88,20 +90,9 @@ class MainWindow(
         if g: self.restoreGeometry(g)
 
     def closeEvent(self, e):
-        result = shutdown_loaded_widgets(self._tab_widgets.values(), timeout_ms=8000)
-        if not result.ok:
-            QMessageBox.warning(
-                self,
-                "DragonTools wird noch beendet",
-                "Mindestens ein Worker läuft noch und konnte innerhalb des "
-                "Shutdown-Zeitfensters nicht sauber beendet werden.\n\n"
-                "Das Fenster bleibt aus Sicherheitsgründen geöffnet. Bitte kurz warten "
-                "und erneut schließen.\n\nNoch aktiv: "
-                + ", ".join(result.still_running),
-            )
+        if not prepare_main_window_close(self):
             e.ignore()
             return
-
         self._settings.setValue("main/geometry", self.saveGeometry())
         self._settings.sync()
         clear_activity()

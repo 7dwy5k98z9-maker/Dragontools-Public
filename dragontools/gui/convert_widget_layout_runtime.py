@@ -33,6 +33,24 @@ class ConvertWidgetLayoutRuntimeMixin:
         button_row.addWidget(self.w.clear_btn)
         ll.addLayout(button_row)
 
+        order_row = QHBoxLayout()
+        self.w.queue_front_btn = QPushButton("⤒")
+        self.w.queue_up_btn = QPushButton("↑")
+        self.w.queue_down_btn = QPushButton("↓")
+        self.w.queue_back_btn = QPushButton("⤓")
+        self.w.queue_front_btn.setToolTip("Auswahl direkt hinter aktuell laufende Dateien setzen")
+        self.w.queue_up_btn.setToolTip("Auswahl eine Position nach oben verschieben")
+        self.w.queue_down_btn.setToolTip("Auswahl eine Position nach unten verschieben")
+        self.w.queue_back_btn.setToolTip("Auswahl ganz nach unten verschieben")
+        for btn in (
+            self.w.queue_front_btn, self.w.queue_up_btn,
+            self.w.queue_down_btn, self.w.queue_back_btn,
+        ):
+            btn.setMaximumWidth(48)
+            order_row.addWidget(btn)
+        order_row.addStretch(1)
+        ll.addLayout(order_row)
+
         # Nur die Dateiliste soll bei hoeherem Fenster vertikal mitwachsen.
         # Ohne Stretch-Faktor verteilt QVBoxLayout freien Platz auch an die
         # nachfolgenden Bereiche (insbesondere den Log-Container).

@@ -157,10 +157,18 @@ def test_subtitle_widget_has_per_job_worker_registry_and_targeted_cancel():
 
 def test_main_window_shutdown_is_fail_closed_and_clears_crash_marker_after_workers_stop():
     source = (GUI_ROOT / "main_window.py").read_text(encoding="utf-8")
+    shutdown_source = (GUI_ROOT / "main_window_shutdown.py").read_text(encoding="utf-8")
     close_pos = source.index("def closeEvent")
     block = source[close_pos:]
-    assert "shutdown_loaded_widgets" in block
-    assert "if not result.ok:" in block
+
+    # MainWindow delegates the coordinated shutdown to a dedicated helper.
+    # The contract stays fail-closed while avoiding duplicate shutdown logic.
+    assert "prepare_main_window_close(self)" in block
+    assert "shutdown_loaded_widgets" in shutdown_source
+    assert "if not result.ok:" in shutdown_source
+    assert "stop_metadata_action_thread" in shutdown_source
+    assert "stop_watch_folder_controller" in shutdown_source
     assert "e.ignore()" in block
-    assert block.index("clear_activity()") > block.index("if not result.ok:")
+    assert block.index("clear_activity()") > block.index("prepare_main_window_close(self)")
     assert "QThread.terminate" not in block
+    assert "QThread.terminate" not in shutdown_source

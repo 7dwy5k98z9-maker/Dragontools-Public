@@ -1,0 +1,5 @@
+# Whisper-Laufzeit fuer die optionale Audio-Spracherkennung.
+# Der offizielle PyInstaller-Build prueft diese Constraints vor dem Build
+# und installiert/repariert nur diese Pakete, falls sie fehlen oder abweichen.
+faster-whisper>=1.1,<2
+ctranslate2>=4.4,<5

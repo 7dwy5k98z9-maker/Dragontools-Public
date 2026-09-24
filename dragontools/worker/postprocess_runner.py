@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 import shutil
 
@@ -37,6 +38,44 @@ class PostProcessService:
 
     def run(self, *, input_path: str, output_path: str) -> list[str]:
         return self.run_result(input_path=input_path, output_path=output_path).created_paths
+
+    def create_nfo_only(self, *, media_path: str) -> PostProcessRunResult:
+        """Create a missing NFO for an existing library item without other post-processing.
+
+        Fix-Queue repairs are intentionally create-only: even if the normal NFO
+        policy is configured to overwrite or back up, this helper uses ``skip``
+        so a file that appeared after issue discovery is never replaced.
+        """
+        self.last_items = []
+        output = Path(media_path)
+        if not output.exists():
+            return PostProcessRunResult([], [{
+                "kind": "nfo", "status": "error", "path": "",
+                "message": "Mediendatei wurde nicht gefunden.",
+            }])
+        cfg = replace(config_from_settings(self.settings).nfo, enabled=True, conflict_mode="skip")
+        nfo_path = self._create_nfo(input_path=str(output), output_path=output, cfg=cfg)
+        created = [str(nfo_path)] if nfo_path else []
+        return PostProcessRunResult(created, [dict(item) for item in self.last_items])
+
+    def create_trickplay_only(self, *, media_path: str) -> PostProcessRunResult:
+        """Create missing trickplay for an existing media file without replacing existing data."""
+        self.last_items = []
+        video = Path(media_path)
+        if not video.exists():
+            return PostProcessRunResult([], [{
+                "kind": "trickplay", "status": "error", "path": "",
+                "message": "Mediendatei wurde nicht gefunden.",
+            }])
+        cfg = replace(
+            config_from_settings(self.settings).trickplay,
+            enabled=True,
+            only_missing=True,
+            conflict_mode="skip",
+            source_mode="output",
+        )
+        result = self._run_trickplay(video_input=video, target_output=video, settings=cfg)
+        return PostProcessRunResult(list(result.created_paths), [dict(item) for item in result.items])
 
     def prepare_source_trickplay(
         self,

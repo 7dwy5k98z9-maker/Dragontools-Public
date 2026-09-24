@@ -8,8 +8,9 @@ from .media_library_jellyfin_source import _column_map, _row_value
 from .media_library_utils import _bool, _float_or_none, _int_or_none, _normalize_stream_type
 
 _HDR_MARKERS = (
-    "hdr", "bt2020", "pq", "hlg", "dolby", "dovi", "dvhe", "smpte2084",
-    "st2084", "arib-std-b67", "2094-40", "st2094",
+    "hdr", "bt2020", "pq", "hlg", "dolby", "dovi", "dvhe", "dvh1",
+    "dva1", "dvav", "dav1", "smpte2084", "st2084", "arib-std-b67",
+    "2094-40", "st2094", "2094 app 4", "st 2094 app 4",
 )
 
 
@@ -30,12 +31,12 @@ def _video_flags_from_streams(
     dv_profile = _int_or_none(video.get("dv_profile"))
     has_hdr10plus = int(
         _bool(video.get("hdr10plus_present"))
-        or any(marker in text for marker in ("hdr10+", "hdr10plus", "dynamic metadata", "2094-40", "st2094"))
+        or any(marker in text for marker in ("hdr10+", "hdr10plus", "dynamic metadata", "2094-40", "st2094", "2094 app 4", "st 2094 app 4"))
     )
     has_dv = int(
         _bool(video.get("rpu_present"))
         or (dv_profile is not None and dv_profile > 0)
-        or any(marker in text for marker in ("dolby vision", "dovi", "dvhe", "dolbyvision"))
+        or any(marker in text for marker in ("dolby vision", "dovi", "dvhe", "dvh1", "dva1", "dvav", "dav1", "dolbyvision"))
     )
     is_hdr = int(bool(has_hdr10plus or has_dv or any(marker in text for marker in _HDR_MARKERS)))
     return (
@@ -60,7 +61,7 @@ def _jellyfin_hdr_format(row: sqlite3.Row, columns: dict[str, str]) -> str:
             continue
         value = row[column]
         text = str(value or "").strip().casefold()
-        if _bool(value) or any(marker in text for marker in ("hdr10+", "hdr10plus", "2094-40", "true", "yes", "ja")):
+        if _bool(value) or any(marker in text for marker in ("hdr10+", "hdr10plus", "2094-40", "2094 app 4", "true", "yes", "ja")):
             parts.append("hdr10plus")
     rpu_present = _bool(_row_value(row, columns, "RpuPresentFlag", default=0))
     dv_profile = _int_or_none(_row_value(row, columns, "DvProfile", "DolbyVisionProfile", default=None))

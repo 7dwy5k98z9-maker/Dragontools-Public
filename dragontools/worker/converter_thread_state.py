@@ -125,5 +125,6 @@ class ConverterServiceRegistry:
     postprocess: Any = None
     postprocess_coordinator: Any = None
     source_visual_check: Any = None
+    quality_target: Any = None
     workflow_services: Any = None
     workflow_runner: Any = None

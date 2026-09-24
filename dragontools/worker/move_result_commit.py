@@ -8,7 +8,6 @@ Move.
 """
 from __future__ import annotations
 
-import traceback
 from pathlib import Path
 
 from PyQt6.QtCore import QSettings
@@ -17,7 +16,6 @@ from ..core.move_file_service import MoveFileService
 from ..core.move_journal import MoveJournalWriteError
 from ..core.move_postprocess import record_media_library_move
 from ..core.move_routing import MoveRouter
-from ..core.move_sidecars import MoveSidecarService
 from ..core.settings_app import APP_NAME, APP_ORG
 from ..core.settings_postprocess import DEFAULT_NFO_MOVIE_TARGET_NAME, DEFAULT_TRICKPLAY_CONFLICT_MODE, DEFAULT_TRICKPLAY_ONLY_MISSING, SET_KEY_NFO_MOVIE_TARGET_NAME, SET_KEY_TRICKPLAY_CONFLICT_MODE, SET_KEY_TRICKPLAY_ONLY_MISSING
 from .move_completion_service import MoveCompletionService
@@ -41,6 +39,10 @@ class MoveResultCommitMixin:
                 self._attr("abort_requested", False) and self._attr("abort_type", None) == "sofort"
             ),
             journal=self._attr("_move_journal", None),
+            episode_replacement_mode=self._attr("episode_replacement_mode", "auto"),
+            confirm_episode_replacement=lambda payload: bool(
+                self._ask(payload).get("replace", False)
+            ),
         )
 
     def _planned_target_for(self, path: str):
@@ -61,66 +63,19 @@ class MoveResultCommitMixin:
             log=self._log,
         )
 
-    def _sidecar_service(self) -> MoveSidecarService:
-        file_service = self._file_service()
-        trickplay_mode = self._attr("_trickplay_conflict_mode", None)
-        if trickplay_mode is None:
-            trickplay_mode = self._read_trickplay_conflict_mode()
-        return MoveSidecarService(
-            filme_path=self._attr("filme_path", ""),
-            trickplay_conflict_mode=trickplay_mode,
-            nfo_movie_target_name=self._read_nfo_movie_target_name(),
-            move_file=file_service.move,
-            log=self._log,
-            append_report=lambda result, kind, sidecar_type: self._append_move_report(
-                result, kind=kind, sidecar_type=sidecar_type
-            ),
-            set_last_result=lambda result: setattr(self, "_last_move_result", result),
-        )
-
     def _completion_service(self) -> MoveCompletionService:
+        """Create the per-batch completion service used by ``MoveBatchExecutor``.
+
+        The batch lifecycle intentionally owns orchestration only.  Wiring the
+        companion commit, media-library update and report callback belongs to
+        this result/commit mixin.
+        """
         return MoveCompletionService(
-            journal=self._move_journal,
+            journal=self._attr("_move_journal", None),
             move_sidecars=self._move_sidecars,
             record_media_library_move=self._record_media_library_move,
             append_move_report=self._append_move_report,
             log=self._log,
-        )
-
-    def _move(self, src, dst_dir, hook=None, *, dest_name: str | None = None):
-        service = self._file_service()
-        try:
-            ok, result = service.move(src, dst_dir, hook=hook, dest_name=dest_name)
-            self._last_move_result = result
-            return ok
-        except MoveJournalWriteError:
-            if service.last_result is not None:
-                self._last_move_result = service.last_result
-            raise
-        except Exception:
-            if service.last_result is not None:
-                self._last_move_result = service.last_result
-            self._log(f"❌ Unbehandelte Ausnahme beim Move von {Path(src).name}", "error")
-            self._log(traceback.format_exc(), "error")
-            return False
-
-    def _move_sidecars(
-        self,
-        video_path: str,
-        target_dir: str,
-        dest_video_path: str | None = None,
-        source_video_path: str | None = None,
-    ) -> dict:
-        # ``video_path`` is the lookup key in the current/recovered sidecar map.
-        # During companion-only recovery it may already be the conflict-renamed
-        # destination.  The original source stem must therefore travel
-        # separately for correct companion rebasing.
-        sidecars = self._attr("_sidecar_outputs_by_video", {}).get(video_path, [])
-        return self._sidecar_service().move_sidecars(
-            source_video_path or video_path,
-            target_dir,
-            sidecars,
-            dest_video_path=dest_video_path,
         )
 
     def _record_media_library_move(self, source_path: str, move_result: dict | None) -> None:

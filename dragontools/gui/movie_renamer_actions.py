@@ -10,6 +10,7 @@ from PyQt6.QtWidgets import QApplication, QFileDialog, QMessageBox
 from ..core.movie_renamer import rename_movie_file
 from ..core.path_syntax import VIDEO_EXTENSIONS, is_video_file, path_compare_key
 from .drop_path_extractor import _iter_video_files_in_folder
+from .jellyfin_refresh_dispatch import dispatch_after_rename
 from .movie_renamer_search_actions import MovieRenamerSearchActionsMixin
 from .movie_renamer_season_prompt import MovieRenamerSeasonPromptMixin
 
@@ -136,6 +137,7 @@ class MovieRenamerActionController(MovieRenamerSeasonPromptMixin, MovieRenamerSe
             return
 
         renamed_rows: list[int] = []
+        renamed_paths: list[tuple[str, str]] = []
         failed: list[str] = []
         QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         try:
@@ -143,13 +145,14 @@ class MovieRenamerActionController(MovieRenamerSeasonPromptMixin, MovieRenamerSe
                 source = self.table_controller.row_path(row)
                 target_name = self.table_controller.target_name(row)
                 try:
-                    rename_movie_file(source, target_name)
+                    target_path = rename_movie_file(source, target_name)
                 except Exception as exc:
                     # Batch boundary: one bad file must not abort the remaining renames.
                     failed.append(f"{Path(source).name}: {exc}")
                     self.table_controller.set_status(row, "❌ Fehler")
                     continue
                 renamed_rows.append(row)
+                renamed_paths.append((str(source), str(target_path)))
         finally:
             QApplication.restoreOverrideCursor()
 
@@ -165,12 +168,26 @@ class MovieRenamerActionController(MovieRenamerSeasonPromptMixin, MovieRenamerSe
                 message + "\n\n" + "\n".join(failed[:8]),
             )
         self.view.status_lbl.setText(message)
+        if renamed_paths:
+            dispatch_after_rename(
+                renamed_paths,
+                lambda text, _level="info": self.view.status_lbl.setText(text),
+                settings=getattr(self.owner, "settings", None),
+            )
 
     def remove_selected(self) -> None:
-        for row in sorted(self.table_controller.selected_rows(), reverse=True):
+        rows = self.table_controller.selected_rows()
+        paths = [self.table_controller.row_path(row) for row in rows]
+        self.resolver.invalidate_paths(paths)
+        for row in sorted(rows, reverse=True):
             self.view.table.removeRow(row)
-        self.view.status_lbl.setText("Auswahl entfernt.")
+        self.view.status_lbl.setText(f"{len(rows)} Eintrag/Einträge entfernt.")
 
     def clear(self) -> None:
+        paths = [
+            self.table_controller.row_path(row)
+            for row in range(self.view.table.rowCount())
+        ]
+        self.resolver.invalidate_paths(paths)
         self.view.table.setRowCount(0)
         self.view.status_lbl.setText("Liste geleert.")

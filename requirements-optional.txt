@@ -2,3 +2,7 @@
 # Ohne diese Pakete bleibt der FFmpeg/dHash-Fallback nutzbar.
 numpy>=1.26,<3
 opencv-python-headless>=4.10,<5
+
+# Optionale Audio-Spracherkennung. Die eigentlichen Whisper-Constraints liegen
+# separat, damit build_v9.bat bei Bedarf nur Whisper/CTranslate2 repariert.
+-r requirements-whisper.txt

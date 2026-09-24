@@ -65,9 +65,15 @@ def test_current_refactor_modules_are_release_smoke_checked():
         "core/media_library_nfo_paths.py",
         "core/media_library_nfo_parser.py",
         "core/media_library_nfo_inventory.py",
+        "core/jellyfin_api.py",
+        "core/jellyfin_refresh_service.py",
+        "core/settings_jellyfin.py",
         "core/media_library_nfo_store.py",
         "core/online_metadata_tvdb_episode_data.py",
         "gui/media_library_search_worker.py",
+        "gui/jellyfin_connection_test.py",
+        "gui/jellyfin_refresh_dispatch.py",
+        "gui/settings_sections/jellyfin.py",
         "gui/preflight_metadata_common.py",
         "gui/preflight_metadata_movie.py",
         "gui/preflight_metadata_series.py",
@@ -342,7 +348,6 @@ def test_release_validation_checks_required_files_and_schema(tmp_path):
     assert by_title["Quell-Startdatei"].status == "ok"
     assert by_title["Schema: Audio-Regeln"].status == "ok"
     assert by_title["PDF-Handbuch"].status == "ok"
-    assert by_title["Python-Paket-Smoke-Test"].status == "ok"
     assert by_title["OpenCV-Bildanalyse"].status in {"ok", "warn"}
     assert by_title["PyInstaller-Build"].status == "warn"
 
@@ -364,7 +369,7 @@ def test_release_validation_warns_about_private_paths(tmp_path):
     from dragontools.core.release_validation import validate_release
 
     root = tmp_path
-    (root / "help.html").write_text(r"C:\Users\Developer\Documents\DragonTools", encoding="utf-8")
+    (root / "help.html").write_text(r"C:\Users\Public\Documents\DragonTools", encoding="utf-8")
 
     checks = validate_release(root)
 
@@ -380,12 +385,11 @@ def test_app_bundle_validation_checks_exe_not_source_files(tmp_path):
     (app_dir / f"DragonToolsV{APP_VERSION}.exe").parent.mkdir(parents=True)
     (app_dir / f"DragonToolsV{APP_VERSION}.exe").write_bytes(b"exe")
     (data_dir / "help.html").parent.mkdir(parents=True)
-    (data_dir / "help.html").write_text("<html>Developer</html>", encoding="utf-8")
+    (data_dir / "help.html").write_text("<html>Public</html>", encoding="utf-8")
     (data_dir / "Handbuch").mkdir()
     (data_dir / "Handbuch" / "Handbuch.pdf").write_bytes(b"%PDF")
     (data_dir / "Aenderungshistorie").mkdir()
     (data_dir / "Aenderungshistorie" / "CHANGELOG.json").write_text('{"format_version": 1, "sections": [{"title": "Überblick", "blocks": ["V9"]}]}', encoding="utf-8")
-    _write_package_smoke_files(data_dir / "Python")
     config = data_dir / "dragontools" / "config"
     _write_json(config / "default_audio_rules.json", {"_schema_version": 4})
     _write_json(config / "default_subtitle_rules.json", {"_schema_version": 6})
@@ -398,9 +402,8 @@ def test_app_bundle_validation_checks_exe_not_source_files(tmp_path):
     titles = set(by_title)
 
     assert by_title["Startdatei"].status == "ok"
-    assert by_title["Python-Quellpaket"].status == "ok"
+    assert by_title["Python-Quellcode"].status == "ok"
     assert by_title["Runtime-Konfiguration"].status == "ok"
-    assert by_title["Python-Paket-Smoke-Test"].status == "ok"
     assert by_title["OpenCV-Bildanalyse"].status in {"ok", "warn"}
     assert "Quell-Startdatei" not in titles
     assert "Versionierte PyInstaller-Spec" not in titles
@@ -552,7 +555,6 @@ def test_package_only_manifest_validates_code_only_release(tmp_path):
     assert by_title["Anwendungsartefakte"].status == "ok"
     assert by_title["Testumgebung"].status == "ok"
     assert by_title["PyInstaller-Build"].status == "ok"
-    assert by_title["Python-Paket-Smoke-Test"].status == "ok"
     assert not any(check.status == "error" for check in checks)
 
 
@@ -607,7 +609,6 @@ def test_release_validation_detects_stale_built_documentation(tmp_path):
         encoding="utf-8",
     )
     (data / "Aenderungshistorie" / "CHANGELOG.txt").write_text("aktuell\n", encoding="utf-8")
-    _write_package_smoke_files(data / "Python")
     (data / "dragontools" / "config").mkdir(parents=True, exist_ok=True)
     for name in (
         "default_audio_rules.json",

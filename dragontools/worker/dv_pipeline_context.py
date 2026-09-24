@@ -39,6 +39,7 @@ class DVRunRequest:
     crop: str | None
     override: dict
     preserve_hdrplus: bool
+    generate_hdr10plus: bool
     container: str
     profile_major: int | None
 
@@ -56,6 +57,7 @@ class DVRunRequest:
         crop: str | None,
         override: dict | None,
         preserve_hdrplus: bool,
+        generate_hdr10plus: bool = False,
         container: str = "mp4",
     ) -> "DVRunRequest":
         return cls(
@@ -69,6 +71,7 @@ class DVRunRequest:
             crop=crop,
             override=dict(override or {}),
             preserve_hdrplus=bool(preserve_hdrplus),
+            generate_hdr10plus=bool(generate_hdr10plus),
             container=str(container or "mp4").strip().lower(),
             profile_major=normalize_dv_profile_major(media_info),
         )
@@ -89,6 +92,10 @@ class DVRunRequest:
             and getattr(mi, "has_dv", False)
             and has_hdr10plus
         )
+
+    @property
+    def requires_hdr10plus(self) -> bool:
+        return bool(self.preserve_dv_hdr10plus_combo or self.generate_hdr10plus)
 
 
 @dataclass(frozen=True)

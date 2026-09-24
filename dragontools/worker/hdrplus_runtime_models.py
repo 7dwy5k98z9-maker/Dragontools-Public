@@ -57,6 +57,7 @@ class HDRPlusExecutionContext:
     container: str
     override: Mapping[str, Any]
     encoder: HDRPlusEncoderConfig
+    generate_hdr10plus: bool = False
 
     @classmethod
     def create(
@@ -73,6 +74,7 @@ class HDRPlusExecutionContext:
         container: str,
         override: Mapping[str, Any] | None,
         encoder: HDRPlusEncoderConfig,
+        generate_hdr10plus: bool = False,
     ) -> "HDRPlusExecutionContext":
         return cls(
             input_path=str(input_path),
@@ -86,6 +88,7 @@ class HDRPlusExecutionContext:
             container=str(container or "mkv").lower(),
             override=MappingProxyType(dict(override or {})),
             encoder=encoder,
+            generate_hdr10plus=bool(generate_hdr10plus),
         )
 
 

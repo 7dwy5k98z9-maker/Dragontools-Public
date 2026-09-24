@@ -25,6 +25,7 @@ from ..core.media_library_export import (
     export_search_results_to_csv,
 )
 from ..core.media_library_jellyfin import import_jellyfin_database
+from ..core.media_library_fix_queue import discover_fix_issues
 from ..core.media_library_nfo_scan import scan_nfo_inventory
 from ..core.media_library_saved_queries import delete_named_query, load_saved_queries, save_named_query
 from ..core.media_library_sql_help import build_schema_help, export_schema_help
@@ -152,6 +153,9 @@ class MediaLibraryDialogService:
 
     def stats(self, db_path: str):
         return get_stats(db_path)
+
+    def discover_fix_issues(self, db_path: str, *, categories=("nfo", "trickplay", "metadata")):
+        return discover_fix_issues(db_path, categories=categories)
 
     def search(
         self,

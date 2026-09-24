@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
+import logging
 
 from datetime import datetime
 from pathlib import Path
@@ -33,7 +34,7 @@ def log_base_from_settings(settings=None) -> Path:
             if root:
                 return Path(root)
     except Exception:
-        pass
+        logging.getLogger(__name__).debug("Unterdrückte Best-Effort-Ausnahme in log_base_from_settings.", exc_info=True)
     return Path.home() / "Documents" / "DragonTools"
 
 

@@ -1,4 +1,5 @@
 from __future__ import annotations
+import logging
 
 import base64
 import json
@@ -7,6 +8,7 @@ from pathlib import Path
 from typing import Any
 import zipfile
 
+from .secret_settings import read_secret
 from .settings_metadata import SENSITIVE_SETTINGS_KEYS
 
 BACKUP_FORMAT = "DragonToolsBackup"
@@ -54,7 +56,7 @@ def json_safe(value: Any) -> Any:
         if type(value).__name__ == "QByteArray":
             return {"__bytes_b64__": base64.b64encode(bytes(value)).decode("ascii")}
     except Exception:
-        pass
+        logging.getLogger(__name__).debug("Unterdrückte Best-Effort-Ausnahme in json_safe.", exc_info=True)
     if isinstance(value, (list, tuple)):
         return [json_safe(item) for item in value]
     if isinstance(value, dict):
@@ -92,6 +94,8 @@ def settings_to_dict(settings, *, mask_sensitive: bool = False) -> dict[str, Any
         key_str = str(key)
         if mask_sensitive and is_sensitive_settings_key(key_str):
             result[key_str] = "********"
+        elif is_sensitive_settings_key(key_str):
+            result[key_str] = json_safe(read_secret(settings, key_str))
         else:
             result[key_str] = json_safe(settings.value(key))
     return result
@@ -102,8 +106,10 @@ def partition_settings(settings) -> tuple[dict[str, Any], dict[str, Any]]:
     sensitive: dict[str, Any] = {}
     for key in sorted(settings.allKeys()):
         key_str = str(key)
-        target = sensitive if is_sensitive_settings_key(key_str) else normal
-        target[key_str] = json_safe(settings.value(key))
+        is_sensitive = is_sensitive_settings_key(key_str)
+        target = sensitive if is_sensitive else normal
+        value = read_secret(settings, key_str) if is_sensitive else settings.value(key)
+        target[key_str] = json_safe(value)
     return normal, sensitive
 
 
@@ -145,5 +151,5 @@ def current_sensitive_values(settings) -> dict[str, Any]:
     for key in settings.allKeys():
         key_str = str(key)
         if is_sensitive_settings_key(key_str):
-            result[key_str] = settings.value(key)
+            result[key_str] = read_secret(settings, key_str)
     return result

@@ -37,6 +37,7 @@ def build_workflow_services(
         encode_plan=services.encode_plan,
         standard_pipeline=services.standard_pipeline,
         output_paths=services.output_paths,
+        quality_target=services.quality_target,
     )
     pipeline_executor = WorkflowPipelineExecutor(
         standard_pipeline=services.standard_pipeline,

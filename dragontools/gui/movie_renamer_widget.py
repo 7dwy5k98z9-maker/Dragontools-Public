@@ -7,8 +7,8 @@ focused collaborators so this class does not grow back into a GUI God Object.
 """
 from __future__ import annotations
 
-from PyQt6.QtCore import QSettings
-from PyQt6.QtWidgets import QWidget
+from PyQt6.QtCore import QSettings, QSize
+from PyQt6.QtWidgets import QSizePolicy, QWidget
 
 from ..core.settings_app import APP_NAME, APP_ORG
 from .movie_renamer_actions import MovieRenamerActionController
@@ -36,6 +36,10 @@ class MovieRenamerWidget(QWidget):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        # The renamer is a scrollable tab page.  No child control is allowed to
+        # turn a transient content width into a QMainWindow minimum width.
+        self.setMinimumWidth(0)
+        self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Expanding)
         self.settings = QSettings(APP_ORG, APP_NAME)
         self._view = MovieRenamerView(self, RenamerColumns, self.settings)
         self._bind_view_attributes()
@@ -64,6 +68,7 @@ class MovieRenamerWidget(QWidget):
             "manual_movie_search_btn",
             "show_all_candidates_btn",
             "edit_search_btn",
+            "edit_season_btn",
             "accept_selected_btn",
             "accept_safe_btn",
             "reject_selected_btn",
@@ -84,6 +89,7 @@ class MovieRenamerWidget(QWidget):
         self.manual_movie_search_btn.clicked.connect(self._actions.manual_movie_search)
         self.show_all_candidates_btn.clicked.connect(self._actions.show_all_candidates)
         self.edit_search_btn.clicked.connect(self._actions.edit_search_query)
+        self.edit_season_btn.clicked.connect(self._actions.edit_selected_season)
         self.accept_selected_btn.clicked.connect(self.accept_selected)
         self.accept_safe_btn.clicked.connect(self.accept_safe)
         self.reject_selected_btn.clicked.connect(self.reject_selected)
@@ -91,6 +97,10 @@ class MovieRenamerWidget(QWidget):
         self.remove_btn.clicked.connect(self.remove_selected)
         self.clear_btn.clicked.connect(self.clear)
         self.table.paths_dropped.connect(self.add_paths)
+
+    def minimumSizeHint(self) -> QSize:
+        hint = super().minimumSizeHint()
+        return QSize(0, hint.height())
 
     # ---- public user actions -------------------------------------------------
     def add_paths(self, paths: list[str]) -> None:

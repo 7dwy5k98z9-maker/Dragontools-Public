@@ -54,6 +54,10 @@ class MainWindowMenuMixin:
                              triggered=self._open_settings_media_library))
         sm.addAction(QAction("🎞 Jellyfin NFO / Trickplay", self,
                              triggered=self._open_settings_postprocess))
+        sm.addAction(QAction("🔌 Jellyfin API", self,
+                             triggered=self._open_settings_jellyfin))
+        sm.addAction(QAction("👁 Watch-Folder / Automatisierung", self,
+                             triggered=lambda: self._exec_settings_dialog(visible_sections=("watch_folders",))))
         sm.addAction(QAction("🔎 Quellbildprüfung", self,
                              triggered=self._open_settings_source_visual))
         sm.addAction(QAction("💾 Speichereinstellungen", self,
@@ -68,6 +72,10 @@ class MainWindowMenuMixin:
                              triggered=self._open_settings_move_conflict))
         sm.addAction(QAction("🎬 IMAX Auto-Erkennung", self,
                              triggered=self._open_settings_imax))
+        sm.addAction(QAction("🌈 SDR → HDR / ComfyUI", self,
+                             triggered=self._open_settings_sdr_hdr))
+        sm.addAction(QAction("✨ Dragon HDR10+ Generator", self,
+                             triggered=self._open_settings_hdr10plus_generator))
         sm.addAction(QAction("⏱ Timeouts …", self,
                              triggered=self._open_timeout_settings))
         sm.addSeparator()
@@ -146,6 +154,8 @@ class MainWindowMenuMixin:
         vm.addSection("Externe Programme")
         vm.addAction(QAction("🎬 HandBrake öffnen", self,
                              triggered=lambda: self._launch_external("HandBrake.exe")))
+        vm.addAction(QAction("🎨 DaVinci Resolve öffnen", self,
+                             triggered=lambda: self._launch_external("Resolve.exe")))
         vm.addAction(QAction("📝 RMTS öffnen", self,
                              triggered=lambda: self._launch_external("RenameMyTVSeries.exe")))
         vm.addAction(QAction("🧰 Remux – MKVToolNix öffnen", self,
@@ -196,6 +206,8 @@ class MainWindowMenuMixin:
         wm.addSeparator()
         wm.addAction(QAction("🎬 HandBrake öffnen", self,
                              triggered=lambda: self._launch_external("HandBrake.exe")))
+        wm.addAction(QAction("🎨 DaVinci Resolve öffnen", self,
+                             triggered=lambda: self._launch_external("Resolve.exe")))
         wm.addAction(QAction("📝 RMTS öffnen", self,
                              triggered=lambda: self._launch_external("RenameMyTVSeries.exe")))
         wm.addAction(QAction("🧰 Remux – MKVToolNix öffnen", self,

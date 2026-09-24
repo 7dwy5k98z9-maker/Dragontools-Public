@@ -32,6 +32,7 @@ def test_queue_actions_facade_contains_no_business_methods():
     assert bases == {
         "ConvertWidgetQueueDragDropMixin",
         "ConvertWidgetQueueManagementMixin",
+        "ConvertWidgetQueueReorderActionsMixin",
         "ConvertWidgetQueueWindowActionsMixin",
         "ConvertWidgetQueueContextActionsMixin",
         "ConvertWidgetQueueTargetActionsMixin",
@@ -45,6 +46,7 @@ def test_queue_action_collaborators_are_bounded_and_single_owner():
     limits = {
         "convert_widget_queue_dragdrop.py": 100,
         "convert_widget_queue_management.py": 90,
+        "convert_widget_queue_reorder_actions.py": 90,
         "convert_widget_queue_window_actions.py": 100,
         "convert_widget_queue_context_actions.py": 190,
         "convert_widget_queue_target_actions.py": 170,
@@ -64,7 +66,7 @@ def test_queue_action_collaborators_are_bounded_and_single_owner():
             assert method.name not in owners, f"{method.name} duplicated in {filename} and {owners[method.name]}"
             owners[method.name] = filename
 
-    assert len(owners) == 46
+    assert len(owners) == 52
 
 
 def test_queue_action_mixins_keep_unique_aggregation_surface():
@@ -78,6 +80,12 @@ def test_queue_action_mixins_keep_unique_aggregation_surface():
         "_add_files",
         "_add_folder",
         "_sync_queue_order",
+        "_active_queue_paths",
+        "_move_selected_queue",
+        "_queue_move_up",
+        "_queue_move_down",
+        "_queue_move_front",
+        "_queue_move_back",
         "_remove_path",
         "_remove_paths",
         "remove_selected_files",
@@ -121,6 +129,7 @@ def test_queue_action_mixins_keep_unique_aggregation_surface():
     for filename in (
         "convert_widget_queue_dragdrop.py",
         "convert_widget_queue_management.py",
+        "convert_widget_queue_reorder_actions.py",
         "convert_widget_queue_window_actions.py",
         "convert_widget_queue_context_actions.py",
         "convert_widget_queue_target_actions.py",

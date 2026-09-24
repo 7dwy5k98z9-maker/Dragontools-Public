@@ -58,13 +58,28 @@ def _hdr_state(
     mi_is_hdr, mi_has_hdr10plus, mi_dv_profile = detect_hdr_from_mediainfo_track(mi_track)
     fp_is_hdr, fp_has_hdr10plus, fp_dv_profile = detect_hdr_from_ffprobe_stream(fp_stream)
 
-    if mi_track:
-        is_hdr, has_hdr10plus, dv_profile = mi_is_hdr, mi_has_hdr10plus, mi_dv_profile
-        if not dv_profile and fp_dv_profile:
-            dv_profile = fp_dv_profile
-            is_hdr = is_hdr or fp_is_hdr
+    # Beide Analysequellen werden zusammengeführt. MediaInfo ist die bevorzugte
+    # Quelle für Container-/Formatstrings, ffprobe kann aber zusätzliche
+    # Bitstream-Side-Data liefern. Ein vorhandener MediaInfo-Track darf deshalb
+    # HDR10+/DV-Evidence aus ffprobe nicht mehr überschreiben.
+    is_hdr = bool(mi_is_hdr or fp_is_hdr)
+    has_hdr10plus = bool(mi_has_hdr10plus or fp_has_hdr10plus)
+
+    mi_profile = None if mi_dv_profile in (None, "", "Ja") else str(mi_dv_profile)
+    fp_profile = None if fp_dv_profile in (None, "", "Ja") else str(fp_dv_profile)
+    if mi_profile and fp_profile and mi_profile.split(".", 1)[0] != fp_profile.split(".", 1)[0]:
+        analysis_warnings.append(
+            "[DV-Erkennung] MediaInfo und ffprobe melden unterschiedliche Profile "
+            f"(MediaInfo={mi_profile}, ffprobe={fp_profile}); verwende ffprobe={fp_profile}."
+        )
+    if fp_profile:
+        dv_profile = fp_profile
+    elif mi_profile:
+        dv_profile = mi_profile
+    elif fp_dv_profile:
+        dv_profile = fp_dv_profile
     else:
-        is_hdr, has_hdr10plus, dv_profile = fp_is_hdr, fp_has_hdr10plus, fp_dv_profile
+        dv_profile = mi_dv_profile
 
     is_hdr, has_hdr10plus, dv_profile = validate_hdr_flags(
         codec=codec,

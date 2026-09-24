@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Benutzerentscheidungs-Dialoge für MoveThread-Anfragen."""
 from __future__ import annotations
+import logging
 
 import traceback
 from pathlib import Path
@@ -28,6 +29,8 @@ class MoveRequestDialogHandler:
                     self.film_destination_dialog(rid, payload)
                 elif req_type == "confirm_shutdown_with_countdown":
                     self.handle_shutdown_countdown(rid, payload)
+                elif req_type == "confirm_episode_replacement":
+                    self.handle_episode_replacement(rid, payload)
                 else:
                     self._state.move_thread.provide_decision(rid, {"abort": True})
             except Exception:
@@ -37,7 +40,7 @@ class MoveRequestDialogHandler:
                     if self._state.move_thread:
                         self._state.move_thread.provide_decision(rid, {"abort": True})
                 except Exception:
-                    pass
+                    logging.getLogger(__name__).debug("Unterdrückte Best-Effort-Ausnahme in on_move_req.", exc_info=True)
 
     def film_destination_dialog(self, rid: str, payload: dict) -> None:
             stem         = payload.get("stem", "Film")
@@ -180,6 +183,25 @@ class MoveRequestDialogHandler:
                 return
             selected = next(candidate for candidate in candidates if candidate["label"] == label)
             self._state.move_thread.provide_decision(rid, {"path": selected["path"]})
+
+    def handle_episode_replacement(self, rid: str, payload: dict) -> None:
+            conflicts = [str(name) for name in (payload.get("conflict_names") or []) if str(name)]
+            old_text = "\n".join(f"• {name}" for name in conflicts) or "• vorhandene Episode"
+            label = str(payload.get("episode_label") or "Episode")
+            target_name = str(payload.get("target_name") or "neue Datei")
+            answer = QMessageBox.question(
+                self._parent,
+                f"{label} ersetzen?",
+                "Dragon Tools hat im Zielordner dieselbe Episodenkennung gefunden.\n\n"
+                f"Vorhanden:\n{old_text}\n\n"
+                f"Neu:\n• {target_name}\n\n"
+                "Soll die vorhandene Episode sicher ersetzt werden?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            self._state.move_thread.provide_decision(
+                rid, {"replace": answer == QMessageBox.StandardButton.Yes}
+            )
 
     def handle_shutdown_countdown(self, rid: str, payload: dict) -> None:
             try:

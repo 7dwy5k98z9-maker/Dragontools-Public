@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
+import logging
 
 import sys
 from datetime import datetime
@@ -206,7 +207,7 @@ class DragonLoggerMessageMixin:
                 from .lang_codes import lang_display
                 language = lang_display(language)
             except Exception:
-                pass
+                logging.getLogger(__name__).debug("Unterdrückte Best-Effort-Ausnahme in audio.", exc_info=True)
         lang = f" [{language}]" if language else ""
         if action == "copy":
             self._write(f"ℹ️  Audio Spur {track_num}{lang} ({codec}) wird kopiert", to_gui=True, to_short=True)
@@ -339,4 +340,4 @@ class DragonLoggerMessageMixin:
                     with open(self.log_file, "a", encoding="utf-8") as f:
                         f.write(failure_msg + "\n")
                 except Exception:
-                    pass
+                    logging.getLogger(__name__).debug("Unterdrückte Best-Effort-Ausnahme in summary.", exc_info=True)

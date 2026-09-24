@@ -6,7 +6,8 @@ Die fachlichen Verantwortlichkeiten sind auf kleine Komponenten verteilt:
 - ``core.move_routing``: Zielermittlung TV/Anime/Film
 - ``core.move_sidecars``: Sidecars und Trickplay
 - ``worker.move_runtime_control``: Pause/Abort/Benutzerentscheidungen
-- ``worker.move_result_commit``: Service-Verdrahtung, Reporting, DB-Commit
+- ``worker.move_companion_adapter``: Companion-first Move- und Sidecar-Adapter
+- ``worker.move_result_commit``: Routing, Reporting und DB-Commit
 - ``worker.move_batch_lifecycle``: Journal, Batch und Shutdown
 
 Diese Klasse besitzt nur Qt-Signale, Initialzustand und den Run-Rahmen.
@@ -20,16 +21,19 @@ from pathlib import Path
 
 from PyQt6.QtCore import QThread, pyqtSignal
 
+from ..core.episode_replacement_policy import normalize_episode_replacement_mode
 from ..core.logger import create_worker_logger
 from ..core.move_journal import MoveJournal
 from .move_batch_executor import collect_move_files
 from .move_batch_lifecycle import MoveBatchLifecycleMixin
+from .move_companion_adapter import MoveCompanionAdapterMixin
 from .move_result_commit import MoveResultCommitMixin
 from .move_runtime_control import MoveRuntimeControlMixin
 
 
 class MoveThread(
     MoveRuntimeControlMixin,
+    MoveCompanionAdapterMixin,
     MoveResultCommitMixin,
     MoveBatchLifecycleMixin,
     QThread,
@@ -55,6 +59,7 @@ class MoveThread(
         planned_targets=None,
         all_video_files=None,
         conflict_mode="skip",
+        episode_replacement_mode="auto",
         log_file_path=None,
         sidecar_outputs_by_video: "dict[str, list[str]] | None" = None,
         move_journal_root=None,
@@ -75,6 +80,9 @@ class MoveThread(
             conflict_mode
             if conflict_mode in {"skip", "delete_first", "overwrite", "rename"}
             else "skip"
+        )
+        self.episode_replacement_mode = normalize_episode_replacement_mode(
+            episode_replacement_mode
         )
         self._sidecar_outputs_by_video: dict[str, list[str]] = dict(
             sidecar_outputs_by_video or {}

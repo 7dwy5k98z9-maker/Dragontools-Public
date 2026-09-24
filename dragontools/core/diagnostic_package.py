@@ -111,8 +111,11 @@ def _diagnostic_tool_paths() -> dict[str, str]:
         "mediainfo": tools.mediainfo,
         "dovi_tool": tools.dovi_tool,
         "hdr10plus_tool": tools.hdr10plus_tool,
+        "hdr10plus_generator": tools.hdr10plus_generator,
+        "davinci_resolve": tools.davinci_resolve,
+        "comfyui": tools.comfyui,
         "mp4box": tools.mp4box,
-        "handbrake": tools.handbrake_cli,
+        "handbrake": tools.handbrake,
         "rmts": tools.rmts,
     }
 

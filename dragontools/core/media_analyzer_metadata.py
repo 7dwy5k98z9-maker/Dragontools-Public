@@ -4,7 +4,11 @@ import logging
 from dataclasses import dataclass
 from typing import Any
 
-from .media_hdr_detection import detect_hdr_from_ffprobe_stream, parse_dolby_vision_profile
+from .media_hdr_detection import (
+    merge_dolby_vision_info,
+    parse_dolby_vision_from_ffprobe_stream,
+    parse_dolby_vision_profile,
+)
 from .media_metadata import normalize_color_range_label, normalize_video_codec
 from .models import VideoStream
 
@@ -38,39 +42,31 @@ def _resolve_dv_info(
     video_streams: list[VideoStream],
     mi_videos: list[dict],
     fp_videos: list[dict],
+    analysis_warnings: list[str] | None = None,
 ) -> dict[str, Any]:
-    dv_info = _default_dv_info()
     dv_streams = [stream for stream in video_streams if stream.hdr_format == "dolby_vision"]
-    if not dv_streams or not mi_videos:
-        return dv_info
+    if not dv_streams:
+        return _default_dv_info()
 
-    dv_info = parse_dolby_vision_profile(mi_videos[0])
-    if not dv_info["dolby_vision"] or dv_info["dv_profile_major"] is None:
-        if fp_videos:
-            _, _, ffprobe_profile = detect_hdr_from_ffprobe_stream(fp_videos[0])
-            if ffprobe_profile and ffprobe_profile != "Ja":
-                try:
-                    major = int(ffprobe_profile.split(".")[0])
-                    dv_info["dolby_vision"] = True
-                    dv_info["dv_profile"] = str(major)
-                    dv_info["dv_profile_major"] = major
-                except (ValueError, AttributeError):
-                    dv_info["dolby_vision"] = True
-            elif ffprobe_profile == "Ja":
-                dv_info["dolby_vision"] = True
-    if not dv_info["dolby_vision"]:
-        dv_info["dolby_vision"] = True
-    return dv_info
+    mi_info = parse_dolby_vision_profile(mi_videos[0]) if mi_videos else _default_dv_info()
+    fp_info = (
+        parse_dolby_vision_from_ffprobe_stream(fp_videos[0])
+        if fp_videos
+        else _default_dv_info()
+    )
+    merged = merge_dolby_vision_info(mi_info, fp_info, analysis_warnings)
+    if not merged["dolby_vision"]:
+        # Der Stream-Builder hat explizite DV-Evidence erkannt, aber die
+        # Detailparser konnten keinen weiteren Profilwert ableiten.
+        merged["dolby_vision"] = True
+    return merged
 
 
 def _resolve_color_metadata(
     mi_videos: list[dict],
     fp_videos: list[dict],
 ) -> tuple[str | None, str | None, str | None]:
-    if not mi_videos:
-        return None, None, None
-
-    media_info = mi_videos[0]
+    media_info = mi_videos[0] if mi_videos else {}
     ffprobe = fp_videos[0] if fp_videos else {}
     color_range = (
         media_info.get("colour_range")
@@ -97,6 +93,7 @@ def collect_video_metadata(
     video_streams: list[VideoStream],
     mi_videos: list[dict],
     fp_videos: list[dict],
+    analysis_warnings: list[str] | None = None,
 ) -> VideoAnalysisMetadata:
     is_hdr = any(
         stream.hdr_format in {"hdr10", "hdr10plus", "dolby_vision"}
@@ -106,7 +103,7 @@ def collect_video_metadata(
         stream.hdr_format == "hdr10plus" or getattr(stream, "has_hdr10plus", False)
         for stream in video_streams
     )
-    dv_info = _resolve_dv_info(video_streams, mi_videos, fp_videos)
+    dv_info = _resolve_dv_info(video_streams, mi_videos, fp_videos, analysis_warnings)
     legacy_profile = None
     if dv_info["dolby_vision"]:
         legacy_profile = dv_info["dv_profile"] or "Ja"

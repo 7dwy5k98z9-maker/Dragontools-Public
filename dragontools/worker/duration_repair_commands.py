@@ -13,8 +13,15 @@ def build_timestamp_repair_command(
     container: str | None,
     mp4box_path: str,
     ffmpeg_path: str,
+    mkvmerge_path: str = "",
+    mkv_video_track_id: int | None = None,
 ) -> list[str]:
-    """Build the lossless timestamp-repair command for MKV or MP4."""
+    """Build a lossless timestamp-repair command for MKV or MP4.
+
+    MKV prefers MKVToolNix ``--default-duration`` when the Matroska track ID
+    is known. This rebuilds timing without touching packet payloads. FFmpeg
+    ``setts`` remains the compatibility fallback.
+    """
     container_name = str(container or source.suffix.lstrip(".")).strip().lower().lstrip(".")
     if container_name == "mp4":
         # MP4Box forces the CFR rate while rebuilding MP4 sample timestamps.
@@ -26,6 +33,19 @@ def build_timestamp_repair_command(
             str(target),
             "-add",
             f"{source}:fps={fps_value}",
+        ]
+
+    if mkvmerge_path and mkv_video_track_id is not None:
+        fps_value = f"{fps.numerator}/{fps.denominator}fps"
+        return [
+            mkvmerge_path,
+            "--ui-language",
+            "en",
+            "--output",
+            str(target),
+            "--default-duration",
+            f"{int(mkv_video_track_id)}:{fps_value}",
+            str(source),
         ]
 
     bsf = setts_filter_for_fps(fps)

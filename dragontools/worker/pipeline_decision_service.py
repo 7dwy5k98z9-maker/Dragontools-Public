@@ -71,6 +71,12 @@ class PipelineDecisionService:
                 self._settings, SET_KEY_OUTPUT_CONTAINER_DV, DEFAULT_OUTPUT_CONTAINER_DV,
                 allowed=("mkv", "mp4"),
             ),
+            hdr10plus_generator_enabled=_safe_bool(
+                self._encoder_options.get("hdr10plus_generator_enabled", False), False
+            ),
+            hdr10plus_generator_available=_safe_bool(
+                self._encoder_options.get("_hdr10plus_generator_available", False), False
+            ),
         )
         self.last_selection = dict(selection)
 
@@ -81,6 +87,11 @@ class PipelineDecisionService:
         archive_reason: str | None = selection.get("archive_reason")  # type: ignore[assignment]
 
         self._logger.info(self._source_summary(media_info, source_codec))
+        if bool(selection.get("generate_hdr10plus", False)):
+            self._logger.info(
+                "HDR10+: externer Generator wird nach dem finalen Video-Encode ausgeführt; "
+                "Injection und Validierung bleiben im bestehenden DragonTools-Pfad."
+            )
 
         # Capability-Entscheidungen mit dem tatsächlichen Grund loggen. Dadurch
         # wird ein inkompatibler Zielcodec nicht fälschlich als Quellcodec-Problem erklärt.

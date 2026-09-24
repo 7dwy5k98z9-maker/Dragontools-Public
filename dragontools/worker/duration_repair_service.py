@@ -106,6 +106,7 @@ class DurationRepairService:
         expected_contract=None,
         verified_hdr10plus: bool = False,
         verified_dolby_vision: bool = False,
+        source_path: str | None = None,
     ) -> DurationRepairOutcome:
         if not self.can_repair(output_path=output_path, container=container, verify_result=initial_result):
             return DurationRepairOutcome(verify_result=initial_result)
@@ -121,6 +122,7 @@ class DurationRepairService:
             verified_dolby_vision=verified_dolby_vision,
             normal_remux_enabled=self._normal_remux_enabled,
             timestamp_repair_enabled=self._timestamp_repair_enabled,
+            source_path=source_path,
         )
 
     @staticmethod

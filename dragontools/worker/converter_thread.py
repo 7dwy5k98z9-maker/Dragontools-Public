@@ -52,7 +52,7 @@ class ConverterThread(QThread):
     file_progress = pyqtSignal(str, int, object)
     file_result = pyqtSignal(str, str, str)  # (input_path, output_path, status)
     log_line = pyqtSignal(str)
-    event = pyqtSignal(object)
+    worker_event = pyqtSignal(object)
     dv_crop_decision_requested = pyqtSignal(object)
 
     def __init__(self, files, config: ConverterConfig, *, shared_logger=None, parent=None):
@@ -98,6 +98,16 @@ class ConverterThread(QThread):
         ok = self._queue.add_file(path, self.log)
         if ok:
             self._session_state.all_input_files.append(path)
+        return ok
+
+    def add_file_with_override(self, path: str, override: dict) -> bool:
+        """Live-add a file with its override installed before it can become current."""
+        with self._files_lock:
+            self._job_state.file_overrides[path] = dict(override or {})
+        ok = self.add_file(path)
+        if not ok:
+            with self._files_lock:
+                self._job_state.file_overrides.pop(path, None)
         return ok
 
     def remove_file(self, path: str) -> RemoveFileStatus:
@@ -198,7 +208,7 @@ class ConverterThread(QThread):
         self._control.wait()
 
     def log(self, msg, level="info"):
-        self.event.emit(log_event(str(msg), severity=level))
+        self.worker_event.emit(log_event(str(msg), severity=level))
         getattr(self._logger, level, self._logger.info)(msg)
 
     def emit_file_progress(self, path, pct, eta=None):

@@ -70,6 +70,7 @@ def build_move_resume_plan(data: dict[str, Any]) -> dict[str, Any]:
         "sidecar_outputs_by_video": sidecars,
         "target_paths": target_paths,
         "conflict_mode": str(data.get("conflict_mode") or "skip"),
+        "episode_replacement_mode": str(data.get("episode_replacement_mode") or "auto"),
         "log_file": str(data.get("log_file") or ""),
         "started_at": str(data.get("started_at") or ""),
     }

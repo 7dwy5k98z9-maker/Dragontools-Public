@@ -6,6 +6,7 @@ WICHTIG: setSource() NICHT verwenden - das navigiert zur URL und
          Stattdessen: document().setBaseUrl() + setHtml()
 """
 from __future__ import annotations
+import logging
 import sys, webbrowser
 from pathlib import Path
 from PyQt6.QtCore import QUrl
@@ -56,7 +57,7 @@ class HelpDialog(QDialog):
                 v.addWidget(self._view)
                 web_ok = True
             except Exception:
-                pass
+                logging.getLogger(__name__).debug("Unterdrückte Best-Effort-Ausnahme in _init_ui.", exc_info=True)
 
         if not web_ok:
             self._browser = QTextBrowser()
@@ -104,4 +105,4 @@ class HelpDialog(QDialog):
             webbrowser.open(QUrl.fromLocalFile(
                 str(Path(self._help_path).resolve())).toString())
         except Exception:
-            pass
+            logging.getLogger(__name__).debug("Unterdrückte Best-Effort-Ausnahme in _open_browser.", exc_info=True)

@@ -18,7 +18,6 @@ from .dv_pipeline_timeouts import (
 
 class DVDynamicMetadataService:
     """Qt-freie DV/HDR10+-Metadatenstufen nach dem Video-Encode."""
-
     def __init__(
         self,
         *,
@@ -27,6 +26,7 @@ class DVDynamicMetadataService:
         audio_mux_service,
         rpu_service,
         hdr10plus_service,
+        generator_client=None,
         level5_editor,
         failure_recovery,
         log: Callable[[str, str], None],
@@ -38,12 +38,12 @@ class DVDynamicMetadataService:
         self._audio_mux_service = audio_mux_service
         self._rpu_service = rpu_service
         self._hdr10plus_service = hdr10plus_service
+        self._generator_client = generator_client
         self._level5_editor = level5_editor
         self._failure_recovery = failure_recovery
         self._log = log
         self._vlog = verbose_log
         self._assert_nonempty_file = assert_nonempty_file
-
     def resolve_rpu_crop(
         self,
         state: DVPipelineState,
@@ -77,7 +77,6 @@ class DVDynamicMetadataService:
             )
             return False
         return self._assert_nonempty_file(state.rpu_to_use, "STEP 6 RPU-Crop")
-
     def save_crop_failure(
         self,
         state: DVPipelineState,
@@ -101,7 +100,6 @@ class DVDynamicMetadataService:
             mux_plain_mp4_without_dv=lambda: mux_plain_mp4_without_dv(state, runner),
             level5_proc=level5_proc,
         )
-
     def mux_plain_mp4_without_dv(self, state: DVPipelineState, runner: DVCommandRunner) -> bool:
         req, files = state.request, state.files
         ok, tracks = self._audio_mux_service.mux_plain_mp4_without_dv(
@@ -118,7 +116,6 @@ class DVDynamicMetadataService:
         )
         state.audio_tracks = tracks
         return ok
-
     def inject_dynamic_metadata(
         self,
         state: DVPipelineState,
@@ -129,27 +126,19 @@ class DVDynamicMetadataService:
     ) -> bool:
         req, files = state.request, state.files
         rpu_input_hevc = files.enc_hevc
+        generate_hdr10plus = bool(getattr(req, "generate_hdr10plus", False))
+        requires_hdr10plus = bool(
+            getattr(req, "requires_hdr10plus", False)
+            or getattr(req, "preserve_dv_hdr10plus_combo", False)
+            or generate_hdr10plus
+        )
 
-        if req.preserve_dv_hdr10plus_combo:
-            self._vlog("[DV+HDR10+][DETAIL] HDR10+-Metadaten injizieren")
-            run_hdr_inject = runner.adapter(
-                timeout=_TIMEOUT_RPU_INJECT(),
-                label="DV+HDR10+ Metadata-Injection",
+        if requires_hdr10plus:
+            rpu_input_hevc = self._prepare_hdr10plus_bitstream(
+                state, runner, generate=generate_hdr10plus
             )
-            if not self._hdr10plus_service.inject_metadata(
-                run_hdr_inject,
-                input_hevc=files.enc_hevc,
-                metadata_json=files.hdr10plus_json,
-                output_hevc=files.hdr10plus_hevc,
-            ):
-                self._log(
-                    "❌ [DV+HDR10+] HDR10+-Metadaten konnten nicht in den Encode injiziert werden.",
-                    "error",
-                )
+            if rpu_input_hevc is None:
                 return False
-            if not self._assert_nonempty_file(files.hdr10plus_hevc, "DV+HDR10+ HDR10+-Injection"):
-                return False
-            rpu_input_hevc = files.hdr10plus_hevc
 
         state.rpu_input_hevc = rpu_input_hevc
         if not validate_rpu_frame_parity(
@@ -182,13 +171,57 @@ class DVDynamicMetadataService:
         ):
             return False
 
-        if not req.preserve_dv_hdr10plus_combo:
+        if not requires_hdr10plus:
             return True
+        return self._verify_hdr10plus_after_dv(state, runner)
 
+    def _prepare_hdr10plus_bitstream(
+        self,
+        state: DVPipelineState,
+        runner: DVCommandRunner,
+        *,
+        generate: bool,
+    ) -> Path | None:
+        files = state.files
+        if generate:
+            self._vlog("[DV+HDR10+][DETAIL] Finalen DV-Encode mit externem HDR10+-Generator analysieren")
+            if self._generator_client is None:
+                self._log("❌ [DV+HDR10+] Generator-Service ist nicht verfügbar.", "error")
+                return None
+            generated = self._generator_client.analyze(files.enc_hevc, files.hdr10plus_json)
+            if not generated.success:
+                reason = generated.message or generated.error or f"Exitcode {generated.returncode}"
+                self._temp_state.record_failure(reason=reason, stage="STEP 6/7 HDR10+ Generator")
+                self._log(f"❌ [DV+HDR10+] Generator fehlgeschlagen: {reason}", "error")
+                return None
+            if not self._assert_nonempty_file(files.hdr10plus_json, "DV+HDR10+ Generator JSON"):
+                return None
+
+        self._vlog("[DV+HDR10+][DETAIL] HDR10+-Metadaten injizieren")
+        run_hdr_inject = runner.adapter(
+            timeout=_TIMEOUT_RPU_INJECT(), label="DV+HDR10+ Metadata-Injection"
+        )
+        if not self._hdr10plus_service.inject_metadata(
+            run_hdr_inject,
+            input_hevc=files.enc_hevc,
+            metadata_json=files.hdr10plus_json,
+            output_hevc=files.hdr10plus_hevc,
+        ):
+            self._log(
+                "❌ [DV+HDR10+] HDR10+-Metadaten konnten nicht in den Encode injiziert werden.",
+                "error",
+            )
+            return None
+        if not self._assert_nonempty_file(files.hdr10plus_hevc, "DV+HDR10+ HDR10+-Injection"):
+            return None
+        return files.hdr10plus_hevc
+    def _verify_hdr10plus_after_dv(
+        self, state: DVPipelineState, runner: DVCommandRunner
+    ) -> bool:
+        files = state.files
         self._vlog("[DV+HDR10+][DETAIL] HDR10+-Nachprüfung vor MP4Box")
         run_hdr_verify = runner.adapter(
-            timeout=_TIMEOUT_HEVC_EXTRACT(),
-            label="DV+HDR10+ Metadata-Prüfung",
+            timeout=_TIMEOUT_HEVC_EXTRACT(), label="DV+HDR10+ Metadata-Prüfung"
         )
         if not self._hdr10plus_service.verify_metadata(
             run_hdr_verify,
@@ -201,11 +234,8 @@ class DVDynamicMetadataService:
                 "error",
             )
             return False
-        self._vlog(
-            "[DV+HDR10+] Zwischenprüfung: DV und HDR10+ im injizierten HEVC-Bitstream bestätigt."
-        )
+        self._vlog("[DV+HDR10+] Zwischenprüfung: DV und HDR10+ im injizierten HEVC-Bitstream bestätigt.")
         return True
-
     def validate_rpu_frame_parity(
         self,
         runner: DVCommandRunner,
@@ -236,7 +266,6 @@ class DVDynamicMetadataService:
         self._temp_state.record_failure(reason=reason, stage="STEP 6/7 RPU-Injektion")
         self._log(f"❌ [DV] {reason}", "error")
         return False
-
     def probe_rpu_frame_count(self, runner: DVCommandRunner, path: Path) -> int | None:
         proc = runner.run(
             [self._tools.dovi_tool, "info", "-s", str(path)],
@@ -258,7 +287,6 @@ class DVDynamicMetadataService:
             if match:
                 return int(match.group(1))
         return None
-
     def probe_hevc_frame_count(self, runner: DVCommandRunner, path: Path) -> int | None:
         proc = runner.run(
             [
@@ -279,7 +307,6 @@ class DVDynamicMetadataService:
             if value > 0:
                 return value
         return None
-
     def verify_injected_rpu(
         self,
         runner: DVCommandRunner,
@@ -309,7 +336,6 @@ class DVDynamicMetadataService:
             return False
         self._vlog("[DV][STEP 6/7] RPU-Nachprüfung OK (SHA-256 identisch).")
         return True
-
     @staticmethod
     def sha256(path: Path) -> str:
         digest = hashlib.sha256()

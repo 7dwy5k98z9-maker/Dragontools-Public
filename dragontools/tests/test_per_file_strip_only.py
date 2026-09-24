@@ -1,3 +1,4 @@
+from pathlib import Path
 from types import SimpleNamespace
 
 import importlib.util
@@ -146,3 +147,41 @@ def test_queue_label_shows_dv_hdr10plus_and_named_postprocess_badges():
     label = owner._override_label_text(path)
 
     assert "[Encode: DV + HDR10+, Postprocessing: NFO + Trickplay]" in label
+
+
+@pytest.mark.skipif(not HAS_PYQT6, reason="PyQt6 wird fuer den GUI-Queue-Mixin benoetigt")
+def test_strip_only_toggle_applies_to_all_selected_paths():
+    from dragontools.gui.convert_widget_queue_override_actions import ConvertWidgetQueueOverrideActionsMixin
+
+    first = r"C:\in\a.mkv"
+    second = r"C:\in\b.mkv"
+    owner = ConvertWidgetQueueOverrideActionsMixin()
+    owner._state = SimpleNamespace(
+        file_overrides={},
+        preflight_rows_by_path={first: {}, second: {}},
+        thread=None,
+    )
+    owner._guard_queue_edit_allowed = lambda *_args: True
+    owner.update_queue_label = lambda _path: None
+    owner._log = lambda *_args: None
+
+    owner._toggle_strip_only((first, second))
+    assert owner._state.file_overrides[first]["processing_mode"] == "strip_only"
+    assert owner._state.file_overrides[second]["processing_mode"] == "strip_only"
+    assert owner._state.preflight_rows_by_path == {}
+
+    owner._toggle_strip_only((first, second))
+    assert "processing_mode" not in owner._state.file_overrides[first]
+    assert "processing_mode" not in owner._state.file_overrides[second]
+
+
+def test_strip_only_context_menu_uses_current_multi_selection():
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "gui"
+        / "convert_widget_queue_context_actions.py"
+    ).read_text(encoding="utf-8")
+
+    assert "Strip-Only für Auswahl" in source
+    assert "self._toggle_strip_only(paths)" in source
+    assert "Nur diese Datei Strip-Only" not in source

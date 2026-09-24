@@ -338,3 +338,30 @@ def test_encode_plan_treats_string_false_imax_and_autocrop_flags_as_false():
 
     assert calls == {"imax": 0, "crop": 0}
     assert plan.crop is None
+
+
+def test_dv_nvenc_encode_args_use_current_ffmpeg_aq_option_names():
+    args = dv_video_encode_args(
+        DVEncoderConfig(
+            codec="h265",
+            crf=23,
+            preset="medium",
+            options={
+                "encoder": "nvenc",
+                "preset": "p6",
+                "cq": 23,
+                "bf": 4,
+                "rc_lookahead": 32,
+                "spatial_aq": True,
+                "temporal_aq": True,
+                "aq_strength": 8,
+            },
+        )
+    )
+
+    assert args[args.index("-c:v") + 1] == "hevc_nvenc"
+    assert args[args.index("-spatial-aq") + 1] == "1"
+    assert args[args.index("-temporal-aq") + 1] == "1"
+    assert args[args.index("-aq-strength") + 1] == "8"
+    assert "-spatial_aq" not in args
+    assert "-temporal_aq" not in args

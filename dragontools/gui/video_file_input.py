@@ -9,6 +9,8 @@ from typing import Callable, Iterable
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QFileDialog, QListWidget, QListWidgetItem, QWidget
 
+from ..core.callback_dispatch import invoke_callback, is_callback_like
+
 
 VIDEO_EXTENSIONS = frozenset({
     ".mkv", ".mp4", ".m4v", ".mov", ".avi", ".ts", ".m2ts", ".wmv", ".webm"
@@ -45,12 +47,12 @@ class VideoDropListWidget(QListWidget):
             return
 
         callback = self._on_paths_dropped
-        if not callable(callback):
+        if not is_callback_like(callback):
             event.ignore()
             return
 
         paths = [url.toLocalFile() for url in event.mimeData().urls() if url.toLocalFile()]
-        callback(paths)
+        invoke_callback(callback, paths)
         event.acceptProposedAction()
 
 

@@ -233,4 +233,8 @@ def effective_encoder_settings(
     )
     if manual is not None:
         _apply_manual_settings(result, manual)
+
+    sdr_hdr = override.get("sdr_hdr")
+    if sdr_hdr is not None:
+        result["encoder_options"]["sdr_hdr_enabled"] = bool(sdr_hdr)
     return result

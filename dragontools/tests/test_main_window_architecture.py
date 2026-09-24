@@ -94,7 +94,7 @@ def test_renamer_view_does_not_force_a_wide_main_window_and_has_configurable_col
     # Tabellenbreiten bleiben Nutzerentscheidung statt Fensterzwang.
     assert "header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)" in view_source
     assert "⚙ Spalten" in view_source
-    assert "_HEADER_STATE_KEY = \"renamer/table_header_state_v1\"" in view_source
+    assert "_HEADER_STATE_KEY = \"renamer/table_header_state_v2\"" in view_source
     assert "hidden_by_default = {self.columns.ACCEPT, self.columns.TYPE, self.columns.HINTS}" in view_state_source
 
     # Sichtbarkeit, Reihenfolge und Breiten werden über dieselben QSettings

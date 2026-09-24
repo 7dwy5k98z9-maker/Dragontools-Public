@@ -21,9 +21,13 @@ from .dv_processing_pipeline import DVProcessingPipeline
 from .dv_processing_components import build_dv_processing_components
 from .dv_runtime_models import DVEncoderConfig
 from .hdrplus_conversion import HDRPlusConversionHelper
+from .converter_optional_runtime import configure_optional_runtime_features
 from .media_analysis_service import MediaAnalysisService
 from .output_verifier import OutputVerifier
 from .postprocess_service import AsyncPostProcessCoordinator, PostProcessService
+from .quality_metrics_service import QualityMetricsService
+from .quality_process_runner import QualityProcessRunner
+from .quality_target_service import AutomaticQualityTargetService
 from .source_visual_check import SourceVisualCheckService
 from .standard_pipeline_runner import StandardPipelineRunner
 from .workflow_engine import ConversionWorkflowRunner
@@ -52,6 +56,8 @@ class ConverterRuntimeBuilder:
         # Absichtlich erst im Worker-Thread laden: Settings können unmittelbar vor
         # QThread.start() noch geändert worden sein.
         services.tools = get_tool_paths()
+        configure_optional_runtime_features(worker, services.tools)
+
         worker._verbose_logger.write(f"[DEBUG] sys.executable: {sys.executable}")
         try:
             worker_source = inspect.getsourcefile(worker.__class__) or inspect.getfile(worker.__class__)
@@ -206,6 +212,19 @@ class ConverterRuntimeBuilder:
         services.source_visual_check = SourceVisualCheckService(
             ffmpeg_path=tools.ffmpeg,
             ffprobe_path=tools.ffprobe,
+        )
+        quality_runner = QualityProcessRunner(
+            worker=worker,
+            log=lambda message: worker.log(message, "info"),
+            prefix="Auto-Qualitätsziel",
+            abort_on_request=False,
+        )
+        services.quality_target = AutomaticQualityTargetService(
+            tools=tools,
+            process_runner=quality_runner,
+            metrics=QualityMetricsService(ffmpeg=tools.ffmpeg, process_runner=quality_runner),
+            log=worker.log,
+            is_aborted=lambda: bool(worker.abort_requested),
         )
         dv_components = build_dv_processing_components(
             tools=tools,

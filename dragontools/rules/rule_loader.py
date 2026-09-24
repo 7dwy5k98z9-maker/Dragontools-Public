@@ -8,7 +8,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
 
-from ..core.config_migration import sanitize_config_for_persistence, write_json_atomic
+from ..core.config_migration import UnsupportedConfigSchemaError, sanitize_config_for_persistence, write_json_atomic
 from ..core.json_io import quarantine_corrupt_file
 
 _LOG = logging.getLogger(__name__)
@@ -39,7 +39,7 @@ def _report_visible_warning(message: str, reporter: Callable | None = None) -> N
     try:
         reporter(message)
     except Exception:
-        pass
+        logging.getLogger(__name__).debug("Unterdrückte Best-Effort-Ausnahme in _report_visible_warning.", exc_info=True)
 
 
 def _quarantine_user_rules(path: Path, *, reason: str, reporter: Callable | None = None) -> None:
@@ -145,7 +145,15 @@ def load_named_rules(
     user_path = _rules_dir() / f"{name}.json"
     if user_path.exists():
         raw = load_json_rules(user_path, default, context=f"user:{name}", reporter=reporter)
-        migrated = _apply_migrator(raw, migrator, source_path=user_path, reporter=reporter)
+        try:
+            migrated = _apply_migrator(raw, migrator, source_path=user_path, reporter=reporter)
+        except UnsupportedConfigSchemaError as exc:
+            _report_visible_warning(
+                f"Regeldatei verwendet ein neueres Schema und bleibt unverändert: {user_path} | {exc} "
+                "-> sichere Defaults aktiv.",
+                reporter=reporter,
+            )
+            return dict(default or {})
         persistent_migrated = sanitize_config_for_persistence(migrated)
         persistent_raw = sanitize_config_for_persistence(raw)
         if migrator is not None and persistent_migrated != persistent_raw:
@@ -161,7 +169,14 @@ def load_named_rules(
     default_path = _default_rules_path(name)
     if default_path.exists():
         raw = load_json_rules(default_path, default, context=f"default:{name}", reporter=reporter)
-        return _apply_migrator(raw, migrator, source_path=default_path, reporter=reporter)
+        try:
+            return _apply_migrator(raw, migrator, source_path=default_path, reporter=reporter)
+        except UnsupportedConfigSchemaError as exc:
+            _report_visible_warning(
+                f"Default-Regeldatei verwendet ein nicht unterstütztes neueres Schema: {default_path} | {exc}.",
+                reporter=reporter,
+            )
+            return dict(default or {})
 
     _report_visible_warning(
         f"Weder Nutzer- noch Default-Regeldatei gefunden für '{name}' -> Fallback/Defaults aktiv.",

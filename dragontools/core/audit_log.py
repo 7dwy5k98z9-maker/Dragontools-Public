@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
+import logging
 
 from datetime import datetime
 from pathlib import Path
@@ -8,6 +9,8 @@ from typing import Any
 from .settings_app import APP_NAME, APP_ORG
 from .settings_storage import LOG_ROOT_KEYS
 from .settings_metadata import SENSITIVE_SETTINGS_KEYS
+
+_LOG = logging.getLogger(__name__)
 
 
 def settings_change_log_dir(settings=None, *, log_root: str | Path | None = None) -> Path:
@@ -37,6 +40,7 @@ def append_audit_event(
             handle.write(f"[{ts}] {action}{suffix}\n")
         return target
     except Exception:
+        _LOG.warning("Einstellungs-Audit konnte nicht geschrieben werden: %s", action, exc_info=True)
         return None
 
 
@@ -44,12 +48,14 @@ def snapshot_qsettings(settings, keys: list[str] | tuple[str, ...] | None = None
     try:
         selected = list(keys) if keys is not None else list(settings.allKeys())
     except Exception:
+        _LOG.debug("QSettings-Schlüsselliste konnte für Audit-Snapshot nicht gelesen werden.", exc_info=True)
         selected = list(keys or [])
     result: dict[str, Any] = {}
     for key in selected:
         try:
             result[str(key)] = settings.value(str(key), None)
         except Exception:
+            _LOG.debug("QSettings-Wert konnte für Audit-Snapshot nicht gelesen werden: %s", key, exc_info=True)
             result[str(key)] = None
     return result
 
@@ -107,5 +113,5 @@ def _log_base_from_settings(settings=None) -> Path:
             if root and root.strip():
                 return Path(root.strip())
     except Exception:
-        pass
+        logging.getLogger(__name__).debug("Unterdrückte Best-Effort-Ausnahme in _log_base_from_settings.", exc_info=True)
     return Path.home() / "Documents" / "DragonTools"

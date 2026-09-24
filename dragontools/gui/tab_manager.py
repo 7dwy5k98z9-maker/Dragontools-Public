@@ -6,6 +6,7 @@ Dialog zum Ein-/Ausblenden von Tabs und Öffnen externer Programme.
 Auch: Registerkarten-Zustand in QSettings persistieren.
 """
 from __future__ import annotations
+import logging
 import os
 import subprocess
 import sys
@@ -40,7 +41,7 @@ def _open_external(exe_path: str) -> None:
         else:
             subprocess.Popen([exe_path])
     except Exception:
-        pass
+        logging.getLogger(__name__).debug("Unterdrückte Best-Effort-Ausnahme in _open_external.", exc_info=True)
 
 
 def _find_bundled_exe(name: str) -> str | None:
@@ -48,6 +49,7 @@ def _find_bundled_exe(name: str) -> str | None:
     candidates = [
         EXE_DIR / "Daten" / "Programme" / name,
         EXE_DIR / "Daten" / "Programme" / "handbrake" / name,
+        EXE_DIR / "Daten" / "Programme" / "davinci_resolve" / name,
         EXE_DIR / "Daten" / "Programme" / "rmts" / name,
         EXE_DIR / "Daten" / "Programme" / "mkvtoolnix" / name,
         EXE_DIR / name,
@@ -119,7 +121,8 @@ class TabManagerDialog(QDialog):
         ))
 
         self._ext_buttons: list[tuple[str, str]] = [
-            ("HandBrakeCLI / HandBrake.exe", "HandBrake.exe"),
+            ("HandBrake", "HandBrake.exe"),
+            ("DaVinci Resolve", "Resolve.exe"),
             ("RenameMyTVSeries.exe (RMTS)",  "RenameMyTVSeries.exe"),
             ("MKVToolNix GUI (Remux)",       "mkvtoolnix-gui.exe"),
         ]
@@ -157,12 +160,13 @@ class TabManagerDialog(QDialog):
         v.addWidget(bb)
 
     def _launch(self, exe_name: str) -> None:
-        from ..core.tool_paths import find_tool_in_settings
+        from ..core.tool_paths import find_tool_in_settings, get_tool_paths
         # Mapping: exe_name → TOOL_KEYS-Schlüssel + mögliche Exe-Namen
         tool_map = {
-            "HandBrake.exe":        ("handbrake", ["HandBrake.exe", "HandBrakeCLI.exe"]),
-            "RenameMyTVSeries.exe": ("rmts",      ["RenameMyTVSeries.exe", "rmts.exe"]),
-            "mkvtoolnix-gui.exe":   ("mkv",       ["mkvtoolnix-gui.exe"]),
+            "HandBrake.exe":        ("handbrake", ["HandBrake.exe"]),
+            "Resolve.exe":          ("davinci_resolve", ["Resolve.exe", "resolve"]),
+            "RenameMyTVSeries.exe": ("rmts", ["RenameMyTVSeries.exe", "rmts.exe"]),
+            "mkvtoolnix-gui.exe":   ("mkv", ["mkvtoolnix-gui.exe"]),
         }
         # 1) Konfigurierter Ordner aus Einstellungen (settings_dialog)
         if exe_name in tool_map:
@@ -170,6 +174,10 @@ class TabManagerDialog(QDialog):
             result = find_tool_in_settings(tool_key, *exe_names)
             if result and Path(result).exists():
                 _open_external(result); return
+        if exe_name == "Resolve.exe":
+            resolved = get_tool_paths().davinci_resolve
+            if resolved and Path(resolved).is_file():
+                _open_external(resolved); return
         # 2) Legacy direkt gespeicherter Pfad
         stored = self._settings.value(f"tools/external/{exe_name}", "", type=str)
         if stored and Path(stored).exists():

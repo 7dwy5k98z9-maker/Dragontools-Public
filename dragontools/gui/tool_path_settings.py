@@ -25,6 +25,8 @@ die aktuellen Werte aus QSettings.
 """
 from __future__ import annotations
 
+import logging
+
 from pathlib import Path
 
 from PyQt6.QtCore import QSettings
@@ -83,5 +85,5 @@ class QtToolPathSettingsProvider(ToolPathSettingsProvider):
                     if p.is_file():
                         return str(p)
         except Exception:
-            pass
+            logging.getLogger(__name__).debug("Unterdrückte Best-Effort-Ausnahme in find_in_settings.", exc_info=True)
         return None

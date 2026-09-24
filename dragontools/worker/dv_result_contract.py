@@ -56,10 +56,10 @@ def emit_dv_result(
     if reason:
         store_dv_failure(worker, input_path, reason, stage=stage)
     mark_dv_terminal(worker, input_path, status)
-    worker.event.emit(result_event(input_path, output_path, status))
+    worker.worker_event.emit(result_event(input_path, output_path, status))
     worker.file_result.emit(input_path, output_path, status)
     if progress is not None:
-        worker.event.emit(progress_event(input_path, int(progress), None))
+        worker.worker_event.emit(progress_event(input_path, int(progress), None))
         worker.file_progress.emit(input_path, int(progress), None)
 
 

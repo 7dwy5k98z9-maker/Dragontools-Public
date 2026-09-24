@@ -208,7 +208,7 @@ def test_dv5_fallback_forces_h265_and_dv(monkeypatch):
     class FakeSignal:
         def connect(self, *_a): pass
     class FakeChild:
-        file_progress = FakeSignal(); file_result = FakeSignal(); event = FakeSignal(); dv_crop_decision_requested = FakeSignal()
+        file_progress = FakeSignal(); file_result = FakeSignal(); worker_event = FakeSignal(); dv_crop_decision_requested = FakeSignal()
         erfolgreich = 0; fehlgeschlagen = 0
         def __init__(self, files, config, shared_logger=None):
             captured["files"] = files
@@ -229,7 +229,7 @@ def test_dv5_fallback_forces_h265_and_dv(monkeypatch):
     signal = SimpleNamespace(emit=lambda *_a: None)
     worker = SimpleNamespace(
         _logger=object(), _active_fallback_worker=None,
-        file_overrides={}, file_progress=signal, file_result=signal, event=signal,
+        file_overrides={}, file_progress=signal, file_result=signal, worker_event=signal,
         dv_crop_decision_requested=signal,
         log=lambda *_a: None,
     )

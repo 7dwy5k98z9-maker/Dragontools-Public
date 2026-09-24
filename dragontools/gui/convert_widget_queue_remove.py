@@ -51,6 +51,12 @@ class ConvertWidgetQueueRemoveMixin:
 
         new_order = self.file_list.get_paths()
         thread.reorder_waiting_files(new_order)
+        journal = getattr(self.state, "job_journal", None)
+        if journal is not None and hasattr(journal, "update_queue_order"):
+            try:
+                journal.update_queue_order(new_order)
+            except (OSError, RuntimeError, TypeError, ValueError) as exc:
+                self.log(f"⚠️ Queue-Reihenfolge konnte nicht im Job-Journal gespeichert werden: {exc}", "warn")
 
     def remove_path(self, path: str) -> None:
         self.remove_paths([path])
@@ -115,6 +121,8 @@ class ConvertWidgetQueueRemoveMixin:
 
             self._remove_local_entry(path)
 
+        if thread and hasattr(thread, "reorder_waiting_files"):
+            self.sync_queue_order()
         self._sync_total_files()
 
     def remove_selected(self) -> None:
@@ -156,4 +164,6 @@ class ConvertWidgetQueueRemoveMixin:
             state.fertig.clear()
             self.reset_progress_ui()
 
+        if thread and hasattr(thread, "reorder_waiting_files"):
+            self.sync_queue_order()
         self._sync_total_files()

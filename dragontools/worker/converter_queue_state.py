@@ -16,6 +16,7 @@ class ConverterQueueState:
 
     def __init__(self, files: list[str]):
         self.files = list(files)
+        self._file_keys = {normalize_worker_path(path) for path in self.files}
         self.initial_total = len(self.files)
         self.lock = threading.Lock()
         self.current_file: str | None = None
@@ -30,13 +31,13 @@ class ConverterQueueState:
 
         with self.lock:
             current_n = normalize_worker_path(self.current_file) if self.current_file else None
-            files_n = {normalize_worker_path(p) for p in self.files}
             done_n = {normalize_worker_path(p) for p in self.done_files}
 
-            if path_n == current_n or path_n in files_n or path_n in done_n:
+            if path_n == current_n or path_n in self._file_keys or path_n in done_n:
                 return False
 
             self.files.append(path)
+            self._file_keys.add(path_n)
 
         log(f"➕ Queue: {name} hinzugefügt.", "info")
         return True
@@ -62,6 +63,7 @@ class ConverterQueueState:
             for i, queued_path in enumerate(self.files):
                 if normalize_worker_path(queued_path) == path_n:
                     del self.files[i]
+                    self._file_keys.discard(path_n)
                     self.skip_files.discard(queued_path)
                     self.pending_remove_files.discard(queued_path)
                     log(f"Queue: '{name}' entfernt.", "info")
@@ -89,12 +91,14 @@ class ConverterQueueState:
                 and normalize_worker_path(p) not in skip_n
                 and normalize_worker_path(p) != curr_n
             ]
+            self._file_keys = {normalize_worker_path(path) for path in self.files}
 
     def next_file(self, processed_count: int) -> tuple[str, int] | None:
         with self.lock:
             done_n = {normalize_worker_path(p) for p in self.done_files}
             while self.files and normalize_worker_path(self.files[0]) in done_n:
-                self.files.pop(0)
+                removed = self.files.pop(0)
+                self._file_keys.discard(normalize_worker_path(removed))
 
             if not self.files:
                 return None
@@ -109,6 +113,7 @@ class ConverterQueueState:
             self.done_files.add(path)
             self.pending_remove_files.discard(path)
             self.current_file = None
+            self._file_keys.discard(normalize_worker_path(path))
             if self.files and self.files[0] == path:
                 self.files.pop(0)
 

@@ -13,12 +13,14 @@ from .online_metadata_common import (
 )
 from .online_metadata_tmdb_resolver import TmdbResolverMixin
 from .online_metadata_tmdb_suggestions import TmdbSuggestionMixin
+from .online_metadata_tmdb_renamer import TmdbRenamerBatchMixin
 from .online_metadata_tmdb_transport import TmdbTransportMixin
 
 
 class TmdbClient(
     TmdbResolverMixin,
     TmdbSuggestionMixin,
+    TmdbRenamerBatchMixin,
     TmdbTransportMixin,
     ParsedMetadataResolverMixin,
 ):
@@ -43,4 +45,9 @@ class TmdbClient(
         self._request_cache_lock = RLock()
         self._request_session_cache: dict[str, dict[str, Any]] = {}
         self._fresh_session_enabled = False
+        # Renamer batch caches: repeated files from one series should not
+        # repeat the same search and per-episode network requests.
+        self._renamer_batch_lock = RLock()
+        self._renamer_search_cache: dict[tuple, list[dict[str, Any]]] = {}
+        self._renamer_season_cache: dict[tuple[int, int, str], dict[str, Any]] = {}
         self.provider_label = "TMDB"

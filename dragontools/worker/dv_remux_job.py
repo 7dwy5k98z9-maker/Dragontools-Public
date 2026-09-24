@@ -389,9 +389,9 @@ class DVRemuxJobRunner:
             )
 
     def _emit_started(self, input_path: str) -> None:
-        self.worker.event.emit(result_event(input_path, input_path, "⏳"))
+        self.worker.worker_event.emit(result_event(input_path, input_path, "⏳"))
         self.worker.file_result.emit(input_path, input_path, "⏳")
-        self.worker.event.emit(progress_event(input_path, 0, None))
+        self.worker.worker_event.emit(progress_event(input_path, 0, None))
         self.worker.file_progress.emit(input_path, 0, None)
 
     def _emit_failed(
@@ -443,8 +443,8 @@ class DVRemuxJobRunner:
             "success",
         )
         self.worker.file_progress.emit(input_path, 100, None)
-        self.worker.event.emit(progress_event(input_path, 100, None))
-        self.worker.event.emit(result_event(input_path, output_path, "✅"))
+        self.worker.worker_event.emit(progress_event(input_path, 100, None))
+        self.worker.worker_event.emit(result_event(input_path, output_path, "✅"))
         self.worker.file_result.emit(input_path, output_path, "✅")
 
     @staticmethod

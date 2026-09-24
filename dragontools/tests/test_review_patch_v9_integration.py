@@ -153,7 +153,7 @@ def test_dv5_fallback_publishes_child_sidecars_before_terminal_result(monkeypatc
         def __init__(self, files, config, shared_logger=None):
             self.file_progress = Signal()
             self.file_result = Signal()
-            self.event = Signal()
+            self.worker_event = Signal()
             self.dv_crop_decision_requested = Signal()
             self.erfolgreich = 0
             self.fehlgeschlagen = 0
@@ -193,7 +193,7 @@ def test_dv5_fallback_publishes_child_sidecars_before_terminal_result(monkeypatc
         _failure_details={},
         file_progress=OuterSignal(),
         file_result=OuterSignal(),
-        event=OuterSignal(),
+        worker_event=OuterSignal(),
         dv_crop_decision_requested=OuterSignal(),
         log=lambda *_args: None,
     )

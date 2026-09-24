@@ -155,7 +155,10 @@ class ConvertOverrideGroupBuilderMixin:
         return bc, subtitle_status, subtitle_panel, spl, subtitle_rows, imax_cb
 
     def _build_hdr_policy_group(self, cv: QVBoxLayout, ov: dict):
-        from ..core.settings_conversion import SET_KEY_PRESERVE_DV, SET_KEY_PRESERVE_HDRPLUS, SET_KEY_AV1_PRESERVE_DV, SET_KEY_AV1_PRESERVE_HDRPLUS
+        from ..core.settings_conversion import (
+            DEFAULT_SDR_HDR_ENABLED, SET_KEY_AV1_PRESERVE_DV, SET_KEY_AV1_PRESERVE_HDRPLUS,
+            SET_KEY_PRESERVE_DV, SET_KEY_PRESERVE_HDRPLUS, SET_KEY_SDR_HDR_ENABLED,
+        )
         from PyQt6.QtCore import QSettings as _QS
 
         ow = self.owner
@@ -165,15 +168,17 @@ class ConvertOverrideGroupBuilderMixin:
         hdp_key = SET_KEY_AV1_PRESERVE_HDRPLUS if codec == "av1" else SET_KEY_PRESERVE_HDRPLUS
         global_dv = qs.value(dv_key, True, type=bool)
         global_hdp = qs.value(hdp_key, True, type=bool)
+        global_sdr_hdr = qs.value(SET_KEY_SDR_HDR_ENABLED, DEFAULT_SDR_HDR_ENABLED, type=bool)
 
-        hdr_grp = QGroupBox("DV / HDR10+ Policy (per Datei)")
+        hdr_grp = QGroupBox("HDR Policy (per Datei)")
         hdr_l = QGridLayout(hdr_grp)
         dv_combo = QComboBox()
         hdp_combo = QComboBox()
-        for combo in (dv_combo, hdp_combo):
+        sdr_hdr_combo = QComboBox()
+        for combo in (dv_combo, hdp_combo, sdr_hdr_combo):
             combo.addItem("Global-Standard", None)
-            combo.addItem("✅ Immer erhalten", True)
-            combo.addItem("⛔ Ignorieren", False)
+            combo.addItem("✅ Aktiv / anwenden", True)
+            combo.addItem("⛔ Deaktivieren", False)
 
         def _set_combo(combo: QComboBox, key: str) -> None:
             val = ov.get(key)
@@ -186,14 +191,15 @@ class ConvertOverrideGroupBuilderMixin:
 
         _set_combo(dv_combo, "preserve_dv")
         _set_combo(hdp_combo, "preserve_hdrplus")
+        _set_combo(sdr_hdr_combo, "sdr_hdr")
         hdr_l.addWidget(QLabel("🎨 Dolby Vision:"), 0, 0)
         hdr_l.addWidget(dv_combo, 0, 1)
         hdr_l.addWidget(
             InfoButton(
                 f"Global-Standard = globale Einstellung benutzen "
                 f"(aktuell: {'erhalten' if global_dv else 'ignorieren'}).\n"
-                "Immer erhalten = DV-Pipeline erzwingen, auch wenn global deaktiviert.\n"
-                "Ignorieren = Standard-Encode erzwingen, DV-Metadaten gehen verloren."
+                "Aktiv = DV-Pipeline erzwingen, auch wenn global deaktiviert.\n"
+                "Deaktivieren = Standard-Encode erzwingen, DV-Metadaten gehen verloren."
             ),
             0,
             2,
@@ -204,11 +210,24 @@ class ConvertOverrideGroupBuilderMixin:
             InfoButton(
                 f"Global-Standard = globale Einstellung benutzen "
                 f"(aktuell: {'erhalten' if global_hdp else 'ignorieren'}).\n"
-                "Immer erhalten = HDR10+-Pipeline erzwingen.\n"
-                "Ignorieren = Standard-Encode erzwingen."
+                "Aktiv = HDR10+-Pipeline erzwingen.\n"
+                "Deaktivieren = Standard-Encode erzwingen."
             ),
             1,
             2,
         )
+        hdr_l.addWidget(QLabel("🌈 SDR → HDR:"), 2, 0)
+        hdr_l.addWidget(sdr_hdr_combo, 2, 1)
+        hdr_l.addWidget(
+            InfoButton(
+                f"Global-Standard = globale SDR→HDR-Einstellung benutzen "
+                f"(aktuell: {'aktiv' if global_sdr_hdr else 'aus'}).\n"
+                "Aktiv = SDR→HDR nur für diese Datei anfordern. Dabei werden das global gewählte Backend und dessen "
+                "ComfyUI/HDRTVDM-Einstellungen verwendet.\n"
+                "Deaktivieren = diese Datei bleibt SDR, auch wenn SDR→HDR global aktiviert ist."
+            ),
+            2,
+            2,
+        )
         cv.addWidget(hdr_grp)
-        return dv_combo, hdp_combo
+        return dv_combo, hdp_combo, sdr_hdr_combo

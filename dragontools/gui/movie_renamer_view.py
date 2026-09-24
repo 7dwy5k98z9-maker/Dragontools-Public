@@ -5,15 +5,14 @@ This module owns widget construction and drag/drop presentation only.  It must
 not perform metadata lookup, filesystem renames, or proposal scoring.
 """
 from __future__ import annotations
-
-from PyQt6.QtCore import QSettings, Qt
+from PyQt6.QtCore import QSettings, QSize, QTimer, Qt
 from PyQt6.QtWidgets import (
-    QComboBox,
     QHBoxLayout,
     QGridLayout,
     QHeaderView,
     QLabel,
     QPushButton,
+    QSizePolicy,
     QTableWidget,
     QVBoxLayout,
     QWidget,
@@ -24,36 +23,49 @@ from .file_drop_widgets import FileDropTable
 from .movie_renamer_view_state import MovieRenamerViewStateMixin
 
 
+
+
+class RenamerStatusLabel(QLabel):
+    """Wrapped status text that never contributes horizontal minimum width."""
+
+    def minimumSizeHint(self) -> QSize:
+        hint = super().minimumSizeHint()
+        return QSize(0, hint.height())
+
+    def sizeHint(self) -> QSize:
+        hint = super().sizeHint()
+        return QSize(min(hint.width(), 640), hint.height())
+
+
 class RenameTable(FileDropTable):
-    pass
+    """Scrollable renamer table that never dictates the window minimum width.
 
+    Removing a row can leave transient editor/cell-widget geometry cached until
+    Qt processes deferred deletes.  The table therefore explicitly invalidates
+    the geometry chain after row removals.
+    """
 
-class WideCandidateComboBox(QComboBox):
-    """Candidate combo whose popup expands without widening the table column."""
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Expanding)
+        self.model().rowsRemoved.connect(self._schedule_geometry_refresh)
+        self.model().modelReset.connect(self._schedule_geometry_refresh)
 
-    _POPUP_HORIZONTAL_PADDING = 56
+    def minimumSizeHint(self) -> QSize:
+        hint = super().minimumSizeHint()
+        return QSize(0, hint.height())
 
-    def showPopup(self) -> None:
-        try:
-            view = self.view()
-            metrics = view.fontMetrics()
-            content_width = max(
-                (metrics.horizontalAdvance(self.itemText(index)) for index in range(self.count())),
-                default=self.width(),
-            )
-            popup_width = max(self.width(), content_width + self._POPUP_HORIZONTAL_PADDING)
+    def _schedule_geometry_refresh(self, *_args) -> None:
+        QTimer.singleShot(0, self._refresh_geometry_chain)
 
-            screen = self.screen()
-            if screen is not None:
-                available_width = max(self.width(), screen.availableGeometry().width() - 80)
-                popup_width = min(popup_width, available_width)
-
-            view.setTextElideMode(Qt.TextElideMode.ElideNone)
-            view.setMinimumWidth(popup_width)
-        except Exception:
-            # Presentation errors must never make the selector unusable.
-            pass
-        super().showPopup()
+    def _refresh_geometry_chain(self) -> None:
+        widget: QWidget | None = self
+        while widget is not None:
+            widget.updateGeometry()
+            layout = widget.layout()
+            if layout is not None:
+                layout.invalidate()
+            widget = widget.parentWidget()
 
 
 class MovieRenamerView(MovieRenamerViewStateMixin):
@@ -74,7 +86,7 @@ class MovieRenamerView(MovieRenamerViewStateMixin):
         "Hinweise",
     )
 
-    _HEADER_STATE_KEY = "renamer/table_header_state_v1"
+    _HEADER_STATE_KEY = "renamer/table_header_state_v2"
 
     def __init__(self, owner: QWidget, columns, settings: QSettings | None = None) -> None:
         self.owner = owner
@@ -121,6 +133,7 @@ class MovieRenamerView(MovieRenamerViewStateMixin):
         self.manual_movie_search_btn = QPushButton("🎬 Als Film suchen")
         self.show_all_candidates_btn = QPushButton("🔎 Alle Treffer")
         self.edit_search_btn = QPushButton("✏️ Suchbegriff")
+        self.edit_season_btn = QPushButton("🗓 Staffel ändern")
         self.accept_selected_btn = QPushButton("✅ Auswahl akzeptieren")
         self.accept_safe_btn = QPushButton("✅ Sichere akzeptieren")
         self.reject_selected_btn = QPushButton("🚫 Auswahl ablehnen")
@@ -131,7 +144,7 @@ class MovieRenamerView(MovieRenamerViewStateMixin):
         toolbar_rows = (
             (self.add_files_btn, self.add_folder_btn, self.resolve_btn,
              self.manual_series_search_btn, self.manual_movie_search_btn),
-            (self.show_all_candidates_btn, self.edit_search_btn,
+            (self.show_all_candidates_btn, self.edit_search_btn, self.edit_season_btn,
              self.accept_selected_btn, self.accept_safe_btn, self.reject_selected_btn),
             (self.rename_btn, self.remove_btn, self.clear_btn),
         )
@@ -153,6 +166,9 @@ class MovieRenamerView(MovieRenamerViewStateMixin):
         header = self.table.horizontalHeader()
         header.setSectionsMovable(True)
         header.setMinimumSectionSize(36)
+        # A stale pre-fix header state must never restore a multi-thousand-pixel
+        # section and thereby force the QMainWindow minimum width.
+        header.setMaximumSectionSize(1200)
         header.setStretchLastSection(False)
         # Alle Spalten sind bewusst interaktiv. So kann keine
         # ResizeToContents-/Stretch-Kombination die Fensterbreite diktieren und
@@ -182,7 +198,18 @@ class MovieRenamerView(MovieRenamerViewStateMixin):
         header.sectionMoved.connect(self._save_header_state)
         root.addWidget(self.table, 1)
 
-        self.status_lbl = QLabel("Bereit. Dateien oder Ordner können auch auf die Tabelle gezogen werden.")
+        self.status_lbl = RenamerStatusLabel("Bereit. Dateien oder Ordner können auch auf die Tabelle gezogen werden.")
         self.status_lbl.setStyleSheet("color:#555;")
+        # Jellyfin runs asynchronously after a rename and may return a long
+        # fallback/error message containing full local/server paths.  A plain
+        # QLabel uses the unwrapped text width as a layout hint, which can force
+        # the entire QMainWindow to several thousand pixels until the next short
+        # status message replaces it.  Keep status text informative without ever
+        # letting it dictate the window minimum width.
+        self.status_lbl.setWordWrap(True)
+        self.status_lbl.setMinimumWidth(0)
+        self.status_lbl.setSizePolicy(
+            QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred
+        )
         root.addWidget(self.status_lbl)
 

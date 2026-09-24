@@ -170,14 +170,73 @@ class ToolPaths:
         return self._find("hdr10plus_tool", "hdr10plus_tool.exe", "hdr10plus_tool")
 
     @property
+    def hdr10plus_generator(self) -> str:
+        return self._find(
+            "hdr10plus_generator",
+            "HDRPlusGenerator.exe",
+            "HDRPlusGenerator",
+        )
+
+    @property
+    def davinci_resolve(self) -> str:
+        resolved = self._find(
+            "davinci_resolve",
+            "Resolve.exe",
+            "resolve",
+        )
+        if Path(resolved).is_file() or shutil.which(resolved):
+            return resolved
+
+        # Resolve is normally not added to PATH on Windows. Keep custom-tool
+        # settings first, then probe Blackmagic's standard install directory.
+        seen: set[str] = set()
+        for env_name in ("ProgramFiles", "ProgramW6432"):
+            root = str(os.environ.get(env_name, "") or "").strip()
+            if not root or root.casefold() in seen:
+                continue
+            seen.add(root.casefold())
+            candidate = Path(root) / "Blackmagic Design" / "DaVinci Resolve" / "Resolve.exe"
+            try:
+                if candidate.is_file():
+                    return str(candidate)
+            except OSError:
+                continue
+        return resolved
+
+    @property
+    def comfyui(self) -> str:
+        # Presence marker only. ComfyUI remains a separately managed local
+        # service; DragonTools talks to its HTTP API and does not assume a
+        # particular launcher or Python environment. ``main.py`` covers the
+        # common portable/git layouts while desktop builds may expose an EXE.
+        return self._find(
+            "comfyui",
+            "ComfyUI.exe",
+            "comfyui.exe",
+            "main.py",
+        )
+
+    @property
     def mp4box(self) -> str:
         return self._find("mp4box", "MP4Box.exe", "mp4box.exe", "MP4Box", "mp4box")
 
     @property
+    def tesseract(self) -> str:
+        return self._find("tesseract", "tesseract.exe", "tesseract")
+
+    @property
+    def handbrake(self) -> str:
+        """Return the HandBrake desktop executable used by Dragon Tools."""
+        return self._find("handbrake", "HandBrake.exe", "HandBrake")
+
+    @property
     def handbrake_cli(self) -> str:
-        return self._find(
-            "handbrake", "HandBrake.exe", "HandBrakeCLI.exe", "HandBrake", "HandBrakeCLI", "handbrake_cli"
-        )
+        """Compatibility alias for older call sites/settings migrations.
+
+        Dragon Tools opens the HandBrake desktop application; it does not use
+        HandBrakeCLI for conversion jobs.
+        """
+        return self.handbrake
 
     @property
     def rmts(self) -> str:
@@ -191,11 +250,15 @@ class ToolPaths:
             "makemkvcon": self.makemkvcon,
             "mkvextract": self.mkvextract,
             "rmts": self.rmts,
-            "handbrake": self.handbrake_cli,
+            "handbrake": self.handbrake,
             "mediainfo": self.mediainfo,
             "dovi_tool": self.dovi_tool,
             "hdr10plus_tool": self.hdr10plus_tool,
+            "hdr10plus_generator": self.hdr10plus_generator,
+            "davinci_resolve": self.davinci_resolve,
+            "comfyui": self.comfyui,
             "mp4box": self.mp4box,
+            "tesseract": self.tesseract,
         }
         return {
             name: (Path(path).exists() or bool(shutil.which(path)))

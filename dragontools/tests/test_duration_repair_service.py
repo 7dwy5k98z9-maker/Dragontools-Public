@@ -1201,3 +1201,264 @@ def test_workflow_runner_never_replaces_or_finalizes_after_failed_verification(t
 
 def _has_genpts_flag(command: list[str]) -> bool:
     return any("+genpts" in str(part) for part in command)
+
+
+def _vfr_mediainfo_json(*, duration: float, frames: int = 4, audio_duration: float | None = None) -> str:
+    import json
+
+    audio_duration = duration if audio_duration is None else audio_duration
+    return json.dumps(
+        {
+            "media": {
+                "track": [
+                    {"@type": "General", "Duration": str(duration * 1000.0)},
+                    {
+                        "@type": "Video",
+                        "Format": "HEVC",
+                        "Duration": str(duration * 1000.0),
+                        "FrameRate_Mode": "Variable",
+                        "FrameRate": "1.000",
+                        "FrameCount": str(frames),
+                    },
+                    {"@type": "Audio", "Duration": str(audio_duration * 1000.0)},
+                ]
+            }
+        }
+    )
+
+
+def _source_frame_timeline_json(points: list[float], *, last_duration: float = 1.0) -> str:
+    import json
+
+    frames = []
+    for index, pts in enumerate(points):
+        frame = {"best_effort_timestamp_time": f"{pts:.6f}"}
+        if index == len(points) - 1:
+            frame["pkt_duration_time"] = f"{last_duration:.6f}"
+        frames.append(frame)
+    return json.dumps({"frames": frames})
+
+
+def test_vfr_reparatur_uebernimmt_original_timeline_wenn_frameanzahl_identisch(tmp_path, monkeypatch):
+    import json
+
+    import dragontools.worker.duration_repair_service as module
+    from dragontools.worker.duration_repair_service import DurationRepairService
+
+    source = tmp_path / "source.mkv"
+    out = tmp_path / "film.mkv"
+    source.write_bytes(b"source" * 900)
+    out.write_bytes(b"damaged" * 900)
+    mkvmerge = _fake_tool(tmp_path / "mkvmerge.exe")
+    ffprobe = _fake_tool(tmp_path / "ffprobe.exe")
+    mediainfo = _fake_tool(tmp_path / "MediaInfo.exe")
+    fixed_paths: set[str] = set()
+    commands: list[list[str]] = []
+    timecode_payloads: list[str] = []
+
+    def fake_run(cmd, **kwargs):
+        commands.append([str(part) for part in cmd])
+        exe = Path(cmd[0]).name.lower()
+        target = str(Path(cmd[-1])) if cmd else ""
+        if exe == "mkvmerge.exe" and "-J" in cmd:
+            return SimpleNamespace(
+                returncode=0,
+                stdout=json.dumps({"tracks": [{"id": 0, "type": "video"}, {"id": 1, "type": "audio"}]}),
+                stderr="",
+            )
+        if exe == "mkvmerge.exe" and "-o" in cmd:
+            tmp = Path(cmd[cmd.index("-o") + 1])
+            if "--timestamps" in cmd:
+                spec = str(cmd[cmd.index("--timestamps") + 1])
+                timecode_path = Path(spec.split(":", 1)[1])
+                timecode_payloads.append(timecode_path.read_text(encoding="utf-8"))
+                tmp.write_bytes(b"fixed-vfr" * 900)
+                fixed_paths.add(str(tmp))
+            else:
+                tmp.write_bytes(b"remuxed-bad" * 900)
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+        if exe == "ffprobe.exe" and "-show_entries" in cmd and any(
+            str(part).startswith("frame=") for part in cmd
+        ):
+            assert "-show_frames" in cmd
+            assert target == str(source)
+            return SimpleNamespace(
+                returncode=0,
+                stdout=_source_frame_timeline_json([0.0, 0.5, 1.5, 3.0], last_duration=1.0),
+                stderr="",
+            )
+        if exe == "ffprobe.exe":
+            if target == str(source) or target in fixed_paths:
+                stdout = _timing_probe_json(
+                    container_duration=4.0,
+                    video_duration=4.0,
+                    frame_rate="1/1",
+                    frames=4,
+                    audio_duration=4.0,
+                    subtitle_count=0,
+                )
+            else:
+                stdout = _timing_probe_json(
+                    container_duration=4_297_448.0,
+                    video_duration=4_297_448.0,
+                    frame_rate="1/1",
+                    frames=4,
+                    audio_duration=4.0,
+                    subtitle_count=0,
+                )
+            return SimpleNamespace(returncode=0, stdout=stdout, stderr="")
+        if exe == "mediainfo.exe":
+            if target == str(source) or target in fixed_paths:
+                return SimpleNamespace(returncode=0, stdout=_vfr_mediainfo_json(duration=4.0), stderr="")
+            return SimpleNamespace(
+                returncode=0,
+                stdout=_vfr_mediainfo_json(duration=4_297_448.0, audio_duration=4.0),
+                stderr="",
+            )
+        raise AssertionError(cmd)
+
+    monkeypatch.setattr(module.subprocess, "run", fake_run)
+    service = DurationRepairService(
+        mkvmerge_path=mkvmerge,
+        ffprobe_path=ffprobe,
+        mediainfo_path=mediainfo,
+        output_verifier=_PathAwareVerifier(fixed_paths, good_duration=4.0),
+        log=lambda *_: None,
+        run_tool_fn=_tool_runner_from_subprocess(fake_run),
+    )
+
+    outcome = service.repair(
+        output_path=str(out),
+        base_dir=tmp_path,
+        container="mkv",
+        expected_duration_ms=4_000,
+        source_has_audio=True,
+        initial_result=_verify_result(duration_ok=False, duration_s=4_297_448.0),
+        source_path=str(source),
+    )
+
+    assert outcome.repaired is True
+    assert outcome.timestamp_fixed is True
+    assert outcome.timestamp_fix_attempted is True
+    assert outcome.timestamp_repair_reason == "Timestamp-Reparatur erfolgreich (Original-VFR-Timeline)."
+    assert out.read_bytes().startswith(b"fixed-vfr")
+    assert timecode_payloads and timecode_payloads[0].splitlines() == [
+        "# timestamp format v2",
+        "0.000000",
+        "500.000000",
+        "1500.000000",
+        "3000.000000",
+    ]
+    assert any("--timestamps" in cmd for cmd in commands)
+    assert not list(tmp_path.glob("*.source_timestamps_*.txt"))
+
+
+def test_vfr_original_timeline_wird_bei_abweichender_frameanzahl_nicht_angewendet(tmp_path, monkeypatch):
+    import dragontools.worker.duration_repair_service as module
+    from dragontools.worker.duration_repair_service import DurationRepairService
+
+    source = tmp_path / "source.mkv"
+    out = tmp_path / "film.mkv"
+    source.write_bytes(b"source" * 900)
+    out.write_bytes(b"damaged" * 900)
+    mkvmerge = _fake_tool(tmp_path / "mkvmerge.exe")
+    ffprobe = _fake_tool(tmp_path / "ffprobe.exe")
+    mediainfo = _fake_tool(tmp_path / "MediaInfo.exe")
+    commands: list[list[str]] = []
+
+    def fake_run(cmd, **kwargs):
+        commands.append([str(part) for part in cmd])
+        exe = Path(cmd[0]).name.lower()
+        target = str(Path(cmd[-1])) if cmd else ""
+        if exe == "mkvmerge.exe" and "-o" in cmd:
+            tmp = Path(cmd[cmd.index("-o") + 1])
+            tmp.write_bytes(b"remuxed-bad" * 900)
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+        if exe == "ffprobe.exe" and "-show_entries" in cmd:
+            assert "-show_frames" in cmd
+            return SimpleNamespace(
+                returncode=0,
+                stdout=_source_frame_timeline_json([0.0, 1.0, 2.0], last_duration=1.0),
+                stderr="",
+            )
+        if exe == "ffprobe.exe":
+            if target == str(source):
+                return SimpleNamespace(
+                    returncode=0,
+                    stdout=_timing_probe_json(
+                        container_duration=3.0, video_duration=3.0, frame_rate="1/1",
+                        frames=3, audio_duration=3.0, subtitle_count=0,
+                    ),
+                    stderr="",
+                )
+            return SimpleNamespace(
+                returncode=0,
+                stdout=_timing_probe_json(
+                    container_duration=4_297_448.0, video_duration=4_297_448.0, frame_rate="1/1",
+                    frames=4, audio_duration=4.0, subtitle_count=0,
+                ),
+                stderr="",
+            )
+        if exe == "mediainfo.exe":
+            if target == str(source):
+                return SimpleNamespace(returncode=0, stdout=_vfr_mediainfo_json(duration=3.0, frames=3), stderr="")
+            return SimpleNamespace(
+                returncode=0,
+                stdout=_vfr_mediainfo_json(duration=4_297_448.0, frames=4, audio_duration=4.0),
+                stderr="",
+            )
+        raise AssertionError(cmd)
+
+    monkeypatch.setattr(module.subprocess, "run", fake_run)
+    service = DurationRepairService(
+        mkvmerge_path=mkvmerge,
+        ffprobe_path=ffprobe,
+        mediainfo_path=mediainfo,
+        output_verifier=_PathAwareVerifier(set()),
+        log=lambda *_: None,
+        run_tool_fn=_tool_runner_from_subprocess(fake_run),
+    )
+
+    outcome = service.repair(
+        output_path=str(out),
+        base_dir=tmp_path,
+        container="mkv",
+        expected_duration_ms=4_000,
+        source_has_audio=True,
+        initial_result=_verify_result(duration_ok=False, duration_s=4_297_448.0),
+        source_path=str(source),
+    )
+
+    assert outcome.repaired is False
+    assert "Frameanzahl stimmt nicht überein" in outcome.timestamp_repair_reason
+    assert not any("--timestamps" in cmd for cmd in commands)
+    assert outcome.archived_path is not None
+
+
+def test_workflow_duration_repair_reicht_original_inputpfad_an_reparaturservice_weiter(tmp_path):
+    from dragontools.worker.duration_repair_models import DurationRepairOutcome
+    from dragontools.worker.workflow_duration_repair import try_duration_repair
+
+    captured = {}
+
+    class Repairer:
+        def can_repair(self, **kwargs):
+            return True
+
+        def repair(self, **kwargs):
+            captured.update(kwargs)
+            return DurationRepairOutcome(attempted=False, repaired=False, verify_result=kwargs["initial_result"])
+
+    source = tmp_path / "source.mkv"
+    ctx = SimpleNamespace(
+        input_path=str(source),
+        output_path=str(tmp_path / "output.mkv"),
+        base_dir=tmp_path,
+        container="mkv",
+        duration_ms=4_000,
+    )
+    result = _verify_result(duration_ok=False, duration_s=4_297_448.0)
+
+    try_duration_repair(ctx, result, True, Repairer())
+
+    assert captured["source_path"] == str(source)

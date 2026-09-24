@@ -22,6 +22,7 @@ from .settings_backup_common import (
     settings_to_dict,
 )
 from .settings_backup_crypto import decrypt_sensitive_settings
+from .secret_settings import write_secret
 
 _LOG = logging.getLogger(__name__)
 
@@ -57,9 +58,14 @@ def restore_backup(
         if clear_settings:
             settings.clear()
         for key, value in settings_data.items():
-            settings.setValue(str(key), json_restore(value))
+            key_str = str(key)
+            restored = json_restore(value)
+            if is_sensitive_settings_key(key_str):
+                write_secret(settings, key_str, str(restored or ""))
+            else:
+                settings.setValue(key_str, restored)
         for key, value in preserved_sensitive.items():
-            settings.setValue(str(key), value)
+            write_secret(settings, str(key), str(value or ""))
 
         for target, content in pending_files:
             target.parent.mkdir(parents=True, exist_ok=True)
@@ -143,7 +149,12 @@ def restore_settings_snapshot(settings, snapshot: dict[str, Any]) -> None:
     try:
         settings.clear()
         for key, value in snapshot.items():
-            settings.setValue(str(key), json_restore(value))
+            key_str = str(key)
+            restored = json_restore(value)
+            if is_sensitive_settings_key(key_str):
+                write_secret(settings, key_str, str(restored or ""))
+            else:
+                settings.setValue(key_str, restored)
         settings.sync()
     except Exception:
         _LOG.exception("QSettings-Rollback nach fehlgeschlagenem Restore ist fehlgeschlagen.")

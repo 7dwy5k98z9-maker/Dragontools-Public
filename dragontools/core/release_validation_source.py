@@ -105,6 +105,15 @@ def _application_artifact_checks(root: Path, manifest: dict, manifest_valid: boo
         _check_exists(root / "Aenderungshistorie" / "CHANGELOG.txt", "V9-Änderungshistorie (TXT-Fallback)", required=False),
         _check_exists(root / "Aenderungshistorie" / "CHANGELOGV8.txt", "Legacy V8-Änderungshistorie", required=False),
         _check_exists(root / "Aenderungshistorie" / "CHANGELOGV7.txt", "Legacy V7-Änderungshistorie", required=False),
+        _check_exists(root / "dragon_hdr10plus_generator" / "pyproject.toml", "Dragon HDR10+ Generator: Projektdefinition"),
+        _check_exists(root / "dragon_hdr10plus_generator" / "src" / "dragon_hdr10plus_generator" / "cli.py", "Dragon HDR10+ Generator: CLI"),
+        _check_exists(root / "dragontools" / "worker" / "comfyui_client.py", "ComfyUI: lokaler API-Client"),
+        _check_exists(root / "dragontools" / "core" / "comfyui_workflow.py", "ComfyUI: Workflow-Vertrag"),
+        _check_exists(root / "dragontools" / "core" / "comfyui_hdr_models.py", "ComfyUI: HDR-Modellprofile"),
+        _check_exists(root / "dragontools" / "worker" / "comfyui_runtime.py", "ComfyUI: Modell-Readiness"),
+        _check_exists(root / "dragontools" / "worker" / "comfyui_video_worker.py", "ComfyUI: Voll-Datei-Worker"),
+        _check_exists(root / "extras" / "comfyui" / "DragonTools_HDRTVDM" / "nodes.py", "ComfyUI: HDRTVDM-Bridge-Nodes"),
+        _check_exists(root / "COMFYUI_HDR_SETUP.md", "ComfyUI: HDRTVDM-Setup-Anleitung"),
     ]
 
 

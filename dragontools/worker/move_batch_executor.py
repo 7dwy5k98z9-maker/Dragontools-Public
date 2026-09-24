@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Callable, Iterable
 
 from ..core.callback_dispatch import invoke_callback
+from ..core.move_source_probe import probe_companions, probe_move_source
 from .move_completion_service import MoveCompletionService
 
 
@@ -77,6 +78,9 @@ class MoveBatchExecutor:
         companion_resume_sources: dict[str, str],
         wait: Callable[[], None],
         abort_type: Callable[[], str | None],
+        prepare_move: Callable[..., dict] | None = None,
+        stage_sidecars: Callable[..., dict] | None = None,
+        rollback_staged_sidecars: Callable[[dict | None], None] | None = None,
         move: MoveFn,
         get_last_move_result: Callable[[], dict],
         set_last_move_result: Callable[[dict], None],
@@ -84,6 +88,8 @@ class MoveBatchExecutor:
         log: LogFn,
         progress_hook: Callable[[int], None],
         file_counted: Callable[[int, int], None],
+        diagnostic_target_for: Callable[[str], object] | None = None,
+        diagnostic_sidecars_for: Callable[[str], Iterable[str]] | None = None,
     ) -> None:
         self._files = files
         self._router = router
@@ -92,6 +98,9 @@ class MoveBatchExecutor:
         self._companion_resume_sources = companion_resume_sources
         self._wait = wait
         self._abort_type = abort_type
+        self._prepare_move = prepare_move or self._default_prepare_move
+        self._stage_sidecars = stage_sidecars or self._default_stage_sidecars
+        self._rollback_staged_sidecars = rollback_staged_sidecars or (lambda _stage: None)
         self._move = move
         self._get_last_move_result = get_last_move_result
         self._set_last_move_result = set_last_move_result
@@ -99,7 +108,30 @@ class MoveBatchExecutor:
         self._log = log
         self._progress_hook = progress_hook
         self._file_counted = file_counted
+        self._diagnostic_target_for = diagnostic_target_for or (lambda _path: None)
+        self._diagnostic_sidecars_for = diagnostic_sidecars_for or (lambda _path: ())
         self.result = MoveBatchResult()
+
+    @staticmethod
+    def _default_prepare_move(path: str, target: str) -> dict:
+        dest = str(Path(target) / Path(path).name)
+        return {
+            "ready": True,
+            "dest_path": dest,
+            "result": {
+                "kind": "video",
+                "source_path": str(path),
+                "target_dir": str(target),
+                "dest_path": dest,
+                "ok": False,
+            },
+        }
+
+    @staticmethod
+    def _default_stage_sidecars(
+        _path: str, _target: str, _dest_path: str, _original_source: str
+    ) -> dict:
+        return {"ok": True, "protected_paths": [], "staged_paths": []}
 
     def _is_immediate_abort(self) -> bool:
         return self._abort_type() == "sofort"
@@ -119,6 +151,32 @@ class MoveBatchExecutor:
         )
         self._log(f"Fehler: {Path(path).name}", "error")
 
+    def _log_unavailable_source(self, path: str, probe) -> None:
+        parent_text = (
+            "ja" if probe.parent_available is True
+            else "nein" if probe.parent_available is False
+            else "unbekannt"
+        )
+        planned = self._diagnostic_target_for(path)
+        companion_status = probe_companions(self._diagnostic_sidecars_for(path))
+        lines = [
+            "⚠️ Move-Quelle auch nach Wiederholungsprüfung nicht erreichbar.",
+            f"   Quelle: {path}",
+            "   Quelle erreichbar: nein",
+            f"   Prüfung: {probe.attempts} Versuch(e), letzter Fehler: {probe.error_text or 'unbekannt'}",
+            f"   Elternordner erreichbar: {parent_text}",
+            f"   Dateigröße: {probe.size_bytes if probe.size_bytes is not None else 'unbekannt'}",
+            f"   Geplantes Ziel: {planned if planned else 'nicht gesetzt'}",
+            f"   Companion-Dateien: {len(companion_status)}",
+        ]
+        if probe.parent_error_text:
+            lines.append(f"   Elternordner-Fehler: {probe.parent_error_text}")
+        for companion, available, error in companion_status:
+            marker = "✅" if available else "⚠️"
+            suffix = "" if available else f" ({error})"
+            lines.append(f"      {marker} {companion}{suffix}")
+        self._log("\n".join(lines), "warn")
+
     def run(self) -> MoveBatchResult:
         result = self.result
         files_done = 0
@@ -129,8 +187,10 @@ class MoveBatchExecutor:
             if self._is_immediate_abort():
                 break
 
-            if not Path(path).exists():
-                self._mark_file_error(path, "Quelldatei nicht gefunden", "Nicht gefunden")
+            source_probe = probe_move_source(path)
+            if not source_probe.available:
+                self._log_unavailable_source(path, source_probe)
+                self._mark_file_error(path, "Quelldatei nicht erreichbar", "Nicht erreichbar")
                 result.error_count += 1
                 files_done += 1
                 invoke_callback(self._file_counted, files_done, total_files)
@@ -159,6 +219,7 @@ class MoveBatchExecutor:
             self._log(f"Move: {Path(path).name}\n   -> {str(target).replace('/', chr(92))}", "info")
 
             original_source = self._companion_resume_sources.get(path, path)
+            staged_sidecars: dict | None = None
             if original_source != path:
                 ok, move_result = self._completion.companion_resume_result(
                     video_path=path,
@@ -167,8 +228,61 @@ class MoveBatchExecutor:
                 )
                 self._set_last_move_result(move_result)
             else:
-                ok = self._move(path, target, hook=self._progress_hook)
+                prepared = self._prepare_move(path, target)
+                move_result = dict(prepared.get("result") or {})
+                self._set_last_move_result(move_result)
+                if not bool(prepared.get("ready", True)):
+                    files_done += 1
+                    result.error_count += 1
+                    self._finish_failed_move(path, move_result)
+                    invoke_callback(self._file_counted, files_done, total_files)
+                    if self._abort_type() == "nach_datei":
+                        break
+                    continue
+
+                planned_dest = str(
+                    prepared.get("dest_path")
+                    or (Path(target) / Path(path).name)
+                )
+                self._journal.set_destination(
+                    path, target_dir=str(target), dest_path=planned_dest
+                )
+
+                staged_sidecars = self._stage_sidecars(
+                    path, str(target), planned_dest, original_source
+                )
+                if not bool(staged_sidecars.get("ok", True)):
+                    self._rollback_staged_sidecars(staged_sidecars)
+                    failed_count = int(staged_sidecars.get("failed", 0) or 0)
+                    message = (
+                        f"{failed_count} Companion-Datei(en) konnten vor dem Video-Commit "
+                        "nicht bereitgestellt werden"
+                    )
+                    self._journal.finish_file(
+                        path,
+                        status="error",
+                        dest_path=planned_dest,
+                        message=message,
+                        phase="video_pending",
+                    )
+                    self._log(f"⚠️ {message}: {Path(path).name}", "warn")
+                    files_done += 1
+                    result.error_count += 1
+                    invoke_callback(self._file_counted, files_done, total_files)
+                    if self._abort_type() == "nach_datei":
+                        break
+                    continue
+
+                ok = self._move(
+                    path,
+                    target,
+                    hook=self._progress_hook,
+                    prepared=prepared,
+                    protected_paths=staged_sidecars.get("protected_paths") or [],
+                )
                 move_result = dict(self._get_last_move_result() or {})
+                if not ok:
+                    self._rollback_staged_sidecars(staged_sidecars)
 
             files_done += 1
             if ok:
@@ -180,6 +294,11 @@ class MoveBatchExecutor:
                     target_dir=str(target),
                     original_source=original_source,
                     move_result=move_result,
+                    staged_sidecar_paths=(
+                        staged_sidecars.get("staged_paths")
+                        if staged_sidecars is not None
+                        else None
+                    ),
                 )
                 if outcome.error:
                     result.error_count += 1

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from ..core.audit_log import append_audit_event
+from ..core.config_migration import UnsupportedConfigSchemaError
 
 
 class EncoderProfileService:
@@ -41,7 +42,17 @@ class EncoderProfileService:
             )
             return
         payload["label"] = label
-        self._profile_manager.set(key, payload)
+        try:
+            self._profile_manager.set(key, payload)
+        except UnsupportedConfigSchemaError as exc:
+            QMessageBox.critical(
+                self._parent_widget,
+                "Profil nicht gespeichert",
+                "Die Profil-Datei wurde mit einer neueren DragonTools-Version erstellt "
+                "und wird zum Schutz vor Datenverlust nicht ueberschrieben.\n\n"
+                f"{exc}",
+            )
+            return
         display = self._profile_manager.profile_display_name(key, payload)
         self._log("💾 Profil '" + display + "' gespeichert.")
         append_audit_event("Profil gespeichert", f"{display} | Schlüssel: {key}")

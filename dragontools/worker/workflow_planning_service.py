@@ -3,7 +3,10 @@ from __future__ import annotations
 
 from ..core.encoder_profile_override import effective_encoder_settings
 from .media_contract import build_expected_media_contract
+from .quality_target_integration import apply_automatic_quality_target
+from .hdr10plus_workflow_policy import should_postprocess_generated_hdr10plus
 from .workflow_models import WorkflowConfig
+from .workflow_override_summary import format_override_summary
 
 
 class WorkflowPlanningService:
@@ -19,6 +22,7 @@ class WorkflowPlanningService:
         encode_plan,
         standard_pipeline,
         output_paths,
+        quality_target=None,
     ) -> None:
         self._config = config
         self._runtime_state = runtime_state
@@ -27,68 +31,13 @@ class WorkflowPlanningService:
         self._encode_plan = encode_plan
         self._standard_pipeline = standard_pipeline
         self._output_paths = output_paths
+        self._quality_target = quality_target
 
     def effective_strip_only(self, override: dict) -> bool:
         return bool(
             self._config.strip_only
             or override.get("processing_mode") == "strip_only"
         )
-
-    @staticmethod
-    def _format_tristate(value) -> str:
-        if value is None:
-            return "global"
-        return "an" if bool(value) else "aus"
-
-    @staticmethod
-    def _format_override_mode(value) -> str:
-        return {
-            "on": "an",
-            "off": "aus",
-            "inherit": "global",
-        }.get(str(value or "inherit").lower(), str(value or "global"))
-
-    @classmethod
-    def _format_override_summary(cls, override: dict, profile_label: str = "") -> str:
-        parts: list[str] = []
-        if profile_label:
-            label = "Encoder-Override" if override.get("encoder_override") else "Encoderprofil"
-            parts.append(f"{label}: {profile_label}")
-        if override.get("processing_mode") == "strip_only":
-            parts.append("Verarbeitung: Strip-Only")
-        if override.get("imax"):
-            parts.append("IMAX: manuell erhalten")
-        if override.get("preserve_dv") is not None:
-            parts.append(
-                f"Dolby Vision erhalten: {cls._format_tristate(override.get('preserve_dv'))}"
-            )
-        if override.get("preserve_hdrplus") is not None:
-            parts.append(
-                f"HDR10+ erhalten: {cls._format_tristate(override.get('preserve_hdrplus'))}"
-            )
-        audio_tracks = list(override.get("audio_tracks") or [])
-        if override.get("audio_mode") == "custom" or audio_tracks:
-            parts.append(f"Audio: manuell ({len(audio_tracks)} Spur-Regel(n))")
-        subtitle_tracks = list(override.get("subtitle_tracks") or [])
-        if override.get("subtitle_mode") == "custom" or subtitle_tracks:
-            keep_count = sum(1 for item in subtitle_tracks if item.get("keep"))
-            burn_count = sum(1 for item in subtitle_tracks if item.get("burn_in"))
-            parts.append(
-                f"Untertitel: manuell ({keep_count} behalten, {burn_count} Burn-In)"
-            )
-        drc = override.get("audio_drc")
-        if isinstance(drc, dict):
-            parts.append(
-                f"DRC/Nachtmodus: {cls._format_override_mode(drc.get('mode'))} "
-                f"({drc.get('scale', 1.0)})"
-            )
-        loudnorm = override.get("audio_loudnorm")
-        if isinstance(loudnorm, dict):
-            parts.append(
-                f"Lautheitsnormalisierung: {cls._format_override_mode(loudnorm.get('mode'))} "
-                f"({loudnorm.get('i', -18.0)} LUFS)"
-            )
-        return " | ".join(parts)
 
     def build_plan(self, ctx, override: dict) -> None:
         if ctx.analysis is None:
@@ -118,6 +67,9 @@ class WorkflowPlanningService:
         ctx.effective_preserve_hdrplus = bool(
             selection.get("effective_preserve_hdrplus", False)
         )
+        ctx.generate_hdr10plus = bool(selection.get("generate_hdr10plus", False))
+        ctx.generate_hdr10plus_postprocess = False
+        apply_automatic_quality_target(ctx, self._quality_target)
         enc_key, q_val, q_label, preset = self._standard_pipeline.logger_start_params(
             encoder_options=ctx.effective_encoder_options,
             crf=ctx.effective_crf,
@@ -134,16 +86,18 @@ class WorkflowPlanningService:
             q_label=q_label,
             encoder_options=ctx.effective_encoder_options or self._config.encoder_options,
         )
-        override_summary = self._format_override_summary(
-            override, ctx.encoder_profile_label
-        )
+        override_summary = format_override_summary(override, ctx.encoder_profile_label)
         if override_summary:
             self._logger.info(f"Per-Datei-Override: {override_summary}")
         pipeline_log_name = (
             "dv+hdr10+"
             if pipeline == "dv"
-            and bool(getattr(ctx.analysis, "has_hdrplus", False))
-            and ctx.effective_preserve_hdrplus
+            and (
+                ctx.generate_hdr10plus
+                or (bool(getattr(ctx.analysis, "has_hdrplus", False)) and ctx.effective_preserve_hdrplus)
+            )
+            else "hdr10+-generated"
+            if pipeline == "hdrplus" and ctx.generate_hdr10plus
             else pipeline
         )
         self._logger.pipeline(
@@ -173,13 +127,28 @@ class WorkflowPlanningService:
                 codec=ctx.effective_codec,
             )
 
+        ctx.generate_hdr10plus_postprocess = should_postprocess_generated_hdr10plus(
+            selection=selection, strip_only=ctx.strip_only, pipeline=pipeline,
+            codec=ctx.effective_codec, encoder_options=ctx.effective_encoder_options,
+            generate_hdr10plus=ctx.generate_hdr10plus,
+        )
+        if ctx.generate_hdr10plus_postprocess and not ctx.strip_only:
+            self._logger.info("HDR10+: SDR→HDR-Ausgabe erhält nach dem Encode generierte dynamische Metadaten.")
+
         self.refresh_media_contract(
             ctx,
             override,
             crop_filter=getattr(ctx.plan, "crop", None) if ctx.plan is not None else None,
         )
 
-    def refresh_media_contract(self, ctx, override: dict, *, crop_filter: str | None) -> None:
+    def refresh_media_contract(
+        self,
+        ctx,
+        override: dict,
+        *,
+        crop_filter: str | None,
+        externalized_subtitle_stream_indices=(),
+    ) -> None:
         """Baut den finalen Medienvertrag mit dem tatsächlich wirksamen Crop neu.
 
         Im DV-Pfad kann der RPU-Level-5-Abgleich den vor dem Encode ermittelten
@@ -194,7 +163,12 @@ class WorkflowPlanningService:
             strip_only=ctx.strip_only,
             effective_codec=ctx.effective_codec or self._config.codec,
             effective_preserve_hdrplus=ctx.effective_preserve_hdrplus,
+            generate_hdr10plus=bool(
+                ctx.generate_hdr10plus or getattr(ctx, "generate_hdr10plus_postprocess", False)
+            ),
+            force_hdr_output=bool((ctx.effective_encoder_options or {}).get("_sdr_hdr_applied", False)),
             subtitle_rules=self._config.subtitle_rules,
             effective_scale_mode=ctx.effective_scale_mode,
             crop_filter=crop_filter,
+            externalized_subtitle_stream_indices=externalized_subtitle_stream_indices,
         )

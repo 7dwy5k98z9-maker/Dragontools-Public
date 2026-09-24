@@ -130,20 +130,42 @@ def test_x265_lookahead_wird_ohne_bframes_nicht_gesetzt():
     assert "rc-lookahead" not in params
 
 
-def test_qsv_lookahead_wird_immer_gesetzt():
+def test_qsv_h264_uses_la_icq_without_qscale_conflict():
     args = _vid_args(
-        "h265",
+        "h264",
         23,
         "medium",
         {
             "encoder": "qsv",
             "q": 23,
-            "lookahead": False,
             "lookahead_depth": 40,
         },
     )
 
+    assert args[args.index("-global_quality") + 1] == "23"
+    assert "-q" not in args
     assert args[args.index("-look_ahead") + 1] == "1"
+    assert args[args.index("-look_ahead_depth") + 1] == "40"
+
+
+@pytest.mark.parametrize("codec", ["h265", "av1"])
+def test_qsv_hevc_av1_use_extbrc_lookahead_without_h264_only_switch(codec):
+    args = _vid_args(
+        codec,
+        23,
+        "medium",
+        {
+            "encoder": "qsv",
+            "q": 23,
+            "lookahead_depth": 40,
+            "_force_10bit": codec == "av1",
+        },
+    )
+
+    assert args[args.index("-global_quality") + 1] == "23"
+    assert "-q" not in args
+    assert "-look_ahead" not in args
+    assert args[args.index("-extbrc") + 1] == "1"
     assert args[args.index("-look_ahead_depth") + 1] == "40"
 
 
@@ -186,6 +208,8 @@ def test_nvenc_legacy_string_options_are_normalized_at_ffmpeg_boundary():
     assert args[args.index("-cq") + 1] == "19"
     assert args[args.index("-bf") + 1] == "4"
     assert args[args.index("-rc-lookahead") + 1] == "32"
+    assert "-spatial-aq" not in args
+    assert "-temporal-aq" not in args
     assert "-spatial_aq" not in args
     assert "-temporal_aq" not in args
 
@@ -200,7 +224,7 @@ def test_qsv_and_amf_legacy_float_strings_become_integer_arguments():
         {"encoder": "amf", "qp": "22.0", "quality": "balanced"},
     )
 
-    assert qsv_args[qsv_args.index("-q") + 1] == "21"
+    assert qsv_args[qsv_args.index("-global_quality") + 1] == "21"
     assert qsv_args[qsv_args.index("-look_ahead_depth") + 1] == "48"
     assert amf_args[amf_args.index("-qp_i") + 1] == "22"
 
@@ -221,3 +245,75 @@ def test_qsv_lookahead_depth_is_clamped_before_ffmpeg():
 
     assert high_args[high_args.index("-look_ahead_depth") + 1] == "100"
     assert low_args[low_args.index("-look_ahead_depth") + 1] == "1"
+
+
+@pytest.mark.parametrize("codec", ["h264", "h265", "av1"])
+def test_nvenc_aq_uses_current_canonical_ffmpeg_option_names(codec):
+    args = _vid_args(
+        codec,
+        23,
+        "medium",
+        {
+            "encoder": "nvenc",
+            "preset": "p6",
+            "cq": 23,
+            "spatial_aq": True,
+            "temporal_aq": True,
+            "aq_strength": 10,
+            "_force_10bit": codec == "av1",
+        },
+    )
+
+    assert args[args.index("-spatial-aq") + 1] == "1"
+    assert args[args.index("-temporal-aq") + 1] == "1"
+    assert args[args.index("-aq-strength") + 1] == "10"
+    assert "-spatial_aq" not in args
+    assert "-temporal_aq" not in args
+
+
+@pytest.mark.parametrize(
+    ("codec", "expects_b_qp"),
+    [("h264", True), ("h265", False), ("av1", True)],
+)
+def test_amf_only_emits_qp_b_for_codecs_that_expose_it(codec, expects_b_qp):
+    args = _vid_args(
+        codec,
+        23,
+        "medium",
+        {
+            "encoder": "amf",
+            "quality": "balanced",
+            "qp": 23,
+            "_force_10bit": codec == "av1",
+        },
+    )
+
+    assert ("-qp_b" in args) is expects_b_qp
+
+
+def test_hardware_quality_values_are_clamped_to_encoder_ranges():
+    nv_hevc = _vid_args("h265", 23, "medium", {"encoder": "nvenc", "cq": 63})
+    nv_av1 = _vid_args("av1", 28, "medium", {"encoder": "nvenc", "cq": 99})
+    qsv = _vid_args("h265", 23, "medium", {"encoder": "qsv", "q": 63, "lookahead_depth": 40})
+    amf_hevc = _vid_args("h265", 23, "medium", {"encoder": "amf", "qp": 63})
+
+    assert nv_hevc[nv_hevc.index("-cq") + 1] == "51"
+    assert nv_av1[nv_av1.index("-cq") + 1] == "63"
+    assert qsv[qsv.index("-global_quality") + 1] == "51"
+    assert amf_hevc[amf_hevc.index("-qp_i") + 1] == "51"
+    assert amf_hevc[amf_hevc.index("-qp_p") + 1] == "51"
+
+
+def test_nvenc_aq_strength_is_integer_and_clamped():
+    args = _vid_args(
+        "h265",
+        23,
+        "medium",
+        {
+            "encoder": "nvenc",
+            "spatial_aq": True,
+            "aq_strength": "99.0",
+        },
+    )
+
+    assert args[args.index("-aq-strength") + 1] == "15"

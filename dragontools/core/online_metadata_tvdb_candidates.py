@@ -7,13 +7,13 @@ from typing import Any
 
 from .online_metadata_common import (
     EpisodeMetadataSuggestion,
-    OnlineMetadataError,
     _float_or_none,
     _int_or_none,
     compare_metadata_text,
     normalize_episode_metadata_title,
     parse_series_query,
 )
+from .online_metadata_tvdb_candidate_cache import collect_candidate_records
 from .online_metadata_tvdb_helpers import (
     _tvdb_localized_title,
     _tvdb_text,
@@ -52,40 +52,8 @@ def _candidate_request(path: str | Path):
     }
 
 
-def _search_languages(client) -> tuple[str, ...]:
-    primary = client.config.language
-    fallback = client.config.fallback_language
-    return (primary,) if fallback == primary else (primary, fallback)
-
-
 def _collect_records(client, request: dict[str, Any]) -> list[dict[str, Any]]:
-    records: list[dict[str, Any]] = []
-    seen_ids: set[int] = set()
-
-    def collect(term: str, year: int | None) -> None:
-        found: list[dict[str, Any]] = []
-        for language in _search_languages(client):
-            try:
-                found = client.search_series(term, year=year, language=language)
-            except OnlineMetadataError:
-                found = []
-            if found:
-                break
-        for record in found or []:
-            record_id = _int_or_none(record.get("tvdb_id") or record.get("id") or record.get("seriesId"))
-            if record_id is None or record_id in seen_ids:
-                continue
-            seen_ids.add(record_id)
-            records.append(record)
-
-    search_terms = list(request["search_terms"])
-    for term in search_terms[:2]:
-        collect(term, request["year"])
-        if request["year"] is not None and request["retry_without_year"]:
-            collect(term, None)
-    for term in search_terms[2:]:
-        collect(term, None)
-    return records
+    return collect_candidate_records(client, request)
 
 
 def _record_rank(client, record: dict[str, Any], *, query: str, year: int | None) -> tuple[float, int, float]:

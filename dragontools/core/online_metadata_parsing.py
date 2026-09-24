@@ -68,6 +68,10 @@ def parse_series_query(value: str | Path) -> ParsedSeriesQuery:
         "", text, flags=re.I,
     )
     text = re.sub(r"(?<!\w)EP(?:ISODE)?[.\-_\s]*\d{1,4}(?!\d).*$", "", text, flags=re.I)
+    # Manche Release-Namen enthalten nur E19 statt S01E19/EP19. Der Renamer
+    # behandelt diese Form als Episode der standardmaessigen Staffel 1; fuer
+    # die Provider-Suche muss der Episodenmarker trotzdem aus dem Titel raus.
+    text = re.sub(r"(?<!\w)E\s*\d{1,4}(?!\d).*$", "", text, flags=re.I)
     text = re.sub(r"\b\d{1,4}x\d{1,4}\b.*$", "", text, flags=re.I)
     text = re.sub(r"\s+", " ", text).strip()
 

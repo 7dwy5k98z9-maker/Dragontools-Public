@@ -18,7 +18,7 @@ from ..core.movie_renamer import (
 )
 from ..core.renamer_candidate_decision import apply_candidate_decision, base_candidate_warnings
 from ..core.path_syntax import path_compare_key
-from .movie_renamer_view import WideCandidateComboBox
+from .movie_renamer_candidate_combo import WideCandidateComboBox
 from .movie_renamer_table_search import MovieRenamerTableSearchMixin
 
 
@@ -220,6 +220,14 @@ class MovieRenamerTableController(MovieRenamerTableSearchMixin):
             if self.row_path(row)
         }
 
+    def find_row_by_path(self, path: str | Path) -> int | None:
+        key = path_compare_key(path)
+        for row in range(self.table.rowCount()):
+            current = self.row_path(row)
+            if current and path_compare_key(current) == key:
+                return row
+        return None
+
     def selected_rows(self) -> list[int]:
         return sorted({index.row() for index in self.table.selectedIndexes()})
 
@@ -285,8 +293,9 @@ class MovieRenamerTableController(MovieRenamerTableSearchMixin):
             hints = [
                 item for item in parsed.warnings
                 if not item.startswith("Staffel fehlt im EPxx-Muster")
+                and "Staffel 1 wurde als Standard angenommen" not in item
             ]
-            hints.append(f"Staffel {season_value} manuell für EPxx gesetzt.")
+            hints.append(f"Staffel {season_value} manuell gesetzt.")
             self.set_item(row, self.columns.HINTS, "; ".join(hints), editable=False)
         self.set_status(row, "bereit")
 

@@ -553,3 +553,97 @@ def test_background_lookup_returns_folder_choices_when_year_is_unknown(monkeypat
         r"D:\Anime\Ranma ½ (1989)",
         r"D:\Anime\Ranma ½ (2024)",
     ]
+
+
+def test_unusable_library_series_hit_still_runs_online_year_lookup(monkeypatch):
+    from dragontools.tests.test_incremental_move_queue_edit import _install_pyqt_stubs
+
+    _install_pyqt_stubs(monkeypatch)
+
+    from dragontools.core import media_library, online_metadata
+    from dragontools.rules import move_rules
+    from dragontools.gui.preflight_dialog import PreFlightDialog
+
+    calls: list[tuple[str, int | None]] = []
+
+    monkeypatch.setattr(
+        media_library,
+        "find_series_dir_from_settings",
+        lambda *_args, **_kwargs: {
+            "series_dir": "",
+            "base": "",
+            "base_type": "Filme",
+            "source": "database",
+            "unusable_reason": (
+                r"Mediathek-Treffer ist aktuell nicht erreichbar (Bereich Filme): "
+                r"\\MediaServer\video\Filme\Robin Hood | Grund: liegt nicht unter den aktuell eingestellten Speicherpfaden"
+            ),
+            "suggested_series_name": "Robin Hood",
+        },
+    )
+    monkeypatch.setattr(move_rules, "find_series_dir_candidates", lambda *_args, **_kwargs: [])
+
+    def fake_online(series_name, _settings, *, year=None):
+        calls.append((series_name, year))
+        return SimpleNamespace(
+            first_air_year=2025,
+            folder_name="Robin Hood (2025)",
+            provider="tmdb",
+        )
+
+    monkeypatch.setattr(online_metadata, "suggest_series_metadata_for_name", fake_online)
+
+    dlg = PreFlightDialog.__new__(PreFlightDialog)
+    dlg._metadata_cancelled = False
+    result_queue = queue.Queue()
+    dlg._run_online_metadata_lookup(
+        [(
+            "series",
+            "job-robin",
+            {
+                "series_name": "Robin Hood",
+                "search_bases": [{"type": "Anime", "base": r"D:\Anime"}],
+            },
+        )],
+        result_queue,
+        online_enabled=True,
+    )
+
+    kind, key, result = result_queue.get_nowait()
+    assert (kind, key) == ("series", "job-robin")
+    assert calls == [("Robin Hood", None)]
+    assert "__library_path_warning__" in result
+    suggestion = result["__online_series_suggestion__"]
+    assert suggestion.first_air_year == 2025
+    assert suggestion.folder_name == "Robin Hood (2025)"
+
+
+def test_composite_series_result_applies_online_year_and_keeps_library_warning(monkeypatch):
+    from dragontools.tests.test_incremental_move_queue_edit import _install_pyqt_stubs
+
+    _install_pyqt_stubs(monkeypatch)
+
+    from dragontools.gui.preflight_metadata_apply import apply_metadata_result
+
+    events: list[tuple[str, object]] = []
+
+    class Widget:
+        def mark_library_path_warning(self, message):
+            events.append(("warning", message))
+
+        def apply_online_metadata_suggestion(self, suggestion):
+            events.append(("online", suggestion))
+
+        def apply_unusable_library_series_match(self, **_kwargs):
+            raise AssertionError("Staler DB-Treffer darf Online-Metadaten nicht überschreiben")
+
+    suggestion = SimpleNamespace(first_air_year=2025, folder_name="Robin Hood (2025)")
+    apply_metadata_result(
+        Widget(),
+        {
+            "__library_path_warning__": "DB-Pfad nicht erreichbar",
+            "__online_series_suggestion__": suggestion,
+        },
+    )
+
+    assert events == [("warning", "DB-Pfad nicht erreichbar"), ("online", suggestion)]

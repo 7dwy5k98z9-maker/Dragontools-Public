@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from .release_validation_common import APP_VERSION, ReleaseCheck, _check_exists, _check_matching_file
-from .release_validation_package import _check_forbidden_release_artifacts, _check_python_package_smoke, _find_dist_dir
+from .release_validation_package import _check_forbidden_release_artifacts, _find_dist_dir
 
 
 def validate_dist_bundle(
@@ -26,7 +26,7 @@ def validate_dist_bundle(
         _check_exists(dist_dir / f"DragonToolsV{APP_VERSION}.exe", "Build: EXE"),
         _check_exists(dist_dir / "Daten", "Build: Datenordner"),
         _check_exists(dist_dir / "Daten" / "dragontools" / "config", "Build: Runtime-Konfiguration"),
-        _check_exists(dist_dir / "Daten" / "Python" / "dragontools", "Build: Python-Quellpaket"),
+        _check_no_python_source_bundle(dist_dir / "Daten", "Build: Python-Quellcode"),
         _check_exists(dist_dir / "Daten" / "Handbuch" / "Handbuch.pdf", "Build: Handbuch"),
         _check_exists(dist_dir / "Daten" / "help.html", "Build: Help-Datei"),
         _check_exists(dist_dir / "Daten" / "Aenderungshistorie" / "CHANGELOG.json", "Build: Changelog JSON"),
@@ -34,10 +34,21 @@ def validate_dist_bundle(
     ])
     checks.extend(_documentation_freshness_checks(root, dist_dir))
     checks.append(_check_exists(dist_dir / "Daten" / "Programme", "Build: Programme/Tools", required=False))
-    checks.append(_check_python_package_smoke(dist_dir / "Daten" / "Python", "Build: Python-Paket-Smoke-Test"))
     bytecode = _check_forbidden_release_artifacts(dist_dir / "Daten")
     checks.append(ReleaseCheck(bytecode.status, "Build: Release-Bytecode", bytecode.detail))
     return checks
+
+
+def _check_no_python_source_bundle(data_dir: Path, title: str = "Python-Quellcode") -> ReleaseCheck:
+    """Ensure frozen releases do not ship the project's readable Python sources."""
+    source_dir = data_dir / "Python"
+    if source_dir.exists():
+        return ReleaseCheck(
+            "error",
+            title,
+            f"Verbotener Python-Quellordner im Release gefunden: {source_dir}",
+        )
+    return ReleaseCheck("ok", title, "Keine separat ausgelieferten Python-Quellen im Release-Bundle.")
 
 
 def _documentation_freshness_checks(root: Path, dist_dir: Path) -> list[ReleaseCheck]:

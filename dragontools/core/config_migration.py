@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
+import logging
 
 from dataclasses import dataclass
+import json
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
@@ -11,6 +13,22 @@ from .json_io import atomic_write_json
 
 
 SCHEMA_VERSION_KEY = "_schema_version"
+
+
+class UnsupportedConfigSchemaError(ValueError):
+    """Raised when an older DragonTools build sees a newer config schema.
+
+    Future schemas are never rewritten/downgraded. Callers may fall back to
+    built-in defaults, but the original user file must remain untouched.
+    """
+
+    def __init__(self, config_name: str, found: int, supported: int) -> None:
+        self.config_name = str(config_name)
+        self.found = int(found)
+        self.supported = int(supported)
+        super().__init__(
+            f"{self.config_name}: Schema {self.found} ist neuer als das unterstützte Schema {self.supported}."
+        )
 
 CURRENT_SCHEMA_VERSIONS: dict[str, int] = {
     "audio_rules": 4,
@@ -44,6 +62,30 @@ def schema_version(data: Any) -> int:
 
 def current_schema_version(config_name: str) -> int:
     return int(CURRENT_SCHEMA_VERSIONS.get(config_name, 1))
+
+
+def ensure_config_write_compatible(path: str | Path, config_name: str) -> None:
+    """Verhindert, dass ein aelterer Build eine neuere Config ueberschreibt.
+
+    Der Guard sitzt absichtlich direkt vor dem Schreibpfad. Damit bleibt der
+    Schutz auch wirksam, wenn eine Datei erst nach dem Laden extern ersetzt
+    wurde oder der Loader wegen eines Future-Schemas auf Defaults
+    zurueckgefallen ist. Nicht lesbare/ungueltige Dateien werden hier nicht
+    neu klassifiziert; deren bestehende Fehlerbehandlung bleibt unveraendert.
+    """
+    target = Path(path)
+    if not target.is_file():
+        return
+    try:
+        raw = json.loads(target.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return
+    if not isinstance(raw, dict):
+        return
+    found = schema_version(raw)
+    supported = current_schema_version(config_name)
+    if found > supported:
+        raise UnsupportedConfigSchemaError(config_name, found, supported)
 
 
 def sanitize_config_for_persistence(data: dict[str, Any]) -> dict[str, Any]:
@@ -92,14 +134,14 @@ def log_config_migration(
         with open(MIGRATION_LOG_PATH, "a", encoding="utf-8") as handle:
             handle.write(f"[{ts}] {line}\n")
     except Exception:
-        pass
+        logging.getLogger(__name__).debug("Unterdrückte Best-Effort-Ausnahme in log_config_migration.", exc_info=True)
 
     try:
         from .audit_log import append_audit_event
 
         append_audit_event("Regel-/Profilmigration", line)
     except Exception:
-        pass
+        logging.getLogger(__name__).debug("Unterdrückte Best-Effort-Ausnahme in log_config_migration.", exc_info=True)
 
     if reporter is None:
         return
@@ -113,7 +155,7 @@ def log_config_migration(
     try:
         reporter(f"Regel-/Profilmigration: {line}")
     except Exception:
-        pass
+        logging.getLogger(__name__).debug("Unterdrückte Best-Effort-Ausnahme in log_config_migration.", exc_info=True)
 
 
 def finish_migration(
@@ -128,6 +170,8 @@ def finish_migration(
     result = dict(data or {})
     from_version = schema_version(raw if raw is not None else data)
     to_version = current_schema_version(config_name)
+    if from_version > to_version:
+        raise UnsupportedConfigSchemaError(config_name, from_version, to_version)
     if result.get(SCHEMA_VERSION_KEY) != to_version:
         result[SCHEMA_VERSION_KEY] = to_version
     msg_tuple = tuple(str(item) for item in (messages or ()) if str(item).strip())

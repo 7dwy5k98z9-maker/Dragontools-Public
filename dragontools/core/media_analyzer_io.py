@@ -52,6 +52,31 @@ def _run_ffprobe_json(path: str, tools: ToolPaths) -> tuple[dict, list[str]]:
         warnings.append(traceback.format_exc())
         return {}, warnings
 
+
+def _run_ffprobe_dynamic_hdr_frames(path: str, tools: ToolPaths) -> tuple[dict, list[str]]:
+    """Read a short frame window for dynamic HDR side-data.
+
+    ``-show_streams`` does not reliably expose frame-level ST-2094-40
+    metadata.  This probe is therefore used only as a fallback when the normal
+    MediaInfo/ffprobe stream analysis did not already detect HDR10+.
+    """
+    warnings: list[str] = []
+    try:
+        result = _run_tool([
+            tools.ffprobe,
+            "-v", "error",
+            "-select_streams", "v:0",
+            "-read_intervals", "0%+2",
+            "-show_frames",
+            "-of", "json",
+            path,
+        ])
+        return json.loads(result.stdout or "{}"), warnings
+    except Exception as e:
+        warnings.append(f"ffprobe Dynamic-HDR-Fallback fehlgeschlagen: {e}")
+        warnings.append(traceback.format_exc())
+        return {}, warnings
+
 def _mi_tracks(mi_json: dict) -> list[dict]:
     media = mi_json.get("media", {}) or {}
     return media.get("track", []) or []

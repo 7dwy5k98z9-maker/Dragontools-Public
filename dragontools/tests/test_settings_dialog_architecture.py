@@ -64,6 +64,7 @@ def test_settings_sections_cover_every_visible_section_exactly_once() -> None:
         "storage.py": "StorageLoggingSection",
         "runtime.py": "RuntimeToolsSection",
         "media.py": "MediaPostprocessSection",
+        "jellyfin.py": "JellyfinIntegrationSection",
         "video.py": "VideoAnalysisSection",
         "safety.py": "SafetyValidationSection",
     }
@@ -84,6 +85,7 @@ def test_no_replacement_god_section_was_created() -> None:
         "storage.py": "StorageLoggingSection",
         "runtime.py": "RuntimeToolsSection",
         "media.py": "MediaPostprocessSection",
+        "jellyfin.py": "JellyfinIntegrationSection",
         "video.py": "VideoAnalysisSection",
         "safety.py": "SafetyValidationSection",
     }
@@ -116,3 +118,13 @@ def test_output_container_has_direct_settings_menu_entry() -> None:
     assert "triggered=self._open_settings_containers" in menu_text
     assert "def _open_settings_containers(self):" in actions_text
     assert 'visible_sections=("containers",)' in actions_text
+
+
+def test_jellyfin_api_has_direct_settings_menu_entry() -> None:
+    menu_text = (GUI / "main_window_menus.py").read_text(encoding="utf-8")
+    actions_text = (GUI / "main_window_settings_actions.py").read_text(encoding="utf-8")
+
+    assert 'QAction("🔌 Jellyfin API"' in menu_text
+    assert "triggered=self._open_settings_jellyfin" in menu_text
+    assert "def _open_settings_jellyfin(self):" in actions_text
+    assert 'visible_sections=("jellyfin_api",)' in actions_text

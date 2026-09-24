@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Windows-Neustartschutz fuer laufende DragonTools-Jobs."""
 from __future__ import annotations
+import logging
 
 import ctypes
 import os
@@ -72,7 +73,7 @@ class WindowsRestartGuard(QObject):
             try:
                 ctypes.windll.user32.ShutdownBlockReasonDestroy(hwnd)
             except Exception:
-                pass
+                logging.getLogger(__name__).debug("Unterdrückte Best-Effort-Ausnahme in release.", exc_info=True)
         self._block_reason = ""
 
     def handle_commit_data_request(self, manager: Any) -> None:
@@ -183,7 +184,7 @@ class WindowsRestartGuard(QObject):
             try:
                 cancel()
             except Exception:
-                pass
+                logging.getLogger(__name__).debug("Unterdrückte Best-Effort-Ausnahme in _cancel_manager.", exc_info=True)
 
     def _show_block_notice(self, decision: RestartGuardDecision) -> None:
         now = time.monotonic()
@@ -227,7 +228,7 @@ def _worker_display_name(worker: Any) -> str:
         if name:
             return str(name)
     except Exception:
-        pass
+        logging.getLogger(__name__).debug("Unterdrückte Best-Effort-Ausnahme in _worker_display_name.", exc_info=True)
     return worker.__class__.__name__
 
 

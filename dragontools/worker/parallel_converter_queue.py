@@ -7,11 +7,19 @@ from .worker_contracts import RemoveFileStatus
 class ParallelConverterQueueMixin:
     """Queue mutation and display ordering for the parallel converter."""
 
+    def add_file_with_override(self, path: str, override: dict) -> bool:
+        """Install per-file options before a free parallel slot can start the child worker."""
+        self.file_overrides[path] = dict(override or {})
+        ok = self.add_file(path)
+        if not ok:
+            self.file_overrides.pop(path, None)
+        return ok
+
     def add_file(self, path: str) -> bool:
         if not self._running or self.abort_requested:
             return False
         key = path_compare_key(path)
-        if key in self._assigned or key in {path_compare_key(p) for p in self.files}:
+        if key in self._assigned or key in self._queue_state.file_keys:
             return False
 
         active = [worker for worker in self._active_workers if worker.isRunning()]

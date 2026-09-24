@@ -175,6 +175,8 @@ class _InjectWorker(_SubWorker):
                             subtitle_codec="mov_text",
                             map_existing_subtitles=False,
                             worker=self,
+                            forced=self.forced,
+                            ffprobe=self.tools.ffprobe,
                         )
                 else:
                     ok = inject_with_mkvmerge(
@@ -190,6 +192,8 @@ class _InjectWorker(_SubWorker):
                             self.language, self.tools.ffmpeg,
                             logger=self.log.emit,
                             worker=self,
+                            forced=self.forced,
+                            ffprobe=self.tools.ffprobe,
                         )
                 self.log.emit("  ✅ OK" if ok else "  ❌ Fehler")
                 self.progress.emit(idx + 1, total)

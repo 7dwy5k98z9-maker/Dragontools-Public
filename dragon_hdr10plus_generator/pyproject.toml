@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dragon-hdr10plus-generator"
+version = "0.2.0"
+description = "Standalone PQ scene analyzer and HDR10+ ST-2094-40 Profile-A metadata generator"
+requires-python = ">=3.11"
+dependencies = ["numpy>=2.0"]
+
+[project.scripts]
+HDRPlusGenerator = "dragon_hdr10plus_generator.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

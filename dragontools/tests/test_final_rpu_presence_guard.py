@@ -86,6 +86,7 @@ def test_failed_rpu_archive_keeps_candidate_when_archive_cannot_be_created(tmp_p
 
 
 def test_target_change_after_dialog_updates_current_output_key():
+    pytest.importorskip("PyQt6", reason="PyQt6 wird fuer den Queue-Zielaktions-Mixin-Import benoetigt")
     from dragontools.gui.convert_widget_queue_target_actions import (
         ConvertWidgetQueueTargetActionsMixin,
     )

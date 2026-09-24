@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from .convert_widget_queue_dragdrop import ConvertWidgetQueueDragDropMixin
 from .convert_widget_queue_management import ConvertWidgetQueueManagementMixin
+from .convert_widget_queue_reorder_actions import ConvertWidgetQueueReorderActionsMixin
 from .convert_widget_queue_window_actions import ConvertWidgetQueueWindowActionsMixin
 from .convert_widget_queue_context_actions import ConvertWidgetQueueContextActionsMixin
 from .convert_widget_queue_target_actions import ConvertWidgetQueueTargetActionsMixin
@@ -21,6 +22,7 @@ from .convert_widget_source_visual_actions import ConvertWidgetSourceVisualActio
 class ConvertWidgetQueueActionsMixin(
     ConvertWidgetQueueDragDropMixin,
     ConvertWidgetQueueManagementMixin,
+    ConvertWidgetQueueReorderActionsMixin,
     ConvertWidgetQueueWindowActionsMixin,
     ConvertWidgetQueueContextActionsMixin,
     ConvertWidgetQueueTargetActionsMixin,

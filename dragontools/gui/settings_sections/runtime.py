@@ -1,16 +1,21 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 from pathlib import Path
-from PyQt6.QtWidgets import QCheckBox, QComboBox, QFrame, QGridLayout, QGroupBox, QLabel, QLineEdit, QMessageBox, QPushButton, QSpinBox
+from PyQt6.QtWidgets import QCheckBox, QComboBox, QFrame, QGridLayout, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QMessageBox, QPushButton, QSpinBox, QWidget
 from ...core import settings as cfg
 from ...core.parallel_settings import migrate_parallel_defaults
 from ...core.tool_paths import find_tool, get_tool_paths, invalidate_tool_paths
+from ...core.settings_storage import SET_KEY_WHISPER_MODEL_DIR, SET_KEY_WHISPER_USE_LOCAL_MODEL
+from ...core.settings_media_library import DEFAULT_MEDIA_LIBRARY_LANGUAGE_MODEL, SET_KEY_MEDIA_LIBRARY_LANGUAGE_MODEL
 from ..info_button import InfoButton
+from ..tool_path_live_check import run_live_tool_check
 from .base import SettingsSection
+from .automation import WatchFolderAutomationPanel
+from .notifications import DesktopNotificationPanel
 
 
 class RuntimeToolsSection(SettingsSection):
-    section_keys = ("tools", "defaults", "parallel")
+    section_keys = ("tools", "defaults", "parallel", "watch_folders", "notifications")
 
     def build(self, vl) -> None:
         d = self.dialog
@@ -21,17 +26,31 @@ class RuntimeToolsSection(SettingsSection):
         tg.setVerticalSpacing(4)
         tg.setColumnStretch(2, 1)  # Edit-Feld dehnt sich aus
 
-        # Zeile 0: Erklärung + Alle-Suchen Button nebeneinander
+        # Kopfzeile als eigener Toolbar-Container. Dadurch bestimmen die beiden
+        # breiten Aktionsbuttons nicht die Breite der schmalen Browse-/Auto-Spalten.
+        top_bar = QWidget(tool_grp)
+        top_layout = QHBoxLayout(top_bar)
+        top_layout.setContentsMargins(0, 0, 0, 0)
+        top_layout.setSpacing(8)
+
         desc_lbl = QLabel(
             "Nur ausfüllen wenn ein Tool <b>nicht automatisch gefunden</b> wird (F9).")
         desc_lbl.setWordWrap(True)
-        tg.addWidget(desc_lbl, 0, 0, 1, 3)
+        top_layout.addWidget(desc_lbl, 1)
 
         all_auto_btn = QPushButton("🔍 Alle Tools automatisch suchen")
         all_auto_btn.setStyleSheet(
             "background:#0078d7;color:white;font-weight:bold;padding:5px 12px;")
         all_auto_btn.clicked.connect(d.auto_detect_all)
-        tg.addWidget(all_auto_btn, 0, 3, 1, 2)
+        top_layout.addWidget(all_auto_btn)
+
+        live_check_btn = QPushButton("✅ Eingaben prüfen")
+        live_check_btn.setToolTip(
+            "Prüft die aktuell sichtbaren Pfade sofort – auch wenn die Einstellungen noch nicht gespeichert wurden."
+        )
+        live_check_btn.clicked.connect(self.check_current_tools)
+        top_layout.addWidget(live_check_btn)
+        tg.addWidget(top_bar, 0, 0, 1, 5)
 
         # Trennlinie
         sep = QFrame(); sep.setFrameShape(QFrame.Shape.HLine)
@@ -54,17 +73,25 @@ class RuntimeToolsSection(SettingsSection):
             "rmts":           ("RMTS (RenameMyTVSeries)",
                                "Serien-Umbenennungstool. Wird extern geöffnet."),
             "handbrake":      ("HandBrake",
-                               "HandBrake.exe / HandBrakeCLI.exe – Wird extern geöffnet."),
+                               "Ordner mit HandBrake.exe. Dragon Tools öffnet die vollständige HandBrake-Oberfläche extern; HandBrakeCLI wird nicht benötigt."),
             "mediainfo":      ("MediaInfo",
                                "MediaInfo.exe – erweiterte HDR/DV-Erkennung."),
             "dovi_tool":      ("dovi_tool",
                                "dovi_tool.exe – Dolby Vision RPU extrahieren/injizieren."),
             "hdr10plus_tool": ("hdr10plus_tool",
-                               "hdr10plus_tool.exe – HDR10+ Metadaten."),
+                               "hdr10plus_tool.exe – HDR10+ Metadaten extrahieren/injizieren."),
+            "hdr10plus_generator": ("Dragon HDR10+ Generator",
+                               "Optionaler externer Analyzer. Liefert ausschließlich hdr10plus.json; Injection/Mux bleiben in DragonTools."),
+            "davinci_resolve": ("DaVinci Resolve",
+                               "Optionales SDR→HDR10/PQ-Backend. Resolve Free wird erkannt; automatische externe Steuerung ist derzeit bewusst nicht aktiviert."),
+            "comfyui": ("ComfyUI", "Optionales lokales SDR→HDR-AI-Backend. Installationsordner eintragen; "
+                        "DragonTools steuert später den lokalen HTTP-API-Dienst modellneutral."),
             "mp4box":         ("MP4Box (GPAC)",
                                "MP4Box.exe – DV-MP4 Muxing."),
+            "tesseract":      ("Tesseract OCR",
+                               "tesseract.exe – optionale OCR-Engine für PGS/VobSub → SRT.\n"
+                               "Benötigte Sprachdaten (z. B. deu/eng/jpn) müssen installiert sein."),
         }
-
         # Spalten-Header
         tg.addWidget(QLabel("<b>Tool</b>"), 2, 0)
         tg.addWidget(QLabel("<b>Ordner</b>"), 2, 2)
@@ -110,6 +137,30 @@ class RuntimeToolsSection(SettingsSection):
             tg.addWidget(auto_btn, row, 4)
 
             row += 1
+
+        # faster-whisper selbst ist ein Python-Paket. Die Checkbox schaltet nur
+        # zwischen normalem Modellname/Cache und einem expliziten lokalen
+        # CTranslate2-Modellordner um.
+        d.whisper_local_model_cb = QCheckBox("faster-whisper / lokales Modell")
+        tg.addWidget(d.whisper_local_model_cb, row, 0)
+        tg.addWidget(InfoButton(
+            "faster-whisper/CTranslate2 wird im offiziellen EXE-Build gebündelt. "
+            "Checkbox aus: Dragon Tools verwendet den eingestellten Modellnamen und den normalen Modellcache. "
+            "Checkbox an: Der hier gewählte CTranslate2-Modellordner (model.bin + config.json) wird zwingend verwendet; "
+            "ein ungültiger lokaler Pfad führt bewusst nicht zu einem stillen Download-Fallback."
+        ), row, 1)
+        d.whisper_model_dir_edit = QLineEdit()
+        d.whisper_model_dir_edit.setPlaceholderText("Lokaler Whisper-Modellordner")
+        tg.addWidget(d.whisper_model_dir_edit, row, 2)
+        d.whisper_model_browse_btn = QPushButton("…")
+        d.whisper_model_browse_btn.setFixedWidth(28)
+        d.whisper_model_browse_btn.clicked.connect(self.browse_whisper_model)
+        tg.addWidget(d.whisper_model_browse_btn, row, 3)
+        whisper_hint = QLabel("lokal")
+        whisper_hint.setStyleSheet("color:#64748b;")
+        tg.addWidget(whisper_hint, row, 4)
+        d.whisper_local_model_cb.toggled.connect(self.update_whisper_model_state)
+
         vl.addWidget(tool_grp)
 
         # ── Standard-Video ─────────────────────────────────────────
@@ -187,6 +238,11 @@ class RuntimeToolsSection(SettingsSection):
         ), 2, 2)
         vl.addWidget(parallel_grp)
 
+        self._watch_panel = WatchFolderAutomationPanel(d)
+        self._watch_panel.build(vl)
+        self._notification_panel = DesktopNotificationPanel(d)
+        self._notification_panel.build(vl)
+
 
     def load(self) -> None:
         d, s = self.dialog, self.settings
@@ -200,6 +256,14 @@ class RuntimeToolsSection(SettingsSection):
             cb.setChecked(s.value(key, False, type=bool))
         for key, ed in d._tool_edits.items():
             ed.setText(s.value(key, "", type=str))
+        whisper_model_dir = s.value(SET_KEY_WHISPER_MODEL_DIR, "", type=str)
+        d.whisper_model_dir_edit.setText(whisper_model_dir)
+        d.whisper_local_model_cb.setChecked(
+            s.value(SET_KEY_WHISPER_USE_LOCAL_MODEL, bool(str(whisper_model_dir).strip()), type=bool)
+        )
+        self.update_whisper_model_state(d.whisper_local_model_cb.isChecked())
+        self._watch_panel.load()
+        self._notification_panel.load()
 
     def save(self) -> bool:
         d, s = self.dialog, self.settings
@@ -212,8 +276,37 @@ class RuntimeToolsSection(SettingsSection):
             s.setValue(key, cb.isChecked())
         for key, ed in d._tool_edits.items():
             s.setValue(key, ed.text().strip())
+        s.setValue(SET_KEY_WHISPER_MODEL_DIR, d.whisper_model_dir_edit.text().strip())
+        s.setValue(SET_KEY_WHISPER_USE_LOCAL_MODEL, d.whisper_local_model_cb.isChecked())
         invalidate_tool_paths()
-        return True
+        if not self._watch_panel.save():
+            return False
+        return self._notification_panel.save()
+
+    def check_current_tools(self) -> None:
+        d = self.dialog
+        run_live_tool_check(
+            d,
+            tool_edits=d._tool_edits,
+            whisper_model_dir=d.whisper_model_dir_edit.text().strip(),
+            whisper_use_local_model=d.whisper_local_model_cb.isChecked(),
+            whisper_model_name=self.settings.value(
+                SET_KEY_MEDIA_LIBRARY_LANGUAGE_MODEL,
+                DEFAULT_MEDIA_LIBRARY_LANGUAGE_MODEL,
+                type=str,
+            ),
+        )
+
+    def update_whisper_model_state(self, enabled: bool) -> None:
+        d = self.dialog
+        d.whisper_model_dir_edit.setEnabled(bool(enabled))
+        d.whisper_model_browse_btn.setEnabled(bool(enabled))
+
+    def browse_whisper_model(self) -> None:
+        d = self.dialog
+        d.browse(d.whisper_model_dir_edit)
+        if d.whisper_model_dir_edit.text().strip():
+            d.whisper_local_model_cb.setChecked(True)
 
     def auto_detect(self, tool: str, edit) -> None:
         d = self.dialog
@@ -222,14 +315,20 @@ class RuntimeToolsSection(SettingsSection):
             "mkv": ("mkvtoolnix-gui.exe", "mkvtoolnix-gui", "mkvmerge.exe", "mkvmerge"),
             "makemkvcon": ("makemkvcon64.exe", "makemkvcon.exe", "makemkvcon"),
             "rmts": ("RenameMyTVSeries.exe", "rmts.exe", "RenameMyTVSeries"),
-            "handbrake": ("HandBrakeCLI.exe", "HandBrakeCLI"),
+            "handbrake": ("HandBrake.exe", "HandBrake"),
             "mediainfo": ("MediaInfo.exe", "mediainfo"),
             "dovi_tool": ("dovi_tool.exe", "dovi_tool"),
             "hdr10plus_tool": ("hdr10plus_tool.exe", "hdr10plus_tool"),
+            "hdr10plus_generator": ("HDRPlusGenerator.exe", "HDRPlusGenerator"),
+            "davinci_resolve": ("Resolve.exe", "resolve"),
+            "comfyui": ("ComfyUI.exe", "comfyui.exe", "main.py"),
             "mp4box": ("MP4Box.exe", "mp4box"),
+            "tesseract": ("tesseract.exe", "tesseract"),
         }.get(tool, (tool,))
-        found = find_tool(names[0], *names[1:])
-        if found != names[0]:
+        optional_tools = get_tool_paths()
+        found = (optional_tools.davinci_resolve if tool == "davinci_resolve" else
+                 optional_tools.comfyui if tool == "comfyui" else find_tool(names[0], *names[1:]))
+        if found != names[0] and Path(found).exists():
             found_path = Path(found).resolve()
             edit.setText(str(found_path.parent))
             QMessageBox.information(d, "Gefunden", f"{tool} gefunden:\n{found_path}")
@@ -248,11 +347,15 @@ class RuntimeToolsSection(SettingsSection):
             "mkv": (tp.mkvmerge, "mkvmerge.exe"),
             "makemkvcon": (tp.makemkvcon, "makemkvcon64.exe / makemkvcon.exe"),
             "rmts": (tp.rmts, "RenameMyTVSeries.exe"),
-            "handbrake": (tp.handbrake_cli, "HandBrake.exe / HandBrakeCLI.exe"),
+            "handbrake": (tp.handbrake, "HandBrake.exe"),
             "mediainfo": (tp.mediainfo, "MediaInfo.exe"),
             "dovi_tool": (tp.dovi_tool, "dovi_tool.exe"),
             "hdr10plus_tool": (tp.hdr10plus_tool, "hdr10plus_tool.exe"),
+            "hdr10plus_generator": (tp.hdr10plus_generator, "HDRPlusGenerator.exe"),
+            "davinci_resolve": (tp.davinci_resolve, "Resolve.exe"),
+            "comfyui": (tp.comfyui, "ComfyUI / main.py"),
             "mp4box": (tp.mp4box, "MP4Box.exe"),
+            "tesseract": (tp.tesseract, "tesseract.exe"),
         }
         missing: list[str] = []
         lines: list[str] = []

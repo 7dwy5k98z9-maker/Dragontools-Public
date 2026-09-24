@@ -76,6 +76,7 @@ class JobJournal:
             "log_file": str(log_file or ""),
             "current_file": "",
             "current_files": [],
+            "queue_order": [str(path) for path in files],
             "pid": os.getpid(),
             "files": {
                 str(path): {
@@ -111,6 +112,27 @@ class JobJournal:
             row["message"] = str(message or "")
             row["finished_at"] = now_iso()
             self._remove_current_file(input_path)
+            self._touch()
+
+    def update_queue_order(self, paths: list[str]) -> None:
+        """Persistiert die aktuelle sichtbare Queue-Reihenfolge atomar.
+
+        Neu live hinzugefügte Dateien werden dabei zugleich als ``queued`` in
+        das Journal aufgenommen. Entfernte wartende Dateien bleiben historisch
+        in ``files`` erhalten, gehören aber nicht mehr zur Resume-Reihenfolge.
+        """
+        with self._lock:
+            ordered: list[str] = []
+            seen: set[str] = set()
+            for path in paths or []:
+                value = str(path or "")
+                key = os.path.normcase(value)
+                if not value or key in seen:
+                    continue
+                seen.add(key)
+                ordered.append(value)
+                self._row(value)
+            self.data["queue_order"] = ordered
             self._touch()
 
     def finish_run(self, *, status: str = "completed") -> None:

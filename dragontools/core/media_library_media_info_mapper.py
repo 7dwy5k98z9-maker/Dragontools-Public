@@ -23,10 +23,16 @@ def _streams_from_media_info(info: MediaInfo) -> list[dict[str, Any]]:
     return streams
 
 
+def _container_stream_index(stream, fallback: int) -> int:
+    """Return the real container/ffprobe stream index when the analyzer has one."""
+    value = _int_or_none(getattr(stream, "index", None))
+    return int(value) if value is not None else int(fallback)
+
+
 def _video_stream_row(info: MediaInfo, stream, index: int) -> dict[str, Any]:
     return {
         "stream_type": "Video",
-        "stream_index": index,
+        "stream_index": _container_stream_index(stream, index),
         "codec": stream.codec,
         "language": None,
         "forced": 0,
@@ -56,7 +62,7 @@ def _video_stream_row(info: MediaInfo, stream, index: int) -> dict[str, Any]:
 def _audio_stream_row(stream, index: int) -> dict[str, Any]:
     return {
         "stream_type": "Audio",
-        "stream_index": index,
+        "stream_index": _container_stream_index(stream, index),
         "codec": stream.codec,
         "language": stream.language,
         "forced": 0,
@@ -86,7 +92,7 @@ def _audio_stream_row(stream, index: int) -> dict[str, Any]:
 def _subtitle_stream_row(stream, index: int) -> dict[str, Any]:
     return {
         "stream_type": "Subtitle",
-        "stream_index": index,
+        "stream_index": _container_stream_index(stream, index),
         "codec": stream.codec,
         "language": stream.language,
         "forced": 1 if stream.forced else 0,
@@ -115,7 +121,12 @@ def _subtitle_stream_row(stream, index: int) -> dict[str, Any]:
 
 def _streams_from_media_info_with_sidecars(path: str | Path, info: MediaInfo) -> list[dict[str, Any]]:
     streams = _streams_from_media_info(info)
-    max_index = max((_int_or_none(stream.get("stream_index")) or -1 for stream in streams), default=-1)
+    indices = [
+        value
+        for stream in streams
+        if (value := _int_or_none(stream.get("stream_index"))) is not None
+    ]
+    max_index = max(indices, default=-1)
     streams.extend(_subtitle_sidecar_streams(path, max_index + 1))
     return streams
 

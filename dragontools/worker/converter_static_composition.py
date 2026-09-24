@@ -74,7 +74,7 @@ def build_static_converter_services(
         logger=logger,
         runtime_state=runtime_state,
         overwrite_original=job.overwrite_original,
-        event_emit=worker.event.emit,
+        event_emit=worker.worker_event.emit,
         file_progress_emit=worker.file_progress.emit,
         file_result_emit=worker.file_result.emit,
         log=worker.log,

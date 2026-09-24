@@ -10,6 +10,7 @@ Windows: liest GPU-Namen direkt aus der Windows-Registry (winreg) –
 Linux:   lspci (subprocess, nur auf Linux relevant).
 """
 from __future__ import annotations
+import logging
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -111,7 +112,7 @@ def _detect_windows() -> list[GpuInfo]:
                     break
 
     except Exception:
-        pass
+        logging.getLogger(__name__).debug("Unterdrückte Best-Effort-Ausnahme in _detect_windows.", exc_info=True)
 
     return gpus
 
@@ -135,7 +136,7 @@ def _detect_linux() -> list[GpuInfo]:
             name = line.split(":", 2)[-1].strip()
             gpus.append(GpuInfo(name=name, vendor=vendor, encoder=encoder, is_igpu=_is_igpu(name)))
     except Exception:
-        pass
+        logging.getLogger(__name__).debug("Unterdrückte Best-Effort-Ausnahme in _detect_linux.", exc_info=True)
     return gpus
 
 

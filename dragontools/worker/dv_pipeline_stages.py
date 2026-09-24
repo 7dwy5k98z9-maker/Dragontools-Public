@@ -37,6 +37,7 @@ def _metadata_service(owner: "DVPipelineStages") -> DVDynamicMetadataService:
         audio_mux_service=getattr(owner, "_audio_mux_service", None),
         rpu_service=getattr(owner, "_rpu_service", None),
         hdr10plus_service=getattr(owner, "_hdr10plus_service", None),
+        generator_client=getattr(owner, "_generator_client", None),
         level5_editor=getattr(owner, "_level5_editor", None),
         failure_recovery=getattr(owner, "_failure_recovery", None),
         log=getattr(owner, "_log", lambda *_args, **_kwargs: None),
@@ -82,6 +83,7 @@ class DVPipelineStages:
         mkv_muxer=None,
         rpu_service=None,
         hdr10plus_service,
+        generator_client=None,
         level5_editor,
         subtitle_service,
         subtitle_mux_service=None,
@@ -104,6 +106,7 @@ class DVPipelineStages:
         self._mkv_muxer = mkv_muxer
         self._rpu_service = rpu_service
         self._hdr10plus_service = hdr10plus_service
+        self._generator_client = generator_client
         self._level5_editor = level5_editor
         self._subtitle_service = subtitle_service
         self._subtitle_mux_service = subtitle_mux_service
@@ -131,6 +134,12 @@ class DVPipelineStages:
         if request.preserve_dv_hdr10plus_combo:
             self._log(
                 "ℹ️  [DV+HDR10+] Kombipfad aktiv: Dolby Vision und HDR10+ werden gemeinsam erhalten.",
+                "info",
+            )
+        elif bool(getattr(request, "generate_hdr10plus", False)):
+            self._log(
+                "ℹ️  [DV+HDR10+] Generatorpfad aktiv: finaler DV-Encode wird zuerst analysiert, "
+                "danach HDR10+ und DV-RPU ohne weitere Bildverarbeitung injiziert.",
                 "info",
             )
 

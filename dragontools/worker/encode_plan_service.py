@@ -10,6 +10,7 @@ from .hdr10_color import (
     should_apply_standard_hdr10_color,
 )
 from ..core.models import TargetCodec
+from ..core.sdr_hdr_enhancement import decide_sdr_hdr_enhancement
 from ..core.type_utils import _safe_bool, _safe_int
 
 
@@ -140,6 +141,7 @@ class EncodePlanService:
         # in der Praxis nicht zuverlässig und kann Rot→Lila verschieben.
         color_pre_filter = None
         color_post_filters: list[str] = []
+        active_options["_sdr_hdr_applied"] = False
         pipeline_value = str(getattr(pipeline, "value", pipeline) or "").strip().lower()
         is_standard_pipeline = pipeline_value not in {"dv", "av1_dv", "pipeline.dv", "pipeline.av1_dv"}
         if is_standard_pipeline and _is_dv5_source(media_info):
@@ -162,6 +164,44 @@ class EncodePlanService:
                     "STANDARD-Modus: HDR10-Farbraum wird explizit als "
                     "BT.2020/PQ/10-bit gesetzt."
                 )
+
+        if is_standard_pipeline and not color_pre_filter and not color_post_filters:
+            enhancement = decide_sdr_hdr_enhancement(
+                media_info,
+                target_codec=active_codec,
+                encoder_options=active_options,
+            )
+            if enhancement.applied:
+                color_post_filters = list(enhancement.filter_chain)
+                active_options["_sdr_hdr_applied"] = True
+                active_options["_force_10bit"] = True
+                backend = str(active_options.get("sdr_hdr_backend", "ffmpeg") or "ffmpeg").strip().lower()
+                if backend == "comfyui":
+                    self._log(
+                        "🧠 SDR→HDR Enhancement aktiv: BT.709 → BT.2020/PQ "
+                        "per ComfyUI/HDRTVDM.",
+                        "info",
+                    )
+                else:
+                    self._log(
+                        "🧪 SDR→HDR Enhancement aktiv: BT.709 → BT.2020/PQ per libplacebo "
+                        "Inverse Tone Mapping / Range Expansion.",
+                        "warn",
+                    )
+            elif enhancement.requested:
+                backend = str(active_options.get("sdr_hdr_backend", "ffmpeg") or "ffmpeg").strip().lower()
+                if backend == "comfyui":
+                    self._log(
+                        f"⚠️ SDR→HDR nicht angewendet: {enhancement.reason} "
+                        "Ausgabe bleibt SDR; normaler SDR-Encode wird fortgesetzt.",
+                        "warn",
+                    )
+                else:
+                    self._log(
+                        f"⚠️ SDR→HDR Enhancement übersprungen: {enhancement.reason} "
+                        "Normaler SDR-Encode bleibt aktiv.",
+                        "warn",
+                    )
 
         pre_filters = [f for f in [color_pre_filter, crop, scale_filter] if f]
         vf_args = self._stream_args.build_vf_args(

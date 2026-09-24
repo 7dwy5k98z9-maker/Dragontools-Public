@@ -52,8 +52,12 @@ class ConversionResultFinishMixin:
             self._state.thread = None
             self._refresh_queue()
         except Exception:
+            details = traceback.format_exc()
+            notifications = getattr(self, "_notifications", None)
+            if notifications is not None:
+                notifications.on_internal_error("Dragon Tools Abschlussfehler", details)
             self._log("❌ Unbehandelte Ausnahme in on_finished()", "error")
-            self._log(traceback.format_exc(), "error")
+            self._log(details, "error")
 
     def _handle_aborted_run(self, finished_thread) -> None:
         self._log("⏹ Konvertierung abgebrochen.")

@@ -76,3 +76,18 @@ def test_architecture_tests_do_not_depend_on_project_cwd():
                 offenders.append(f"{path.name}:{node.lineno}:{first.value}")
 
     assert offenders == []
+
+
+def test_source_release_omits_generated_pyinstaller_specs(tmp_path):
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "module.py").write_text("VALUE = 1\n", encoding="utf-8")
+    (source / "DragonToolsV9.8.5.spec").write_text("# generated\n", encoding="utf-8")
+    target = tmp_path / "source.zip"
+
+    create_source_release_zip(source, target)
+
+    with zipfile.ZipFile(target) as archive:
+        names = archive.namelist()
+    assert "module.py" in names
+    assert not any(name.casefold().endswith(".spec") for name in names)

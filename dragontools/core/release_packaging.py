@@ -16,6 +16,7 @@ from pathlib import Path, PurePosixPath
 
 FORBIDDEN_RELEASE_DIRS = frozenset({"__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache"})
 FORBIDDEN_RELEASE_SUFFIXES = frozenset({".pyc", ".pyo"})
+GENERATED_BUILD_SUFFIXES = frozenset({".spec"})
 ROOT_LOCAL_CACHE_DIRS = frozenset({".pytest_cache", ".mypy_cache", ".ruff_cache"})
 IGNORED_RELEASE_DIRS = frozenset({
     "__pycache__",
@@ -30,6 +31,9 @@ IGNORED_RELEASE_DIRS = frozenset({
     "git release",
     "projekt",
     "third_party",
+    "comfyui_windows_portable",
+    "dragon_hdr10plus_generator",
+    "hdrtvdm",
 })
 EXCLUDED_LOCAL_TREES = IGNORED_RELEASE_DIRS - FORBIDDEN_RELEASE_DIRS
 
@@ -172,6 +176,8 @@ def _iter_release_files(root: Path, *, excluded_paths: set[Path]) -> list[Path]:
                 continue
             relative = path.relative_to(root)
             if is_forbidden_release_path(relative):
+                continue
+            if relative.suffix.casefold() in GENERATED_BUILD_SUFFIXES:
                 continue
             files.append(path)
     return sorted(files, key=lambda item: item.relative_to(root).as_posix().casefold())

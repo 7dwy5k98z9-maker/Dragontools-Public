@@ -11,16 +11,14 @@ def apply_series_season_override(
     parsed: ParsedSeriesReleaseName,
     season_override: int | None,
 ) -> tuple[ParsedSeriesReleaseName, str | None]:
-    """Apply an explicit season to an EPxx-only parsed release.
+    """Apply an explicit season to a parsed series release.
 
     Returns ``(parsed, issue)``. ``issue`` is ``None`` on success,
     ``"missing"`` when no season was supplied, and ``"invalid"`` for an
     out-of-range value.
     """
-    if not parsed.season_missing:
-        return parsed, None
     if season_override is None:
-        return parsed, "missing"
+        return (parsed, "missing") if parsed.season_missing else (parsed, None)
     try:
         season = int(season_override)
     except (TypeError, ValueError):
@@ -31,7 +29,9 @@ def apply_series_season_override(
     warnings = tuple(
         item for item in parsed.warnings
         if not item.startswith("Staffel fehlt im EPxx-Muster")
-    ) + (f"Staffel {season} manuell für EPxx gesetzt.",)
+        and not item.startswith("Staffel ")
+        and "Staffel 1 wurde als Standard angenommen" not in item
+    ) + (f"Staffel {season} manuell gesetzt.",)
     return replace(
         parsed,
         season=season,

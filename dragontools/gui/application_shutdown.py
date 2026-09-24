@@ -6,6 +6,7 @@ Das Modul ist absichtlich Qt-unabhängig. Die einzelnen Widgets exponieren über
 MainWindow weder private Worker-Attribute noch konkrete Workerklassen.
 """
 from __future__ import annotations
+import logging
 
 from dataclasses import dataclass
 import time
@@ -29,7 +30,7 @@ def _worker_name(worker: Any) -> str:
         if name:
             return str(name)
     except Exception:
-        pass
+        logging.getLogger(__name__).debug("Unterdrückte Best-Effort-Ausnahme in _worker_name.", exc_info=True)
     return worker.__class__.__name__
 
 

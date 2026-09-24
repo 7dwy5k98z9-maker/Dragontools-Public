@@ -43,15 +43,14 @@ class ConvertWidgetQueueContextActionsMixin:
             menu.exec(self._ui.file_list.mapToGlobal(pos))
             return
         menu.addSeparator()
-        processing_mode = normalize_override_dict(
-            self._state.file_overrides.get(path, {})
-        ).get("processing_mode")
-        strip_action = menu.addAction(
-            "🧹 Nur diese Datei Strip-Only AN/AUS",
-            lambda: self._toggle_strip_only(path),
+        strip_selected = all(
+            normalize_override_dict(self._state.file_overrides.get(selected, {})).get("processing_mode") == "strip_only"
+            for selected in selected_paths
         )
+        strip_label = f"🧹 Strip-Only für Auswahl ({len(selected_paths)}) AN/AUS" if len(selected_paths) > 1 else "🧹 Strip-Only AN/AUS"
+        strip_action = menu.addAction(strip_label, lambda paths=tuple(selected_paths): self._toggle_strip_only(paths))
         strip_action.setCheckable(True)
-        strip_action.setChecked(processing_mode == "strip_only")
+        strip_action.setChecked(strip_selected)
         menu.addAction("⚙️ Datei-Einstellungen …", lambda: self._edit_override(path))
         encoder_label = (
             f"🎛️ Encoder / Skalierung für Auswahl ({len(selected_paths)}) …"

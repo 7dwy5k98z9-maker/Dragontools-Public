@@ -78,11 +78,13 @@ def source_has_hdr10_base(media_info) -> bool:
     return _is_pq(transfer) and _is_bt2020(primaries)
 
 
-def should_apply_standard_hdr10_color(media_info, target_codec: str) -> bool:
+def should_apply_standard_hdr10_color(media_info, target_codec: str, *, force_hdr: bool = False) -> bool:
     codec_value = getattr(target_codec, "value", target_codec)
     codec = str(codec_value).lower()
-    return codec in {TargetCodec.H265.value, TargetCodec.AV1.value} and source_has_hdr10_base(media_info)
+    if codec not in {TargetCodec.H265.value, TargetCodec.AV1.value}:
+        return False
+    return bool(force_hdr) or source_has_hdr10_base(media_info)
 
 
-def hdr10_output_args(media_info, target_codec: str) -> list[str]:
-    return list(HDR10_OUTPUT_ARGS) if should_apply_standard_hdr10_color(media_info, target_codec) else []
+def hdr10_output_args(media_info, target_codec: str, *, force_hdr: bool = False) -> list[str]:
+    return list(HDR10_OUTPUT_ARGS) if should_apply_standard_hdr10_color(media_info, target_codec, force_hdr=force_hdr) else []

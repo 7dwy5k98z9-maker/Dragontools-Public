@@ -25,7 +25,6 @@ def _set_last_stderr(worker, value: str) -> None:
 class ConverterProcessExecutor:
     def __init__(self, worker) -> None:
         self.worker = worker
-
     def terminate(self, proc, *, label: str, timeout_s=None) -> None:
         if proc is None:
             return
@@ -54,7 +53,6 @@ class ConverterProcessExecutor:
             command=command, label=label, timeout_s=timeout_s, worker=self.worker,
             log=self.worker.log, timeout_mode=timeout_mode, file_path=path,
         )
-
     def run(self, cmd, *, timeout_s: int | None = None, label: str = "Subprozess") -> int:
         timeout_s = 14_400 if timeout_s is None else timeout_s
         full = [str(part) for part in cmd]
@@ -71,7 +69,6 @@ class ConverterProcessExecutor:
             **_popen_kwargs(),
         )
         lifecycle.register(proc)
-
         def drain_stdout() -> None:
             try:
                 if proc.stdout is None:
@@ -80,7 +77,6 @@ class ConverterProcessExecutor:
                     lifecycle.note_activity()
             except (OSError, ValueError):
                 return
-
         thread = threading.Thread(target=drain_stdout, daemon=True)
         thread.start()
         rc: int | None = None
@@ -107,7 +103,6 @@ class ConverterProcessExecutor:
             if thread.is_alive():
                 thread.join(timeout=0.5)
         return int(rc if rc is not None else 1)
-
     def run_capture(self, cmd, *, timeout_s: int | None = None, label: str = "Tool-Prozess") -> tuple[int, str, str]:
         timeout_s = 14_400 if timeout_s is None else timeout_s
         full = [str(part) for part in cmd]
@@ -135,6 +130,13 @@ class ConverterProcessExecutor:
                 if abort_rc is not None:
                     rc = abort_rc
                     break
+                # A completed child always wins over an absolute timeout after a pause.
+                polled = proc.poll()
+                if polled is not None:
+                    stdout, stderr = proc.communicate()
+                    rc = int(polled)
+                    break
+
                 timeout_rc = lifecycle.handle_timeout(display="seconds")
                 if timeout_rc is not None:
                     rc = timeout_rc
@@ -156,6 +158,7 @@ class ConverterProcessExecutor:
             lifecycle.finish(rc)
             close_process_streams(proc)
         return int(rc if rc is not None else 1), stdout or "", stderr or ""
+
     def run_progress(self, cmd, path, dur_ms, *, timeout_s, label: str, probe_frames, read_progress) -> int:
         worker = self.worker
         total_frames = None if dur_ms else probe_frames(path)
@@ -174,7 +177,6 @@ class ConverterProcessExecutor:
             verbose = getattr(worker, "_verbose_logger", None)
             if verbose:
                 verbose.write(f"[FFMPEG FINAL CMD] {_cmd_for_log(full)}")
-
         _set_last_stderr(worker, "")
         stderr_lines: list[str] = []
         lifecycle = self._lifecycle(
@@ -197,10 +199,8 @@ class ConverterProcessExecutor:
             **_popen_kwargs(),
         )
         lifecycle.register(proc)
-
         def note_activity() -> None:
             lifecycle.note_activity()
-
         def drain_stderr() -> None:
             try:
                 if proc.stderr is None:

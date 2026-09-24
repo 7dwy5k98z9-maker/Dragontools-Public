@@ -54,13 +54,17 @@ class CompositeMetadataClient(ParsedMetadataResolverMixin):
         language: str | None = None,
     ) -> list[dict[str, Any]]:
         results: list[dict[str, Any]] = []
+        errors: list[tuple[str, OnlineMetadataError]] = []
+        successful_providers = 0
         for client in self.clients:
             if not hasattr(client, "search_movies"):
                 continue
             try:
                 provider_results = client.search_movies(query, year=year, language=language)
-            except OnlineMetadataError:
+            except OnlineMetadataError as exc:
+                errors.append((_client_provider_label(client), exc))
                 continue
+            successful_providers += 1
             provider = "thetvdb" if isinstance(client, TheTvdbClient) else "tmdb"
             for item in provider_results:
                 record = dict(item)
@@ -70,33 +74,44 @@ class CompositeMetadataClient(ParsedMetadataResolverMixin):
                     record.get("provider_id") or record.get("id") or record.get("tmdb_id"),
                 )
                 results.append(record)
+        _raise_if_all_providers_failed(successful_providers, errors)
         return results
 
     def resolve_movie(self, query: str, *, year: int | None = None) -> MovieMetadataSuggestion | None:
         # Clients stehen bereits in der vom Benutzer gewählten Priorität.
         # Der zweite Provider ist Fallback, nicht Konkurrent des bevorzugten.
+        errors: list[tuple[str, OnlineMetadataError]] = []
+        successful_providers = 0
         for client in self.clients:
             if not hasattr(client, "resolve_movie"):
                 continue
             try:
                 suggestion = client.resolve_movie(query, year=year)
-            except OnlineMetadataError:
+            except OnlineMetadataError as exc:
+                errors.append((_client_provider_label(client), exc))
                 continue
+            successful_providers += 1
             if suggestion is not None:
                 return suggestion
+        _raise_if_all_providers_failed(successful_providers, errors)
         return None
 
     def resolve_series(self, query: str, *, year: int | None = None) -> SeriesMetadataSuggestion | None:
         # Clients stehen bereits in der vom Benutzer gewählten Priorität.
+        errors: list[tuple[str, OnlineMetadataError]] = []
+        successful_providers = 0
         for client in self.clients:
             if not hasattr(client, "resolve_series"):
                 continue
             try:
                 suggestion = client.resolve_series(query, year=year)
-            except OnlineMetadataError:
+            except OnlineMetadataError as exc:
+                errors.append((_client_provider_label(client), exc))
                 continue
+            successful_providers += 1
             if suggestion is not None:
                 return suggestion
+        _raise_if_all_providers_failed(successful_providers, errors)
         return None
 
     def resolve_episode_file(self, path: str | Path) -> EpisodeMetadataSuggestion | None:
@@ -110,6 +125,41 @@ class CompositeMetadataClient(ParsedMetadataResolverMixin):
         limit: int = 6,
     ) -> tuple[EpisodeMetadataSuggestion, ...]:
         return self._episode_candidates(path, limit=limit, force_refresh=False)
+
+    def resolve_renamer_episode_candidates(
+        self,
+        path: str | Path,
+        *,
+        limit: int = 6,
+    ) -> tuple[EpisodeMetadataSuggestion, ...]:
+        """Use provider batch paths tailored to the rename UI."""
+        per_provider_cap = max(1, int(limit))
+        results: list[EpisodeMetadataSuggestion] = []
+        errors: list[tuple[str, OnlineMetadataError]] = []
+        successful_providers = 0
+        for client in self.clients:
+            attempted = False
+            try:
+                if hasattr(client, "resolve_renamer_episode_candidates"):
+                    attempted = True
+                    bucket = client.resolve_renamer_episode_candidates(
+                        path, limit=per_provider_cap
+                    )
+                elif hasattr(client, "resolve_episode_candidates"):
+                    attempted = True
+                    bucket = client.resolve_episode_candidates(
+                        path, limit=per_provider_cap
+                    )
+                else:
+                    bucket = ()
+            except OnlineMetadataError as exc:
+                errors.append((_client_provider_label(client), exc))
+                continue
+            if attempted:
+                successful_providers += 1
+            results.extend(list(bucket or ())[:per_provider_cap])
+        _raise_if_all_providers_failed(successful_providers, errors)
+        return tuple(results)
 
     def refresh_episode_candidates(
         self,
@@ -135,25 +185,51 @@ class CompositeMetadataClient(ParsedMetadataResolverMixin):
     ) -> tuple[EpisodeMetadataSuggestion, ...]:
         per_provider_cap = max(1, int(limit))
         results: list[EpisodeMetadataSuggestion] = []
+        errors: list[tuple[str, OnlineMetadataError]] = []
+        successful_providers = 0
         for client in self.clients:
             bucket: list[EpisodeMetadataSuggestion] = []
+            attempted = False
             try:
                 if force_refresh and hasattr(client, "refresh_episode_candidates"):
+                    attempted = True
                     bucket.extend(
                         client.refresh_episode_candidates(path, limit=per_provider_cap)
                     )
                 elif hasattr(client, "resolve_episode_candidates"):
+                    attempted = True
                     bucket.extend(
                         client.resolve_episode_candidates(path, limit=per_provider_cap)
                     )
                 elif hasattr(client, "resolve_episode_file"):
+                    attempted = True
                     suggestion = client.resolve_episode_file(path)
                     if suggestion is not None:
                         bucket.append(suggestion)
-            except OnlineMetadataError:
+            except OnlineMetadataError as exc:
+                errors.append((_client_provider_label(client), exc))
                 continue
+            if attempted:
+                successful_providers += 1
             results.extend(bucket[:per_provider_cap])
+        _raise_if_all_providers_failed(successful_providers, errors)
         return tuple(results)
+
+
+def _client_provider_label(client: Any) -> str:
+    return str(getattr(client, "provider_label", "Metadaten") or "Metadaten")
+
+
+def _raise_if_all_providers_failed(
+    successful_providers: int,
+    errors: list[tuple[str, OnlineMetadataError]],
+) -> None:
+    if successful_providers > 0 or not errors:
+        return
+    details = "; ".join(f"{provider}: {error}" for provider, error in errors)
+    raise OnlineMetadataError(
+        f"Alle konfigurierten Metadaten-Provider sind fehlgeschlagen: {details}"
+    ) from errors[-1][1]
 
 
 def client_from_settings(settings, *, require_enabled: bool = False):

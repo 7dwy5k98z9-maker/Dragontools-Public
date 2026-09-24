@@ -199,6 +199,7 @@ class MainWindowRecoveryMixin:
             sidecar_outputs_by_video=plan.get("sidecar_outputs_by_video") or {},
             target_paths=plan.get("target_paths") or {},
             conflict_mode=str(plan.get("conflict_mode") or ""),
+            episode_replacement_mode=str(plan.get("episode_replacement_mode") or ""),
             journal_path=str(plan.get("journal_path") or ""),
             companion_resume_sources=plan.get("companion_resume_sources") or {},
         )

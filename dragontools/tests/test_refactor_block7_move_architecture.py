@@ -66,3 +66,15 @@ def test_release_smoke_tracks_block7_modules():
         "move_batch_lifecycle",
     ):
         assert name in source
+
+def test_move_completion_service_factory_is_wired_after_refactor():
+    commit = _source("worker/move_result_commit.py")
+    lifecycle = _source("worker/move_batch_lifecycle.py")
+
+    assert "def _completion_service" in commit
+    assert "MoveCompletionService(" in commit
+    assert "move_sidecars=self._move_sidecars" in commit
+    assert "record_media_library_move=self._record_media_library_move" in commit
+    assert "append_move_report=self._append_move_report" in commit
+    assert "completion=self._completion_service()" in lifecycle
+

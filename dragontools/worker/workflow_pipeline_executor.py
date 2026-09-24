@@ -30,7 +30,8 @@ class WorkflowPipelineExecutor:
     def execute(self, request: PipelineExecutionRequest) -> PipelineExecutionResult:
         self._temp_state.reset_diagnostics()
         if request.strip_only:
-            return self._execute_strip(request)
+            result = self._execute_strip(request)
+            return self._maybe_generate_hdr10plus(request, result)
 
         try:
             pipeline = Pipeline(request.pipeline)
@@ -49,7 +50,23 @@ class WorkflowPipelineExecutor:
             if self._av1_hdrplus_pipeline is None:
                 return PipelineExecutionResult(success=False, failure_stage="AV1-HDR10+", failure_reason="AV1-HDR10+-Pipeline ist nicht verdrahtet.")
             return self._av1_hdrplus_pipeline.execute(request)
-        return self._standard_pipeline.execute(request)
+        result = self._standard_pipeline.execute(request)
+        return self._maybe_generate_hdr10plus(request, result)
+
+    def _maybe_generate_hdr10plus(
+        self, request: PipelineExecutionRequest, result: PipelineExecutionResult
+    ) -> PipelineExecutionResult:
+        if not result.success or not bool(request.generate_hdr10plus_postprocess):
+            return result
+        postprocess = getattr(self._hdrplus_pipeline, "generate_and_inject_existing_output", None)
+        if not callable(postprocess):
+            return PipelineExecutionResult(
+                success=False,
+                sidecar_paths=result.sidecar_paths,
+                failure_stage="HDR10+-Postprozess",
+                failure_reason="HDR10+-Postprozess ist nicht verdrahtet.",
+            )
+        return postprocess(request, sidecar_paths=result.sidecar_paths)
 
     def _execute_strip(self, request: PipelineExecutionRequest) -> PipelineExecutionResult:
         ok = bool(
@@ -64,7 +81,11 @@ class WorkflowPipelineExecutor:
         if ok:
             owner = getattr(self._strip_runner, "__self__", None)
             sidecars = tuple(getattr(owner, "last_sidecar_paths", ()) or ())
-            return PipelineExecutionResult.succeeded(sidecar_paths=sidecars)
+            externalized = tuple(getattr(owner, "last_externalized_subtitle_stream_indices", ()) or ())
+            return PipelineExecutionResult.succeeded(
+                sidecar_paths=sidecars,
+                externalized_subtitle_stream_indices=externalized,
+            )
         return PipelineExecutionResult(
             success=False,
             failure_reason=self._temp_state.failure_reason,

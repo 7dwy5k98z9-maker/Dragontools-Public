@@ -67,6 +67,8 @@ class MoveCompletionService:
         target_dir: str,
         dest_path: str,
         source_video_path: str,
+        staged_paths: list[str] | tuple[str, ...] | set[str] | None = None,
+        force_nfo_overwrite: bool = False,
     ) -> dict:
         """Call the companion contract while preserving legacy adapters.
 
@@ -85,7 +87,20 @@ class MoveCompletionService:
         except (TypeError, ValueError):
             accepts_varargs = True
             positional = []
-        if accepts_varargs or len(positional) >= 4:
+        if accepts_varargs or len(positional) >= 6:
+            return self._move_sidecars(
+                sidecar_key,
+                target_dir,
+                dest_path,
+                source_video_path,
+                staged_paths,
+                force_nfo_overwrite,
+            )
+        if len(positional) >= 5:
+            return self._move_sidecars(
+                sidecar_key, target_dir, dest_path, source_video_path, staged_paths
+            )
+        if len(positional) >= 4:
             return self._move_sidecars(
                 sidecar_key, target_dir, dest_path, source_video_path
             )
@@ -101,6 +116,7 @@ class MoveCompletionService:
         target_dir: str,
         original_source: str,
         move_result: dict,
+        staged_sidecar_paths: list[str] | tuple[str, ...] | set[str] | None = None,
     ) -> MoveCompletionOutcome:
         cleanup_pending = bool(move_result.get("cleanup_pending"))
         self._append_move_report(move_result)
@@ -114,7 +130,12 @@ class MoveCompletionService:
         )
 
         sidecar_result = self._call_move_sidecars(
-            sidecar_key, target_dir, dest_path, str(original_source or sidecar_key)
+            sidecar_key,
+            target_dir,
+            dest_path,
+            str(original_source or sidecar_key),
+            staged_sidecar_paths,
+            bool(move_result.get("episode_identity_replacement")),
         )
         if not bool(sidecar_result.get("ok", True)):
             failed_count = int(sidecar_result.get("failed", 0) or 0)

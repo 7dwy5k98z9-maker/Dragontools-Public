@@ -131,6 +131,14 @@ class TvdbResolverMixin:
             force_refresh=force_refresh,
         )
 
+    def resolve_renamer_episode_candidates(
+        self, path: str | Path, *, limit: int = 6
+    ) -> tuple[EpisodeMetadataSuggestion, ...]:
+        # TheTVDB already exposes the complete series episode list and caches it
+        # per client session. The additional high-level series-search cache keeps
+        # mass-renamer runs local after the first file of a series.
+        return self.resolve_episode_candidates(path, limit=limit, force_refresh=False)
+
     def refresh_episode_candidates(
         self, path: str | Path, *, limit: int = 6
     ) -> tuple[EpisodeMetadataSuggestion, ...]:

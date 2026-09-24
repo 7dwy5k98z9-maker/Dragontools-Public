@@ -2,6 +2,7 @@
 """Sidecar- und Trickplay-Verschiebung als eigener Service."""
 from __future__ import annotations
 
+import filecmp
 import shutil
 from pathlib import Path
 from typing import Callable
@@ -19,6 +20,7 @@ class MoveSidecarService:
         trickplay_conflict_mode: str,
         nfo_movie_target_name: str,
         move_file: Callable[..., tuple[bool, dict]],
+        overwrite_file: Callable[..., tuple[bool, dict]] | None = None,
         log: Callable[[str, str], None],
         append_report: Callable[[dict | None, str, str | None], None],
         set_last_result: Callable[[dict], None],
@@ -27,6 +29,7 @@ class MoveSidecarService:
         self.trickplay_conflict_mode = trickplay_conflict_mode
         self.nfo_movie_target_name = nfo_movie_target_name
         self._move_file = move_file
+        self._overwrite_file = overwrite_file or move_file
         self._log = log
         self._append_report = append_report
         self._set_last_result = set_last_result
@@ -38,6 +41,8 @@ class MoveSidecarService:
         sidecars: list[str],
         *,
         dest_video_path: str | None = None,
+        staged_paths: list[str] | tuple[str, ...] | set[str] | None = None,
+        force_nfo_overwrite: bool = False,
     ) -> dict:
         """Verschiebt Companion-Dateien idempotent und liefert einen Gesamtstatus.
 
@@ -53,7 +58,8 @@ class MoveSidecarService:
             "failed": 0,
             "results": [],
         }
-        for sidecar in sidecars or []:
+        staged_keys = {self._path_key(path) for path in (staged_paths or [])}
+        for sidecar in self._ordered_sidecars(sidecars):
             summary["total"] += 1
             sidecar_p = Path(sidecar)
             sidecar_type = self.sidecar_type(sidecar_p)
@@ -64,6 +70,44 @@ class MoveSidecarService:
                 dest_video_path=dest_video_path,
             )
             dest_path = Path(target_dir) / dest_name
+
+            # Companion-first staging copies sidecars into the final location
+            # before the video is installed, but intentionally keeps the source
+            # until the video commit succeeds.  Finalization consumes that source
+            # without treating our own staged copy as a user conflict.
+            same_location = bool(
+                sidecar_p.exists() and dest_path.exists() and same_path(sidecar_p, dest_path)
+            )
+            if same_location or (
+                dest_path.exists()
+                and (
+                    self._path_key(dest_path) in staged_keys
+                    or (sidecar_p.exists() and self._paths_equivalent(sidecar_p, dest_path))
+                )
+            ):
+                if not same_location:
+                    self._remove_committed_source(sidecar_p)
+                result = {
+                    "kind": "sidecar",
+                    "sidecar_type": sidecar_type,
+                    "name": sidecar_p.name,
+                    "source_path": str(sidecar_p),
+                    "target_dir": str(target_dir),
+                    "dest_path": str(dest_path),
+                    "ok": True,
+                    "already_present": True,
+                    "staged_before_video": True,
+                    "conflict": False,
+                    "deleted_existing": False,
+                    "replaced_existing": False,
+                    "renamed": False,
+                    "skipped_conflict": False,
+                }
+                summary["already_present"] += 1
+                summary["results"].append(result)
+                self._append_report(result, "sidecar", sidecar_type)
+                self._log(f"  ✅ Sidecar vor Video-Commit bereitgestellt: {dest_name}", "info")
+                continue
 
             if not sidecar_p.exists():
                 if dest_path.exists():
@@ -128,7 +172,12 @@ class MoveSidecarService:
                     self._log(f"  ❌ Trickplay konnte nicht verschoben werden: {sidecar_p.name}", "error")
                 continue
 
-            ok, result = self._move_file(sidecar, target_dir, dest_name=dest_name)
+            mover = (
+                self._overwrite_file
+                if force_nfo_overwrite and sidecar_type == "nfo" and dest_path.exists()
+                else self._move_file
+            )
+            ok, result = mover(sidecar, target_dir, dest_name=dest_name)
             self._set_last_result(result)
             self._append_report(result, "sidecar", sidecar_type)
             summary["results"].append(result)
@@ -144,6 +193,174 @@ class MoveSidecarService:
                 self._log(f"  ❌ Sidecar konnte nicht verschoben werden: {sidecar_p.name}", "error")
 
         return summary
+
+    def stage_before_video(
+        self,
+        video_path: str,
+        target_dir: str,
+        sidecars: list[str],
+        *,
+        dest_video_path: str | None = None,
+    ) -> dict:
+        """Make companions visible before the video without consuming sources.
+
+        Missing target companions are copied into their final names. Existing
+        targets are deliberately left untouched until the video commit succeeds;
+        they are still protected from SxxExx cleanup so Jellyfin always sees an
+        NFO/subtitle/trickplay companion when the final video appears.
+        """
+        summary = {
+            "ok": True,
+            "total": 0,
+            "copied": 0,
+            "preexisting": 0,
+            "failed": 0,
+            "protected_paths": [],
+            "staged_paths": [],
+            "results": [],
+        }
+        for sidecar in self._ordered_sidecars(sidecars):
+            summary["total"] += 1
+            source = Path(sidecar)
+            sidecar_type = self.sidecar_type(source)
+            dest_name = self.sidecar_dest_name(
+                source,
+                target_dir,
+                video_path=video_path,
+                dest_video_path=dest_video_path,
+            )
+            dest = Path(target_dir) / dest_name
+            row = {
+                "sidecar_type": sidecar_type,
+                "source_path": str(source),
+                "dest_path": str(dest),
+                "status": "",
+            }
+
+            if dest.exists():
+                row["status"] = "preexisting"
+                summary["preexisting"] += 1
+                summary["protected_paths"].append(str(dest))
+                summary["results"].append(row)
+                self._log(
+                    f"  🧩 Companion bereits vor Video vorhanden: {dest.name}",
+                    "info",
+                )
+                continue
+
+            if not source.exists():
+                row["status"] = "missing"
+                summary["ok"] = False
+                summary["failed"] += 1
+                summary["results"].append(row)
+                self._log(
+                    f"  ⚠️ Companion vor Video-Commit nicht gefunden: {source.name}",
+                    "warn",
+                )
+                continue
+
+            try:
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                if source.is_dir():
+                    shutil.copytree(str(source), str(dest), copy_function=shutil.copy2)
+                else:
+                    shutil.copy2(str(source), str(dest))
+            except (OSError, shutil.Error) as exc:
+                try:
+                    if dest.exists() or dest.is_symlink():
+                        remove_path(dest)
+                except (OSError, shutil.Error):
+                    pass
+                row["status"] = "error"
+                row["message"] = str(exc)
+                summary["ok"] = False
+                summary["failed"] += 1
+                summary["results"].append(row)
+                self._log(
+                    f"  ❌ Companion konnte vor Video-Commit nicht bereitgestellt werden: "
+                    f"{source.name} – {exc}",
+                    "error",
+                )
+                continue
+
+            row["status"] = "copied"
+            summary["copied"] += 1
+            summary["protected_paths"].append(str(dest))
+            summary["staged_paths"].append(str(dest))
+            summary["results"].append(row)
+            self._log(
+                f"  📦 Companion vor Video bereitgestellt: {source.name} -> {dest.name}",
+                "info",
+            )
+
+        # Stable order and dedupe make the journal/tests deterministic.
+        summary["protected_paths"] = list(dict.fromkeys(summary["protected_paths"]))
+        summary["staged_paths"] = list(dict.fromkeys(summary["staged_paths"]))
+        return summary
+
+    def rollback_stage(self, stage_result: dict | None) -> None:
+        """Remove only copies created by :meth:`stage_before_video`."""
+        for path_text in reversed(list((stage_result or {}).get("staged_paths") or [])):
+            path = Path(path_text)
+            try:
+                if path.exists() or path.is_symlink():
+                    remove_path(path)
+                    self._log(
+                        f"  ↩️ Vorbereiteter Companion nach fehlgeschlagenem Video-Move entfernt: {path.name}",
+                        "warn",
+                    )
+            except (OSError, shutil.Error) as exc:
+                self._log(
+                    f"⚠️ Vorbereiteter Companion konnte nicht zurückgerollt werden: {path.name} – {exc}",
+                    "warn",
+                )
+
+    @classmethod
+    def _ordered_sidecars(cls, sidecars: list[str] | tuple[str, ...] | None) -> list[str]:
+        priority = {"nfo": 0, "subtitle": 1, "trickplay": 2, "sidecar": 3}
+        return sorted(
+            list(sidecars or []),
+            key=lambda value: (
+                priority.get(cls.sidecar_type(Path(value)), 9),
+                Path(value).name.casefold(),
+            ),
+        )
+
+    @staticmethod
+    def _path_key(path: str | Path) -> str:
+        import os
+        return os.path.normcase(os.path.abspath(str(path)))
+
+    @classmethod
+    def _paths_equivalent(cls, source: Path, dest: Path) -> bool:
+        try:
+            if source.is_file() and dest.is_file():
+                if source.stat().st_size != dest.stat().st_size:
+                    return False
+                return filecmp.cmp(source, dest, shallow=False)
+            if source.is_dir() and dest.is_dir():
+                source_files = {
+                    p.relative_to(source): p
+                    for p in source.rglob("*")
+                    if p.is_file()
+                }
+                dest_files = {
+                    p.relative_to(dest): p
+                    for p in dest.rglob("*")
+                    if p.is_file()
+                }
+                if source_files.keys() != dest_files.keys():
+                    return False
+                for rel, source_file in source_files.items():
+                    dest_file = dest_files[rel]
+                    if source_file.stat().st_size != dest_file.stat().st_size:
+                        return False
+                    if not filecmp.cmp(source_file, dest_file, shallow=False):
+                        return False
+                return True
+        except OSError:
+            return False
+        return False
 
     def move_trickplay(self, src_p: Path, dst_p: Path) -> tuple[bool, dict]:
         result = new_move_result(str(src_p), str(dst_p.parent), dest_name=dst_p.name)

@@ -7,8 +7,11 @@ from .media_library_utils import _int_or_none
 
 _GERMAN_LANGUAGES = {"de", "deu", "ger", "german", "deutsch"}
 _HDR_MARKERS = ("hdr", "bt2020", "pq", "hlg", "dolby", "smpte2084", "st2084")
-_HDR10PLUS_MARKERS = ("hdr10+", "hdr10plus", "dynamic metadata", "2094-40", "st2094")
-_DV_MARKERS = ("dolby vision", "dovi", "dvhe")
+_HDR10PLUS_MARKERS = (
+    "hdr10+", "hdr10plus", "dynamic metadata", "2094-40", "st2094",
+    "2094 app 4", "st 2094 app 4",
+)
+_DV_MARKERS = ("dolby vision", "dovi", "dvhe", "dvh1", "dva1", "dvav", "dav1")
 
 
 def is_german(language: Any) -> bool:

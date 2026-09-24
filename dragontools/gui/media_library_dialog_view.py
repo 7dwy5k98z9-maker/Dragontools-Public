@@ -24,6 +24,7 @@ from .media_library_dialog_options import (
     SEARCH_SCOPES,
 )
 from .media_library_mapping_tab import build_mapping_tab
+from .media_library_fix_tab import build_fix_tab
 from .media_library_search_tab import build_search_tab, update_search_options
 from .media_library_sql_tab import build_sql_tab
 from .media_library_status_tab import build_status_tab
@@ -46,6 +47,7 @@ class MediaLibraryDialogView:
         self.actions = actions
         self.scan_sensitive_widgets: list[QWidget] = []
         self.nfo_scan_sensitive_widgets: list[QWidget] = []
+        self.fix_sensitive_widgets: list[QWidget] = []
         self._build()
 
     def _build(self) -> None:
@@ -68,6 +70,7 @@ class MediaLibraryDialogView:
         self.tabs.addTab(build_mapping_tab(self, self.actions), "Pfad-Mapping")
         self.tabs.addTab(build_search_tab(self, self.actions), "Suchen")
         self.tabs.addTab(build_sql_tab(self, self.actions), "Bearbeiten")
+        self.tabs.addTab(build_fix_tab(self, self.actions), "Fix Queue")
         root.addWidget(self.tabs, 1)
         root.addWidget(self._build_dialog_buttons())
 
@@ -89,11 +92,16 @@ class MediaLibraryDialogView:
         update_search_options(self, index)
 
     def set_scan_running(self, running: bool) -> None:
-        for widget in self.scan_sensitive_widgets:
+        for widget in [*self.scan_sensitive_widgets, *self.fix_sensitive_widgets]:
             widget.setEnabled(not running)
         self.scan_abort_btn.setEnabled(running)
 
     def set_nfo_scan_running(self, running: bool) -> None:
-        for widget in self.nfo_scan_sensitive_widgets:
+        for widget in [*self.nfo_scan_sensitive_widgets, *self.fix_sensitive_widgets]:
             widget.setEnabled(not running)
         self.nfo_abort_btn.setEnabled(running)
+
+    def set_fix_running(self, running: bool, *, allow_abort: bool = False) -> None:
+        for widget in [*self.fix_sensitive_widgets, *self.scan_sensitive_widgets]:
+            widget.setEnabled(not running)
+        self.fix_abort_btn.setEnabled(bool(running and allow_abort))
