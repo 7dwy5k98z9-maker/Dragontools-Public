@@ -18,7 +18,7 @@ class ConvertWidgetQueueTargetActionsMixin:
             for item in self._ui.file_list.selectedItems()
             if item.data(Qt.ItemDataRole.UserRole)
         ]
-        return selected if clicked_path in selected else [clicked_path]
+        return [clicked_path, *[path for path in selected if path != clicked_path]] if clicked_path in selected else [clicked_path]
 
     def _planned_target_storage_key(self, input_path: str) -> str:
         state = self._state

@@ -38,15 +38,13 @@ from .movie_renamer_candidates import (
 from .online_metadata_common import default_episode_title
 from .path_syntax import path_compare_key
 from .movie_renamer_release_warnings import release_style_warnings
-from .movie_renamer_season_override import apply_series_season_override
+from .movie_renamer_season_override import apply_series_episode_override, apply_series_season_override
 from ..rules.renamer_rules import apply_title_exception
 from .movie_renamer_matching import candidate_status, select_score_stage, stage_warning
-
 
 def _series_candidate_from_result(raw: Any, parsed: ParsedSeriesReleaseName) -> SeriesRenameCandidate | None:
     """Compatibility wrapper that preserves monkeypatchable alias rules."""
     return _candidate_series_from_result(raw, parsed, title_exception=apply_title_exception)
-
 
 def build_movie_rename_proposal(
     path: str | Path,
@@ -128,7 +126,6 @@ def build_movie_rename_proposal(
         search_mode=search_mode,
     )
 
-
 def build_series_rename_proposal(
     path: str | Path,
     *,
@@ -140,6 +137,7 @@ def build_series_rename_proposal(
     minimum_score_override: float | None = None,
     show_all_candidates: bool = False,
     season_override: int | None = None,
+    episode_override: int | None = None,
 ) -> SeriesRenameProposal:
     source_path = Path(path)
     parsed = parse_series_release_name(source_path)
@@ -159,7 +157,12 @@ def build_series_rename_proposal(
         parsed = empty
 
     parsed, season_issue = apply_series_season_override(parsed, season_override)
+    parsed, episode_issue = apply_series_episode_override(parsed, episode_override)
     warnings = list(parsed.warnings)
+    if episode_issue == "invalid":
+        warnings.append("Ungültige Episode gewählt.")
+        return SeriesRenameProposal(source_path=source_path, parsed=parsed, status="no_match",
+                                    warnings=tuple(warnings), search_mode="manual_series" if force else "auto")
     if season_issue is not None:
         if season_issue == "invalid":
             warnings.append("Ungültige Staffel gewählt.")
@@ -244,7 +247,6 @@ def build_series_rename_proposal(
         search_mode=search_mode,
     )
 
-
 def build_rename_proposal(
     path: str | Path,
     *,
@@ -259,6 +261,7 @@ def build_rename_proposal(
     minimum_score_override: float | None = None,
     show_all_candidates: bool = False,
     series_season_override: int | None = None,
+    series_episode_override: int | None = None,
 ) -> RenameProposal:
     forced = str(force_kind or "").strip().lower()
     parsed = parse_movie_release_name(path)
@@ -274,6 +277,7 @@ def build_rename_proposal(
             minimum_score_override=minimum_score_override,
             show_all_candidates=show_all_candidates,
             season_override=series_season_override,
+            episode_override=series_episode_override,
         )
     return build_movie_rename_proposal(
         path,
@@ -288,10 +292,9 @@ def build_rename_proposal(
 
 
 __all__ = [
-    "EDITION_PATTERNS", "TECHNICAL_TAG_PATTERNS", "VIDEO_SUFFIXES",
-    "MovieRenameCandidate", "MovieRenameProposal", "MovieSearchResolver", "ParsedMovieReleaseName",
-    "ParsedSeriesReleaseName", "RenameProposal", "SeriesRenameCandidate", "SeriesRenameProposal", "SeriesSearchResolver",
-    "build_movie_rename_proposal", "build_rename_proposal", "build_series_rename_proposal",
-    "build_series_target_filename", "build_target_filename", "parse_movie_release_name", "parse_series_release_name",
-    "release_style_warnings", "rename_movie_file", "sanitize_filename_part",
+    "EDITION_PATTERNS", "TECHNICAL_TAG_PATTERNS", "VIDEO_SUFFIXES", "MovieRenameCandidate", "MovieRenameProposal",
+    "MovieSearchResolver", "ParsedMovieReleaseName", "ParsedSeriesReleaseName", "RenameProposal", "SeriesRenameCandidate",
+    "SeriesRenameProposal", "SeriesSearchResolver", "build_movie_rename_proposal", "build_rename_proposal",
+    "build_series_rename_proposal", "build_series_target_filename", "build_target_filename", "parse_movie_release_name",
+    "parse_series_release_name", "release_style_warnings", "rename_movie_file", "sanitize_filename_part",
 ]

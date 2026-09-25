@@ -168,9 +168,7 @@ class ConvertWidgetQueueOverrideActionsMixin:
         self._state.file_overrides[path] = ov
         self.update_queue_label(path)
 
-    def _edit_override(self, path: str) -> None:
+    def _edit_override(self, paths) -> None:
         if not self._guard_queue_edit_allowed("Datei-Einstellungen aendern"):
             return
-        self._override_dialog.edit_override(path)
-        getattr(self._state, "preflight_rows_by_path", {}).pop(path, None)
-        self.update_queue_label(path)
+        self._override_dialog.edit_override(paths)

@@ -51,7 +51,7 @@ class ConvertWidgetQueueContextActionsMixin:
         strip_action = menu.addAction(strip_label, lambda paths=tuple(selected_paths): self._toggle_strip_only(paths))
         strip_action.setCheckable(True)
         strip_action.setChecked(strip_selected)
-        menu.addAction("⚙️ Datei-Einstellungen …", lambda: self._edit_override(path))
+        menu.addAction(f"⚙️ Datei-Einstellungen für Auswahl ({len(selected_paths)}) …" if len(selected_paths) > 1 else "⚙️ Datei-Einstellungen …", lambda paths=tuple(selected_paths): self._edit_override(paths))
         encoder_label = (
             f"🎛️ Encoder / Skalierung für Auswahl ({len(selected_paths)}) …"
             if len(selected_paths) > 1

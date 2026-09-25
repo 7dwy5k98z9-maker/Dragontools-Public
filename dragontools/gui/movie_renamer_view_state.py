@@ -87,6 +87,7 @@ class MovieRenamerViewStateMixin:
             self.show_all_candidates_btn,
             self.edit_search_btn,
             self.edit_season_btn,
+            self.edit_episode_btn,
             self.accept_selected_btn,
             self.accept_safe_btn,
             self.reject_selected_btn,
@@ -115,6 +116,7 @@ class MovieRenamerViewStateMixin:
             self.show_all_candidates_btn,
             self.edit_search_btn,
             self.edit_season_btn,
+            self.edit_episode_btn,
             self.remove_btn,
             self.clear_btn,
         )

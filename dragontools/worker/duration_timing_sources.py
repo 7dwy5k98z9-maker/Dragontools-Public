@@ -23,7 +23,7 @@ class TimingSourceReader:
         if count_frames:
             cmd.append("-count_frames")
         cmd.extend(["-show_format", "-show_streams", "-show_chapters", "-of", "json", str(path)])
-        run = self.run_command(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", stdin=subprocess.DEVNULL, timeout=90, **self.subprocess_kwargs)
+        run = self.run_command(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", stdin=subprocess.DEVNULL, timeout=(180 if count_frames else 90), **self.subprocess_kwargs)
         if run.returncode != 0:
             raise RuntimeError((run.stderr or "ffprobe fehlgeschlagen.").strip())
         return json.loads(run.stdout or "{}")

@@ -24,7 +24,7 @@ class TimestampCandidateService:
                 before_mediainfo: StreamInventory, before_mkvmerge: StreamInventory | None = None,
                 expected_duration_ms: int | None = None, source_has_audio: bool = False,
                 timing_summary: list[str], expected_contract=None, verified_hdr10plus: bool = False,
-                verified_dolby_vision: bool = False) -> TimestampRepairResult:
+                verified_dolby_vision: bool = False, source_reference: MediaTimingInfo | None = None) -> TimestampRepairResult:
         run = self._runtime.run_tool(command, label=label)
         candidate_exists = self._candidate_plausible(out, tmp)
         failure = self._handle_tool_result(
@@ -48,6 +48,7 @@ class TimestampCandidateService:
             expected_contract=expected_contract,
             verified_hdr10plus=verified_hdr10plus,
             verified_dolby_vision=verified_dolby_vision,
+            source_reference=source_reference,
         )
         if not validation.ok:
             return self._reject_invalid_candidate(

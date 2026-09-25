@@ -115,3 +115,60 @@ class MovieRenamerSeasonPromptMixin:
         self.view.status_lbl.setText(
             f"Staffel {season} für {len(series_rows)} Serien-Datei(en) gesetzt; Metadaten werden neu gesucht."
         )
+
+
+    def edit_selected_episode(self) -> None:
+        """Manually override the episode number for selected series rows."""
+        rows = self.table_controller.selected_rows()
+        if not rows:
+            QMessageBox.information(
+                self.owner,
+                "Episode ändern",
+                "Bitte zuerst eine oder mehrere Serien-Zeilen markieren.",
+            )
+            return
+
+        series_rows: list[int] = []
+        detected_episodes: set[int] = set()
+        for row in rows:
+            if self.table_controller.row_item(row, self.table_controller.columns.TYPE).text() != "Serie":
+                continue
+            series_rows.append(row)
+            override = self.table_controller.row_episode_override(row)
+            if override is not None:
+                detected_episodes.add(override)
+                continue
+            parsed = parse_series_release_name(self.table_controller.row_path(row))
+            if parsed is not None:
+                detected_episodes.add(int(parsed.episode))
+
+        if not series_rows:
+            QMessageBox.information(
+                self.owner,
+                "Episode ändern",
+                "Die markierte Auswahl enthält keine als Serie erkannten Dateien.",
+            )
+            return
+
+        default_episode = next(iter(detected_episodes)) if len(detected_episodes) == 1 else 1
+        episode, ok = QInputDialog.getInt(
+            self.owner,
+            "Episode ändern",
+            f"Episode für {len(series_rows)} ausgewählte Serien-Datei(en):",
+            default_episode,
+            0,
+            9999,
+            1,
+        )
+        if not ok:
+            return
+
+        for row in series_rows:
+            self.table_controller.set_row_episode_override(row, episode)
+
+        rerun = getattr(self.resolver, "rerun_rows", None)
+        if callable(rerun):
+            rerun(series_rows)
+        self.view.status_lbl.setText(
+            f"Episode {episode} für {len(series_rows)} Serien-Datei(en) gesetzt; Metadaten werden neu gesucht."
+        )

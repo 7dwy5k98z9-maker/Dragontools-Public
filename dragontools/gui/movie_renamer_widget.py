@@ -69,6 +69,7 @@ class MovieRenamerWidget(QWidget):
             "show_all_candidates_btn",
             "edit_search_btn",
             "edit_season_btn",
+            "edit_episode_btn",
             "accept_selected_btn",
             "accept_safe_btn",
             "reject_selected_btn",
@@ -90,6 +91,7 @@ class MovieRenamerWidget(QWidget):
         self.show_all_candidates_btn.clicked.connect(self._actions.show_all_candidates)
         self.edit_search_btn.clicked.connect(self._actions.edit_search_query)
         self.edit_season_btn.clicked.connect(self._actions.edit_selected_season)
+        self.edit_episode_btn.clicked.connect(self._actions.edit_selected_episode)
         self.accept_selected_btn.clicked.connect(self.accept_selected)
         self.accept_safe_btn.clicked.connect(self.accept_safe)
         self.reject_selected_btn.clicked.connect(self.reject_selected)

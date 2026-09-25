@@ -16,7 +16,11 @@ def allow_one_frame_wrap_cfr_repair(
     expected_duration_s: float | None,
     fallback_reason: str,
 ) -> bool:
-    """Allow CFR reconstruction only for the narrow ±1-frame 2^32-ms-wrap case."""
+    """Allow CFR reconstruction only for the narrow ±1-frame 2^32-ms-wrap case.
+
+    Patch BA permits up to 1.0 s between container/source and frame-derived
+    duration; payload preservation is still verified packet-by-packet.
+    """
     if (before.frame_rate_mode or "").upper() != "VFR":
         return False
     match = re.search(r"Original=(\d+), Ausgabe=(\d+)", str(fallback_reason or ""))
@@ -26,7 +30,7 @@ def allow_one_frame_wrap_cfr_repair(
         return False
     frame_duration = 1.0 / float(before.frame_rate)
     frame_expected = float(before.video_frame_count) * frame_duration
-    if expected_duration_s is None or abs(frame_expected - float(expected_duration_s)) > max(0.4, frame_duration):
+    if expected_duration_s is None or abs(frame_expected - float(expected_duration_s)) > max(1.0, frame_duration):
         return False
     reported = (before.video_duration_s, before.container_duration_s)
     return any(value is not None and float(value) >= 1_000_000.0 for value in reported)

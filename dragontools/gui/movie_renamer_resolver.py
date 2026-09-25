@@ -1,10 +1,8 @@
 # -*- coding: utf-8 -*-
 """Metadata worker and lifecycle coordinator for the renamer GUI."""
 from __future__ import annotations
-
 from PyQt6.QtCore import QSettings, QThread, QTimer, pyqtSignal
 from PyQt6.QtWidgets import QMessageBox, QWidget
-
 from ..core.movie_renamer import build_rename_proposal, parse_movie_release_name
 from ..core.online_metadata import (
     OnlineMetadataAuthError,
@@ -45,7 +43,9 @@ class MovieRenameResolveThread(QThread):
                 query_override = str(job[3] if len(job) > 3 else "" or "").strip() or None
                 show_all_candidates = bool(job[4]) if len(job) > 4 else False
                 season_override = job[5] if len(job) > 5 else None
-                request_id = int(job[6]) if len(job) > 6 else 0
+                # Alte 7er-Jobs bleiben ohne Episoden-Override lesbar.
+                episode_override = job[6] if len(job) > 7 else None
+                request_id = int(job[-1]) if len(job) > 6 else 0
                 parsed = parse_movie_release_name(path)
                 use_series = force_kind == "series" or (force_kind != "movie" and parsed.is_probable_series)
                 if use_series:
@@ -62,6 +62,7 @@ class MovieRenameResolveThread(QThread):
                     force_kind=force_kind,
                     show_all_candidates=show_all_candidates,
                     series_season_override=season_override,
+                    series_episode_override=episode_override,
                 )
                 self.proposal_ready.emit(path, request_id, proposal)
         except OnlineMetadataError as exc:
@@ -87,7 +88,8 @@ class MovieRenamerResolveCoordinator(MovieRenamerResolveSearchMixin):
             return
         jobs = [
             (row, self.table_controller.row_path(row), "", "", False,
-             self.table_controller.row_season_override(row))
+             self.table_controller.row_season_override(row),
+             self.table_controller.row_episode_override(row))
             for row in range(self.view.table.rowCount())
             if self.table_controller.row_path(row)
         ]
@@ -111,7 +113,11 @@ class MovieRenamerResolveCoordinator(MovieRenamerResolveSearchMixin):
                 continue
             if self.table_controller.row_item(row, self.table_controller.columns.STATUS).text() != "bereit":
                 continue
-            jobs.append((row, path, "", "", False, self.table_controller.row_season_override(row)))
+            jobs.append((
+                row, path, "", "", False,
+                self.table_controller.row_season_override(row),
+                self.table_controller.row_episode_override(row),
+            ))
         self.auto_resolve_pending = False
         if jobs:
             self.start_jobs(jobs, automatic=True)

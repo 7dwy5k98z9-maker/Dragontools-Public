@@ -4179,3 +4179,71 @@ Das Inhaltsverzeichnis sowie alle nachfolgenden Help-Kapitelnummern wurden fortl
 - Der Renamer erhält den neuen Button **„🗓 Staffel ändern“**. Die Staffel kann damit auch bei bereits erkannten `SxxExx`-Dateien oder bei automatisch als Staffel 1 interpretierten `E19`-Releases manuell überschrieben werden.
 - Nach einer manuellen Staffeländerung wird die Metadatensuche für die betroffenen Zeilen automatisch mit der neuen Staffel neu gestartet.
 - Explizite Staffel-Overrides sind nicht mehr auf `EPxx`-Dateien mit fehlender Staffel beschränkt.
+
+## Patch BA – getrennte Original-Timingreferenzen und tolerantere lossless Timestamp-Validierung – 25.09.2026
+
+### Original-Timing statt globalem Maximalwert
+
+- Die Timestamp-Reparatur vermisst die **Originaldatei jetzt getrennt** und führt Containerdauer, Videodauer, Frame/FPS-Dauer und Frameanzahl als eigene Referenzen.
+- Die reparierte Videotimeline wird nicht mehr gegen die bisherige globale `max(Container, Video, Audio, Untertitel)`-Dauer geprüft. Dadurch kann ein später endender Subtitle-/Containerwert eine technisch korrekte Videoreparatur nicht mehr fälschlich verwerfen.
+- Im Reparaturlog erscheint zusätzlich eine kompakte `Original-Referenz` mit Container-, Video-, Frame/FPS-Dauer und Frameanzahl.
+
+### Reparaturtoleranz
+
+- Für **lossless** Timestamp-Reparaturen gilt bei vorhandener Originalreferenz jetzt eine praxisnahe Toleranz von **±1,0 s** für Video- und Containerdauer.
+- Die Frame/FPS-Prüfung verwendet ebenfalls die Original-Videoreferenz und toleriert mindestens eine Frame-Dauer; eine bereits beim Encode entstandene Abweichung von genau einem Frame verhindert die Timestamp-Reparatur nicht mehr.
+- Die enge ±1-Frame-Sonderfreigabe für eindeutige `2^32 ms`-/Millionen-Sekunden-Wraps akzeptiert jetzt bis zu 1,0 s Differenz zwischen Quell-/Containerdauer und framebasierter Videodauer.
+- Diese Toleranz ist **keine** Freigabe für Datenverlust: Paketanzahl und SHA-256-Nutzdaten werden weiterhin pro Stream zwischen defektem Encode und Reparaturkandidat verglichen und müssen unverändert bleiben; Millionen-Sekunden-PTS und unplausible Paketdauern bleiben Ablehnungsgründe.
+
+### ffprobe-Robustheit
+
+- `ffprobe -count_frames` erhält für die vollständige Reparaturprüfung bis zu **180 Sekunden** statt 90 Sekunden, damit längere Dateien nicht unnötig am Analyse-Timeout scheitern.
+
+### Regression
+
+- Neuer Patch-BA-Test reproduziert den Fall, dass die globale Quelldauer 0,75 s länger ist als die echte Videotimeline und bestätigt, dass die Reparatur mit separater Original-Videoreferenz akzeptiert wird.
+- Zusätzliche Tests sichern die ±1,0-s-Grenze, den ±1-Frame-/Timestamp-Wrap-Fall und den verlängerten `-count_frames`-Timeout ab.
+
+
+---
+
+## Patch BB – Renamer: Episode manuell ändern und 3×5-Werkzeugleiste – 25.09.2026
+
+### Manuelle Episodenwahl
+
+- Neben **„🗓 Staffel ändern“** gibt es jetzt **„🔢 Episode ändern“** für markierte Serienzeilen.
+- Staffel und Episode werden als getrennte Overrides geführt und können beliebig kombiniert werden, z. B. aus einem falsch erkannten `S01E19` gezielt `S03E07`.
+- Nach einer Episodenänderung wird die Metadatensuche für die betroffenen Zeilen automatisch neu gestartet; Provider-Suche, Vorschlag und Zielname verwenden die manuell gewählte Episodennummer.
+- Der Episoden-Override bleibt auch bei „Alle Treffer“, eigener Seriensuche und erneuter Vorschlagssuche erhalten.
+- Die Override-Zustände wurden aus dem Tabellencontroller in einen eigenen kleinen State-Mixin ausgelagert, damit der Renamer-Controller trotz zusätzlicher Funktion innerhalb der Architekturgrenzen bleibt.
+
+### Gleichmäßige Renamer-Werkzeugleiste
+
+- Die jetzt **15 Renamer-Aktionen** sind exakt auf **3 Zeilen mit je 5 Buttons** verteilt.
+- Alle fünf Spalten erhalten denselben Layout-Stretch; die Buttons dürfen horizontal gleichmäßig mitwachsen.
+- Die Reihen sind logisch gruppiert: Datei/Suche, Treffer/Struktur/Auswahl sowie Annahme/Umbenennen/Entfernen.
+- Dadurch bleibt die Leiste sowohl auf breiten als auch schmaleren Fenstern ausgeglichen und erzeugt keine unnötige Mindestbreite.
+
+### Regression
+
+- Neue Tests prüfen Episoden-Override, kombinierte Staffel-/Episoden-Overrides, ungültige Episodennummern, Button-Verdrahtung sowie die 3×5-Verteilung.
+- Relevanter Duration-/Renamer-/Architektur-Testverbund: **74 bestanden, 1 umgebungsbedingter PyQt6-Skip, 0 Fehler**.
+- `compileall` über `dragontools`: **erfolgreich**.
+
+---
+
+## Patch BC – Datei-Einstellungen auf Mehrfachauswahl anwenden – 25.09.2026
+
+### Mehrfachauswahl im Queue-Kontextmenü
+
+- **„⚙️ Datei-Einstellungen …“** arbeitet jetzt wie Strip-Only, Zielordner und Encoder-/Skalierungs-Override auf allen markierten Queue-Dateien, sofern auf eine bereits markierte Datei rechtsgeklickt wird.
+- Bei Mehrfachauswahl zeigt das Kontextmenü **„⚙️ Datei-Einstellungen für Auswahl (N) …“** und der Dialog nennt die Anzahl der betroffenen Dateien sowie die Referenzdatei.
+- Die angeklickte Datei wird innerhalb der vorhandenen Auswahl bewusst als erste Referenz verwendet. Ihre Streamstruktur dient damit für benutzerdefinierte Audio-/Untertitel-Trackindizes als Vorlage.
+
+### Sichere Übernahme
+
+- Dialogeigene Werte wie Processing-Modus, Encoder-Override, Audio/Untertitel, DRC/Loudnorm, IMAX sowie DV/HDR/HDR10+-Overrides werden auf jede markierte Datei übernommen.
+- Zustände, die der Dialog nicht besitzt – insbesondere ein separat zugewiesenes **Encoder-Profil** – bleiben pro Datei erhalten und werden nicht versehentlich von der Referenzdatei kopiert.
+- Bereits laufende oder abgeschlossene Queue-Dateien können weiterhin nicht geändert werden. Bei gemischter Auswahl werden noch nicht gestartete Dateien übernommen und abgelehnte Dateien gesammelt gemeldet.
+- Für jede erfolgreich geänderte Datei werden Preflight-Cache und Queue-Badges aktualisiert.
+- Bei benutzerdefinierten Audio-/Untertitelspuren weist der Dialog darauf hin, dass die Track-Indizes der Referenzdatei übernommen werden; bei unterschiedlicher Spurstruktur sollen die Dateien getrennt eingestellt werden.

@@ -38,3 +38,24 @@ def apply_series_season_override(
         season_missing=False,
         warnings=warnings,
     ), None
+
+
+def apply_series_episode_override(
+    parsed: ParsedSeriesReleaseName,
+    episode_override: int | None,
+) -> tuple[ParsedSeriesReleaseName, str | None]:
+    """Apply an explicit episode number to a parsed series release."""
+    if episode_override is None:
+        return parsed, None
+    try:
+        episode = int(episode_override)
+    except (TypeError, ValueError):
+        return parsed, "invalid"
+    if episode < 0 or episode > 9999:
+        return parsed, "invalid"
+
+    warnings = tuple(
+        item for item in parsed.warnings
+        if not (item.startswith("Episode ") and "manuell gesetzt" in item)
+    ) + (f"Episode {episode} manuell gesetzt.",)
+    return replace(parsed, episode=episode, warnings=warnings), None

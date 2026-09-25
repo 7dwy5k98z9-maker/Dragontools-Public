@@ -6,11 +6,12 @@ from pathlib import Path
 
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtWidgets import (
-    QDialog, QDialogButtonBox, QMessageBox, QScrollArea, QVBoxLayout, QWidget,
+    QDialog, QDialogButtonBox, QLabel, QMessageBox, QScrollArea, QVBoxLayout, QWidget,
 )
 
 from .convert_override_groups import ConvertOverrideGroupBuilderMixin
 from .convert_override_lifecycle import _OverrideAnalyzeThread, _OverrideDialog
+from .convert_widget_override_apply import merge_dialog_override
 from .convert_override_state import _audio_meta_text, _lang_label, _load_override_state
 from .convert_override_tracks import (
     _build_audio_rows, _build_subtitle_rows, _collect_audio_tracks,
@@ -33,14 +34,22 @@ class ConvertWidgetOverrideDialogHelper(ConvertOverrideGroupBuilderMixin):
         """Öffnet den schlanken Encoder-/Skalierungsdialog für eine Auswahl."""
         self._encoder_override.edit_paths(paths)
 
-    def edit_override(self, path: str) -> None:
-        """Öffnet den Override-Dialog und persistiert die Einstellungen."""
+    def edit_override(self, paths) -> None:
+        """Öffnet den Override-Dialog für eine oder mehrere markierte Dateien."""
         ow = self.owner
         state = ow._state
+        raw_paths = [paths] if isinstance(paths, str) else list(paths or ())
+        selected_paths = list(dict.fromkeys(str(path) for path in raw_paths if path))
+        if not selected_paths:
+            return
+        path = selected_paths[0]
         ov = dict(state.file_overrides.get(path) or {})
 
         dlg = _OverrideDialog(ow)
-        dlg.setWindowTitle(f"Einstellungen: {Path(path).name}")
+        dlg.setWindowTitle(
+            f"Einstellungen: {Path(path).name}" if len(selected_paths) == 1
+            else f"Einstellungen für {len(selected_paths)} Dateien – Vorlage: {Path(path).name}"
+        )
         dlg.setMinimumWidth(560)
         dlg.resize(760, 640)
         dlg.setMaximumHeight(760)
@@ -48,6 +57,14 @@ class ConvertWidgetOverrideDialogHelper(ConvertOverrideGroupBuilderMixin):
         dlg._override_loader = None
 
         v = QVBoxLayout(dlg)
+        if len(selected_paths) > 1:
+            note = QLabel(
+                f"Die gewählten Werte werden auf {len(selected_paths)} markierte Dateien angewendet. "
+                "Benutzerdefinierte Audio-/Untertitelspuren verwenden die Track-Indizes der Referenzdatei; "
+                "bei abweichender Spurstruktur bitte getrennt einstellen."
+            )
+            note.setWordWrap(True)
+            v.addWidget(note)
         scroll = QScrollArea(dlg)
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
@@ -85,7 +102,7 @@ class ConvertWidgetOverrideDialogHelper(ConvertOverrideGroupBuilderMixin):
         bc, subtitle_status, subtitle_panel, spl, subtitle_rows, imax_cb = self._build_subtitle_group(
             cv, subtitle_mode_value, ov
         )
-        dv_combo, hdp_combo, sdr_hdr_combo = self._build_hdr_policy_group(cv, ov)
+        dv_combo, hdp_combo, sdr_hdr_combo, hdrgen_combo = self._build_hdr_policy_group(cv, ov)
         cv.addStretch(1)
 
         def _refresh_panels():
@@ -174,10 +191,11 @@ class ConvertWidgetOverrideDialogHelper(ConvertOverrideGroupBuilderMixin):
             "dv_combo": dv_combo,
             "hdrplus_combo": hdp_combo,
             "sdr_hdr_combo": sdr_hdr_combo,
+            "hdrgen_combo": hdrgen_combo,
         }
-        self._persist_override_result(path, state, ov, controls)
+        self._persist_override_result(selected_paths, state, ov, controls)
 
-    def _persist_override_result(self, path: str, state, ov: dict, controls: dict) -> None:
+    def _persist_override_result(self, paths: list[str], state, ov: dict, controls: dict) -> None:
         """Übernimmt validierte Dialogwerte in den Datei-Override-Zustand."""
         ow = self.owner
         processing_combo = controls["processing_combo"]
@@ -193,6 +211,7 @@ class ConvertWidgetOverrideDialogHelper(ConvertOverrideGroupBuilderMixin):
         dv_combo = controls["dv_combo"]
         hdp_combo = controls["hdrplus_combo"]
         sdr_hdr_combo = controls["sdr_hdr_combo"]
+        hdrgen_combo = controls["hdrgen_combo"]
 
         processing_mode = processing_combo.currentData()
         if processing_mode == "strip_only":
@@ -256,20 +275,29 @@ class ConvertWidgetOverrideDialogHelper(ConvertOverrideGroupBuilderMixin):
         else:
             ov["sdr_hdr"] = bool(sdr_hdr_val)
 
-        thread = state.thread
-        if thread and hasattr(thread, "update_override"):
-            ok = thread.update_override(path, ov)
-            if not ok:
-                QMessageBox.warning(
-                    ow,
-                    "Override abgelehnt",
-                    f"'{Path(path).name}' wird gerade verarbeitet\n"
-                    "oder ist bereits abgeschlossen.\n\n"
-                    "Override kann nur für noch nicht gestartete Dateien gesetzt werden.",
-                )
-                return
+        hdrgen_val = hdrgen_combo.currentData()
+        if hdrgen_val is None:
+            ov.pop("generate_hdr10plus", None)
+        else:
+            ov["generate_hdr10plus"] = bool(hdrgen_val)
 
-        state.file_overrides[path] = ov
-        ow.update_queue_label(path)
+        thread = state.thread
+        rejected: list[str] = []
+        applied: list[str] = []
+        for path in paths:
+            target_override = merge_dialog_override(state.file_overrides.get(path), ov)
+            if thread and hasattr(thread, "update_override") and not thread.update_override(path, target_override):
+                rejected.append(path)
+                continue
+            state.file_overrides[path] = target_override
+            getattr(state, "preflight_rows_by_path", {}).pop(path, None)
+            ow.update_queue_label(path)
+            applied.append(path)
+        if applied:
+            ow._log(f"Datei-Einstellungen angewendet: {len(applied)} Datei(en)", "info")
+        if rejected:
+            preview = "\n".join(f"• {Path(path).name}" for path in rejected[:8])
+            more = f"\n… und {len(rejected) - 8} weitere" if len(rejected) > 8 else ""
+            QMessageBox.warning(ow, "Override teilweise abgelehnt", "Nur noch nicht gestartete Dateien können geändert werden.\n\nNicht geändert:\n" + preview + more)
 
 __all__ = ["ConvertWidgetOverrideDialogHelper"]

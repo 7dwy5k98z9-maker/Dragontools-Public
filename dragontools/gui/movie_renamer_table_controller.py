@@ -20,6 +20,7 @@ from ..core.renamer_candidate_decision import apply_candidate_decision, base_can
 from ..core.path_syntax import path_compare_key
 from .movie_renamer_candidate_combo import WideCandidateComboBox
 from .movie_renamer_table_search import MovieRenamerTableSearchMixin
+from .movie_renamer_series_override_state import MovieRenamerSeriesOverrideStateMixin
 
 
 class RenamerColumns:
@@ -37,7 +38,7 @@ class RenamerColumns:
     HINTS = 11
 
 
-class MovieRenamerTableController(MovieRenamerTableSearchMixin):
+class MovieRenamerTableController(MovieRenamerSeriesOverrideStateMixin, MovieRenamerTableSearchMixin):
     def __init__(self, table) -> None:
         self.table = table
         self.columns = RenamerColumns
@@ -56,6 +57,7 @@ class MovieRenamerTableController(MovieRenamerTableSearchMixin):
             "proposal": None,
             "season_missing": bool(series_parsed is not None and series_parsed.season_missing),
             "season_override": None,
+            "episode_override": None,
         })
         self.table.setItem(row, self.columns.ACCEPT, accept)
 
@@ -261,43 +263,6 @@ class MovieRenamerTableController(MovieRenamerTableSearchMixin):
 
     def row_path(self, row: int) -> str:
         return str(self.row_meta(row).get("path") or "")
-
-    def row_requires_season(self, row: int) -> bool:
-        meta = self.row_meta(row)
-        return bool(meta.get("season_missing")) and meta.get("season_override") is None
-
-    def row_season_override(self, row: int) -> int | None:
-        value = self.row_meta(row).get("season_override")
-        try:
-            return int(value) if value is not None else None
-        except (TypeError, ValueError):
-            return None
-
-    def set_row_season_override(self, row: int, season: int) -> None:
-        season_value = int(season)
-        if season_value < 0 or season_value > 9999:
-            raise ValueError("Staffel muss zwischen 0 und 9999 liegen.")
-        meta = self.row_meta(row)
-        meta["season_override"] = season_value
-        meta["season_missing"] = False
-        self.row_item(row, self.columns.ACCEPT).setData(Qt.ItemDataRole.UserRole, meta)
-
-        parsed = parse_series_release_name(self.row_path(row))
-        if parsed is not None:
-            self.set_item(
-                row,
-                self.columns.QUERY,
-                f"S{season_value:02d}E{parsed.episode:02d}",
-                editable=False,
-            )
-            hints = [
-                item for item in parsed.warnings
-                if not item.startswith("Staffel fehlt im EPxx-Muster")
-                and "Staffel 1 wurde als Standard angenommen" not in item
-            ]
-            hints.append(f"Staffel {season_value} manuell gesetzt.")
-            self.set_item(row, self.columns.HINTS, "; ".join(hints), editable=False)
-        self.set_status(row, "bereit")
 
     def set_row_path(self, row: int, path: str | Path) -> None:
         meta = self.row_meta(row)

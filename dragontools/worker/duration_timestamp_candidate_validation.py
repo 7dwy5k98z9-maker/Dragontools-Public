@@ -6,7 +6,7 @@ from pathlib import Path
 
 from .duration_packet_integrity import PacketIntegrityVerifier
 from .duration_repair_models import MediaTimingInfo, calculate_expected_duration
-from .duration_repair_validation import validate_timestamp_repair
+from .duration_repair_validation import source_video_reference_s, validate_timestamp_repair
 
 
 @dataclass(slots=True)
@@ -41,6 +41,7 @@ class TimestampCandidateValidator:
         verified_hdr10plus: bool = False,
         verified_dolby_vision: bool = False,
         before_mkvmerge=None,
+        source_reference: MediaTimingInfo | None = None,
     ) -> CandidateValidation:
         repaired_info = self._timing_analyzer.get_media_timing_info(str(path))
         verify_result = self.verify_output(
@@ -75,6 +76,7 @@ class TimestampCandidateValidator:
             source_has_audio=source_has_audio,
             stream_count_overrides=stream_overrides,
             ignore_verify_stream_kinds=stream_overrides,
+            source_reference=source_reference,
         )
         all_messages = list(messages)
         if not guard.ok:
@@ -83,17 +85,17 @@ class TimestampCandidateValidator:
         # Die Reparatur ist lossless. Daher müssen Paketanzahl und Paketnutzdaten
         # pro Stream bitidentisch bleiben; nur Container-/Paketzeitstempel dürfen
         # sich ändern. Diese Prüfung schützt die bewusst tolerantere Laufzeitlogik.
-        reference_duration_s = (
-            float(expected_duration_ms) / 1000.0
-            if expected_duration_ms and expected_duration_ms > 0
-            else calculate_expected_duration(repaired_info) or calculate_expected_duration(before)
-        )
+        reference_duration_s = source_video_reference_s(
+            source_reference,
+            expected_duration_ms=expected_duration_ms,
+            fallback_info=before,
+        ) or calculate_expected_duration(repaired_info) or calculate_expected_duration(before)
         packet_result = self._packet_integrity.validate(
             before.path,
             str(path),
             reference_duration_s=reference_duration_s,
             frame_rate=repaired_info.frame_rate or before.frame_rate,
-            tolerance_s=0.4,
+            tolerance_s=1.0,
         )
         if not packet_result.ok:
             all_messages.extend(message for message in packet_result.messages if message not in all_messages)

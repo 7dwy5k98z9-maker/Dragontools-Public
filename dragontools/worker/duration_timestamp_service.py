@@ -15,6 +15,7 @@ from .duration_repair_models import MediaTimingInfo, TimestampRepairResult, dete
 from .duration_original_timeline_service import OriginalTimelineRepairService
 from .duration_repair_runtime import DurationRepairRuntime
 from .duration_repair_stream_guard import RepairStreamGuard, StreamInventory
+from .duration_repair_validation import source_video_reference_s
 from .duration_timestamp_candidate_service import TimestampCandidateService
 from .duration_timing_analyzer import MediaTimingAnalyzer, _fps_label
 from .duration_timestamp_helpers import (
@@ -65,19 +66,24 @@ class TimestampRepairService:
             return TimestampRepairResult(verify_result=reference_result, reason=reason)
 
         self._runtime.log("ℹ️ [Reparatur 2/2] Timestamp-Prüfung gestartet.", "info")
-        before = self.get_media_timing_info(str(out), expected_duration_s=expected_duration_s)
+
+        source_reference, video_reference_s = _load_source_timing_reference(
+            self, source_path, expected_duration_ms, expected_duration_s
+        )
+
+        before = self.get_media_timing_info(str(out), expected_duration_s=video_reference_s)
         summary = self.timing_summary(before)
         for line in summary:
             self._runtime.log(f"   {line}", "info")
 
-        problem = detect_timestamp_problem(before, expected_duration_s=expected_duration_s)
+        problem = detect_timestamp_problem(before, expected_duration_s=video_reference_s)
         original_fallback = None
         vfr_fallback_reason = ""
         if not problem.should_repair:
             original_fallback = _try_original_timeline_fallback(
                 service=self._original_timeline_service, problem_reason=problem.reason, before=before,
                 source_path=source_path, out=out, base_dir=base_dir, container=container,
-                expected_duration_ms=expected_duration_ms, expected_duration_s=expected_duration_s,
+                expected_duration_ms=expected_duration_ms, expected_duration_s=video_reference_s,
                 source_has_audio=source_has_audio, reference_result=reference_result, timing_summary=summary,
                 expected_contract=expected_contract, verified_hdr10plus=verified_hdr10plus,
                 verified_dolby_vision=verified_dolby_vision,
@@ -87,7 +93,7 @@ class TimestampRepairService:
             if original_fallback is not None:
                 vfr_fallback_reason = original_fallback.reason or ""
             if not allow_one_frame_wrap_cfr_repair(
-                before, expected_duration_s=expected_duration_s, fallback_reason=vfr_fallback_reason
+                before, expected_duration_s=video_reference_s, fallback_reason=vfr_fallback_reason
             ):
                 if original_fallback is not None:
                     return original_fallback
@@ -134,6 +140,7 @@ class TimestampRepairService:
             before_ffprobe=before_ffprobe,
             before_mediainfo=before_mediainfo,
             before_mkvmerge=before_mkvmerge,
+            source_reference=source_reference,
         )
         if (
             not repaired.repaired
@@ -162,6 +169,7 @@ class TimestampRepairService:
         before_ffprobe: StreamInventory | None = None,
         before_mediainfo: StreamInventory | None = None,
         before_mkvmerge: StreamInventory | None = None,
+        source_reference: MediaTimingInfo | None = None,
     ) -> TimestampRepairResult:
         if before.frame_rate is None:
             return TimestampRepairResult(reason="Framerate fehlt.", timing_summary=timing_summary)
@@ -179,8 +187,6 @@ class TimestampRepairService:
             command = self.build_timestamp_repair_command(out, tmp, before.frame_rate, container=container)
             attempts.append((tmp, command, "MP4Box-Timestamp-Reparatur", "MP4Box CFR-Neuaufbau"))
         else:
-            # Primär exakt der robuste MKVToolNix-Weg: Videotrack-ID aus
-            # `mkvmerge -J` lesen und nur dessen Default-Duration neu setzen.
             if tool_available(self._runtime.mkvmerge_path):
                 try:
                     track_id = mkv_video_track_id(self._runtime, out)
@@ -194,7 +200,6 @@ class TimestampRepairService:
                 except Exception as exc:
                     self._runtime.log(f"⚠️ MKVToolNix-Videotrack-ID konnte nicht bestimmt werden: {exc}", "warn")
 
-            # FFmpeg-setts bleibt ein zweiter lossless Fallback.
             if tool_available(self._runtime.ffmpeg_path) and self.ffmpeg_supports_setts():
                 tmp = out.with_name(f"{out.stem}.timestamp_setts_{uuid4().hex}{out.suffix}")
                 command = build_timestamp_repair_command(
@@ -243,6 +248,7 @@ class TimestampRepairService:
                     expected_duration_ms=expected_duration_ms, source_has_audio=source_has_audio,
                     timing_summary=timing_summary, expected_contract=expected_contract,
                     verified_hdr10plus=verified_hdr10plus, verified_dolby_vision=verified_dolby_vision,
+                    source_reference=source_reference,
                 )
             except Exception as exc:
                 self._runtime.safe_unlink(tmp)
@@ -293,38 +299,78 @@ class TimestampRepairService:
         )
 
     def timing_summary(self, info: MediaTimingInfo) -> list[str]:
-        from .duration_timing_analyzer import _derived_fps_suffix
-
-        return [
-            f"Containerdauer: {_fmt_duration(info.container_duration_s)}",
-            f"Videodauer: {_fmt_duration(info.video_duration_s)}",
-            f"Audiodauer: {_fmt_duration(info.audio_duration_s)}",
-            f"Untertiteldauer: {_fmt_duration(info.subtitle_duration_s)}",
-            f"Kapitelende: {_fmt_duration(info.chapter_end_s)}",
-            f"Videoframes: {info.video_frame_count if info.video_frame_count is not None else 'unbekannt'}",
-            f"Framerate: {_fps_label(info.frame_rate)}{_derived_fps_suffix(info)}",
-            f"Framerate-Modus: {info.frame_rate_mode}",
-            f"Erwartete Videodauer: {_fmt_duration(info.expected_video_duration_s)}",
-            f"Streams: Video={info.video_stream_count}, Audio={info.audio_stream_count}, "
-            f"Untertitel={info.subtitle_stream_count}, Attachments={info.attachment_stream_count}",
-        ]
+        return _timing_summary(info)
 
     def ffmpeg_supports_setts(self) -> bool:
-        if self._setts_supported is not None:
-            return self._setts_supported
+        return _ffmpeg_supports_setts(self)
+
+
+
+
+def _load_source_timing_reference(
+    service: TimestampRepairService,
+    source_path: str | None,
+    expected_duration_ms: int | None,
+    expected_duration_s: float | None,
+) -> tuple[MediaTimingInfo | None, float | None]:
+    """Measure the original source separately from the damaged encoded output."""
+    source_reference = None
+    if source_path:
         try:
-            run = self._runtime.run_tool(
-                [self._runtime.ffmpeg_path, "-hide_banner", "-bsfs"],
-                label="FFmpeg-Bitstreamfilter-Prüfung",
+            source_reference = service.get_media_timing_info(str(source_path))
+            service._runtime.log(
+                "   Original-Referenz: "
+                f"Container={_fmt_duration(source_reference.container_duration_s)} | "
+                f"Video={_fmt_duration(source_reference.video_duration_s)} | "
+                f"Frame/FPS={_fmt_duration(source_reference.expected_video_duration_s)} | "
+                f"Frames={source_reference.video_frame_count if source_reference.video_frame_count is not None else 'unbekannt'}",
+                "info",
             )
-            text = f"{run.stdout}\n{run.stderr}"
-            self._setts_supported = run.returncode == 0 and "setts" in text.split()
-        except (OSError, ValueError, RuntimeError) as exc:
-            self._setts_supported = False
-            self._runtime.log(f"⚠️ FFmpeg-setts-Unterstützung konnte nicht geprüft werden: {exc}", "warn")
-        return bool(self._setts_supported)
+        except Exception as exc:
+            service._runtime.log(
+                f"⚠️ Original-Timingreferenz konnte nicht vollständig ermittelt werden: {exc}",
+                "warn",
+            )
+    video_reference_s = source_video_reference_s(
+        source_reference, expected_duration_ms=expected_duration_ms
+    ) or expected_duration_s
+    return source_reference, video_reference_s
 
 
+def _timing_summary(info: MediaTimingInfo) -> list[str]:
+    from .duration_timing_analyzer import _derived_fps_suffix
+
+    return [
+        f"Containerdauer: {_fmt_duration(info.container_duration_s)}",
+        f"Videodauer: {_fmt_duration(info.video_duration_s)}",
+        f"Audiodauer: {_fmt_duration(info.audio_duration_s)}",
+        f"Untertiteldauer: {_fmt_duration(info.subtitle_duration_s)}",
+        f"Kapitelende: {_fmt_duration(info.chapter_end_s)}",
+        f"Videoframes: {info.video_frame_count if info.video_frame_count is not None else 'unbekannt'}",
+        f"Framerate: {_fps_label(info.frame_rate)}{_derived_fps_suffix(info)}",
+        f"Framerate-Modus: {info.frame_rate_mode}",
+        f"Erwartete Videodauer: {_fmt_duration(info.expected_video_duration_s)}",
+        f"Streams: Video={info.video_stream_count}, Audio={info.audio_stream_count}, "
+        f"Untertitel={info.subtitle_stream_count}, Attachments={info.attachment_stream_count}",
+    ]
+
+
+def _ffmpeg_supports_setts(service: TimestampRepairService) -> bool:
+    if service._setts_supported is not None:
+        return service._setts_supported
+    try:
+        run = service._runtime.run_tool(
+            [service._runtime.ffmpeg_path, "-hide_banner", "-bsfs"],
+            label="FFmpeg-Bitstreamfilter-Prüfung",
+        )
+        value = f"{run.stdout}\n{run.stderr}"
+        service._setts_supported = run.returncode == 0 and "setts" in value.split()
+    except (OSError, ValueError, RuntimeError) as exc:
+        service._setts_supported = False
+        service._runtime.log(
+            f"⚠️ FFmpeg-setts-Unterstützung konnte nicht geprüft werden: {exc}", "warn"
+        )
+    return bool(service._setts_supported)
 
 def _try_original_timeline_fallback(
     *, service: OriginalTimelineRepairService, problem_reason: str, before: MediaTimingInfo,

@@ -134,6 +134,7 @@ class MovieRenamerView(MovieRenamerViewStateMixin):
         self.show_all_candidates_btn = QPushButton("🔎 Alle Treffer")
         self.edit_search_btn = QPushButton("✏️ Suchbegriff")
         self.edit_season_btn = QPushButton("🗓 Staffel ändern")
+        self.edit_episode_btn = QPushButton("🔢 Episode ändern")
         self.accept_selected_btn = QPushButton("✅ Auswahl akzeptieren")
         self.accept_safe_btn = QPushButton("✅ Sichere akzeptieren")
         self.reject_selected_btn = QPushButton("🚫 Auswahl ablehnen")
@@ -141,17 +142,21 @@ class MovieRenamerView(MovieRenamerViewStateMixin):
         self.remove_btn = QPushButton("➖ Entfernen")
         self.clear_btn = QPushButton("🗑 Alle")
 
+        # 15 Aktionen werden gleichmäßig als 3 × 5 Werkzeugfelder verteilt.
         toolbar_rows = (
             (self.add_files_btn, self.add_folder_btn, self.resolve_btn,
              self.manual_series_search_btn, self.manual_movie_search_btn),
             (self.show_all_candidates_btn, self.edit_search_btn, self.edit_season_btn,
-             self.accept_selected_btn, self.accept_safe_btn, self.reject_selected_btn),
-            (self.rename_btn, self.remove_btn, self.clear_btn),
+             self.edit_episode_btn, self.accept_selected_btn),
+            (self.accept_safe_btn, self.reject_selected_btn, self.rename_btn,
+             self.remove_btn, self.clear_btn),
         )
         for row_index, buttons in enumerate(toolbar_rows):
             for column_index, button in enumerate(buttons):
+                button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
                 toolbar.addWidget(button, row_index, column_index)
-        toolbar.setColumnStretch(5, 1)
+        for column_index in range(5):
+            toolbar.setColumnStretch(column_index, 1)
         root.addLayout(toolbar)
 
         self.table = RenameTable()

@@ -53,6 +53,7 @@ class MovieRenamerResolveSearchMixin:
             jobs.append((
                 row, path, kind, normalized_query, False,
                 self.table_controller.row_season_override(row),
+                self.table_controller.row_episode_override(row),
             ))
         self.start_jobs(jobs, automatic=False, priority=True)
 
@@ -68,6 +69,7 @@ class MovieRenamerResolveSearchMixin:
             jobs.append((
                 row, path, kind, query, True,
                 self.table_controller.row_season_override(row),
+                self.table_controller.row_episode_override(row),
             ))
         self.start_jobs(jobs, automatic=False, priority=True)
 
@@ -75,7 +77,7 @@ class MovieRenamerResolveSearchMixin:
         """Re-run normal candidate resolution after a structural row edit.
 
         This keeps each row's current series/movie query but does not force the
-        expanded "Alle Treffer" mode.  It is used after changing the season.
+        expanded "Alle Treffer" mode.  It is used after changing the season or episode.
         """
         jobs: list[tuple] = []
         for row in sorted(set(rows)):
@@ -91,5 +93,6 @@ class MovieRenamerResolveSearchMixin:
             jobs.append((
                 row, path, kind, query, False,
                 self.table_controller.row_season_override(row),
+                self.table_controller.row_episode_override(row),
             ))
         self.start_jobs(jobs, automatic=False, priority=True)

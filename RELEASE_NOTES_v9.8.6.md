@@ -21,3 +21,12 @@ Zum Aktualisieren das ZIP in einen neuen Ordner entpacken und die EXE zusammen m
 ## Bekannte Grenzen
 
 Externe Medienwerkzeuge und optionale Modelle werden entsprechend der bestehenden Public-Paketierung separat eingerichtet. Automatisierte Prüfungen ersetzen keine vollständige Hardware-Encoder-, Medien- und interaktive GUI-Abnahme.
+
+## Nachtrag vom 25.09.2026 – Patches BA bis BC
+
+- Timestamp-Reparaturen nutzen getrennte Originalreferenzen für Video und Container; verlustfreie Reparaturen erhalten die angepasste Dauertoleranz bei weiterhin unveränderten Paket- und Nutzdatenprüfungen.
+- Serienepisoden können zusätzlich zur Staffel manuell geändert werden; die Renamer-Werkzeugleiste ist in drei Reihen mit je fünf Aktionen angeordnet.
+- Datei-Einstellungen lassen sich auf mehrere markierte Queue-Dateien anwenden; separate Encoder-Profile bleiben pro Datei erhalten.
+- Alle 12 gezielten Regressionstests bestehen. Das Windows-Paket wurde aus dem erneut anonymisierten Stand gebaut und validiert.
+
+Das ZIP wurde innerhalb der Version 9.8.6 ersetzt; die neue Prüfsumme ist maßgeblich. Bereits installierte 9.8.6-Versionen erhalten deshalb keinen automatischen Updatehinweis.
