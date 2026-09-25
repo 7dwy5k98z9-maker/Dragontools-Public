@@ -133,32 +133,7 @@ for %%F in (
   )
 )
 
-REM Externe Tools, die im Build gebuendelt werden.
-for %%F in (
-  "third_party\FFmpeg\ffmpeg.exe"
-  "third_party\FFmpeg\ffprobe.exe"
-  "third_party\GPAC\mp4box.exe"
-  "third_party\dovi_tool\dovi_tool.exe"
-  "third_party\hdr10plus_tool\hdr10plus_tool.exe"
-  "third_party\Mediainfo\MediaInfo.exe"
-) do (
-  if not exist %%F (
-    echo [FEHLER] Externes Build-Tool fehlt: %%~F
-    goto :BUILD_FAILED
-  )
-)
-for %%D in (
-  "third_party\rmts"
-  "third_party\HandBrake"
-  "third_party\MKVToolNix"
-  "third_party\MakeMKV"
-) do (
-  if not exist %%D (
-    echo [FEHLER] Externer Build-Ordner fehlt: %%~D
-    goto :BUILD_FAILED
-  )
-)
-
+REM Public-Build: externe Werkzeuge werden separat installiert.
 REM Vor dem Source-Release-Check alte App-Bundles entfernen.
 REM validate_release(..., mode='source') prueft einen vorhandenen dist-Build ebenfalls.
 REM Ein Build aus einem aelteren Quellstand darf deshalb den neuen Build nicht blockieren.
@@ -237,17 +212,7 @@ REM Versionsinfo fuer reproduzierbare Build-Logs.
   --add-data "Aenderungshistorie\CHANGELOGV7.txt;Aenderungshistorie" ^
   --add-data "Bilder\banner.png;Bilder" ^
   --add-data "Bilder\splash_Intro.png;Bilder" ^
-  --add-data "third_party\rmts;Programme\rmts" ^
-  --add-data "third_party\HandBrake;Programme\handbrake" ^
   --add-data "dragontools\config;dragontools\config" ^
-  --add-data "third_party\MKVToolNix;Programme\mkvtoolnix" ^
-  --add-data "third_party\MakeMKV;Programme\MakeMKV" ^
-  --add-binary "third_party\FFmpeg\ffmpeg.exe;Programme" ^
-  --add-binary "third_party\FFmpeg\ffprobe.exe;Programme" ^
-  --add-binary "third_party\GPAC\mp4box.exe;Programme" ^
-  --add-binary "third_party\dovi_tool\dovi_tool.exe;Programme" ^
-  --add-binary "third_party\hdr10plus_tool\hdr10plus_tool.exe;Programme" ^
-  --add-binary "third_party\Mediainfo\MediaInfo.exe;Programme" ^
   DragonToolsV9.py
 
 if errorlevel 1 (
@@ -300,6 +265,15 @@ if exist "%DATA_ROOT%\Python" (
   echo [FEHLER] Unerwarteter Python-Quellordner im Build: %DATA_ROOT%\Python
   goto :BUILD_FAILED
 )
+
+REM Public-Vertrag: leerer Werkzeugordner, Installationshinweise und Inhaltspruefung.
+if not exist "%DATA_ROOT%\Programme" mkdir "%DATA_ROOT%\Programme"
+copy /Y "TOOLS_INSTALLIEREN.txt" "%DIST_ROOT%\TOOLS_INSTALLIEREN.txt" >nul
+if errorlevel 1 goto :BUILD_FAILED
+copy /Y "AUTHORS.md" "%DIST_ROOT%\AUTHORS.md" >nul
+if errorlevel 1 goto :BUILD_FAILED
+"%PYTHON_EXE%" -B "scripts\check_public_bundle.py" "%DIST_ROOT%"
+if errorlevel 1 goto :BUILD_FAILED
 
 REM App-Bundle mit derselben Release-Pruefung validieren.
 "%PYTHON_EXE%" -B -c "from dragontools.core.release_validation import validate_release, format_release_checks; c=validate_release(r'%DIST_ROOT%', mode='app'); print(format_release_checks(c)); raise SystemExit(1 if any(x.status == 'error' for x in c) else 0)"

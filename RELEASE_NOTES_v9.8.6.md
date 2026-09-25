@@ -30,3 +30,7 @@ Externe Medienwerkzeuge und optionale Modelle werden entsprechend der bestehende
 - Alle 12 gezielten Regressionstests bestehen. Das Windows-Paket wurde aus dem erneut anonymisierten Stand gebaut und validiert.
 
 Das ZIP wurde innerhalb der Version 9.8.6 ersetzt; die neue Prüfsumme ist maßgeblich. Bereits installierte 9.8.6-Versionen erhalten deshalb keinen automatischen Updatehinweis.
+
+## Public-Paketierung ohne externe Werkzeuge (25.09.2026)
+
+Der Public-Build bindet keine Dateien aus `third_party` ein. Externe Medienwerkzeuge werden separat installiert; `TOOLS_INSTALLIEREN.txt` liegt im Paket. `scripts/check_public_bundle.py` prüft Build-Ordner und ZIP auf ausgeschlossene Werkzeugdateien und nichtleere `Programme`-/`third_party`-Verzeichnisse. Diese Prüfung muss auch nach jedem erneuten Abgleich mit dem privaten Projekt bestehen. Die benötigten Python-/Qt-Laufzeitbibliotheken bleiben enthalten; dies ist keine pauschale Lizenzfreigabe für diese Bibliotheken.

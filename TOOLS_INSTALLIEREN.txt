@@ -1,7 +1,9 @@
-DragonTools V9.8.2 - externe Werkzeuge
+DragonTools V9.8.6 - externe Werkzeuge
 ========================================
 
-Dieses Programmpaket enthaelt bewusst keine Drittanbieterprogramme.
+Dieses Programmpaket enthaelt bewusst keine separat installierbaren externen Medienwerkzeuge.
+Die fuer DragonTools erforderlichen Python-/Qt-Laufzeitbibliotheken sind enthalten;
+deren jeweilige Lizenzen gelten weiterhin.
 DragonTools selbst kann gestartet werden, einzelne Funktionen werden jedoch erst
 verfuegbar, nachdem die dafuer benoetigten Werkzeuge eingerichtet wurden.
 

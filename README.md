@@ -266,3 +266,7 @@ git push
 - Die Drittanbieterprogramme werden durch `.gitignore` ausgeschlossen.
 - Große fertige Programmpakete gehören später in einen GitHub Release und nicht direkt in die Git-Historie.
 - Medien dürfen nur im Rahmen der jeweils geltenden Rechte und Gesetze verarbeitet werden.
+
+## Public-Paketierung ohne externe Werkzeuge (25.09.2026)
+
+Der Public-Build bindet keine Dateien aus `third_party` ein. Externe Medienwerkzeuge werden separat installiert; `TOOLS_INSTALLIEREN.txt` liegt im Paket. `scripts/check_public_bundle.py` prüft Build-Ordner und ZIP auf ausgeschlossene Werkzeugdateien und nichtleere `Programme`-/`third_party`-Verzeichnisse. Diese Prüfung muss auch nach jedem erneuten Abgleich mit dem privaten Projekt bestehen. Die benötigten Python-/Qt-Laufzeitbibliotheken bleiben enthalten; dies ist keine pauschale Lizenzfreigabe für diese Bibliotheken.
