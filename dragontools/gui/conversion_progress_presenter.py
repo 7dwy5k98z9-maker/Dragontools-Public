@@ -38,19 +38,42 @@ class ConversionProgressPresenter:
         self._last_queue_refresh_at = 0.0
         self.clear_active_progress_display(clear_widgets=True)
 
+    def _total_activity_label(self, done: int, total: int, worker) -> str:
+        if worker and hasattr(worker, "encode_active_count") and hasattr(worker, "postprocessing_file_count"):
+            return (
+                f"Gesamt: {done}/{total} fertig · "
+                f"{int(worker.encode_active_count())} Encode · "
+                f"{int(worker.postprocessing_file_count())} Nachbearbeitung"
+            )
+        if worker and hasattr(worker, "active_file_count"):
+            return f"Gesamt: {done}/{total} fertig · {int(worker.active_file_count())} aktiv"
+        current = min(done + 1, total) if done < total else total
+        return f"Gesamt: Datei {current}/{total}"
+
+    def on_encode_stage_complete(self, input_path: str, _output_path: str) -> None:
+        path = str(input_path)
+        if path in self._state.completed_inputs:
+            return
+        self._state.active_file_progress[path] = 90
+        self._state.active_file_eta.pop(path, None)
+        self._set_file_list_item_text(
+            path,
+            f"🧬 HEVC fertig · DV/HDR+/Mux läuft · {Path(path).name}",
+        )
+        self.update_file_progress_display(changed_path=path, changed_pct=90, changed_eta=None)
+        self._refresh_queue()
+
     def on_total_progress(self, pct: int) -> None:
         self._ui.progress_bar.setValue(pct)
         n, done, worker = self._state.total_files, len(self._state.completed_inputs), self._state.thread
         if n <= 0:
             return
-        if worker and hasattr(worker, "active_file_count"):
-            self._ui.total_lbl.setText(f"Gesamt: {done}/{n} fertig · {int(worker.active_file_count())} aktiv")
-        else:
-            current = min(done + 1, n) if done < n else n
-            self._ui.total_lbl.setText(f"Gesamt: Datei {current}/{n}")
+        self._ui.total_lbl.setText(self._total_activity_label(done, n, worker))
 
     def on_file_progress(self, path: str, pct: int, eta_s) -> None:
         state, path_str = self._state, str(path)
+        if path_str in state.completed_inputs:
+            return
         pct = max(0, min(100, int(pct or 0)))
         self._mark_file_started(path_str)
         eta_str = self.format_eta(eta_s)
@@ -81,10 +104,7 @@ class ConversionProgressPresenter:
         total_pct = int(worker.aggregate_progress_percent()) if worker and hasattr(worker, "aggregate_progress_percent") else int(((done + pct / 100.0) / n) * 100)
         total_pct = max(state.last_total_pct, min(99 if done < n else 100, total_pct))
         state.last_total_pct = total_pct; ui.progress_bar.setValue(total_pct)
-        if worker and hasattr(worker, "active_file_count"):
-            ui.total_lbl.setText(f"Gesamt: {done}/{n} fertig · {int(worker.active_file_count())} aktiv")
-        else:
-            ui.total_lbl.setText(f"Gesamt: Datei {done + 1}/{n}")
+        ui.total_lbl.setText(self._total_activity_label(done, n, worker))
 
     def on_file_result_cleanup(self, input_path: str, _output_path: str, _status: str) -> None:
         path = str(input_path)

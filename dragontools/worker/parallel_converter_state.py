@@ -17,12 +17,27 @@ class ParallelQueueState:
     file_progress_pct: dict[str, int] = field(default_factory=dict)
     terminal_inputs: set[str] = field(default_factory=set)
     postprocessing_inputs: set[str] = field(default_factory=set)
+    dv_postprocessing_inputs: set[str] = field(default_factory=set)
     display_index_by_path: dict[str, int] = field(default_factory=dict)
     file_keys: set[str] = field(default_factory=set)
     display_total: int = 0
+    duplicate_inputs_ignored: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
-        self.files = list(self.files)
+        unique: list[str] = []
+        seen: set[str] = set()
+        for raw_path in list(self.files):
+            path = str(raw_path or "")
+            if not path:
+                continue
+            key = path_compare_key(path)
+            if not key or key in seen:
+                if key in seen:
+                    self.duplicate_inputs_ignored.append(path)
+                continue
+            seen.add(key)
+            unique.append(path)
+        self.files = unique
         self.pending_files = list(self.files)
         self.rebuild_display_positions()
 
@@ -42,6 +57,8 @@ class ParallelQueueState:
             if path not in self.terminal_inputs
         )
         value = int(((len(self.terminal_inputs) + active_fraction) / total) * 100)
+        if len(self.terminal_inputs) < len(self.files):
+            value = min(value, 99)
         return max(0, min(100, value))
 
     def display_position(self, path: str, fallback_idx: int, fallback_total: int) -> tuple[int, int]:

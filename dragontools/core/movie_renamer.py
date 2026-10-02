@@ -22,6 +22,7 @@ from .movie_renamer_parsing import (
     TECHNICAL_TAG_PATTERNS,
     VIDEO_SUFFIXES,
     build_series_target_filename,
+    build_series_multi_target_filename,
     build_target_filename,
     parse_movie_release_name,
     parse_series_release_name,
@@ -41,6 +42,8 @@ from .movie_renamer_release_warnings import release_style_warnings
 from .movie_renamer_season_override import apply_series_episode_override, apply_series_season_override
 from ..rules.renamer_rules import apply_title_exception
 from .movie_renamer_matching import candidate_status, select_score_stage, stage_warning
+from .movie_renamer_year_override import apply_year_override
+from .renamer_year_safety import apply_year_review
 
 def _series_candidate_from_result(raw: Any, parsed: ParsedSeriesReleaseName) -> SeriesRenameCandidate | None:
     """Compatibility wrapper that preserves monkeypatchable alias rules."""
@@ -56,9 +59,10 @@ def build_movie_rename_proposal(
     force: bool = False,
     minimum_score_override: float | None = None,
     show_all_candidates: bool = False,
+    year_override: int | None = None,
 ) -> MovieRenameProposal:
     source_path = Path(path)
-    parsed = parse_movie_release_name(source_path)
+    parsed = apply_year_override(parse_movie_release_name(source_path), year_override)
     warnings = list(parsed.warnings)
     manual_query = str(query_override or "").strip()
     if manual_query:
@@ -108,6 +112,7 @@ def build_movie_rename_proposal(
     target_path = source_path.with_name(target_name)
     target_exists = target_path.exists() and path_compare_key(target_path) != path_compare_key(source_path)
     status, warning = candidate_status(candidates, threshold=threshold, target_exists=target_exists)
+    status = apply_year_review(status, warnings, parsed.year, selected.year)
     if warning:
         warnings.append(warning)
 
@@ -138,6 +143,7 @@ def build_series_rename_proposal(
     show_all_candidates: bool = False,
     season_override: int | None = None,
     episode_override: int | None = None,
+    year_override: int | None = None,
 ) -> SeriesRenameProposal:
     source_path = Path(path)
     parsed = parse_series_release_name(source_path)
@@ -156,6 +162,7 @@ def build_series_rename_proposal(
             return SeriesRenameProposal(source_path=source_path, parsed=empty, status="not_series", warnings=empty.warnings)
         parsed = empty
 
+    parsed = apply_year_override(parsed, year_override)
     parsed, season_issue = apply_series_season_override(parsed, season_override)
     parsed, episode_issue = apply_series_episode_override(parsed, episode_override)
     warnings = list(parsed.warnings)
@@ -229,6 +236,7 @@ def build_series_rename_proposal(
     target_path = source_path.with_name(target_name)
     target_exists = target_path.exists() and path_compare_key(target_path) != path_compare_key(source_path)
     status, warning = candidate_status(candidates, threshold=threshold, target_exists=target_exists)
+    status = apply_year_review(status, warnings, parsed.year, selected.year)
     if warning:
         warnings.append(warning)
 
@@ -262,6 +270,7 @@ def build_rename_proposal(
     show_all_candidates: bool = False,
     series_season_override: int | None = None,
     series_episode_override: int | None = None,
+    year_override: int | None = None,
 ) -> RenameProposal:
     forced = str(force_kind or "").strip().lower()
     parsed = parse_movie_release_name(path)
@@ -278,6 +287,7 @@ def build_rename_proposal(
             show_all_candidates=show_all_candidates,
             season_override=series_season_override,
             episode_override=series_episode_override,
+            year_override=year_override,
         )
     return build_movie_rename_proposal(
         path,
@@ -286,6 +296,7 @@ def build_rename_proposal(
         limit=limit,
         query_override=movie_query_override,
         force=forced == "movie",
+        year_override=year_override,
         minimum_score_override=minimum_score_override,
         show_all_candidates=show_all_candidates,
     )
@@ -295,6 +306,6 @@ __all__ = [
     "EDITION_PATTERNS", "TECHNICAL_TAG_PATTERNS", "VIDEO_SUFFIXES", "MovieRenameCandidate", "MovieRenameProposal",
     "MovieSearchResolver", "ParsedMovieReleaseName", "ParsedSeriesReleaseName", "RenameProposal", "SeriesRenameCandidate",
     "SeriesRenameProposal", "SeriesSearchResolver", "build_movie_rename_proposal", "build_rename_proposal",
-    "build_series_rename_proposal", "build_series_target_filename", "build_target_filename", "parse_movie_release_name",
+    "build_series_rename_proposal", "build_series_target_filename", "build_series_multi_target_filename", "build_target_filename", "parse_movie_release_name",
     "parse_series_release_name", "release_style_warnings", "rename_movie_file", "sanitize_filename_part",
 ]

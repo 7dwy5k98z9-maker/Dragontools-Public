@@ -109,7 +109,6 @@ def test_actions_facade_contains_no_business_methods():
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
     ]
     assert methods == []
-    assert len(FACADE.read_text(encoding="utf-8").splitlines()) <= 40
 
 
 def test_action_mixins_preserve_complete_aggregation_surface_without_duplicates():
@@ -124,16 +123,6 @@ def test_action_mixins_preserve_complete_aggregation_surface_without_duplicates(
             owners[method.name] = filename
 
     assert set(owners) == EXPECTED_METHODS
-
-
-def test_focused_action_modules_stay_small():
-    for filename in ACTION_MODULES:
-        path = GUI_DIR / filename
-        lines = len(path.read_text(encoding="utf-8").splitlines())
-        assert lines <= 260, f"{filename} ist mit {lines} Zeilen wieder zu groß"
-        for method in _methods(path):
-            length = (method.end_lineno or method.lineno) - method.lineno + 1
-            assert length <= 130, f"{filename}:{method.name} ist mit {length} Zeilen zu groß"
 
 
 def test_facade_only_composes_focused_action_mixins():

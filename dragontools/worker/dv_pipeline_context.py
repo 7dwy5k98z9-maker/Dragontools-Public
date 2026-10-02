@@ -6,6 +6,7 @@ from pathlib import Path
 
 from .dv_audio_mux_service import DVExtractedAudioTrack, DVMuxAudioTrack
 from .dv_subtitle_mux_service import DVMuxSubtitleTrack
+from .frame_count_evidence import FrameCountEvidence
 
 
 def normalize_dv_profile_major(media_info) -> int | None:
@@ -145,6 +146,7 @@ class DVPipelineState:
     audio_tracks: list[DVExtractedAudioTrack] = field(default_factory=list)
     mux_audio_tracks: list[DVMuxAudioTrack] = field(default_factory=list)
     mux_subtitle_tracks: list[DVMuxSubtitleTrack] = field(default_factory=list)
+    video_encode_completed: bool = False
     profile_hevc: Path | None = None
     rpu_to_use: Path | None = None
     rpu_input_hevc: Path | None = None
@@ -162,6 +164,17 @@ class DVPipelineState:
     final_rpu_message: str = ""
     effective_crop: str | None = None
     effective_vf_args: list = field(default_factory=list)
+    encode_slot_released: bool = False
+    encoded_frame_evidence: FrameCountEvidence | None = None
+    hdr10plus_frame_evidence: FrameCountEvidence | None = None
+    rpu_input_frame_evidence: FrameCountEvidence | None = None
+    failure_archive_path: str = ""
+    failure_artifact_paths: list[str] = field(default_factory=list)
+    preserve_failed_output: bool = False
+    frame_recovery_applied: bool = False
+    frame_recovery_original_count: int | None = None
+    frame_recovery_final_count: int | None = None
+    frame_recovery_message: str = ""
 
 
 @dataclass(frozen=True)
@@ -183,3 +196,10 @@ class DVPipelineResult:
     final_rpu_message: str = ""
     effective_crop: str | None = None
     effective_vf_args: list = field(default_factory=list)
+    encode_slot_released: bool = False
+    encoded_frame_evidence: FrameCountEvidence | None = None
+    hdr10plus_frame_evidence: FrameCountEvidence | None = None
+    rpu_input_frame_evidence: FrameCountEvidence | None = None
+    failure_archive_path: str = ""
+    failure_artifact_paths: tuple[str, ...] = ()
+    preserve_failed_output: bool = False

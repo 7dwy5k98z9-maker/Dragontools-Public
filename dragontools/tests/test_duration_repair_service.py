@@ -351,6 +351,17 @@ def _fake_tool(path):
     return str(path)
 
 
+def _packet_probe_result(audio_count, subtitle_count):
+    """Explicit lossless evidence for successful timestamp repair scenarios."""
+    import json
+    kinds = ['video'] + ['audio'] * audio_count + ['subtitle'] * subtitle_count
+    return SimpleNamespace(returncode=0, stderr='', stdout=json.dumps({
+        'streams': [{'index': i, 'codec_type': kind} for i, kind in enumerate(kinds)],
+        'packets': [{'stream_index': i, 'data_hash': 'SHA256:' + f'{i:064x}',
+                     'pts_time': '0', 'duration_time': '0.04'} for i in range(len(kinds))],
+    }))
+
+
 def _tool_runner_from_subprocess(fake_run):
     from dragontools.worker.tool_runner import ToolRunResult
 
@@ -426,6 +437,8 @@ def test_timestamp_repair_nutzt_setts_nach_erfolglosem_remux_23976(tmp_path, mon
             tmp.write_bytes(b"remuxed" * 500)
             return SimpleNamespace(returncode=0, stdout="", stderr="")
         if exe == "ffprobe.exe":
+            if "-show_packets" in cmd:
+                return _packet_probe_result(2, 2)
             target = str(Path(cmd[-1]))
             if target in fixed_paths:
                 stdout = _timing_probe_json(
@@ -728,6 +741,8 @@ def test_media_info_vfr_pts_ausreisser_wird_ueber_quell_dauer_sicher_repariert(t
             tmp.write_bytes(b"remuxed" * 500)
             return SimpleNamespace(returncode=0, stdout="", stderr="")
         if exe == "ffprobe.exe":
+            if "-show_packets" in cmd:
+                return _packet_probe_result(1, 2)
             target = str(Path(cmd[-1]))
             if target in fixed_paths:
                 return SimpleNamespace(
@@ -976,6 +991,8 @@ def test_genpts_fallback_accepts_valid_candidate_even_with_ffmpeg_einval_returnc
             tmp.write_bytes(b"remuxed" * 500)
             return SimpleNamespace(returncode=0, stdout="", stderr="")
         if exe == "ffprobe.exe":
+            if "-show_packets" in cmd:
+                return _packet_probe_result(1, 1)
             target = str(Path(cmd[-1]))
             duration = 1441.56 if target in fixed_paths else 4_296_408.0
             return SimpleNamespace(

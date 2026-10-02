@@ -3,11 +3,11 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from PyQt6.QtCore import QObject, QSettings, pyqtSignal
+from PyQt6.QtCore import QObject, pyqtSignal
 
 from ..core.logger import create_worker_logger
-from ..core.parallel_settings import clamp_parallel_jobs
-from ..core.settings_app import APP_NAME, APP_ORG
+from ..core.parallel_settings import DEFAULT_DV_POSTPROCESS_JOBS, clamp_parallel_jobs
+from ..core.settings_access import worker_settings_snapshot
 from .converter_config import ConverterConfig
 from .converter_thread import ConverterThread
 from .parallel_child_result_coordinator import ParallelChildResultCoordinator
@@ -17,6 +17,7 @@ from .parallel_converter_lifecycle import ParallelConverterLifecycleMixin
 from .parallel_converter_queue import ParallelConverterQueueMixin
 from .parallel_converter_state import ParallelQueueState, ParallelResultState, ParallelWorkerRegistry
 from .parallel_worker_launcher import ParallelWorkerLauncher
+from .dv_postprocess_gate import DVPostprocessGate
 
 
 class ParallelConverterThread(
@@ -31,6 +32,7 @@ class ParallelConverterThread(
     progress = pyqtSignal(int)
     file_progress = pyqtSignal(str, int, object)
     file_result = pyqtSignal(str, str, str)
+    encode_stage_complete = pyqtSignal(str, str)
     log_line = pyqtSignal(str)
     worker_event = pyqtSignal(object)
     dv_crop_decision_requested = pyqtSignal(object)
@@ -42,6 +44,7 @@ class ParallelConverterThread(
         config: ConverterConfig,
         *,
         parallel_jobs: int,
+        max_postprocessing_jobs: int = DEFAULT_DV_POSTPROCESS_JOBS,
         parent=None,
     ) -> None:
         super().__init__(parent)
@@ -63,6 +66,8 @@ class ParallelConverterThread(
         self.anime_path = config.anime_path
         self.filme_path = config.filme_path
         self.parallel_jobs = clamp_parallel_jobs(parallel_jobs, 1)
+        self.max_postprocessing_jobs = max(1, int(max_postprocessing_jobs))
+        self._dv_postprocess_gate = DVPostprocessGate(self.max_postprocessing_jobs)
 
         self.abort_requested = False
         self.abort_type = None
@@ -81,7 +86,7 @@ class ParallelConverterThread(
         )
 
         self._logger = create_worker_logger(
-            settings=QSettings(APP_ORG, APP_NAME),
+            settings=worker_settings_snapshot(),
             gui_callback=self.log_line.emit,
         )
         self.log_file_path = str(self._logger.log_file) if self._logger.log_file else None
@@ -121,6 +126,8 @@ class ParallelConverterThread(
             relay_crop_decision=self._relay_dv_crop_decision,
             on_file_progress=self._on_child_file_progress,
             on_file_result=self._on_child_file_result,
+            on_encode_stage_complete=self._on_child_encode_stage_complete,
+            dv_postprocess_gate=self._dv_postprocess_gate,
             emit_progress=self._emit_aggregate_progress,
             on_finished=self._on_child_finished,
         )
@@ -129,6 +136,23 @@ class ParallelConverterThread(
         self._file_progress_pct[path] = int(pct)
         self.file_progress.emit(path, pct, eta_s)
         self._emit_aggregate_progress()
+
+    def _on_child_encode_stage_complete(
+        self,
+        child: ConverterThread,
+        input_path: str,
+        output_path: str,
+    ) -> None:
+        self._child_results.on_encode_stage_complete(
+            child,
+            input_path,
+            output_path,
+            abort_requested=self.abort_requested,
+            start_pending_workers=self._start_pending_workers,
+            emit_encode_stage_complete=self.encode_stage_complete.emit,
+            emit_aggregate_progress=self._emit_aggregate_progress,
+            finish_if_done=self._finish_if_done,
+        )
 
     def _on_child_file_result(
         self,

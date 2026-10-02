@@ -53,5 +53,5 @@ def test_context_menu_and_dialog_are_wired_for_multi_selection():
     assert "Datei-Einstellungen für Auswahl" in context
     assert "lambda paths=tuple(selected_paths): self._edit_override(paths)" in context
     assert "for path in paths:" in dialog
-    assert "merge_dialog_override(state.file_overrides.get(path), ov)" in dialog
+    # Actual persistence and failure behavior are covered by test_override_analysis_safety.
     assert "[clicked_path, *[path for path in selected if path != clicked_path]]" in target

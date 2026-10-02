@@ -134,7 +134,7 @@ def _install_parallel_fakes(monkeypatch):
     logger = FakeLogger()
     monkeypatch.setattr(module, "ConverterThread", FakeWorker)
     monkeypatch.setattr(module, "create_worker_logger", lambda **_kwargs: logger)
-    monkeypatch.setattr(module, "QSettings", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(module, "worker_settings_snapshot", lambda: None)
     return module, logger
 
 
@@ -182,6 +182,102 @@ def test_parallel_thread_starts_limited_workers_and_aggregates_progress(monkeypa
     thread._on_child_finished(FakeWorker.instances[0])
     assert len(FakeWorker.instances) == 3
     assert FakeWorker.instances[2].files == ["c.mkv"]
+
+
+def _complete(thread, child):
+    path = child.files[0]
+    thread._on_child_file_result(child, path, path + ".out", "✅")
+    child._running = False
+    thread._on_child_finished(child)
+
+
+def test_live_reduction_drains_running_files_before_replacing_one(monkeypatch):
+    module, _ = _install_parallel_fakes(monkeypatch)
+    thread = _thread(module, ["a.mkv", "b.mkv", "c.mkv", "d.mkv"], jobs=2)
+    thread.start()
+    first, second = FakeWorker.instances
+    assert thread.set_parallel_jobs(1) == 1
+    assert len(FakeWorker.instances) == 2
+    assert first.isRunning() and second.isRunning()
+    assert not first.abort_requested and not second.abort_requested
+    _complete(thread, first)
+    assert len(FakeWorker.instances) == 2
+    assert thread.encode_active_count() == 1
+    _complete(thread, second)
+    assert len(FakeWorker.instances) == 3
+    assert FakeWorker.instances[-1].files == ["c.mkv"]
+    _complete(thread, FakeWorker.instances[-1])
+    assert FakeWorker.instances[-1].files == ["d.mkv"]
+    _complete(thread, FakeWorker.instances[-1])
+    assert not thread.isRunning()
+    assert [w.files[0] for w in FakeWorker.instances] == ["a.mkv", "b.mkv", "c.mkv", "d.mkv"]
+
+
+def test_live_increase_fills_free_slots_immediately_in_queue_order(monkeypatch):
+    module, _ = _install_parallel_fakes(monkeypatch)
+    thread = _thread(module, ["a.mkv", "b.mkv", "c.mkv", "d.mkv"], jobs=1)
+    thread.start()
+    assert thread.set_parallel_jobs(2) == 2
+    assert [w.files[0] for w in FakeWorker.instances] == ["a.mkv", "b.mkv"]
+    assert thread.set_parallel_jobs(3) == 3
+    assert [w.files[0] for w in FakeWorker.instances] == ["a.mkv", "b.mkv", "c.mkv"]
+    assert thread.set_parallel_jobs(3) == 3
+    assert len(FakeWorker.instances) == 3
+    _complete(thread, FakeWorker.instances[0])
+    assert FakeWorker.instances[-1].files == ["d.mkv"]
+    assert thread.encode_active_count() == 3
+
+
+def test_limit_change_during_pause_waits_for_resume(monkeypatch):
+    module, _ = _install_parallel_fakes(monkeypatch)
+    thread = _thread(module, ["a.mkv", "b.mkv", "c.mkv"], jobs=1)
+    thread.start()
+    thread.pause()
+    thread.set_parallel_jobs(3)
+    assert len(FakeWorker.instances) == 1
+    _complete(thread, FakeWorker.instances[0])
+    assert len(FakeWorker.instances) == 1
+    assert thread.add_file("d.mkv")
+    assert len(FakeWorker.instances) == 1
+    thread.resume()
+    assert [w.files[0] for w in FakeWorker.instances] == ["a.mkv", "b.mkv", "c.mkv", "d.mkv"]
+    assert not any(w._paused for w in FakeWorker.instances if w.isRunning())
+
+
+def test_limit_increase_does_not_override_abort_after_file(monkeypatch):
+    module, _ = _install_parallel_fakes(monkeypatch)
+    thread = _thread(module, ["a.mkv", "b.mkv", "c.mkv"], jobs=1)
+    thread.start()
+    thread.request_abort("nach_datei")
+    thread.set_parallel_jobs(3)
+    assert len(FakeWorker.instances) == 1
+    assert thread.clear_abort_request()
+    assert len(FakeWorker.instances) == 3
+
+
+def test_live_limit_applies_to_dv_encode_slot_release(monkeypatch):
+    module, _ = _install_parallel_fakes(monkeypatch)
+    thread = _thread(module, ["a.mkv", "b.mkv", "c.mkv"], jobs=2)
+    thread.start()
+    first, second = FakeWorker.instances
+    thread.set_parallel_jobs(1)
+    thread._on_child_encode_stage_complete(first, "a.mkv", "a.out")
+    assert len(FakeWorker.instances) == 2
+    thread._on_child_encode_stage_complete(second, "b.mkv", "b.out")
+    assert FakeWorker.instances[-1].files == ["c.mkv"]
+    assert thread.encode_active_count() == 1
+    assert thread.postprocessing_file_count() == 2
+    assert first.isRunning() and second.isRunning()
+
+
+def test_single_initial_file_can_add_jobs_after_live_increase(monkeypatch):
+    module, _ = _install_parallel_fakes(monkeypatch)
+    thread = _thread(module, ["a.mkv"], jobs=1)
+    thread.start()
+    thread.set_parallel_jobs(3)
+    assert thread.add_file("b.mkv")
+    assert thread.add_file("c.mkv")
+    assert thread.encode_active_count() == 3
 
 
 def test_parallel_thread_delegates_pause_resume_and_abort(monkeypatch):
@@ -281,3 +377,17 @@ def test_parallel_thread_marks_unreported_child_finish_as_error(monkeypatch):
     assert thread.fehlgeschlagen == 1
     assert finished == [True]
     assert any("Worker beendet ohne Dateiergebnis" in line for line in logger.lines)
+
+
+def test_parallel_thread_deduplicates_initial_queue_before_starting_workers(monkeypatch):
+    module, logger = _install_parallel_fakes(monkeypatch)
+    same_windows_path = r"C:\Media\Film.mkv"
+    duplicate_case_variant = r"c:\media\FILM.mkv"
+    thread = _thread(module, [same_windows_path, duplicate_case_variant], jobs=2)
+
+    thread.start()
+
+    assert thread.files == [same_windows_path]
+    assert len(FakeWorker.instances) == 1
+    assert FakeWorker.instances[0].files == [same_windows_path]
+    assert any("doppelter Queue-Eintrag" in line for line in logger.lines)

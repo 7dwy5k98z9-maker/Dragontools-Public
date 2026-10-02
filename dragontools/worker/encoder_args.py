@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from ..core.codec_utils import normalize_target_codec, value_or_default
+from ..core.codec_utils import (
+    encoder_10bit_filter_pixel_format,
+    normalize_target_codec,
+    value_or_default,
+)
 from ..core.type_utils import _safe_bool, _safe_int
 
 
@@ -22,7 +26,7 @@ def _text_option(options: dict, key: str, allowed: set[str]) -> str | None:
 
 
 def _h265_10bit_args(encoder_key: str) -> list[str]:
-    pix_fmt = "yuv420p10le" if encoder_key == "cpu" else "p010le"
+    pix_fmt = encoder_10bit_filter_pixel_format(encoder_key)
     args = ["-profile:v", "main10", "-pix_fmt", pix_fmt]
     if encoder_key == "amf":
         args += ["-bitdepth", "10"]

@@ -8,9 +8,8 @@ from .dv_runtime_models import DVEncoderConfig
 from .dv_video_filters import (
     build_dv5_libplacebo_vf,
     inject_dv_colorspace,
-    remap_vf_to_input1,
 )
-from .encoder_args import _vid_args
+from .encoder_args import _vid_args, encoder_10bit_filter_pixel_format
 
 
 _DV_HDR10_OUTPUT_FLAGS = [
@@ -46,58 +45,42 @@ def build_dv_encode_command(
     ffmpeg_path: str,
     encoder_config: DVEncoderConfig,
     input_path: str,
-    p8_hevc: Path,
+    p8_hevc: Path | None = None,
     output_hevc: Path,
     vf_args: list,
     profile_major: int | None,
 ) -> DVEncodeCommand:
-    """Erzeugt den Encode-Befehl ohne Seiteneffekte.
+    """Build the normal DV picture encode directly from the source container.
 
-    Sonderfälle sind absichtlich explizit:
+    Dolby-Vision metadata processing is deliberately independent from picture
+    decoding.  The RPU is extracted/normalized directly from Matroska before
+    this step; FFmpeg therefore has no reason to decode a demuxed/rewritten
+    HEVC working stream.  This removes the old ``source.hevc -> p8.hevc``
+    failure surface that could lose reference pictures.
 
-    * DV Profile 5 wird direkt aus dem Originalcontainer decodiert. Die
-      ICtCp-Basis wird über libplacebo nach HDR10/BT.2020nc/PQ konvertiert.
-      Der alte P5-Remux-Pfad ist hier bewusst NICHT erreichbar.
-    * DV Profile 7/8 (und unbekannte DV-Profile nach vorheriger dovi_tool-
-      Normalisierung) encodieren aus ``p8_hevc``. Nur Audio/Subtitel-Metadaten
-      stammen weiterhin aus dem Originalcontainer.
+    ``p8_hevc`` remains an optional compatibility argument for callers/tests
+    from older builds.  It is never used as the video source.
     """
-    if profile_major == 5:
-        command = (
-            [
-                ffmpeg_path, "-y", "-nostdin",
-                "-loglevel", "error",
-                "-i", input_path,
-            ]
-            + build_dv5_libplacebo_vf(vf_args)
-            + dv_video_encode_args(encoder_config)
-            + ["-an", "-fps_mode", "passthrough"]
-            + [
-                "-progress", "pipe:1",
-                "-nostats",
-                "-f", "hevc",
-                str(output_hevc),
-            ]
-        )
-        return DVEncodeCommand(
-            command=command,
-            profile_major=profile_major,
-            uses_libplacebo=True,
-            video_source=input_path,
-        )
+    filter_pixel_format = encoder_10bit_filter_pixel_format(encoder_config.options)
 
-    processed_vf = inject_dv_colorspace(
-        remap_vf_to_input1(vf_args),
-        is_p5=False,
-    )
-    has_filter_complex = "-filter_complex" in processed_vf
+    if profile_major == 5:
+        processed_vf = build_dv5_libplacebo_vf(
+            vf_args, pixel_format=filter_pixel_format
+        )
+        uses_libplacebo = True
+    else:
+        processed_vf = inject_dv_colorspace(
+            list(vf_args),
+            is_p5=False,
+            pixel_format=filter_pixel_format,
+        )
+        uses_libplacebo = False
+
     command = (
         [
             ffmpeg_path, "-y", "-nostdin",
             "-loglevel", "error",
             "-i", input_path,
-            "-f", "hevc", "-i", str(p8_hevc),
-            *([] if has_filter_complex else ["-map", "1:v:0"]),
         ]
         + processed_vf
         + dv_video_encode_args(encoder_config)
@@ -112,6 +95,6 @@ def build_dv_encode_command(
     return DVEncodeCommand(
         command=command,
         profile_major=profile_major,
-        uses_libplacebo=False,
-        video_source=str(p8_hevc),
+        uses_libplacebo=uses_libplacebo,
+        video_source=input_path,
     )

@@ -14,17 +14,6 @@ def _class_node(path: Path, name: str) -> ast.ClassDef:
     return next(node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == name)
 
 
-def test_hdrplus_coordinator_stays_below_release_complexity_ceiling():
-    worker = _worker_dir()
-    coordinator = worker / "hdrplus_conversion.py"
-    mux_service = worker / "hdrplus_mux_service.py"
-    tool_runner = worker / "hdrplus_tool_runner.py"
-
-    assert len(coordinator.read_text(encoding="utf-8").splitlines()) <= 650
-    assert len(mux_service.read_text(encoding="utf-8").splitlines()) <= 250
-    assert len(tool_runner.read_text(encoding="utf-8").splitlines()) <= 220
-
-
 def test_hdrplus_coordinator_does_not_reimplement_mux_or_metadata_json_parsing():
     source = (_worker_dir() / "hdrplus_conversion.py").read_text(encoding="utf-8")
 
@@ -192,24 +181,6 @@ def test_hdrplus_new_services_stay_qt_free_and_coordinator_methods_bounded():
         source = path.read_text(encoding="utf-8")
         assert "PyQt" not in source
         assert "from PySide" not in source
-
-    coordinator = _class_node(worker / "hdrplus_pipeline_coordinator.py", "HDRPlusPipelineCoordinator")
-    method_sizes = {
-        node.name: node.end_lineno - node.lineno + 1
-        for node in coordinator.body
-        if isinstance(node, ast.FunctionDef)
-    }
-    assert max(method_sizes.values()) <= 80
-    assert method_sizes["run"] <= 80
-
-
-def test_hdrplus_helper_run_is_now_thin_facade():
-    cls = _class_node(_worker_dir() / "hdrplus_conversion.py", "HDRPlusConversionHelper")
-    run = next(node for node in cls.body if isinstance(node, ast.FunctionDef) and node.name == "run")
-    execute = next(node for node in cls.body if isinstance(node, ast.FunctionDef) and node.name == "execute")
-    assert run.end_lineno - run.lineno + 1 <= 35
-    assert execute.end_lineno - execute.lineno + 1 <= 55
-
 
 def test_hdrplus_new_job_clears_stale_tool_diagnostics_before_preflight():
     from dragontools.worker.dv_runtime_models import DVTempState

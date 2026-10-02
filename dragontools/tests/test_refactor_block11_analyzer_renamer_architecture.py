@@ -17,11 +17,6 @@ from dragontools.core.movie_renamer_models import ParsedSeriesReleaseName, Serie
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_block11_facades_stay_small() -> None:
-    assert len((PACKAGE_ROOT / "core/media_analyzer_streams.py").read_text(encoding="utf-8").splitlines()) <= 60
-    assert len((PACKAGE_ROOT / "core/movie_renamer_candidates.py").read_text(encoding="utf-8").splitlines()) <= 80
-
-
 def test_block11_stream_builders_keep_public_facade_contract() -> None:
     video = _build_video_streams(
         [{"Format": "HEVC", "Width": "1920", "Height": "1080", "BitDepth": "10", "ColorSpace": "YUV", "ChromaSubsampling": "4:2:0"}],

@@ -378,10 +378,63 @@ class DragonSplashScreen:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  Einstiegspunkt
+#  Einstiegspunkt / Build-Smoke
 # ══════════════════════════════════════════════════════════════════════════════
 
+def _run_frozen_smoke_test() -> int:
+    """Prüft die kritische Frozen-Runtime inklusive echter Qt-Initialisierung.
+
+    Ein reiner ``import PyQt6`` erkennt fehlende Platform-Plugins (z. B.
+    ``qwindows.dll``) nicht zuverlässig. Deshalb erzeugt der Release-Smoke eine
+    echte ``QApplication`` plus ein minimales ``QWidget``, ohne das DragonTools-
+    Hauptfenster oder externe Medienwerkzeuge zu starten.
+    """
+    import cv2  # noqa: F401
+    import ctranslate2  # noqa: F401
+    import cryptography  # noqa: F401
+    import faster_whisper  # noqa: F401
+    import numpy  # noqa: F401
+
+    from PyQt6.QtCore import QCoreApplication, Qt
+    QCoreApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts)
+    from PyQt6.QtWidgets import QApplication, QWidget
+
+    app = QApplication.instance()
+    owns_app = app is None
+    if app is None:
+        app = QApplication(["DragonTools", "--smoke-test"])
+    app.setOrganizationName("DragonTools")
+    app.setApplicationName("Dragon Tools")
+    app.setApplicationVersion(APP_VERSION)
+
+    try:
+        probe_widget = QWidget()
+        probe_widget.setObjectName("DragonToolsFrozenSmoke")
+        probe_widget.ensurePolished()
+        app.processEvents()
+
+        from dragontools.core.tool_paths import ToolPaths
+        from dragontools.gui.main_window import MainWindow  # noqa: F401
+
+        # Konstruktion des Tool-Resolvers darf im Frozen-Bundle ebenfalls nicht
+        # an Pfadauflösung oder fehlenden optionalen Einstellungen scheitern.
+        ToolPaths()
+        probe_widget.deleteLater()
+        app.processEvents()
+    finally:
+        _close_pyinstaller_boot_splash()
+        if owns_app:
+            app.quit()
+            app.processEvents()
+    return 0
+
+
 def main():
+    if "--version" in sys.argv:
+        print(APP_VERSION)
+        return 0
+    if "--smoke-test" in sys.argv:
+        return _run_frozen_smoke_test()
     clear_activity_fn = lambda: None
     from PyQt6.QtCore import QCoreApplication, Qt, QTimer
     QCoreApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts)

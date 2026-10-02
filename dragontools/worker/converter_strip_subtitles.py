@@ -18,7 +18,7 @@ def build_strip_subtitle_args(worker, mi, ov, container: str, *, exclude_mkv_str
         worker.log(f"⚠️ {warning}", "warn")
     if str(container or "mkv").lower() == "mp4":
         return _mp4_subtitle_args(plan, rules)
-    return _mkv_subtitle_args(plan, exclude_stream_indices=exclude_mkv_stream_indices)
+    return _mkv_subtitle_args(plan, rules=rules, exclude_stream_indices=exclude_mkv_stream_indices)
 
 
 def _mp4_subtitle_args(plan, rules: dict) -> list[str]:
@@ -37,13 +37,17 @@ def _mp4_subtitle_args(plan, rules: dict) -> list[str]:
     return args
 
 
-def _mkv_subtitle_args(plan, *, exclude_stream_indices: set[int] | None = None) -> list[str]:
+def _mkv_subtitle_args(plan, *, rules: dict | None = None, exclude_stream_indices: set[int] | None = None) -> list[str]:
     streams = ([plan.burn_sub] if plan.burn_sub else []) + list(plan.keep_streams)
     deduped = []
     seen: set[int] = set()
     excluded = {int(i) for i in (exclude_stream_indices or set())}
+    from ..rules.subtitle_storage import pgs_original_storage
+    pgs_sidecar = pgs_original_storage(rules) == "sidecar"
     for stream in streams:
         if int(stream.index) in excluded:
+            continue
+        if pgs_sidecar and str(getattr(stream, "codec", "") or "").strip().lower() in {"hdmv_pgs_subtitle", "pgs"}:
             continue
         if stream.index not in seen:
             seen.add(stream.index)

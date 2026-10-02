@@ -22,7 +22,7 @@ DEFAULT_PREFERRED_SUBTITLE_FORMATS = [
 
 
 DEFAULT_SUBTITLE_RULES: dict[str, Any] = {
-    SCHEMA_VERSION_KEY: 6,
+    SCHEMA_VERSION_KEY: 7,
     "language_priority": ["de", "en"],
     "max_languages": 1,
     "tracks_per_language": 1,
@@ -56,6 +56,8 @@ DEFAULT_SUBTITLE_RULES: dict[str, Any] = {
     "mp4_sidecars_enabled": True,
     "additional_sidecars_enabled": False,
     "text_to_srt_sidecar_enabled": False,
+    "pgs_to_srt_enabled": False,
+    "pgs_original_storage": "internal_mkv",
 }
 
 
@@ -138,6 +140,10 @@ def migrate_subtitle_rules(
             migration_messages.append("MP4-Sidecar-Regel ergänzt")
     if "additional_sidecars_enabled" not in raw:
         migration_messages.append("Zusätzliche Sidecar-Regel ergänzt")
+    if "pgs_to_srt_enabled" not in raw:
+        migration_messages.append("PGS-zu-SRT-OCR-Regel ergänzt")
+    if "pgs_original_storage" not in raw:
+        migration_messages.append("PGS-Originalspeicher-Regel ergänzt")
     if "text_to_srt_sidecar_enabled" not in raw:
         if "ass_to_srt_sidecar_enabled" in raw:
             migration_messages.append("ASS/SSA-zu-SRT-Regel in Text-zu-SRT-Sidecar-Regel übernommen")
@@ -162,6 +168,11 @@ def migrate_subtitle_rules(
         raw.get("text_to_srt_sidecar_enabled", raw.get("ass_to_srt_sidecar_enabled")),
         DEFAULT_SUBTITLE_RULES["text_to_srt_sidecar_enabled"],
     )
+    migrated["pgs_to_srt_enabled"] = _safe_bool(
+        raw.get("pgs_to_srt_enabled"), DEFAULT_SUBTITLE_RULES["pgs_to_srt_enabled"]
+    )
+    pgs_storage = str(raw.get("pgs_original_storage", DEFAULT_SUBTITLE_RULES["pgs_original_storage"]) or "internal_mkv").strip().lower()
+    migrated["pgs_original_storage"] = pgs_storage if pgs_storage in {"internal_mkv", "sidecar"} else "internal_mkv"
     migrated.pop("ass_to_srt_sidecar_enabled", None)
     if "dv_extract_external_subs" in raw:
         migrated["dv_extract_external_subs"] = migrated["mp4_sidecars_enabled"]

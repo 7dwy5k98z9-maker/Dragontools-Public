@@ -22,6 +22,13 @@ from .settings_backup_common import (
     settings_to_dict,
 )
 from .settings_backup_crypto import decrypt_sensitive_settings
+from .settings_backup_limits import (
+    MAX_BACKUP_METADATA_BYTES,
+    MAX_BACKUP_SECRET_ENTRY_BYTES,
+    read_backup_entry,
+    validate_backup_archive,
+    validate_backup_path_size,
+)
 from .secret_settings import write_secret
 
 _LOG = logging.getLogger(__name__)
@@ -71,7 +78,7 @@ def restore_backup(
             target.parent.mkdir(parents=True, exist_ok=True)
             atomic_write_bytes(target, content)
             restored_files.append(str(target))
-        settings.sync()
+        sync_settings_checked(settings)
     except Exception:
         restore_settings_snapshot(settings, settings_snapshot)
         restore_file_snapshots(file_snapshots)
@@ -95,9 +102,11 @@ def _load_restore_payload(
     password: str | None,
     restore_legacy_plaintext_secrets: bool,
 ) -> tuple[dict[str, Any], dict[str, Any], str, dict[str, Any], list[tuple[Path, bytes]]]:
-    # Erst vollständig lesen/entschlüsseln/validieren. Ein falsches Passwort darf
-    # aktuelle QSettings niemals teilweise verändern.
+    # Erst vollständig lesen/entschlüsseln/validieren. Ein falsches Passwort oder
+    # ein manipuliertes Archiv darf aktuelle QSettings niemals teilweise verändern.
+    validate_backup_path_size(archive)
     with zipfile.ZipFile(archive, "r") as zf:
+        validate_backup_archive(zf)
         manifest = read_manifest(zf)
         secret_info = manifest.get("secrets") or {}
         secret_mode = str(secret_info.get("mode") or SECRET_MODE_LEGACY_PLAINTEXT)
@@ -105,7 +114,9 @@ def _load_restore_payload(
             raise ValueError(f"Unbekannter Secret-Modus im Backup: {secret_mode}")
 
         try:
-            settings_data = json.loads(zf.read("settings.json").decode("utf-8"))
+            settings_data = json.loads(
+                read_backup_entry(zf, "settings.json", max_bytes=MAX_BACKUP_METADATA_BYTES).decode("utf-8")
+            )
         except KeyError as exc:
             raise ValueError("Ungültiges DragonTools-Backup: settings.json fehlt.") from exc
         if not isinstance(settings_data, dict):
@@ -113,7 +124,9 @@ def _load_restore_payload(
 
         if secret_mode == SECRET_MODE_ENCRYPTED:
             try:
-                encrypted_payload = zf.read(SECRETS_ENTRY)
+                encrypted_payload = read_backup_entry(
+                    zf, SECRETS_ENTRY, max_bytes=MAX_BACKUP_SECRET_ENTRY_BYTES
+                )
             except KeyError as exc:
                 raise ValueError("Verschlüsselte Zugangsdaten fehlen im Backup.") from exc
             settings_data.update(decrypt_sensitive_settings(encrypted_payload, password))
@@ -155,9 +168,18 @@ def restore_settings_snapshot(settings, snapshot: dict[str, Any]) -> None:
                 write_secret(settings, key_str, str(restored or ""))
             else:
                 settings.setValue(key_str, restored)
-        settings.sync()
+        sync_settings_checked(settings)
     except Exception:
         _LOG.exception("QSettings-Rollback nach fehlgeschlagenem Restore ist fehlgeschlagen.")
+
+
+def sync_settings_checked(settings) -> None:
+    settings.sync()
+    status_fn = getattr(settings, "status", None)
+    if callable(status_fn):
+        status = status_fn()
+        if getattr(status, "value", status) != 0:
+            raise OSError(f"Einstellungen konnten nicht gespeichert werden: {status}")
 
 
 def restore_file_snapshots(snapshots: dict[Path, bytes | None]) -> None:

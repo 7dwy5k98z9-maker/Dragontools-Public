@@ -337,7 +337,7 @@ def test_release_validation_checks_required_files_and_schema(tmp_path):
     _write_package_smoke_files(root)
     config = root / "dragontools" / "config"
     _write_json(config / "default_audio_rules.json", {"_schema_version": 4})
-    _write_json(config / "default_subtitle_rules.json", {"_schema_version": 6})
+    _write_json(config / "default_subtitle_rules.json", {"_schema_version": 7})
     _write_json(config / "default_move_rules.json", {"_schema_version": 1})
     _write_json(config / "default_renamer_rules.json", {"_schema_version": 3})
     _write_json(config / "default_profiles.json", {"_schema_version": 3})
@@ -362,14 +362,14 @@ def test_release_validation_treats_schema_mismatch_as_error(tmp_path):
     by_title = {check.title: check for check in checks}
 
     assert by_title["Schema: Untertitel-Regeln"].status == "error"
-    assert "erwartet 6" in by_title["Schema: Untertitel-Regeln"].detail
+    assert "erwartet 7" in by_title["Schema: Untertitel-Regeln"].detail
 
 
 def test_release_validation_warns_about_private_paths(tmp_path):
     from dragontools.core.release_validation import validate_release
 
     root = tmp_path
-    (root / "help.html").write_text(r"C:\Users\Public\Documents\DragonTools", encoding="utf-8")
+    (root / "help.html").write_text(r"C:\Users\<USER>\Documents\DragonTools", encoding="utf-8")
 
     checks = validate_release(root)
 
@@ -385,14 +385,14 @@ def test_app_bundle_validation_checks_exe_not_source_files(tmp_path):
     (app_dir / f"DragonToolsV{APP_VERSION}.exe").parent.mkdir(parents=True)
     (app_dir / f"DragonToolsV{APP_VERSION}.exe").write_bytes(b"exe")
     (data_dir / "help.html").parent.mkdir(parents=True)
-    (data_dir / "help.html").write_text("<html>Public</html>", encoding="utf-8")
+    (data_dir / "help.html").write_text("<html>DragonTools</html>", encoding="utf-8")
     (data_dir / "Handbuch").mkdir()
     (data_dir / "Handbuch" / "Handbuch.pdf").write_bytes(b"%PDF")
     (data_dir / "Aenderungshistorie").mkdir()
     (data_dir / "Aenderungshistorie" / "CHANGELOG.json").write_text('{"format_version": 1, "sections": [{"title": "Überblick", "blocks": ["V9"]}]}', encoding="utf-8")
     config = data_dir / "dragontools" / "config"
     _write_json(config / "default_audio_rules.json", {"_schema_version": 4})
-    _write_json(config / "default_subtitle_rules.json", {"_schema_version": 6})
+    _write_json(config / "default_subtitle_rules.json", {"_schema_version": 7})
     _write_json(config / "default_move_rules.json", {"_schema_version": 1})
     _write_json(config / "default_renamer_rules.json", {"_schema_version": 3})
     _write_json(config / "default_profiles.json", {"_schema_version": 3})
@@ -446,7 +446,7 @@ def test_source_only_manifest_makes_source_archive_self_consistent(tmp_path):
     _write_package_smoke_files(root)
     config = root / "dragontools" / "config"
     _write_json(config / "default_audio_rules.json", {"_schema_version": 4})
-    _write_json(config / "default_subtitle_rules.json", {"_schema_version": 6})
+    _write_json(config / "default_subtitle_rules.json", {"_schema_version": 7})
     _write_json(config / "default_move_rules.json", {"_schema_version": 1})
     _write_json(config / "default_renamer_rules.json", {"_schema_version": 3})
     _write_json(config / "default_profiles.json", {"_schema_version": 3})
@@ -521,7 +521,7 @@ def test_package_only_manifest_validates_code_only_release(tmp_path):
     _write_package_smoke_files(root)
     config = root / "dragontools" / "config"
     _write_json(config / "default_audio_rules.json", {"_schema_version": 4})
-    _write_json(config / "default_subtitle_rules.json", {"_schema_version": 6})
+    _write_json(config / "default_subtitle_rules.json", {"_schema_version": 7})
     _write_json(config / "default_move_rules.json", {"_schema_version": 1})
     _write_json(config / "default_renamer_rules.json", {"_schema_version": 3})
     _write_json(config / "default_profiles.json", {"_schema_version": 3})
@@ -590,7 +590,7 @@ def test_release_validation_detects_stale_built_documentation(tmp_path):
     _write_package_smoke_files(root)
     config = root / "dragontools" / "config"
     _write_json(config / "default_audio_rules.json", {"_schema_version": 4})
-    _write_json(config / "default_subtitle_rules.json", {"_schema_version": 6})
+    _write_json(config / "default_subtitle_rules.json", {"_schema_version": 7})
     _write_json(config / "default_move_rules.json", {"_schema_version": 1})
     _write_json(config / "default_renamer_rules.json", {"_schema_version": 3})
     _write_json(config / "default_profiles.json", {"_schema_version": 3})
@@ -627,3 +627,44 @@ def test_release_validation_detects_stale_built_documentation(tmp_path):
     assert by_title["Build: Handbuch-Aktualität"].status == "ok"
     assert by_title["Build: Changelog-JSON-Aktualität"].status == "ok"
     assert by_title["Build: Changelog-TXT-Aktualität"].status == "ok"
+
+
+def test_validate_source_release_accepts_relative_root(tmp_path, monkeypatch):
+    from pathlib import Path
+    from dragontools.core.release_validation_source import validate_source_release
+
+    root = tmp_path / "relative_release"
+    root.mkdir()
+    # A real file is important here: the original bug surfaced when absolute
+    # inventory paths were made relative to a still-relative root.
+    (root / "CHANGELOGV7.txt").write_text("fixture", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+
+    checks = validate_source_release(Path("relative_release"))
+    assert isinstance(checks, list)
+    assert checks
+
+
+def test_release_validation_rejects_structurally_invalid_changelog(tmp_path):
+    from dragontools.core.release_validation import validate_release
+
+    root = tmp_path
+    (root / "Aenderungshistorie").mkdir(parents=True)
+    (root / "Aenderungshistorie" / "CHANGELOG.json").write_text(
+        '{"format_version": 1, "sections": ["silent-loss"]}',
+        encoding="utf-8",
+    )
+
+    checks = validate_release(root, mode="source")
+    by_title = {check.title: check for check in checks}
+    changelog = by_title["V9-Änderungshistorie (JSON)"]
+    assert changelog.status == "error"
+    assert "Ungültige Änderungshistorie" in changelog.detail
+
+    (root / "Aenderungshistorie" / "CHANGELOG.json").write_text(
+        '{"format_version": [], "sections": [{"title": "Überblick", "blocks": ["V9"]}]}',
+        encoding="utf-8",
+    )
+    checks = validate_release(root, mode="source")
+    by_title = {check.title: check for check in checks}
+    assert by_title["V9-Änderungshistorie (JSON)"].status == "error"

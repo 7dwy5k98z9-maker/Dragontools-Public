@@ -25,7 +25,7 @@ class ParallelConverterQueueMixin:
         active = [worker for worker in self._active_workers if worker.isRunning()]
         self.files.append(path)
         self._rebuild_display_positions()
-        if len(active) < self.parallel_jobs:
+        if len(active) < self.parallel_jobs and not self._paused:
             self._start_child_worker([path])
             self._logger.info(f"➕ Queue: {display_name(path)} als neuer Parallel-Worker hinzugefügt.")
             self._emit_aggregate_progress()
@@ -69,7 +69,12 @@ class ParallelConverterQueueMixin:
         self._queue_state.reorder(order)
         self._sync_child_display_positions()
         for worker in self._workers:
-            worker.reorder_waiting_files(order)
+            # Only the coordinator assigns files; sorting is not assignment.
+            owned_order = [
+                path for path in order
+                if self._assigned.get(path_compare_key(path)) is worker
+            ]
+            worker.reorder_waiting_files(owned_order)
         self._emit_aggregate_progress()
 
     def update_override(self, path: str, override: dict) -> bool:
@@ -96,6 +101,14 @@ class ParallelConverterQueueMixin:
             worker._display_total = self._display_total
 
     def _start_pending_workers(self) -> None:
+        if not self._running or self.abort_requested or self._paused:
+            return
         while self._pending_files and len(self._active_workers) < self.parallel_jobs:
             path = self._pending_files.pop(0)
+            key = path_compare_key(path)
+            if key in self._assigned:
+                self._logger.warn(
+                    f"⚠️ Doppelter Queue-Eintrag blockiert: {display_name(path)} ist bereits einem Worker zugeordnet."
+                )
+                continue
             self._start_child_worker([path])

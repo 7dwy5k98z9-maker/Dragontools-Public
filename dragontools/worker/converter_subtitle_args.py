@@ -17,7 +17,7 @@ def build_subtitle_args(worker, input_path, mi, ov, *, container: str, subtitle_
         worker.log(f"⚠️ {warning}", "warn")
     if str(container or "mkv").lower() == "mp4":
         return _mp4_args(worker, plan, burn_sub, subtitle_rules)
-    return _mkv_args(worker, burn_sub, keep, exclude_stream_indices=exclude_mkv_stream_indices)
+    return _mkv_args(worker, burn_sub, keep, subtitle_rules=subtitle_rules, exclude_stream_indices=exclude_mkv_stream_indices)
 
 
 def _mp4_args(worker, plan, burn_sub, rules):
@@ -44,7 +44,7 @@ def _mp4_args(worker, plan, burn_sub, rules):
     return (burn_sub if burn_sub else []), (args or ["-sn"])
 
 
-def _mkv_args(worker, burn_sub, keep, *, exclude_stream_indices: set[int] | None = None):
+def _mkv_args(worker, burn_sub, keep, *, subtitle_rules: dict | None = None, exclude_stream_indices: set[int] | None = None):
     """Build Matroska subtitle mappings.
 
     mov_text/tx3g is converted directly to SubRip inside Matroska.  The caller
@@ -56,7 +56,13 @@ def _mkv_args(worker, burn_sub, keep, *, exclude_stream_indices: set[int] | None
         worker._logger.decision(f"Sub #{burn_sub.index} ({burn_sub.language},forced={burn_sub.forced})→burn-in")
     excluded = {int(i) for i in (exclude_stream_indices or set())}
     mov_text_codecs = {"mov_text", "tx3g"}
-    internal = [stream for stream in keep if int(stream.index) not in excluded]
+    from ..rules.subtitle_storage import pgs_original_storage
+    pgs_sidecar = pgs_original_storage(subtitle_rules) == "sidecar"
+    internal = [
+        stream for stream in keep
+        if int(stream.index) not in excluded
+        and not (pgs_sidecar and str(getattr(stream, "codec", "") or "").strip().lower() in {"hdmv_pgs_subtitle", "pgs"})
+    ]
 
     if not internal:
         if not burn_sub:

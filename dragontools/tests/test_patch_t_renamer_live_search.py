@@ -8,6 +8,9 @@ from dragontools.gui.movie_renamer_resolve_search import MovieRenamerResolveSear
 
 
 class _FakeController:
+    def row_year_override(self, row):
+        return None
+
     def __init__(self) -> None:
         self.rows = {"C:/Media/A.mkv": 0}
         self.applied: list[tuple[int, object]] = []

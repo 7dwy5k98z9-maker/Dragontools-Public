@@ -4,6 +4,7 @@ from __future__ import annotations
 import statistics
 import tempfile
 from pathlib import Path
+from ..core.output_timestamps import build_output_timestamp_args
 
 from ..core.quality_target import QualityTargetConfig, QualityTargetEvaluation, QualityTargetResult, adaptive_quality_search
 from ..core.quality_tester import automatic_quality_segments
@@ -201,7 +202,7 @@ class AutomaticQualityTargetService:
         cmd = [
             str(self._tools.ffmpeg), "-y", "-hide_banner", "-loglevel", "error",
             "-ss", f"{segment.start_s:.3f}", "-t", f"{segment.duration_s:.3f}", "-i", input_path,
-            "-map", "0:v:0", "-an", "-sn", *args, output_path,
+            "-map", "0:v:0", "-an", "-sn", *args, *build_output_timestamp_args(output_path), output_path,
         ]
         self._runner.run(cmd, label=f"VMAF-Testencode Q{quality}")
 

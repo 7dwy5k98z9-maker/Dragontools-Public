@@ -14,8 +14,9 @@ from ..core.tool_paths import ToolPaths
 from ..worker.process_control import terminate_process_tree
 from ..worker.tool_runner import run_tool
 from ..subtitle.extractor import extract_with_ffmpeg
+from ..subtitle.sidecar_matcher import find_injection_subtitle
 from ..subtitle.injector import inject_with_mkvmerge, inject_with_ffmpeg
-from ..subtitle.converter import srt_to_ass, subtitle_to_txt, txt_to_ass, txt_to_srt
+from ..subtitle.converter import build_ass_style, srt_to_ass, subtitle_to_txt, txt_to_ass, txt_to_srt
 
 def _unique_output_path(path: Path) -> Path:
     """Liefert einen freien Ausgabepfad, ohne vorhandene Nutzerdateien zu überschreiben."""
@@ -136,9 +137,10 @@ class _ExtractWorker(_SubWorker):
 
 class _InjectWorker(_SubWorker):
     def __init__(self, video_files: list[str], sub_file: str,
-                 language: str, forced: bool, tools: ToolPaths):
+                 language: str, forced: bool, tools: ToolPaths, title: str = "Deutsch"):
         super().__init__()
         self.video_files = video_files
+        self.title       = title
         self.sub_file    = sub_file
         self.language    = language
         self.forced      = forced
@@ -159,9 +161,16 @@ class _InjectWorker(_SubWorker):
                 if self._cancel:
                     break
                 self.log.emit(f"▶ Einfügen in: {Path(path).name}")
+                try:
+                    sub_file = self.sub_file or str(find_injection_subtitle(path, self.language))
+                except (ValueError, OSError) as exc:
+                    self.log.emit(f"  ⚠️ Übersprungen: {exc}")
+                    self.progress.emit(idx + 1, total)
+                    continue
+                self.log.emit(f"  Untertitel: {Path(sub_file).name} | {self.language} | {self.title}")
                 out = self._output_path(path)
                 video_suffix = Path(path).suffix.lower()
-                sub_suffix = Path(self.sub_file).suffix.lower()
+                sub_suffix = Path(sub_file).suffix.lower()
                 ok = False
 
                 if video_suffix in {".mp4", ".m4v", ".mov"}:
@@ -169,7 +178,7 @@ class _InjectWorker(_SubWorker):
                         self.log.emit("  ⚠️ MP4/MOV unterstützt hier nur Text-Untertitel (.srt/.ass).")
                     else:
                         ok = inject_with_ffmpeg(
-                            path, self.sub_file, out,
+                            path, sub_file, out,
                             self.language, self.tools.ffmpeg,
                             logger=self.log.emit,
                             subtitle_codec="mov_text",
@@ -177,23 +186,26 @@ class _InjectWorker(_SubWorker):
                             worker=self,
                             forced=self.forced,
                             ffprobe=self.tools.ffprobe,
+                            title=self.title,
                         )
                 else:
                     ok = inject_with_mkvmerge(
-                        path, self.sub_file, out,
+                        path, sub_file, out,
                         self.language, self.forced,
                         logger=self.log.emit,
                         mkvmerge=self.tools.mkvmerge,
+                        title=self.title,
                         worker=self,
                     )
                     if not ok:
                         ok = inject_with_ffmpeg(
-                            path, self.sub_file, out,
+                            path, sub_file, out,
                             self.language, self.tools.ffmpeg,
                             logger=self.log.emit,
                             worker=self,
                             forced=self.forced,
                             ffprobe=self.tools.ffprobe,
+                            title=self.title,
                         )
                 self.log.emit("  ✅ OK" if ok else "  ❌ Fehler")
                 self.progress.emit(idx + 1, total)
@@ -209,11 +221,16 @@ class _InjectWorker(_SubWorker):
 # ---------------------------------------------------------------------------
 
 class _ConvertWorker(_SubWorker):
-    def __init__(self, files: list[str], mode: str, out_dir: str):
+    def __init__(
+        self, files: list[str], mode: str, out_dir: str,
+        *, font_family: str = "Arial", font_size: int = 22,
+    ):
         super().__init__()
         self.files   = files
         self.mode    = mode    # "srt2ass" | "sub2txt" | "txt2srt" | "txt2ass"
         self.out_dir = out_dir
+        self.font_family = str(font_family or "Arial")
+        self.font_size = max(8, min(200, int(font_size)))
 
     def run(self) -> None:
         try:
@@ -227,17 +244,21 @@ class _ConvertWorker(_SubWorker):
                         if Path(path).suffix.lower() != ".srt":
                             raise ValueError("SRT -> ASS unterstützt nur .srt-Dateien.")
                         out = os.path.join(self.out_dir, Path(path).stem + ".ass")
-                        srt_to_ass(path, out)
+                        srt_to_ass(path, out, style=build_ass_style(self.font_family, self.font_size))
                     elif self.mode == "txt2srt":
                         if Path(path).suffix.lower() != ".txt":
                             raise ValueError("TXT -> SRT unterstützt nur .txt-Dateien.")
                         out = os.path.join(self.out_dir, Path(path).stem + ".srt")
                         txt_to_srt(path, out)
+                        self.log.emit(
+                            f"  ℹ️ SRT speichert keine Schriftart/-größe; Vorschau: "
+                            f"{self.font_family}, {self.font_size} px"
+                        )
                     elif self.mode == "txt2ass":
                         if Path(path).suffix.lower() != ".txt":
                             raise ValueError("TXT -> ASS unterstützt nur .txt-Dateien.")
                         out = os.path.join(self.out_dir, Path(path).stem + ".ass")
-                        txt_to_ass(path, out)
+                        txt_to_ass(path, out, style=build_ass_style(self.font_family, self.font_size))
                     else:
                         out = os.path.join(self.out_dir, Path(path).stem + ".txt")
                         subtitle_to_txt(path, out)

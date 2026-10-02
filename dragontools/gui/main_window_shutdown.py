@@ -5,6 +5,8 @@ from __future__ import annotations
 from PyQt6.QtWidgets import QMessageBox
 
 from .application_shutdown import shutdown_loaded_widgets
+from .convert_override_lifecycle import active_override_loaders
+from types import SimpleNamespace
 from .jellyfin_refresh_dispatch import stop_jellyfin_workers
 from .main_window_metadata_actions import stop_metadata_action_thread
 from .watch_folder_main_window_bridge import stop_watch_folder_controller
@@ -12,7 +14,11 @@ from .watch_folder_main_window_bridge import stop_watch_folder_controller
 
 def prepare_main_window_close(window, *, timeout_ms: int = 8000) -> bool:
     """Stop background work cooperatively before the main window is allowed to close."""
-    result = shutdown_loaded_widgets(window._tab_widgets.values(), timeout_ms=timeout_ms)
+    # Close intake first, even when a conversion worker needs another close
+    # attempt. Otherwise scans can refill queues while workers are draining.
+    watch_stopped = stop_watch_folder_controller(window)
+    widgets = [*window._tab_widgets.values(), SimpleNamespace(iter_shutdown_workers=active_override_loaders)]
+    result = shutdown_loaded_widgets(widgets, timeout_ms=timeout_ms)
     if not result.ok:
         QMessageBox.warning(
             window,
@@ -33,7 +39,7 @@ def prepare_main_window_close(window, *, timeout_ms: int = 8000) -> bool:
         )
         return False
 
-    if not stop_watch_folder_controller(window):
+    if not watch_stopped:
         QMessageBox.warning(
             window,
             "Watch-Folder wird noch beendet",

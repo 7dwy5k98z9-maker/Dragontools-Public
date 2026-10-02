@@ -13,6 +13,7 @@ import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
+from .move_copy_verification import verify_staged_path_copy
 
 
 class PathTransactionRollbackError(OSError):
@@ -97,6 +98,7 @@ class PathSwapTransaction:
             raise FileExistsError(f"Staging-Pfad existiert bereits: {self.staging_path}")
         try:
             copy_path_to_staging(self.source, self.staging_path)
+            verify_staged_path_copy(self.source, self.staging_path)
         except (OSError, shutil.Error):
             self.cleanup_staging(best_effort=True)
             raise

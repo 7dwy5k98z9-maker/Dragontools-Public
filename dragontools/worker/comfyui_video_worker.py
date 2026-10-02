@@ -31,6 +31,9 @@ class ComfyUIVideoResult:
     message: str = ""
 
 
+DEFAULT_COMFYUI_INACTIVITY_TIMEOUT_S = 900.0
+
+
 class ComfyUIHDRVideoService:
     """Run one complete CFR source through the configured ComfyUI workflow."""
 
@@ -101,7 +104,17 @@ class ComfyUIHDRVideoService:
             f"🧠 ComfyUI/HDRTVDM: Voll-Datei-Job gestartet ({fps.numerator}/{fps.denominator} fps, Prompt {queued.prompt_id}).",
             "info",
         )
-        waited = self._wait_for_completion(client, queued.prompt_id, Path(manifest_path), input_path)
+        inactivity_timeout_s = _safe_float(
+            encoder_options.get("comfyui_inactivity_timeout_s"),
+            DEFAULT_COMFYUI_INACTIVITY_TIMEOUT_S,
+        )
+        waited = self._wait_for_completion(
+            client,
+            queued.prompt_id,
+            Path(manifest_path),
+            input_path,
+            inactivity_timeout_s=max(30.0, inactivity_timeout_s),
+        )
         if not waited.success:
             return waited
 
@@ -154,8 +167,12 @@ class ComfyUIHDRVideoService:
         prompt_id: str,
         manifest_path: Path,
         input_path: str,
+        *,
+        inactivity_timeout_s: float = DEFAULT_COMFYUI_INACTIVITY_TIMEOUT_S,
     ) -> ComfyUIVideoResult:
         last_frames = -1
+        last_status = ""
+        last_activity = time.monotonic()
         while True:
             if _aborted(self._worker):
                 cancelled = client.cancel(prompt_id)
@@ -168,8 +185,11 @@ class ComfyUIHDRVideoService:
             entry = history.payload.get(prompt_id)
             if isinstance(entry, dict):
                 status = entry.get("status") if isinstance(entry.get("status"), dict) else {}
+                status_text = str(status.get("status_str") or "").strip().lower()
+                if status_text and status_text != last_status:
+                    last_status = status_text
+                    last_activity = time.monotonic()
                 if status.get("completed") is True:
-                    status_text = str(status.get("status_str") or "").strip().lower()
                     if status_text and status_text not in {"success", "completed"}:
                         return ComfyUIVideoResult(
                             False, prompt_id=prompt_id, error="COMFYUI_JOB_FAILED",
@@ -181,12 +201,27 @@ class ComfyUIHDRVideoService:
             frames = _safe_int(manifest.get("frames"), 0)
             if frames > last_frames:
                 last_frames = frames
+                last_activity = time.monotonic()
                 expected = _safe_int(manifest.get("expected_frames"), 0)
                 if expected > 0:
                     pct = min(99, int(frames * 100 / expected))
                     self._log(f"🧠 ComfyUI/HDRTVDM: {frames}/{expected} Frames ({pct}%).", "info")
                 elif frames > 0 and frames % 100 == 0:
                     self._log(f"🧠 ComfyUI/HDRTVDM: {frames} Frames verarbeitet.", "info")
+
+            idle_s = time.monotonic() - last_activity
+            if idle_s >= max(30.0, float(inactivity_timeout_s)):
+                cancelled = client.cancel(prompt_id)
+                detail = cancelled.message or cancelled.error or "ComfyUI-Job ohne Fortschritt abgebrochen."
+                return ComfyUIVideoResult(
+                    False,
+                    prompt_id=prompt_id,
+                    error="INACTIVITY_TIMEOUT",
+                    message=(
+                        f"ComfyUI/HDRTVDM meldete {idle_s:.0f}s keinen Fortschritt für {input_path}. "
+                        f"{detail}"
+                    ),
+                )
             time.sleep(0.75)
 
 

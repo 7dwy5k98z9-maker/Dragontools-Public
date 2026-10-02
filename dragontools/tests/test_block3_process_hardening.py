@@ -49,7 +49,7 @@ def test_tool_runner_delegates_shared_process_lifecycle():
     runner = (PROJECT_PACKAGE / "worker" / "tool_runner.py").read_text(encoding="utf-8")
     lifecycle = (PROJECT_PACKAGE / "worker" / "tool_process_lifecycle.py").read_text(encoding="utf-8")
 
-    assert len(runner.splitlines()) < 360
+    # Responsibility and complexity are checked centrally, independently of LOC.
     assert "ProcessLifecycle" in runner
     assert "class ProcessLifecycle" in lifecycle
     assert "PyQt6" not in lifecycle

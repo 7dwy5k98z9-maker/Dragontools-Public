@@ -5,12 +5,19 @@ from __future__ import annotations
 class MovieRenamerTableSearchMixin:
     """Manual-search helpers separated from table rendering/state."""
 
+    def invalidate_row_proposal(self, row: int) -> None:
+        """A changed search never inherits approval or a previous target."""
+        self.set_row_accepted(row, False)
+        self.set_row_proposal(row, None)
+        self.table.removeCellWidget(row, self.columns.MATCH)
+        for column in (self.columns.MATCH, self.columns.PROVIDER, self.columns.SCORE, self.columns.TARGET):
+            self.set_item(row, column, "", editable=column == self.columns.TARGET)
+
     def prepare_manual_search(self, row: int, query: str, *, kind: str) -> None:
         if row < 0 or row >= self.table.rowCount():
             return
         normalized = str(query or "").strip()
-        self.table.removeCellWidget(row, self.columns.MATCH)
-        self.set_row_proposal(row, None)
+        self.invalidate_row_proposal(row)
         if kind == "series":
             self.set_item(row, self.columns.TYPE, "Serie", editable=False)
             self.set_item(row, self.columns.SERIES, normalized, editable=False)

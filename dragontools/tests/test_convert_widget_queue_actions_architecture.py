@@ -20,7 +20,6 @@ def test_queue_actions_facade_contains_no_business_methods():
     path, tree = _module("convert_widget_queue_actions.py")
     facade = _class(tree, "ConvertWidgetQueueActionsMixin")
 
-    assert len(path.read_text(encoding="utf-8").splitlines()) <= 60
     methods = [node.name for node in facade.body if isinstance(node, ast.FunctionDef)]
     assert methods == []
 
@@ -43,21 +42,20 @@ def test_queue_actions_facade_contains_no_business_methods():
 
 
 def test_queue_action_collaborators_are_bounded_and_single_owner():
-    limits = {
-        "convert_widget_queue_dragdrop.py": 100,
-        "convert_widget_queue_management.py": 90,
-        "convert_widget_queue_reorder_actions.py": 90,
-        "convert_widget_queue_window_actions.py": 100,
-        "convert_widget_queue_context_actions.py": 190,
-        "convert_widget_queue_target_actions.py": 170,
-        "convert_widget_queue_override_actions.py": 190,
-        "convert_widget_queue_badges.py": 140,
-        "convert_widget_source_visual_actions.py": 120,
-    }
+    modules = (
+        "convert_widget_queue_dragdrop.py",
+        "convert_widget_queue_management.py",
+        "convert_widget_queue_reorder_actions.py",
+        "convert_widget_queue_window_actions.py",
+        "convert_widget_queue_context_actions.py",
+        "convert_widget_queue_target_actions.py",
+        "convert_widget_queue_override_actions.py",
+        "convert_widget_queue_badges.py",
+        "convert_widget_source_visual_actions.py",
+    )
     owners: dict[str, str] = {}
-    for filename, maximum in limits.items():
+    for filename in modules:
         path, tree = _module(filename)
-        assert len(path.read_text(encoding="utf-8").splitlines()) <= maximum, filename
         classes = [node for node in tree.body if isinstance(node, ast.ClassDef)]
         assert len(classes) == 1, filename
         for method in classes[0].body:

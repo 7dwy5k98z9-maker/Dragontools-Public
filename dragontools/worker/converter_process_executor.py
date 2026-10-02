@@ -22,6 +22,25 @@ def _set_last_stderr(worker, value: str) -> None:
     setattr(target, "stderr" if target is not worker else "_last_stderr", value)
 
 
+def _is_x265_runtime_diagnostic(text: str) -> bool:
+    """Keep only compact x265 startup diagnostics useful for CPU bottleneck analysis."""
+    value = str(text or "").strip()
+    lowered = value.casefold()
+    if not lowered.startswith("x265 ["):
+        return False
+    if "[warning]" in lowered or "[error]" in lowered:
+        return True
+    return any(
+        marker in lowered
+        for marker in (
+            "using cpu capabilities",
+            "thread pool",
+            "frame threads / pool features",
+            "lookahead / bframes",
+        )
+    )
+
+
 class ConverterProcessExecutor:
     def __init__(self, worker) -> None:
         self.worker = worker
@@ -29,15 +48,10 @@ class ConverterProcessExecutor:
         if proc is None:
             return
         worker = self.worker
-        lock = worker_lock(worker)
-        if lock is None:
-            try:
-                proc.terminate()
-            except OSError:
-                pass
-            return
+        lock = worker_lock(worker) or threading.Lock()
         terminate_process_tree(
-            worker, lock, log=worker.log, attr_name=current_process_attr(worker), label=label
+            worker, lock, log=worker.log, attr_name=current_process_attr(worker), label=label,
+            process=proc, terminate_timeout=3 if timeout_s is None else timeout_s,
         )
 
     def _lifecycle(
@@ -161,6 +175,16 @@ class ConverterProcessExecutor:
 
     def run_progress(self, cmd, path, dur_ms, *, timeout_s, label: str, probe_frames, read_progress) -> int:
         worker = self.worker
+        counts = getattr(worker, "_progress_frame_counts", None)
+        if not isinstance(counts, dict):
+            counts = {}
+            setattr(worker, "_progress_frame_counts", counts)
+        counts.pop(str(path), None)
+        completed = getattr(worker, "_progress_end_seen", None)
+        if not isinstance(completed, dict):
+            completed = {}
+            setattr(worker, "_progress_end_seen", completed)
+        completed.pop(str(path), None)
         total_frames = None if dur_ms else probe_frames(path)
         full = [str(part) for part in cmd]
         if full and Path(full[0]).stem.lower() == "ffmpeg":
@@ -205,11 +229,14 @@ class ConverterProcessExecutor:
             try:
                 if proc.stderr is None:
                     return
+                verbose = getattr(worker, "_verbose_logger", None)
                 for line in proc.stderr:
                     note_activity()
                     text = line.rstrip()
                     if text:
                         stderr_lines.append(text)
+                        if verbose is not None and _is_x265_runtime_diagnostic(text):
+                            verbose.write(f"[X265 RUNTIME] {text}")
             except (OSError, ValueError):
                 return
 

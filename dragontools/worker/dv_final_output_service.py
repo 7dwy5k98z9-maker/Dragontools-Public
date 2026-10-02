@@ -15,6 +15,7 @@ class DVFinalOutputService:
 
     def mux(self, state, runner, *, verify_final_mux_metadata) -> bool:
         req, files = state.request, state.files
+        self._log("📦 [DV] Phase: abschließendes Zusammenführen/Remuxen", "info")
         container = str(getattr(req, "container", "mp4") or "mp4").lower()
         self._vlog(f"[TRACE][DV] before final {container} creation (video={files.injected.name}, audio_tracks={len(state.mux_audio_tracks)}, subtitle_tracks={len(state.mux_subtitle_tracks)})")
         ok, label = self._mux_container(container, state, runner)

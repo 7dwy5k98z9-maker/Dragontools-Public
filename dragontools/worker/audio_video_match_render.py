@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 from pathlib import Path
+import subprocess
 from typing import Any
 
 from ..core.audio_video_matcher import AudioSyncPlan
 from ..core.media_analyzer import analyze_media
+from ..core.output_timestamps import build_output_timestamp_args
+from ..core.process_runner import subprocess_no_window_kwargs
+from .output_probe import probe_output
 
 
 def build_audio_command(
@@ -95,6 +99,7 @@ def build_mux_command(
         "language=deu",
         "-disposition:a:0",
         "default",
+        *build_output_timestamp_args(temp_output),
         str(temp_output),
     ]
 
@@ -115,7 +120,11 @@ def validate_output(
     if not path.is_file() or path.stat().st_size <= 0:
         raise RuntimeError("Ausgabedatei fehlt oder ist leer.")
     try:
-        info = analyze_media(str(path), tools)
+        analyze_media(str(path), tools)
+        # Source-reference selection deliberately ignores long auxiliary tracks.
+        # Validation must still inspect the real output container, including wraps.
+        info = probe_output(path, ffprobe_path=str(tools.ffprobe), run_process=subprocess.run,
+                            no_window_kwargs=subprocess_no_window_kwargs())
     except Exception as exc:
         raise RuntimeError(f"Ausgabe konnte nicht validiert werden: {exc}") from exc
 

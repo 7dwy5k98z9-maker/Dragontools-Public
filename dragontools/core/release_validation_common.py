@@ -6,6 +6,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from .changelog import load_changelog
 from .config_migration import current_schema_version
 from .version import APP_VERSION
 
@@ -48,6 +49,21 @@ def _check_exists(path: Path, title: str, *, required: bool = True) -> ReleaseCh
     if path.exists():
         return ReleaseCheck("ok", title, str(path))
     return ReleaseCheck("error" if required else "warn", title, f"Nicht gefunden: {path}")
+
+
+def _check_changelog_file(path: Path, title: str) -> ReleaseCheck:
+    if not path.exists():
+        return ReleaseCheck("error", title, f"Nicht gefunden: {path}")
+    try:
+        document = load_changelog(path)
+    except (OSError, UnicodeError, ValueError, TypeError, json.JSONDecodeError) as exc:
+        return ReleaseCheck("error", title, f"Ungültige Änderungshistorie: {exc}")
+    block_count = sum(len(section.blocks) for section in document.sections)
+    return ReleaseCheck(
+        "ok",
+        title,
+        f"{len(document.sections)} Abschnitte / {block_count} Einträge: {path.name}",
+    )
 
 
 def _load_json(path: Path) -> dict:

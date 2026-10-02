@@ -2,23 +2,35 @@
 from __future__ import annotations
 
 from ..core.models import TargetCodec
+from .encoder_args import encoder_10bit_filter_pixel_format
 
 
-HDR10_SETPARAMS_FILTER = (
-    "format=p010le,"
-    "setparams=range=limited"
-    ":colorspace=bt2020nc"
-    ":color_primaries=bt2020"
-    ":color_trc=smpte2084"
-)
+def hdr10_setparams_filter(encoder: str | dict | None = "nvenc") -> str:
+    pix_fmt = encoder_10bit_filter_pixel_format(encoder)
+    return (
+        f"format={pix_fmt},"
+        "setparams=range=limited"
+        ":colorspace=bt2020nc"
+        ":color_primaries=bt2020"
+        ":color_trc=smpte2084"
+    )
 
-DV_P5_LIBPLACEBO_FILTER = (
-    "libplacebo=format=p010le"
-    ":colorspace=bt2020nc"
-    ":color_primaries=bt2020"
-    ":color_trc=smpte2084"
-    ":range=tv"
-)
+
+def dv_p5_libplacebo_filter(encoder: str | dict | None = "nvenc") -> str:
+    pix_fmt = encoder_10bit_filter_pixel_format(encoder)
+    return (
+        f"libplacebo=format={pix_fmt}"
+        ":colorspace=bt2020nc"
+        ":color_primaries=bt2020"
+        ":color_trc=smpte2084"
+        ":range=tv"
+    )
+
+
+# Compatibility aliases for older imports/tests. Production planning now uses
+# the encoder-aware builders above. The generic/default path is CPU/libx265.
+HDR10_SETPARAMS_FILTER = hdr10_setparams_filter("cpu")
+DV_P5_LIBPLACEBO_FILTER = dv_p5_libplacebo_filter("cpu")
 
 HDR10_OUTPUT_ARGS = [
     "-color_range", "tv",

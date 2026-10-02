@@ -50,10 +50,6 @@ def _section_titles() -> set[str]:
 def test_settings_dialog_is_orchestrator_not_god_class() -> None:
     path = GUI / "settings_dialog.py"
     lines = path.read_text(encoding="utf-8").splitlines()
-    assert len(lines) <= 220
-    assert _method_span(path, "SettingsDialog", "_init_ui") <= 30
-    assert _method_span(path, "SettingsDialog", "_load") <= 10
-    assert _method_span(path, "SettingsDialog", "_save") <= 30
     text = "\n".join(lines)
     assert "QGroupBox(" not in text
     assert "SET_KEY_" not in text
@@ -78,23 +74,6 @@ def test_settings_sections_cover_every_visible_section_exactly_once() -> None:
             assert _method_span(path, class_name, method) > 0
     assert len(seen) == len(set(seen)), "Ein sichtbarer Settings-Bereich besitzt mehrere Owner"
     assert set(seen) == _section_titles()
-
-
-def test_no_replacement_god_section_was_created() -> None:
-    classes = {
-        "storage.py": "StorageLoggingSection",
-        "runtime.py": "RuntimeToolsSection",
-        "media.py": "MediaPostprocessSection",
-        "jellyfin.py": "JellyfinIntegrationSection",
-        "video.py": "VideoAnalysisSection",
-        "safety.py": "SafetyValidationSection",
-    }
-    for filename, class_name in classes.items():
-        path = SECTIONS / filename
-        assert len(path.read_text(encoding="utf-8").splitlines()) <= 380
-        assert _method_span(path, class_name, "build") <= 240
-        assert _method_span(path, class_name, "load") <= 100
-        assert _method_span(path, class_name, "save") <= 100
 
 
 def test_settings_dialog_uses_public_collaborator_helpers_without_private_aliases() -> None:

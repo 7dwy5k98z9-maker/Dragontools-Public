@@ -133,3 +133,21 @@ def test_ass_to_txt_preserves_timestamps_for_roundtrip(tmp_path):
         "-Du kannst vermeiden\n"
         "dich zurückzuverwandeln."
     )
+
+
+def test_ass_style_supports_configurable_font_and_size(tmp_path):
+    from dragontools.subtitle.converter import build_ass_style, srt_to_ass
+
+    srt = tmp_path / "Film.srt"
+    srt.write_text(
+        "1\n00:00:00,000 --> 00:00:01,000\nHallo\n",
+        encoding="utf-8",
+    )
+    result = srt_to_ass(srt, style=build_ass_style("Verdana", 46))
+    assert "Style: Default,Verdana,46," in result
+
+
+def test_ass_style_sanitizes_comma_and_clamps_font_size():
+    from dragontools.subtitle.converter import build_ass_style
+
+    assert "Style: Default,Font Name,200," in build_ass_style("Font,Name", 999)

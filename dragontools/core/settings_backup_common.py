@@ -10,6 +10,7 @@ import zipfile
 
 from .secret_settings import read_secret
 from .settings_metadata import SENSITIVE_SETTINGS_KEYS
+from .settings_backup_limits import MAX_BACKUP_METADATA_BYTES, read_backup_entry
 
 BACKUP_FORMAT = "DragonToolsBackup"
 BACKUP_FORMAT_VERSION = 2
@@ -126,11 +127,26 @@ def iter_backup_files(root: Path) -> list[tuple[Path, str]]:
 
 def read_manifest(zf: zipfile.ZipFile) -> dict[str, Any]:
     try:
-        manifest = json.loads(zf.read("manifest.json").decode("utf-8"))
+        manifest = json.loads(
+            read_backup_entry(zf, "manifest.json", max_bytes=MAX_BACKUP_METADATA_BYTES).decode("utf-8")
+        )
     except KeyError as exc:
         raise ValueError("Keine DragonTools-Backup-Datei: manifest.json fehlt.") from exc
-    if manifest.get("format") != BACKUP_FORMAT:
+    if not isinstance(manifest, dict) or manifest.get("format") != BACKUP_FORMAT:
         raise ValueError("Keine DragonTools-Backup-Datei.")
+
+    raw_version = manifest.get("format_version", 1)
+    if type(raw_version) is not int:
+        raise ValueError(f"Ungültige Backup-Formatversion: {raw_version!r}")
+    format_version = raw_version
+    if format_version not in {1, BACKUP_FORMAT_VERSION}:
+        if format_version > BACKUP_FORMAT_VERSION:
+            raise ValueError(
+                f"Backupformat {format_version} ist neuer als die von dieser DragonTools-Version "
+                f"unterstützte Version {BACKUP_FORMAT_VERSION}."
+            )
+        raise ValueError(f"Nicht unterstützte Backup-Formatversion: {format_version}")
+    manifest["format_version"] = format_version
     return manifest
 
 

@@ -30,11 +30,14 @@ def _qt_core_stub_modules() -> dict[str, ModuleType]:
 
     class _QSettings:
         def __init__(self, *args, **kwargs):
-            pass
+            self._values = {}
         def value(self, key, default=None, type=None):
-            return default
-        def setValue(self, *args, **kwargs):
-            return None
+            value = self._values.get(key, default)
+            return type(value) if type is not None and value is not None else value
+        def setValue(self, key, value):
+            self._values[key] = value
+        def allKeys(self):
+            return list(self._values)
 
     qt_core.QThread = _QThread
     qt_core.pyqtSignal = _pyqt_signal
@@ -94,13 +97,17 @@ def _mp4_thread():
     return thread
 
 def _dv_remux_thread(files=None, *, overwrite_original=False):
+    # Keep the Qt stub installed for construction as well: DVRemuxThread captures
+    # the central read-only settings snapshot in __init__.  Reloading the module
+    # under the stub and removing it before construction leaves app_qsettings()
+    # without a QSettings provider in headless CI.
     with patch.dict(sys.modules, _qt_core_stub_modules()):
         dv_mod = _reload_module("dragontools.worker.dv_remux_thread")
-    with patch.object(dv_mod, "create_worker_logger", return_value=_fake_logger()):
-        thread = dv_mod.DVRemuxThread(
-            files=list(files or []),
-            overwrite_original=overwrite_original,
-        )
+        with patch.object(dv_mod, "create_worker_logger", return_value=_fake_logger()):
+            thread = dv_mod.DVRemuxThread(
+                files=list(files or []),
+                overwrite_original=overwrite_original,
+            )
     return thread
 
 

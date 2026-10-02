@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from ..core.output_timestamps import build_output_timestamp_args
 
 from .converter_strip_runtime import progress as _progress, subtitle_rules as _subtitle_rules, tools as _tools
 from .converter_strip_subtitles import build_strip_subtitle_args, selected_strip_mkv_mov_text_streams
@@ -41,7 +42,7 @@ def run_strip_command(
     ]
     if str(container or "mkv").lower() == "mp4":
         cmd += ["-movflags", "+faststart"]
-    cmd += ["-map", "0:v:0", "-c:v", "copy", out]
+    cmd += ["-map", "0:v:0", "-c:v", "copy", *build_output_timestamp_args(container), out]
     return _progress(worker).run(cmd) == 0
 
 

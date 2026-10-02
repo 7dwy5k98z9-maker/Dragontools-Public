@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from .config_migration import current_schema_version
-from .release_validation_common import APP_VERSION, ReleaseCheck, _check_exists, _check_schema_file, _resolve_app_dirs
+from .release_validation_common import _check_changelog_file, APP_VERSION, ReleaseCheck, _check_exists, _check_schema_file, _resolve_app_dirs
 from .release_validation_build import _check_no_python_source_bundle
 from .release_validation_environment import _check_opencv_dependency
 from .release_validation_package import _check_forbidden_release_artifacts
@@ -18,7 +18,7 @@ def validate_app_bundle(app_root: str | Path | None = None) -> list[ReleaseCheck
         _check_exists(data_dir, "Datenordner"),
         _check_exists(data_dir / "help.html", "Help-Datei"),
         _check_exists(data_dir / "Handbuch" / "Handbuch.pdf", "PDF-Handbuch"),
-        _check_exists(data_dir / "Aenderungshistorie" / "CHANGELOG.json", "V9-Änderungshistorie (JSON)"),
+        _check_changelog_file(data_dir / "Aenderungshistorie" / "CHANGELOG.json", "V9-Änderungshistorie (JSON)"),
         _check_exists(data_dir / "Aenderungshistorie" / "CHANGELOG.txt", "V9-Änderungshistorie (TXT-Fallback)", required=False),
         _check_exists(data_dir / "Aenderungshistorie" / "CHANGELOGV8.txt", "Legacy V8-Änderungshistorie", required=False),
         _check_exists(data_dir / "Aenderungshistorie" / "CHANGELOGV7.txt", "Legacy V7-Änderungshistorie", required=False),

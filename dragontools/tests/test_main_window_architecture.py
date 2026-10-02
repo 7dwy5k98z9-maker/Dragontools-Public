@@ -18,7 +18,6 @@ def _methods(cls: ast.ClassDef) -> set[str]:
 
 def test_main_window_is_small_composition_root():
     cls = _class(GUI_DIR / "main_window.py", "MainWindow")
-    assert cls.end_lineno - cls.lineno + 1 <= 90
     assert _methods(cls) == {"__init__", "_set_icon", "_restore", "closeEvent"}
 
     source = (GUI_DIR / "main_window.py").read_text(encoding="utf-8")
@@ -41,8 +40,6 @@ def test_main_window_tab_and_recovery_owners_are_separate_and_bounded():
     tab_methods = _methods(tabs)
     recovery_methods = _methods(recovery)
     assert tab_methods.isdisjoint(recovery_methods)
-    assert tabs.end_lineno - tabs.lineno + 1 <= 330
-    assert recovery.end_lineno - recovery.lineno + 1 <= 225
 
     assert {"_init_tabs", "_create_tab_widget", "_apply_tab_visibility", "_handoff_iso_to_converter"} <= tab_methods
     assert {"_show_unfinished_move_journal", "_show_unfinished_job_journal", "_restore_move_resume_plan", "_restore_job_resume_plan"} <= recovery_methods

@@ -12,6 +12,10 @@ from .settings_backup_common import (
 )
 
 _AAD = b"DragonToolsBackup:secrets:v1"
+_SUPPORTED_SCRYPT_PROFILES = frozenset({(2**15, 8, 1)})
+_EXPECTED_SALT_BYTES = 16
+_EXPECTED_NONCE_BYTES = 12
+_MAX_CIPHERTEXT_BYTES = 8 * 1024 * 1024
 
 
 def _crypto_primitives():
@@ -68,14 +72,20 @@ def decrypt_sensitive_settings(payload_bytes: bytes, password: str | None) -> di
             raise ValueError("Unbekanntes Secret-Format im Backup.")
         if payload.get("cipher") != "AES-256-GCM" or payload.get("kdf") != "scrypt":
             raise ValueError("Nicht unterstützte Backup-Verschlüsselung.")
-        salt = base64.b64decode(payload["salt_b64"], validate=True)
-        nonce = base64.b64decode(payload["nonce_b64"], validate=True)
-        ciphertext = base64.b64decode(payload["ciphertext_b64"], validate=True)
         n = int(payload["n"])
         r = int(payload["r"])
         p = int(payload["p"])
-        if n < 2**14 or n > 2**20 or r < 1 or r > 32 or p < 1 or p > 16:
-            raise ValueError("Ungültige KDF-Parameter im Backup.")
+        if (n, r, p) not in _SUPPORTED_SCRYPT_PROFILES:
+            raise ValueError(
+                "Nicht unterstützte KDF-Parameter im Backup; DragonTools akzeptiert nur bekannte scrypt-Profile."
+            )
+        salt = base64.b64decode(payload["salt_b64"], validate=True)
+        nonce = base64.b64decode(payload["nonce_b64"], validate=True)
+        ciphertext = base64.b64decode(payload["ciphertext_b64"], validate=True)
+        if len(salt) != _EXPECTED_SALT_BYTES or len(nonce) != _EXPECTED_NONCE_BYTES:
+            raise ValueError("Ungültige Salt-/Nonce-Länge im verschlüsselten Backup.")
+        if len(ciphertext) > _MAX_CIPHERTEXT_BYTES:
+            raise ValueError("Verschlüsselter Secret-Block im Backup ist zu groß.")
         key = _derive_key(password, salt, n=n, r=r, p=p)
         plaintext = AESGCM(key).decrypt(nonce, ciphertext, _AAD)
         data = json.loads(plaintext.decode("utf-8"))

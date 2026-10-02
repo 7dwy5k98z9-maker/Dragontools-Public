@@ -59,6 +59,21 @@ def _ass_ts_to_srt(t: str) -> str:
     return f"{int(h):02d}:{int(minute):02d}:{int(second):02d},{ms:03d}"
 
 
+
+
+def build_ass_style(font_family: str = "Arial", font_size: int = 22) -> str:
+    """Build a safe ASS Default style for 1080p script coordinates."""
+    family = str(font_family or "Arial").replace(",", " ").strip() or "Arial"
+    try:
+        size = int(font_size)
+    except (TypeError, ValueError):
+        size = 22
+    size = max(8, min(200, size))
+    return (
+        f"Style: Default,{family},{size},&H00FFFFFF,&H000000FF,&H00000000,&H80000000,"
+        "0,0,0,0,100,100,0,0,1,2,2,2,10,10,10,1"
+    )
+
 def _ass_header(style: str | None = None) -> str:
     default_style = (
         "Style: Default,Arial,22,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,"

@@ -8,12 +8,13 @@ from __future__ import annotations
 import traceback
 from pathlib import Path
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QRect
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTabWidget,
     QPushButton, QLabel, QListWidget, QListWidgetItem, QFileDialog, QLineEdit, QCheckBox,
-    QProgressBar, QTextEdit, QGroupBox,
+    QProgressBar, QTextEdit, QGroupBox, QComboBox, QFontComboBox, QSpinBox,
 )
+from PyQt6.QtGui import QFont, QPainter, QPixmap, QLinearGradient, QColor, QPen
 
 from ..core.tool_paths import get_tool_paths
 from .subtitle_widget_workers import _SubWorker, _ExtractWorker, _InjectWorker, _ConvertWorker
@@ -110,6 +111,7 @@ class SubtitleWidget(QWidget):
         sub_row = QHBoxLayout()
         sub_row.addWidget(QLabel("Untertitel-Datei:"))
         self.inj_sub  = QLineEdit()
+        self.inj_sub.setPlaceholderText("Leer lassen: passende Untertitel neben den Videos suchen")
         sub_btn       = QPushButton("…"); sub_btn.setFixedWidth(30)
         sub_btn.clicked.connect(lambda: self._browse_file(self.inj_sub, "Untertitel (*.srt *.ass *.sup)"))
         sub_row.addWidget(self.inj_sub); sub_row.addWidget(sub_btn)
@@ -117,10 +119,21 @@ class SubtitleWidget(QWidget):
 
         opt = QHBoxLayout()
         opt.addWidget(QLabel("Sprache:"))
-        self.inj_lang = QLineEdit("de"); self.inj_lang.setFixedWidth(50)
+        self.inj_lang = QComboBox()
+        self.inj_lang.addItem("Deutsch", "deu")
+        self.inj_lang.addItem("Englisch", "eng")
         self.inj_forced = QCheckBox("Forced")
         opt.addWidget(self.inj_lang); opt.addWidget(self.inj_forced); opt.addStretch()
         v.addLayout(opt)
+        title_row = QHBoxLayout()
+        title_row.addWidget(QLabel("Titelname:"))
+        self.inj_title = QComboBox()
+        self.inj_title.setEditable(True)
+        self.inj_title.addItems(["Deutsch", "Deutsch GPT"])
+        self.inj_title.setToolTip("Frei editierbarer Spurtitel, z. B. Deutsch GPT oder Custom.")
+        self.inj_lang.currentIndexChanged.connect(self._inject_language_changed)
+        title_row.addWidget(self.inj_title)
+        v.addLayout(title_row)
 
         self.inj_progress = QProgressBar()
         self.inj_log      = QTextEdit(); self.inj_log.setReadOnly(True); self.inj_log.setMaximumHeight(120)
@@ -133,16 +146,22 @@ class SubtitleWidget(QWidget):
         self.inj_cancel.clicked.connect(lambda: self._cancel_worker("inject"))
         return w
 
+    def _inject_language_changed(self) -> None:
+        title = self.inj_title.currentText()
+        if title in {"Deutsch", "Englisch"}:
+            self.inj_title.setEditText("Deutsch" if self.inj_lang.currentData() == "deu" else "Englisch")
+
     def _start_inject(self) -> None:
         try:
             files = [self.inj_list.item(i).data(Qt.ItemDataRole.UserRole)
                      for i in range(self.inj_list.count())]
             sub   = self.inj_sub.text().strip()
-            if not files or not sub:
+            if not files:
                 return
             worker = _InjectWorker(
-                files, sub, self.inj_lang.text().strip() or "de",
+                files, sub, self.inj_lang.currentData(),
                 self.inj_forced.isChecked(), self.tools,
+                title=self.inj_title.currentText().strip() or ("Deutsch" if self.inj_lang.currentData() == "deu" else "Englisch"),
             )
             self._wire("inject", worker, self.inj_progress, self.inj_log, self.inj_start, self.inj_cancel)
             worker.start()
@@ -172,6 +191,90 @@ class SubtitleWidget(QWidget):
         return self._simple_convert_tab("txt2ass", "TXT → ASS",
                                         "TXT-Dateien (*.txt)")
 
+    def _build_subtitle_style_controls(self, mode: str) -> tuple[QWidget, QFontComboBox, QSpinBox, QLabel]:
+        box = QGroupBox("Darstellung")
+        layout = QVBoxLayout(box)
+
+        row = QHBoxLayout()
+        row.addWidget(QLabel("Schriftart:"))
+        font_combo = QFontComboBox()
+        font_combo.setCurrentFont(QFont("Arial"))
+        row.addWidget(font_combo, 1)
+        row.addWidget(QLabel("Größe:"))
+        size_spin = QSpinBox()
+        size_spin.setRange(8, 200)
+        size_spin.setValue(22)
+        size_spin.setSuffix(" px")
+        row.addWidget(size_spin)
+        layout.addLayout(row)
+
+        if mode == "txt2srt":
+            note = QLabel(
+                "Hinweis: SRT speichert keine Schriftart oder Schriftgröße. "
+                "Die Einstellung dient hier nur der Vorschau; bei ASS wird sie in die Datei geschrieben."
+            )
+            note.setWordWrap(True)
+            layout.addWidget(note)
+
+        preview = QLabel()
+        preview.setMinimumHeight(210)
+        preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        preview.setToolTip("16:9-Beispielbild zur Beurteilung der Untertitelgröße")
+        layout.addWidget(preview)
+
+        def update_preview(*_args) -> None:
+            self._render_subtitle_preview(
+                preview, font_combo.currentFont().family(), size_spin.value()
+            )
+
+        font_combo.currentFontChanged.connect(update_preview)
+        size_spin.valueChanged.connect(update_preview)
+        update_preview()
+        return box, font_combo, size_spin, preview
+
+    @staticmethod
+    def _render_subtitle_preview(label: QLabel, font_family: str, font_size: int) -> None:
+        width, height = 640, 360
+        pixmap = QPixmap(width, height)
+        painter = QPainter(pixmap)
+        try:
+            gradient = QLinearGradient(0, 0, 0, height)
+            gradient.setColorAt(0.0, QColor(45, 65, 90))
+            gradient.setColorAt(0.55, QColor(80, 95, 105))
+            gradient.setColorAt(1.0, QColor(28, 33, 38))
+            painter.fillRect(0, 0, width, height, gradient)
+
+            # Simple generated sample frame: no external image dependency.
+            painter.fillRect(0, int(height * 0.58), width, int(height * 0.42), QColor(20, 35, 24))
+            painter.setPen(QPen(QColor(150, 160, 170), 2))
+            painter.drawLine(0, int(height * 0.58), width, int(height * 0.58))
+
+            # Scale ASS-like 1080p font values into the 360p preview.
+            scaled_size = max(7, int(round(int(font_size) * (height / 1080.0))))
+            font = QFont(font_family or "Arial")
+            font.setPixelSize(scaled_size)
+            font.setBold(False)
+            painter.setFont(font)
+            text = "Beispiel-Untertitel\nSo wirkt Schriftart und Größe im Bild"
+            rect = QRect(30, int(height * 0.70), width - 60, int(height * 0.24))
+
+            # Draw an outline for video readability, then the white glyphs.
+            for dx, dy in ((-2, 0), (2, 0), (0, -2), (0, 2), (-1, -1), (1, 1), (-1, 1), (1, -1)):
+                painter.setPen(QColor(0, 0, 0))
+                painter.drawText(rect.translated(dx, dy), Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignBottom, text)
+            painter.setPen(QColor(255, 255, 255))
+            painter.drawText(rect, Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignBottom, text)
+        finally:
+            painter.end()
+        label.setPixmap(
+            pixmap.scaled(
+                max(320, label.width() if label.width() > 0 else width),
+                max(180, label.height() if label.height() > 0 else height),
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+        )
+
     def _simple_convert_tab(self, mode: str, title: str, filt: str) -> QWidget:
         w = QWidget()
         v = QVBoxLayout(w)
@@ -194,6 +297,12 @@ class SubtitleWidget(QWidget):
         out_row.addWidget(out_edit); out_row.addWidget(ob)
         v.addLayout(out_row)
 
+        font_combo = None
+        size_spin = None
+        if mode in {"srt2ass", "txt2srt", "txt2ass"}:
+            style_box, font_combo, size_spin, _preview = self._build_subtitle_style_controls(mode)
+            v.addWidget(style_box)
+
         prog   = QProgressBar()
         log    = QTextEdit(); log.setReadOnly(True); log.setMaximumHeight(120)
         start  = QPushButton(f"▶ {title} starten")
@@ -209,7 +318,11 @@ class SubtitleWidget(QWidget):
                     return
                 if not out:
                     out = str(Path(files[0]).parent)
-                worker = _ConvertWorker(files, mode, out)
+                worker = _ConvertWorker(
+                    files, mode, out,
+                    font_family=(font_combo.currentFont().family() if font_combo is not None else "Arial"),
+                    font_size=(size_spin.value() if size_spin is not None else 22),
+                )
                 self._wire(mode, worker, prog, log, start, cancel)
                 worker.start()
             except Exception:

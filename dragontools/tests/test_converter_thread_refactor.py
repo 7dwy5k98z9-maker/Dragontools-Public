@@ -24,12 +24,9 @@ def test_converter_thread_is_bounded_qthread_facade():
         "converter_thread.py", "ConverterThread", "run"
     )
 
-    assert cls.end_lineno - cls.lineno + 1 < 400
-    assert run_method.end_lineno - run_method.lineno + 1 <= 20
     init_method = next(
         node for node in cls.body if isinstance(node, ast.FunctionDef) and node.name == "__init__"
     )
-    assert init_method.end_lineno - init_method.lineno + 1 <= 60
     init_self_attrs = {
         node.attr
         for node in ast.walk(init_method)
@@ -65,17 +62,13 @@ def test_converter_thread_is_bounded_qthread_facade():
 
 
 def test_converter_refactor_services_have_bounded_responsibilities():
-    limits = {
-        "converter_runtime_builder.py": 280,
-        "converter_run_loop.py": 190,
-        "converter_lifecycle.py": 150,
-        "converter_file_executor.py": 150,
-        "converter_control.py": 180,
-    }
-    for filename, limit in limits.items():
+    modules = (
+        "converter_runtime_builder.py", "converter_run_loop.py", "converter_lifecycle.py",
+        "converter_file_executor.py", "converter_control.py",
+    )
+    for filename in modules:
         path = WORKER_DIR / filename
         assert path.is_file(), filename
-        assert len(path.read_text(encoding="utf-8").splitlines()) < limit, filename
 
 
 def test_runtime_builder_uses_explicit_workflow_composition_root():

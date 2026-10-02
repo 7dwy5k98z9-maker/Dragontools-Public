@@ -50,6 +50,7 @@ class ConversionResultFinishMixin:
                 self._set_queue_edit(True)
 
             self._state.thread = None
+            self._state.start_reserved = False
             self._refresh_queue()
         except Exception:
             details = traceback.format_exc()
@@ -71,6 +72,7 @@ class ConversionResultFinishMixin:
                 )
                 self._start_move(move_files, finished_thread)
                 self._state.thread = None
+                self._state.start_reserved = False
                 self._refresh_queue()
                 return
             self._log(
@@ -89,6 +91,7 @@ class ConversionResultFinishMixin:
             self._clear()
 
         self._state.thread = None
+        self._state.start_reserved = False
         self._set_start_enabled(True)
         self._set_queue_edit(True)
         self._refresh_queue()

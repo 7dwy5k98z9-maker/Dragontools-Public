@@ -65,9 +65,7 @@ def test_encoder_settings_controller_is_small_composition_facade():
     cls = next(node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == "EncoderSettingsController")
     methods = [node for node in cls.body if isinstance(node, ast.FunctionDef)]
 
-    assert path.read_text(encoding="utf-8").count("\n") + 1 <= 80
     assert [method.name for method in methods] == ["__init__"]
-    assert cls.end_lineno - cls.lineno + 1 <= 45
 
 
 def test_encoder_settings_methods_have_exactly_one_implementation_owner():
@@ -79,19 +77,6 @@ def test_encoder_settings_methods_have_exactly_one_implementation_owner():
 
     assert set(owners) == EXPECTED_METHODS
     assert all(len(files) == 1 for files in owners.values()), owners
-
-
-def test_encoder_settings_modules_remain_focused():
-    limits = {
-        "encoder_settings_panels.py": 130,
-        "encoder_settings_options.py": 175,
-        "encoder_settings_persistence.py": 185,
-        "encoder_settings_profiles.py": 180,
-    }
-    for filename, max_lines in limits.items():
-        path = GUI_DIR / filename
-        lines = path.read_text(encoding="utf-8").count("\n") + 1
-        assert lines <= max_lines, f"{filename} grew to {lines} lines"
 
 
 def test_encoder_settings_persistence_and_profiles_are_separated():

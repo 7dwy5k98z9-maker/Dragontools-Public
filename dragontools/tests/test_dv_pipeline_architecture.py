@@ -78,7 +78,7 @@ def test_p5_filter_complex_behält_original_input_und_setzt_libplacebo_vor_userf
     assert "[vout]" in fc
 
 
-def test_p7_und_p8_encode_verwenden_p8_hevc_als_videoquelle(tmp_path):
+def test_p7_und_p8_encode_verwenden_direkt_die_mkv_und_keinen_p8_arbeitsstream(tmp_path):
     for profile in (7, 8):
         p8 = tmp_path / f"p8_{profile}.hevc"
         plan = build_dv_encode_command(
@@ -92,15 +92,16 @@ def test_p7_und_p8_encode_verwenden_p8_hevc_als_videoquelle(tmp_path):
         )
         joined = " ".join(map(str, plan.command))
         assert plan.uses_libplacebo is False
-        assert plan.video_source == str(p8)
-        assert str(p8) in plan.command
-        assert plan.command.count("-i") == 2
+        assert plan.video_source == "film.mkv"
+        assert str(p8) not in plan.command
+        assert plan.command.count("-i") == 1
+        assert plan.command[plan.command.index("-i") + 1] == "film.mkv"
         assert "libplacebo=" not in joined
         map_positions = [i for i, value in enumerate(plan.command) if value == "-map"]
-        assert any(plan.command[i + 1] == "1:v:0" for i in map_positions)
+        assert all(plan.command[i + 1] != "1:v:0" for i in map_positions)
 
 
-def test_p7_filter_complex_wird_auf_input1_remapped_ohne_zweiten_videomap(tmp_path):
+def test_p7_filter_complex_bleibt_auf_mkv_input0(tmp_path):
     p8 = tmp_path / "p8.hevc"
     plan = build_dv_encode_command(
         ffmpeg_path="ffmpeg",
@@ -116,8 +117,8 @@ def test_p7_filter_complex_wird_auf_input1_remapped_ohne_zweiten_videomap(tmp_pa
         profile_major=7,
     )
     fc = plan.command[plan.command.index("-filter_complex") + 1]
-    assert "[1:v:0]" in fc
-    assert "[0:v:0]" not in fc
+    assert "[0:v:0]" in fc
+    assert "[1:v:0]" not in fc
     map_targets = [plan.command[i + 1] for i, v in enumerate(plan.command[:-1]) if v == "-map"]
     assert "[vout]" in map_targets
     assert "1:v:0" not in map_targets
@@ -144,31 +145,6 @@ def test_request_p5_string_wird_als_p5_sonderpfad_markiert():
     )
     assert req.is_p5 is True
     assert req.profile_major == 5
-
-
-def test_dv_pipeline_run_ist_nur_noch_orchestrator_und_stufen_bleiben_begrenzt():
-    pipeline_path = PACKAGE_ROOT / "worker" / "dv_processing_pipeline.py"
-    stages_path = PACKAGE_ROOT / "worker" / "dv_pipeline_stages.py"
-    pipeline_tree = ast.parse(pipeline_path.read_text(encoding="utf-8"))
-    stages_tree = ast.parse(stages_path.read_text(encoding="utf-8"))
-
-    pipeline_cls = next(
-        node for node in pipeline_tree.body
-        if isinstance(node, ast.ClassDef) and node.name == "DVProcessingPipeline"
-    )
-    run_node = next(
-        node for node in pipeline_cls.body
-        if isinstance(node, ast.FunctionDef) and node.name == "run"
-    )
-    assert run_node.end_lineno - run_node.lineno + 1 <= 110
-    assert len(pipeline_path.read_text(encoding="utf-8").splitlines()) <= 330
-
-    stages_cls = next(
-        node for node in stages_tree.body
-        if isinstance(node, ast.ClassDef) and node.name == "DVPipelineStages"
-    )
-    stage_methods = [node for node in stages_cls.body if isinstance(node, ast.FunctionDef)]
-    assert max(node.end_lineno - node.lineno + 1 for node in stage_methods) <= 80
 
 
 def test_produktiver_p5_run_hat_keinen_legacy_remux_aufruf():

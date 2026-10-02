@@ -12,18 +12,18 @@ from dragontools.core.paths import (
 
 
 def test_unc_path_is_normalized_without_host_reinterpretation() -> None:
-    path = r"\\MediaServer\video\Serien\TV\American Dad! (2005)"
+    path = r"\\<SERVER>\video\Serien\TV\American Dad! (2005)"
 
     assert normalize_user_path(path) == path
     assert user_path_name(path) == "American Dad! (2005)"
-    assert user_path_parent(path) == r"\\MediaServer\video\Serien\TV"
+    assert user_path_parent(path) == r"\\<SERVER>\video\Serien\TV"
 
 
 def test_forward_slash_unc_and_backslash_unc_compare_equal() -> None:
-    forward = "//MediaServer/video/Serien/Anime"
-    backslash = r"\\MediaServer\video\Serien\Anime"
+    forward = "//<SERVER>/video/Serien/Anime"
+    backslash = r"\\<SERVER>\video\Serien\Anime"
 
-    assert normalize_user_path(forward) == r"\\MediaServer\video\Serien\Anime"
+    assert normalize_user_path(forward) == r"\\<SERVER>\video\Serien\Anime"
     assert path_compare_key(forward) == path_compare_key(backslash)
 
 
@@ -43,9 +43,9 @@ def test_windows_filename_helpers_are_host_independent() -> None:
 
 
 def test_path_child_check_is_case_insensitive_for_windows_paths() -> None:
-    base = r"\\MediaServer\video\Serien\TV"
-    child = r"//MediaServer/video/serien/tv/American Dad! (2005)"
-    sibling = r"\\MediaServer\video\Serien\TV_alt\American Dad! (2005)"
+    base = r"\\<SERVER>\video\Serien\TV"
+    child = r"//<SERVER>/video/serien/tv/American Dad! (2005)"
+    sibling = r"\\<SERVER>\video\Serien\TV_alt\American Dad! (2005)"
 
     assert path_is_same_or_child(child, base) is True
     assert path_is_same_or_child(sibling, base) is False

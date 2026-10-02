@@ -5,6 +5,7 @@ import logging
 
 import subprocess
 from pathlib import Path
+from ..core.output_timestamps import build_output_timestamp_args
 
 from ..core.lang_codes import canonical_lang
 from ..core.media_metadata import normalize_video_codec
@@ -62,7 +63,7 @@ class AudioMuxPlanService:
             chain = audio_filter_chain(decision)
             if chain:
                 cmd += [f"-filter:a:{out_idx}", chain]
-        cmd += ["-map", "0:s?", "-c:s", "copy", "-map", "0:t?", "-c:t", "copy", "-map", "0:d?", "-c:d", "copy", out]
+        cmd += ["-map", "0:s?", "-c:s", "copy", "-map", "0:t?", "-c:t", "copy", "-map", "0:d?", "-c:d", "copy", *build_output_timestamp_args(out), out]
         return cmd
 
     def build_expected_contract(self, source_path: str, media_info, plan) -> ExpectedMediaContract:

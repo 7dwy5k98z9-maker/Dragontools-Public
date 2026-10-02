@@ -25,11 +25,12 @@ class SidecarSelection:
     storage: object
     normal_streams: tuple[object, ...]
     ass_srt_streams: tuple[object, ...] = ()
+    pgs_srt_streams: tuple[object, ...] = ()
 
     @property
     def streams(self) -> tuple[object, ...]:
         """Kompatibilitätsalias: alle Streams, die irgendein Sidecar-Ziel haben."""
-        return dedupe_stream_objects((*self.normal_streams, *self.ass_srt_streams))
+        return dedupe_stream_objects((*self.normal_streams, *self.ass_srt_streams, *self.pgs_srt_streams))
 
     @property
     def planned_stream_indices(self) -> tuple[int, ...]:
@@ -77,6 +78,8 @@ def select_sidecar_streams(
     sidecars_enabled: Callable[[dict], bool],
     additional_sidecars_enabled: Callable[[dict], bool] | None = None,
     text_to_srt_sidecar_enabled: Callable[[dict], bool] | None = None,
+    pgs_to_srt_enabled: Callable[[dict], bool] | None = None,
+    pgs_original_storage: Callable[[dict], str] | None = None,
     container: str = "mp4",
 ) -> SidecarSelection:
     """Resolve the rule plan and the streams that must become sidecars."""
@@ -106,6 +109,8 @@ def select_sidecar_streams(
         else False
     )
 
+    pgs_codecs = {"hdmv_pgs_subtitle", "pgs"}
+    pgs_storage = pgs_original_storage(subtitle_rules) if pgs_original_storage is not None else "internal_mkv"
     if target_container in {"mp4", "m4v", "mov"}:
         if sidecars_enabled(subtitle_rules) or additional_enabled:
             normal_streams = selected
@@ -113,6 +118,17 @@ def select_sidecar_streams(
             normal_streams = list(getattr(storage, "external_streams", ()) or ())
     else:
         normal_streams = selected if additional_enabled else []
+        if pgs_storage == "sidecar":
+            normal_streams = list(dedupe_stream_objects((*normal_streams, *(
+                stream for stream in selected
+                if str(getattr(stream, "codec", "") or "").lower() in pgs_codecs
+            ))))
+
+    pgs_srt_enabled = bool(pgs_to_srt_enabled(subtitle_rules)) if pgs_to_srt_enabled is not None else False
+    pgs_srt_streams = [
+        stream for stream in selected
+        if pgs_srt_enabled and str(getattr(stream, "codec", "") or "").lower() in pgs_codecs
+    ]
 
     ass_srt_streams = [
         stream for stream in selected
@@ -123,4 +139,5 @@ def select_sidecar_streams(
         storage=storage,
         normal_streams=dedupe_stream_objects(normal_streams),
         ass_srt_streams=dedupe_stream_objects(ass_srt_streams),
+        pgs_srt_streams=dedupe_stream_objects(pgs_srt_streams),
     )

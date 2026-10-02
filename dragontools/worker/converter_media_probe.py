@@ -8,6 +8,7 @@ import traceback
 from pathlib import Path
 
 from ..core.process_runner import subprocess_no_window_kwargs as _no_window_kwargs
+from ..core.media_duration import source_duration
 
 
 def _tools(worker):
@@ -23,20 +24,10 @@ def probe_ms(worker, path) -> int | None:
             capture_output=True, text=True, encoding="utf-8", errors="replace",
             stdin=subprocess.DEVNULL, **_no_window_kwargs(), timeout=30,
         )
-        data = json.loads(result.stdout or "{}")
-        duration = 0.0
-        try:
-            duration = max(duration, float(data.get("format", {}).get("duration", 0.0)))
-        except Exception as exc:
-            worker.log(f"⚠️ ffprobe-Formatdauer konnte nicht gelesen werden: {exc}", "warn")
-            worker.log(traceback.format_exc(), "error")
-        for stream in data.get("streams", []):
-            try:
-                duration = max(duration, float(stream.get("duration", 0.0)))
-            except Exception as exc:
-                worker.log(f"⚠️ ffprobe-Streamdauer konnte nicht gelesen werden: {exc}", "warn")
-                worker.log(traceback.format_exc(), "error")
-        return int(duration * 1000) if duration > 0.0 else None
+        if result.returncode != 0:
+            raise RuntimeError(result.stderr or "ffprobe fehlgeschlagen")
+        duration = source_duration(json.loads(result.stdout or "{}"))
+        return int(duration * 1000) if duration is not None else None
     except Exception as exc:
         worker.log(f"⚠️ ffprobe-Daueranalyse fehlgeschlagen bei {Path(path).name}: {exc}", "warn")
         worker.log(traceback.format_exc(), "error")

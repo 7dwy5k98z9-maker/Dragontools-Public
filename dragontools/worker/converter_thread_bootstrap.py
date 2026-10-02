@@ -2,11 +2,9 @@
 """Composition/bootstrap boundary for ``ConverterThread`` construction."""
 from __future__ import annotations
 
-from PyQt6.QtCore import QSettings
-
 from ..core.gpu_detection import best_encoder, detect_gpus
 from ..core.logger import create_verbose_logger, create_worker_logger
-from ..core.settings_app import APP_NAME, APP_ORG
+from ..core.settings_access import worker_settings_snapshot
 from .converter_control import ConverterControlService
 from .converter_file_executor import ConverterFileExecutor
 from .converter_lifecycle import ConverterLifecycleService
@@ -50,7 +48,7 @@ def bootstrap_converter_thread(worker, files, config, *, shared_logger=None) -> 
 
     worker._log_gpu_list, worker._log_enc_name = _detect_log_gpu_context(worker._job_state)
 
-    worker.settings = QSettings(APP_ORG, APP_NAME)
+    worker.settings = worker_settings_snapshot()
     worker._logger = shared_logger or create_worker_logger(
         settings=worker.settings,
         log_file_path=config.log_file_path,

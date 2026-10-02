@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import errno
 import shutil
 from pathlib import Path
 from typing import Callable
@@ -89,10 +90,7 @@ class MoveTransferExecutor:
                         if progress_hook is not None and not self.notify_progress(progress_hook, len(buf)):
                             progress_hook = None
                     fdst.flush()
-                    try:
-                        os.fsync(fdst.fileno())
-                    except OSError:
-                        pass
+                    os.fsync(fdst.fileno())
 
                 verify_staged_file_copy(src_p, tmp_p)
                 shutil.copystat(src_p, tmp_p)
@@ -169,7 +167,24 @@ class MoveTransferExecutor:
                     self.journal.set_destination(src_p, dst_p)
                     self.log(f"📝 Umbenennung: Zielordner heißt jetzt {dst_p.name}", "info")
 
-            shutil.move(str(src_p), str(dst_p))
+            # Fast same-volume rename; cross-volume copies are never exposed
+            # under the final name until the entire staged tree is verified.
+            try:
+                os.rename(str(src_p), str(dst_p))
+            except OSError as exc:
+                if exc.errno != errno.EXDEV and getattr(exc, 'winerror', None) != 17:
+                    raise
+                transaction = PathSwapTransaction(
+                    src_p, dst_p, self.conflicts.unique_backup_path(dst_p)
+                )
+                transaction.stage()
+                transaction.commit()
+                destination_installed = True
+                if not self.remove_committed_source(src_p):
+                    message = "Zielordner installiert; Quellordner konnte nicht entfernt werden."
+                    result["cleanup_pending"] = True
+                    result["cleanup_message"] = message
+                    self.journal.set_cleanup_pending(src_p, message)
             result["ok"] = True
             result["dest_path"] = str(dst_p)
             return True

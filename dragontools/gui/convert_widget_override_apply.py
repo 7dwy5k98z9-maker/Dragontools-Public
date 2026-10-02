@@ -26,7 +26,13 @@ DIALOG_OVERRIDE_KEYS = {
 }
 
 
-def merge_dialog_override(existing: dict | None, template: dict | None) -> dict:
+TRACK_OVERRIDE_KEYS = {
+    "audio_mode", "audio_tracks", "audio_action", "subtitle_mode",
+    "subtitle_tracks", "burn_mode", "burn_stream_index",
+}
+
+
+def merge_dialog_override(existing: dict | None, template: dict | None, *, preserve_tracks: bool = False) -> dict:
     """Apply only fields owned by the file-settings dialog.
 
     Per-file state that is intentionally not edited by this dialog (for example
@@ -35,6 +41,8 @@ def merge_dialog_override(existing: dict | None, template: dict | None) -> dict:
     result = dict(existing or {})
     source = dict(template or {})
     for key in DIALOG_OVERRIDE_KEYS:
+        if preserve_tracks and key in TRACK_OVERRIDE_KEYS:
+            continue
         if key in source:
             result[key] = deepcopy(source[key])
         else:
@@ -42,4 +50,4 @@ def merge_dialog_override(existing: dict | None, template: dict | None) -> dict:
     return result
 
 
-__all__ = ["DIALOG_OVERRIDE_KEYS", "merge_dialog_override"]
+__all__ = ["DIALOG_OVERRIDE_KEYS", "TRACK_OVERRIDE_KEYS", "merge_dialog_override"]

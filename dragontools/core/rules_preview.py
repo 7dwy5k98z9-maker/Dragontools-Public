@@ -40,6 +40,8 @@ def build_rules_preview(
     default_scale_mode: str = "original",
     default_encoder_options: dict[str, Any] | None = None,
     autocrop_enabled: bool = False,
+    standard_container: str = "mkv",
+    dv_container: str = "mp4",
 ) -> dict[str, Any]:
     """Reine Preview aus Analyse- und Regelbausteinen; keine Worker-/FFmpeg-Ausführung."""
     resolved_tools = tools or get_tool_paths()
@@ -60,6 +62,8 @@ def build_rules_preview(
         file_override=ov,
         global_preserve_dv=bool(global_preserve_dv),
         global_preserve_hdrplus=bool(global_preserve_hdrplus),
+        standard_container=str(standard_container or "mkv"),
+        dv_container=str(dv_container or "mp4"),
     )
     pipeline = str(_value(pipeline_ctx["pipeline"]))
     container = str(_value(pipeline_ctx["container"]))

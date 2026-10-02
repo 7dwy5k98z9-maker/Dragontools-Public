@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .release_validation_common import APP_VERSION, ReleaseCheck, _check_exists, _check_matching_file
+from .release_validation_common import _check_changelog_file, APP_VERSION, ReleaseCheck, _check_exists, _check_matching_file
 from .release_validation_package import _check_forbidden_release_artifacts, _find_dist_dir
 
 
@@ -29,7 +29,7 @@ def validate_dist_bundle(
         _check_no_python_source_bundle(dist_dir / "Daten", "Build: Python-Quellcode"),
         _check_exists(dist_dir / "Daten" / "Handbuch" / "Handbuch.pdf", "Build: Handbuch"),
         _check_exists(dist_dir / "Daten" / "help.html", "Build: Help-Datei"),
-        _check_exists(dist_dir / "Daten" / "Aenderungshistorie" / "CHANGELOG.json", "Build: Changelog JSON"),
+        _check_changelog_file(dist_dir / "Daten" / "Aenderungshistorie" / "CHANGELOG.json", "Build: Changelog JSON"),
         _check_exists(dist_dir / "Daten" / "Aenderungshistorie" / "CHANGELOG.txt", "Build: Changelog TXT-Fallback", required=False),
     ])
     checks.extend(_documentation_freshness_checks(root, dist_dir))

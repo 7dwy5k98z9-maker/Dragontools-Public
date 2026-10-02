@@ -90,6 +90,12 @@ def _series_candidate_from_result(
         score = min(score, 0.92 if episode_verified else 0.85)
         match_reason = "Episodentitel offen" if episode_verified else "Episode noch nicht in Metadaten"
 
+    # Apply after alias rules: a matching title cannot prove the right remake.
+    if parsed.year is not None and year != parsed.year:
+        score = min(score, 0.89)
+        if match_reason != "Aliasregel":
+            match_reason = "Jahr nicht bestätigt" if year is None else "Abweichendes Jahr"
+
     return SeriesRenameCandidate(
         series=series or parsed.series,
         season=season,
@@ -124,7 +130,7 @@ def _series_candidate_fields(
         provider = str(getattr(raw, "provider", "") or "metadata")
         provider_id = _int_or_none(getattr(raw, "series_provider_id", None) or getattr(raw, "series_tmdb_id", None))
         episode_id = _int_or_none(getattr(raw, "episode_provider_id", None) or getattr(raw, "episode_tmdb_id", None))
-        year = _int_or_none(getattr(raw, "first_air_year", None)) or parsed.year
+        year = _year_from_value(getattr(raw, "first_air_year", None))
         return series, season, episode, title, year, provider, provider_id, episode_id, title_is_fallback
 
     if hasattr(raw, "name") and hasattr(raw, "first_air_year"):
@@ -135,7 +141,7 @@ def _series_candidate_fields(
             parsed.season,
             episode,
             default_episode_title(episode),
-            _int_or_none(getattr(raw, "first_air_year", None)) or parsed.year,
+            _year_from_value(getattr(raw, "first_air_year", None)),
             str(getattr(raw, "provider", "") or "metadata"),
             _int_or_none(getattr(raw, "provider_id", None) or getattr(raw, "tmdb_id", None)),
             None,
@@ -153,7 +159,7 @@ def _series_candidate_fields(
             season,
             episode,
             title,
-            _int_or_none(raw.get("year") or raw.get("first_air_year")) or parsed.year,
+            _year_from_value(raw.get("year") or raw.get("first_air_year")),
             str(raw.get("provider") or "metadata"),
             _int_or_none(raw.get("provider_id") or raw.get("series_id") or raw.get("tmdb_id")),
             _int_or_none(raw.get("episode_id") or raw.get("episode_provider_id") or raw.get("episode_tmdb_id")),

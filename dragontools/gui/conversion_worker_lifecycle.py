@@ -103,6 +103,7 @@ class ConversionWorkerLifecycle:
         return stopped
 
     def abort(self) -> None:
+        self._state.watch_intake_blocked = True
         worker = self.active_worker()
         if not worker:
             return
@@ -114,6 +115,7 @@ class ConversionWorkerLifecycle:
             and hasattr(worker, "clear_abort_request")
         ):
             if worker.clear_abort_request():
+                self._state.watch_intake_blocked = False
                 self._set_abort_button_default()
                 self._refresh_queue()
                 return
@@ -135,6 +137,8 @@ class ConversionWorkerLifecycle:
         worker.file_progress.connect(self._result_service.on_file_progress)
         worker.file_result.connect(self._progress.on_file_result_cleanup)
         worker.file_result.connect(self._result_service.on_file_result)
+        if hasattr(worker, "encode_stage_complete"):
+            worker.encode_stage_complete.connect(self._progress.on_encode_stage_complete)
         worker.progress.connect(lambda value: invoke_callback(total_progress_slot, value))
         if hasattr(worker, "dv_crop_decision_requested"):
             from .dv_crop_dialog import show_dv_crop_decision
@@ -151,7 +155,7 @@ class ConversionWorkerLifecycle:
         *,
         mode: str = "convert",
         files: list[str] | None = None,
-    ) -> None:
+    ) -> bool:
         self._set_start_enabled(False)
         self._ui.abort_btn.setEnabled(True)
         self._set_abort_button_default()
@@ -168,10 +172,11 @@ class ConversionWorkerLifecycle:
                 "❌ Konvertierung nicht gestartet: Job-Journal konnte nicht dauerhaft angelegt werden.",
                 "error",
             )
-            return
+            return False
         self._log(start_message)
         self._progress.refresh_queue_after_file_progress(0)
         worker.start()
+        return True
 
     def start_job_journal(self, worker, *, mode: str, files: list[str]) -> bool:
         try:

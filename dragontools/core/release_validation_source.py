@@ -2,11 +2,13 @@
 """Validation of DragonTools source/package releases."""
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 from .config_migration import current_schema_version
+from .release_packaging import find_forbidden_release_artifacts
 from .release_validation_build import validate_dist_bundle
-from .release_validation_common import APP_VERSION, ReleaseCheck, _check_exists, _check_schema_file
+from .release_validation_common import _check_changelog_file, APP_VERSION, ReleaseCheck, _check_exists, _check_schema_file
 from .release_validation_environment import (
     _check_build_environment,
     _check_ci_workflow,
@@ -25,6 +27,9 @@ from .release_validation_package import (
 
 
 def validate_source_release(root: Path, *, dist_root: Path | None = None) -> list[ReleaseCheck]:
+    root = Path(root).resolve()
+    if dist_root is not None:
+        dist_root = Path(dist_root).resolve()
     checks: list[ReleaseCheck] = []
     manifest, manifest_check = _load_release_manifest(root)
     checks.append(manifest_check)
@@ -36,13 +41,65 @@ def validate_source_release(root: Path, *, dist_root: Path | None = None) -> lis
     checks.extend(_schema_checks(root / "dragontools" / "config"))
     checks.extend([
         _check_python_package_smoke(root),
-        _check_forbidden_release_artifacts(root),
+        _check_source_artifacts_without_self_import_false_positive(root),
     ])
     checks.extend(_declared_environment_checks(root, manifest, manifest_valid))
     checks.append(_check_opencv_dependency())
     checks.extend(validate_dist_bundle(root, dist_root=dist_root, profile=profile))
     checks.extend(_scan_private_markers(root))
     return checks
+
+
+def _check_source_artifacts_without_self_import_false_positive(root: Path) -> ReleaseCheck:
+    """Keep direct in-process validation useful without weakening release gates.
+
+    Importing the validator without ``python -B`` may create bytecode inside the
+    tree under inspection. Only cache files belonging to DragonTools modules
+    that are actually loaded in this process are downgraded. Unrelated/stale
+    ``*.pyc`` files remain release errors.
+    """
+    check = _check_forbidden_release_artifacts(root)
+    if check.status != "error" or sys.dont_write_bytecode:
+        return check
+    try:
+        current_project = Path(__file__).resolve().parents[2]
+    except (OSError, RuntimeError):
+        return check
+    if root != current_project:
+        return check
+    findings = find_forbidden_release_artifacts(root)
+    allowed = _loaded_project_bytecode_paths(root)
+    if not findings or not all(path in allowed for path in findings):
+        return check
+    return ReleaseCheck(
+        "warn",
+        "Release-Bytecode",
+        "Direkter In-Process-Aufruf ohne python -B hat ausschließlich Bytecode der aktuell "
+        "geladenen DragonTools-Module im Quellbaum erzeugt. Die offiziellen Build-/Source-ZIP-Wege "
+        "laufen mit -B und prüfen Bytecode weiterhin strikt.",
+    )
+
+
+def _loaded_project_bytecode_paths(root: Path) -> set[Path]:
+    """Return cache artifacts attributable to currently loaded project modules."""
+    allowed: set[Path] = set()
+    root = root.resolve()
+    for name, module in tuple(sys.modules.items()):
+        if not (name == "dragontools" or name.startswith("dragontools.")):
+            continue
+        cached = getattr(module, "__cached__", None)
+        if not cached:
+            continue
+        try:
+            relative = Path(cached).resolve().relative_to(root)
+        except (OSError, ValueError):
+            continue
+        if relative.suffix.casefold() != ".pyc":
+            continue
+        allowed.add(relative)
+        if relative.parent.name.casefold() == "__pycache__":
+            allowed.add(relative.parent)
+    return allowed
 
 
 def _profile_source_checks(
@@ -101,12 +158,14 @@ def _application_artifact_checks(root: Path, manifest: dict, manifest_valid: boo
         _check_exists(root / "help.html", "Help-Datei"),
         _check_exists(root / "DragonToolsV9_Dokumentation.docx", "Dokumentationsquelle", required=False),
         _check_exists(root / "Handbuch" / "Handbuch.pdf", "PDF-Handbuch", required=manual_required),
-        _check_exists(root / "Aenderungshistorie" / "CHANGELOG.json", "V9-Änderungshistorie (JSON)"),
+        _check_changelog_file(root / "Aenderungshistorie" / "CHANGELOG.json", "V9-Änderungshistorie (JSON)"),
         _check_exists(root / "Aenderungshistorie" / "CHANGELOG.txt", "V9-Änderungshistorie (TXT-Fallback)", required=False),
         _check_exists(root / "Aenderungshistorie" / "CHANGELOGV8.txt", "Legacy V8-Änderungshistorie", required=False),
         _check_exists(root / "Aenderungshistorie" / "CHANGELOGV7.txt", "Legacy V7-Änderungshistorie", required=False),
-        _check_exists(root / "dragon_hdr10plus_generator" / "pyproject.toml", "Dragon HDR10+ Generator: Projektdefinition"),
-        _check_exists(root / "dragon_hdr10plus_generator" / "src" / "dragon_hdr10plus_generator" / "cli.py", "Dragon HDR10+ Generator: CLI"),
+        _check_exists(root / "dragon_hdr10plus_generator" / "src" / "dragon_hdr10plus_generator" / "cli.py", "Dragon HDR10+ Generator: Source"),
+        _check_exists(root / "dragon_hdr10plus_generator" / "hdrplusgenerator_entry.py", "Dragon HDR10+ Generator: Entry-Point"),
+        _check_exists(root / "dragon_hdr10plus_generator" / "build.bat", "Dragon HDR10+ Generator: Standalone-Build"),
+        _check_exists(root / "dragon_hdr10plus_generator" / "tests", "Dragon HDR10+ Generator: Tests"),
         _check_exists(root / "dragontools" / "worker" / "comfyui_client.py", "ComfyUI: lokaler API-Client"),
         _check_exists(root / "dragontools" / "core" / "comfyui_workflow.py", "ComfyUI: Workflow-Vertrag"),
         _check_exists(root / "dragontools" / "core" / "comfyui_hdr_models.py", "ComfyUI: HDR-Modellprofile"),

@@ -158,9 +158,13 @@ class WorkerConversionResultService:
 
     def fail(self, ctx, reason: str) -> None:
         report_path = str(getattr(ctx, "error_report_path", "") or "")
+        archive_path = str(getattr(ctx, "replacement_archived_path", "") or "")
+        message = str(reason or "")
+        if archive_path:
+            message = f"{message} Diagnosearchiv: {archive_path}".strip()
         if self._failure_details is not None:
             self._failure_details[ctx.input_path] = {
-                "message": str(reason or ""),
+                "message": message,
                 "error_report": report_path,
                 "pipeline": str(getattr(ctx, "pipeline", "") or ""),
                 "container": str(getattr(ctx, "container", "") or ""),
@@ -169,9 +173,11 @@ class WorkerConversionResultService:
         self._log(f"Fehler: {Path(ctx.input_path).name}", "error")
         if reason:
             self._log(reason, "error")
+        if archive_path:
+            self._log(f"📦 Diagnosearchiv: {archive_path}", "warn")
         if report_path:
             self._log(f"Fehlerbericht: {report_path}", "error")
-        self.emit_file_result(ctx.input_path, ctx.input_path, "❌")
+        self.emit_file_result(ctx.input_path, archive_path or ctx.input_path, "❌")
         self.emit_file_progress(ctx.input_path, 100)
         self._runtime_state.fehlgeschlagen += 1
 

@@ -85,12 +85,21 @@ class ConverterQueueState:
             done_n = {normalize_worker_path(p) for p in self.done_files}
             skip_n = {normalize_worker_path(p) for p in self.skip_files}
             curr_n = normalize_worker_path(self.current_file) if self.current_file else None
-            self.files = [
-                p for p in list(new_order or [])
+            # Reordering must never assign work owned by another child. Keep
+            # omitted local entries too: a GUI snapshot can race with add_file.
+            waiting = {
+                normalize_worker_path(p): p for p in self.files
                 if normalize_worker_path(p) not in done_n
                 and normalize_worker_path(p) not in skip_n
                 and normalize_worker_path(p) != curr_n
-            ]
+            }
+            reordered = []
+            for path in list(new_order or []):
+                owned = waiting.pop(normalize_worker_path(path), None)
+                if owned is not None:
+                    reordered.append(owned)
+            reordered.extend(waiting.values())
+            self.files = reordered
             self._file_keys = {normalize_worker_path(path) for path in self.files}
 
     def next_file(self, processed_count: int) -> tuple[str, int] | None:

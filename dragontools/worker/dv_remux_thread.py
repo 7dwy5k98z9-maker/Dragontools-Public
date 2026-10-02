@@ -28,12 +28,12 @@ import threading, traceback
 
 from pathlib import Path
 
-from PyQt6.QtCore import QThread, pyqtSignal, QSettings
+from PyQt6.QtCore import QThread, pyqtSignal
 
 from ..core.conversion_artifacts import ArtifactRegistry
 from ..core.logger import create_worker_logger
 from ..core.tool_paths import get_tool_paths
-from ..core.settings_app import APP_ORG, APP_NAME
+from ..core.settings_access import worker_settings_snapshot
 from ..core.settings_conversion import (
     DEFAULT_DV_REMUX_ENCODE_DV5,
     DEFAULT_DV_REMUX_KEEP_DV7_MKV,
@@ -86,7 +86,7 @@ class DVRemuxThread(QThread):
         self.files = self._queue.files          # ?ffentliches Attribut für UI-Zugriff
 
         self.overwrite_original = overwrite_original
-        settings = QSettings(APP_ORG, APP_NAME)
+        settings = worker_settings_snapshot()
         configured_container = settings_text(
             settings,
             SET_KEY_OUTPUT_CONTAINER_DV,
@@ -135,7 +135,7 @@ class DVRemuxThread(QThread):
         self._postprocess_outputs = self._artifacts.postprocess_outputs
         self._failure_details = self._artifacts.failure_details
 
-        s = QSettings(APP_ORG, APP_NAME)
+        s = settings
         self._logger = create_worker_logger(
             settings=s,
             gui_callback=self.log_line.emit,

@@ -351,6 +351,8 @@ def build_media_info_text(
     codec: str,
     global_preserve_dv: bool = True,
     global_preserve_hdrplus: bool = True,
+    standard_container: str = "mkv",
+    dv_container: str = "mp4",
 ) -> str:
     """Erzeugt den vollständigen DragonTools-Medieninfo-/Rules-Preview-Text."""
     lines: list[str] = [
@@ -374,6 +376,8 @@ def build_media_info_text(
             media_info=mi,
             global_preserve_dv=global_preserve_dv,
             global_preserve_hdrplus=global_preserve_hdrplus,
+            standard_container=standard_container,
+            dv_container=dv_container,
         )
     except Exception as exc:
         lines.extend(["Rules Preview konnte nicht erstellt werden.", f"Fehler: {exc}"])

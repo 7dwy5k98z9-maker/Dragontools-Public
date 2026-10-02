@@ -104,6 +104,57 @@ class DVProcessingPipeline(DVPipelineDiagnosticCompatibilityMixin):
     def _assert_nonempty_file(self, path: Path, label: str) -> bool:
         return self._file_validator.assert_nonempty(path, label)
 
+
+    def _notify_encode_complete(self, state) -> bool:
+        worker = self._worker
+        if worker is None or not bool(getattr(worker, "_enable_dv_encode_overlap", False)):
+            return True
+        request = state.request
+        self._log(
+            "🧬 [DV] HEVC-Encode abgeschlossen. Encode-Slot wird freigegeben; "
+            "DV/HDR10+-Nachbearbeitung wartet auf einen separaten Postprocessing-Slot.",
+            "info",
+        )
+        emit = getattr(worker, "emit_encode_stage_complete", None)
+        if callable(emit):
+            emit(request.input_path, request.output_path)
+
+        gate = getattr(worker, "_dv_postprocess_gate", None)
+        if gate is None:
+            return True
+        if int(getattr(gate, "active", 0) or 0) >= int(getattr(gate, "limit", 4) or 4):
+            self._log(
+                f"⏳ [DV] Postprocessing-Limit erreicht ({getattr(gate, 'limit', 4)}). "
+                "Warte auf freien DV/HDR+-Slot …",
+                "info",
+            )
+        def _aborted() -> bool:
+            control = getattr(worker, "_control_state", None)
+            return bool(
+                getattr(control, "abort_requested", False)
+                if control is not None
+                else getattr(worker, "abort_requested", False)
+            )
+        if gate.acquire(abort_requested=_aborted):
+            setattr(worker, "_dv_postprocess_slot_acquired", True)
+            self._log(
+                f"🧬 [DV] Postprocessing-Slot aktiv "
+                f"({getattr(gate, 'active', '?')}/{getattr(gate, 'limit', 4)}).",
+                "info",
+            )
+            return True
+        self._log("⏹️ [DV] Nach Encode beim Warten auf den Postprocessing-Slot abgebrochen.", "warn")
+        return False
+
+    def _release_postprocess_slot(self) -> None:
+        worker = self._worker
+        if worker is None or not bool(getattr(worker, "_dv_postprocess_slot_acquired", False)):
+            return
+        gate = getattr(worker, "_dv_postprocess_gate", None)
+        if gate is not None:
+            gate.release()
+        setattr(worker, "_dv_postprocess_slot_acquired", False)
+
     def _build_stages(self) -> DVPipelineStages:
         return build_pipeline_stages(
             tools=self._tools,
@@ -126,6 +177,7 @@ class DVProcessingPipeline(DVPipelineDiagnosticCompatibilityMixin):
             assert_nonempty_file=self._assert_nonempty_file,
             clear_burn_sub_tmp=self._clear_burn_sub_tmp,
             crop_decision=getattr(self._worker, "request_dv_crop_decision", None),
+            encode_complete=self._notify_encode_complete,
         )
 
     def _reset_run_diagnostics(self) -> None:
@@ -230,6 +282,7 @@ class DVProcessingPipeline(DVPipelineDiagnosticCompatibilityMixin):
                 generate_hdr10plus=generate_hdr10plus,
                 container=container,
             )
+            self._log("🔎 [DV] Phase: Vorprüfung", "info")
             if not self._preflight(request):
                 return False
             return self._execute_request(request)
@@ -237,6 +290,8 @@ class DVProcessingPipeline(DVPipelineDiagnosticCompatibilityMixin):
             # Pipeline boundary: record a complete failure diagnostic and never
             # let a worker exception escape without state for the error report.
             return self._handle_run_exception(input_path, exc)
+        finally:
+            self._release_postprocess_slot()
 
 
 __all__ = ["DVProcessingPipeline"]

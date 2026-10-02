@@ -10,13 +10,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PyQt6.QtCore import QSettings
-
 from ..core.move_file_service import MoveFileService
 from ..core.move_journal import MoveJournalWriteError
 from ..core.move_postprocess import record_media_library_move
 from ..core.move_routing import MoveRouter
-from ..core.settings_app import APP_NAME, APP_ORG
+from ..core.settings_access import worker_settings_snapshot
 from ..core.settings_postprocess import DEFAULT_NFO_MOVIE_TARGET_NAME, DEFAULT_TRICKPLAY_CONFLICT_MODE, DEFAULT_TRICKPLAY_ONLY_MISSING, SET_KEY_NFO_MOVIE_TARGET_NAME, SET_KEY_TRICKPLAY_CONFLICT_MODE, SET_KEY_TRICKPLAY_ONLY_MISSING
 from .move_completion_service import MoveCompletionService
 
@@ -29,6 +27,10 @@ class MoveResultCommitMixin:
             return getattr(self, name, default)
         except RuntimeError:
             return default
+
+    def _worker_settings(self):
+        snapshot = self._attr("_settings_snapshot", None)
+        return snapshot if snapshot is not None else worker_settings_snapshot()
 
     def _file_service(self) -> MoveFileService:
         return MoveFileService(
@@ -80,7 +82,7 @@ class MoveResultCommitMixin:
 
     def _record_media_library_move(self, source_path: str, move_result: dict | None) -> None:
         record_media_library_move(
-            QSettings(APP_ORG, APP_NAME),
+            self._worker_settings(),
             source_path=source_path,
             move_result=move_result,
             log=self._log,
@@ -103,9 +105,8 @@ class MoveResultCommitMixin:
             self._move_report_log = []
         self._move_report_log.append(entry)
 
-    @staticmethod
-    def _read_trickplay_conflict_mode() -> str:
-        settings = QSettings(APP_ORG, APP_NAME)
+    def _read_trickplay_conflict_mode(self) -> str:
+        settings = self._worker_settings()
         mode = settings.value(SET_KEY_TRICKPLAY_CONFLICT_MODE, "", type=str)
         if mode in {"skip", "overwrite", "backup"}:
             return mode
@@ -117,9 +118,8 @@ class MoveResultCommitMixin:
         mode = "skip" if only_missing else "overwrite"
         return mode if mode in {"skip", "overwrite", "backup"} else DEFAULT_TRICKPLAY_CONFLICT_MODE
 
-    @staticmethod
-    def _read_nfo_movie_target_name() -> str:
-        settings = QSettings(APP_ORG, APP_NAME)
+    def _read_nfo_movie_target_name(self) -> str:
+        settings = self._worker_settings()
         configured = settings.value(
             SET_KEY_NFO_MOVIE_TARGET_NAME,
             DEFAULT_NFO_MOVIE_TARGET_NAME,

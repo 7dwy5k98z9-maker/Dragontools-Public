@@ -51,13 +51,13 @@ def build_hdrplus_helper_services(
     worker = getattr(progress_runner, "worker", None)
     rules = dict(subtitle_rules or {})
     subtitle_service = SubtitleSidecarService(
-        ffmpeg_path=tools.ffmpeg,
+        ffmpeg_path=getattr(tools, "ffmpeg", "ffmpeg"),
         subtitle_rules=rules,
         log=log,
         worker=worker,
     )
     subtitle_mux_service = DVSubtitleMuxService(
-        ffmpeg_path=tools.ffmpeg,
+        ffmpeg_path=getattr(tools, "ffmpeg", "ffmpeg"),
         subtitle_rules=rules,
         log=log,
     )
@@ -70,6 +70,8 @@ def build_hdrplus_helper_services(
         worker=worker,
         log=log,
         run_tool_fn=run_tool_fn,
+        ffmpeg_path=getattr(tools, "ffmpeg", "ffmpeg"),
+        ffprobe_path=getattr(tools, "ffprobe", "ffprobe"),
     )
     tool_runner = HDRPlusToolRunner(
         run_tool_fn=run_tool_fn,
@@ -85,12 +87,12 @@ def build_hdrplus_helper_services(
         capture_tool=tool_runner.capture,
     )
     encode_service = HDRPlusEncodeService(
-        ffmpeg_path=tools.ffmpeg,
+        ffmpeg_path=getattr(tools, "ffmpeg", "ffmpeg"),
         progress_runner=progress_runner,
         temp_state=temp_state,
         log=log,
     )
-    stream_service = HDRPlusStreamService(ffmpeg_path=tools.ffmpeg, log=log)
+    stream_service = HDRPlusStreamService(ffmpeg_path=getattr(tools, "ffmpeg", "ffmpeg"), log=log)
     pipeline = HDRPlusPipelineCoordinator(
         encode_service=encode_service,
         subtitle_service=subtitle_service,

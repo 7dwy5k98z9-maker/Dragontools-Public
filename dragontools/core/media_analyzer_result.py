@@ -4,7 +4,8 @@ from pathlib import Path
 
 from .media_analyzer_metadata import VideoAnalysisMetadata
 from .models import AudioStream, MediaInfo, SubtitleStream, VideoStream
-from .type_utils import _safe_float, _safe_int
+from .type_utils import _safe_int
+from .media_duration import source_duration
 
 
 def build_media_info(
@@ -20,10 +21,10 @@ def build_media_info(
     analysis_warnings: list[str],
 ) -> MediaInfo:
     format_data = ffprobe_json.get("format", {}) or {}
-    duration_s = _safe_float(
-        mi_general.get("Duration") or format_data.get("duration"),
-        0.0,
-    )
+    duration_s = source_duration(
+        ffprobe_json, video_streams=video_streams, audio_streams=audio_streams,
+        container_duration=mi_general.get("Duration"),
+    ) or 0.0
     size_bytes = _safe_int(
         mi_general.get("FileSize")
         or format_data.get("size")

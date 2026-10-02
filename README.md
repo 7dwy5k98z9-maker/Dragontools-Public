@@ -1,13 +1,15 @@
-# DragonTools V9.8.6
+# DragonTools V9.8.7
 
-> Die bestätigten Review-Befunde wurden in den nachfolgenden V9.8.5-Patches korrigiert und durch Schutz-Regressionsprüfungen abgesichert. Die aktuelle technische Historie steht in `PATCH.md`. Eine vollständige EXE-/Hardware-Abnahme bleibt davon getrennt.
+> DragonTools V9.8.7 konsolidiert den Direct-MKV-Dolby-Vision-Pfad, die konservative Frame-Mismatch-Teilreparatur, den manuellen Watchfolder-Sofortscan und den nachgezogenen Release-Smoke für den nativen PGS-Parser. Die aktuelle technische Historie steht in `PATCH.md`. Eine vollständige EXE-/Hardware-Abnahme bleibt davon getrennt.
 
 DragonTools ist eine Windows-Anwendung zur Analyse, Konvertierung und Verwaltung von Video-, Audio- und Untertiteldateien. Das Projekt bündelt die benötigten Drittanbieterprogramme nicht im Git-Repository. Sie müssen separat von den jeweiligen Projektseiten heruntergeladen werden.
 
 
-## Stand 9.8.6 – 24.09.2026
+## Stand 9.8.7 – 02.10.2026
 
-Normalisierter FFmpeg-AutoCrop ist die verbindliche physische DV-Crop-Quelle. Finaler RPU-Nachweis schützt das Original auch bei exakter Geometrie. Zieländerungen während laufender Aufträge sind an der Move-Transaktionsgrenze abgesichert. Renamer unterstützt Releasegruppen, E05S06 und EPxx mit Staffelwahl; Fenster und Spalten sind flexibel skalierbar.
+**Release-Schwerpunkte V9.8.7:** Dolby-Vision-Profil 5/7/8 liest die RPU bei Matroska direkt aus dem Originalcontainer und encodiert auch den Bildpfad direkt aus der MKV; die früheren normalen `source.hevc`-/`p8.hevc`-Zwischenstufen entfallen. Ein verifizierter Frame-Mismatch kann unter engen Bedingungen durch einen lokalisierten GOP-/IRAP-basierten Teil-Reencode repariert werden; unsichere Fälle bleiben fail-closed. Der neue Button **„Watchfolder durchsuchen“** zieht vollständig geschriebene neue Dateien manuell in die bestehende Queue nach, auch wenn die Watch-Automatik ausgeschaltet ist. `core/pgs_display_set.py` ist jetzt verpflichtender Bestandteil des Release-Smokes.
+
+Normalisierter FFmpeg-AutoCrop ist die verbindliche physische DV-Crop-Quelle. Finaler RPU-Nachweis schützt das Original auch bei exakter Geometrie. Zieländerungen während laufender Aufträge sind an der Move-Transaktionsgrenze abgesichert. Renamer unterstützt Staffel-, Episoden- und Jahreskorrekturen. Queue-Reihenfolgeaktionen sind in Haupt- und Zoomfenster verfügbar; der HDR10+-Generator ist gegen fehlende Farbraumdaten und hängende Analyseprozesse gehärtet.
 
 - Cleanup-Warnungen und Fehler bleiben terminal erhalten. Hintergrund-Nachbearbeitung darf daraus keinen Erfolg machen; Auto-Move bleibt für solche Ergebnisse gesperrt.
 - Nachbearbeitungsaufträge besitzen eigene Prozess-Slots. Timeout, Abbruch und Pause verwenden die konkrete Prozessinstanz; ein lokaler Auftrag darf keinen parallelen Auftrag beenden. Ein ausdrücklich angeforderter Batch-Abbruch gilt weiterhin für den gesamten Batch.
@@ -16,11 +18,29 @@ Normalisierter FFmpeg-AutoCrop ist die verbindliche physische DV-Crop-Quelle. Fi
 - Renamer-Regeln Schema 3 ergänzt eine eigene Releasegruppen-Liste: bekannte Gruppen wie `STARS` können am Anfang/Ende des Release-Namens gefiltert werden. Serienmuster `E05S06` werden als Staffel 6 / Episode 5 erkannt; bei `EP01` ohne Staffel fragt DragonTools vor der Providerabfrage ausdrücklich nach der Staffel.
 - SDR→HDR über ComfyUI/HDRTVDM ist als Voll-Datei-Pfad nutzbar, kann ComfyUI bei Bedarf automatisch starten und lässt sich pro Datei über den Override aktivieren/deaktivieren. Ein gemessener 1080p-Praxiswert auf einer RTX 4080 SUPER liegt bei ungefähr **4:1 Konvertierungsdauer zu Filmdauer**; das ist ein Richtwert, keine Leistungszusage.
 - Der **Dragon HDR10+ Generator 0.2.0** analysiert vorhandene PQ/BT.2020-Videos framegenau, erzeugt ein `hdr10plus_tool`-kompatibles ST-2094-40-Profile-A-JSON und ist sowohl direkt per CLI als auch aus DragonTools nutzbar. DragonTools kann HDR10+ nach SDR→HDR sowie bei geeigneten HDR10-HEVC-Remux-/Strip-Only-Ausgaben erzeugen, injizieren und final verifizieren.
+- Source-Releases besitzen jetzt einen einzigen kanonischen Inventarvertrag: BAT und Python-Packager verwenden dieselbe Implementierung. Python-Quellen werden im Public-ZIP ebenfalls anonymisiert und AST-basiert auf hart codierte Secrets geprüft; die In-Process-Bytecode-Ausnahme gilt nur für tatsächlich geladene DragonTools-Module. Private Snapshot-/Review-Artefakte bleiben aus öffentlichen Source-ZIPs heraus; der finale Windows-Build startet nach PyInstaller die tatsächlich gebaute DragonTools-EXE mit einem echten Qt-`QApplication`-Smoke.
+- Der HDR10+-Scanner speichert seine 64 Szenenerkennungs-Histogrammbins pro Frame kompakt als `uint32` statt als Python-Floattupel. Bei 2 h/24 fps sinkt allein dieser Histogrammanteil rechnerisch von rund 344 MiB auf rund 55 MiB; die Distanzberechnung bleibt mathematisch gleich.
 - Die HDR-Einstellungen sind direkt erreichbar: **Einstellungen → 🌈 SDR → HDR / ComfyUI** sowie **Einstellungen → ✨ Dragon HDR10+ Generator**. Die Help-Datei besitzt dafür eigene Kapitel zu SDR→HDR/HDRTVDM, dem Generator sowie HDR-Erkennung/Datei-Overrides/Strip-Only.
+- Der Renamer besitzt einen **🌐 Metadaten-Browser**: Serien und Filme können ohne vorher importierte Datei direkt bei TMDB/TheTVDB gesucht werden. Serienfolgen lassen sich per Drag & Drop oder Automatik auf Episoden abbilden; 1–4 aufeinanderfolgende Episoden pro Datei werden als `S01E01E02...` übernommen. Die Zuordnung wird anschließend als normaler Renamer-Vorschlag übernommen und erst dort endgültig ausgeführt.
+- Rechts neben den Queue-Pfeilen stehen Schnellschalter für **HDR+ Generator**, **SDR → HDR** und **Watch-Folder**. Ein synchroner Start-Lock plus Queue-/Worker-Deduplizierung schützt zusätzlich gegen reentrante Doppelstarts derselben Datei.
+- Im Converter steht zusätzlich **„Watchfolder durchsuchen“** bereit. Der manuelle Sofortscan durchsucht alle aktivierten Watch-Regeln auch bei ausgeschalteter Automatik, ergänzt nur noch nicht verarbeitete/nicht bereits eingereihte Dateien und startet im Leerlauf keinen neuen Batch. Bei laufender Konvertierung werden Treffer über die bestehende Live-Queue nachgereicht.
+- Regel-/Profil-Simulator und Medieninfo/DragonTools-Reiter verwenden für den angezeigten **Ausgabecontainer** dieselben Einstellungen wie die reale Pipeline. `DV → MKV` und `Standard → MP4` werden daher nicht mehr durch historische Defaultcontainer falsch angezeigt.
 
 Abbruch ist kooperativ: Ein bereits abgeschlossenes atomares Dateisystem-Replace kann nicht rückwirkend verhindert werden. Die Prüfung liegt unmittelbar vor dem Commit und beim Containerwechsel nochmals vor dem Original-Cleanup; bei einem dort erkannten Abbruch wird die Installation zurückgerollt. Bereits sicher installierte Ausgaben werden nicht blind gelöscht.
 
-Aktueller Quellstand einschließlich des eigenständigen Dragon-HDR10+-Generators: **986 Python-Dateien/Programme, 150.125 Gesamtzeilen und 126.908 Codezeilen** (nichtleer, keine reinen Kommentarzeilen). Die kombinierten Testpakete umfassen 233 Python-Dateien, davon 229 `test_*.py` mit 1.736 statisch erkannten Testfunktionen. Produktivcode einschließlich Einstiegspunkt und Generator-Source: 753 Python-Dateien, 105.564 Gesamtzeilen und 90.866 Codezeilen. Die nachfolgende Bestandsbeschreibung dokumentiert den historischen Stand 9.8.2.
+Aktueller Quellstand einschließlich des eigenständigen Dragon-HDR10+-Generators: **1.064 Python-Dateien/Programme, 165.934 Gesamtzeilen und 140.321 Codezeilen** (nichtleer, keine reinen Kommentarzeilen). Die Testbereiche umfassen 281 Python-Dateien, davon 276 `test_*.py` mit **2.037 statisch erkannten Testfunktionen**. Produktivcode einschließlich Einstiegspunkt und Generator-Source: **783 Python-Dateien, 114.420 Gesamtzeilen und 98.586 Codezeilen**.**
+
+**V9.8.6 Patch BH:** Bei Dolby-Vision-Jobs wird der Encode-Slot direkt nach erfolgreichem HEVC-Encode freigegeben. DV/HDR10+-Injection und Final-Mux der vorherigen Datei können dadurch parallel zum Encode der nächsten Queue-Datei weiterlaufen, ohne die konfigurierte Zahl gleichzeitiger Encodes zu überschreiten. Der Dragon HDR10+ Generator meldet während langer Bildanalysen regelmäßig Frames, Prozent, Analyse-FPS, Laufzeit und ETA.
+
+**V9.8.6 Patch BJ:** Fehlschlägt nach bereits erzeugter HDR10+-JSON die DV/HDR10+-Injection oder der finale HDR10+-Nachweis, wird der Kandidat vor dem temporären Cleanup in ein eigenes `Archiv/...__DV_HDR10PLUS_FAILED__...`-Diagnosepaket verschoben. Gesichert werden der finale MKV/MP4-Kandidat bzw. der weitest fortgeschrittene HEVC-Stream, die erzeugte HDR10+-JSON, die Verify-JSON und – sofern vorhanden – die tatsächlich verwendete sowie weitere RPU-Varianten. Das Original bleibt unangetastet.
+
+**V9.8.6 Patch BP:** Der optionale FFmpeg/libplacebo-SDR→HDR-Pfad verwendet jetzt dieselbe encoderabhängige 10-bit-Filterformat-Policy wie DV/HDR10: CPU/libx265 bleibt planar in `yuv420p10le`, Hardwareencoder verwenden `p010le`. DV-P5-Verbose-Logs melden das tatsächlich aktive Pixelformat statt pauschal `p010le`; die bewusst gesetzten x265-Parameter `bframes=8` und `rc-lookahead=40` bleiben unverändert.
+
+**V9.8.6 Patch BI:** DV/HDR-Nachbearbeitung besitzt jetzt ein separates Limit von vier schweren Postprocessing-Jobs. Die Encode-Slot-Freigabe verwendet ein eigenes Ereignis statt des historischen `🧩`-NFO/Trickplay-Status. Bildzahlen werden als strukturierte Nachweise mit Herkunft und Verlässlichkeit geführt: tatsächliche FFmpeg-Encode-Frames und vollständig analysierte HDR10+-Frames sind verlässlich; `FPS × Dauer` bleibt ausschließlich eine gekennzeichnete Fortschrittsschätzung. Im normalen DV/HDR10+-Ablauf wird kein zusätzlicher `ffprobe -count_frames`-Vollscan mehr gestartet.
+
+**V9.8.6 Patch BS/BT:** Der Converter besitzt einen synchronen `start_reserved`-Schutz gegen das kurze Startfenster vor `QThread.isRunning()`. Der Renamer wurde um den provider-expliziten Metadaten-Browser mit Film-/Seriensuche, Staffel-/Episodenansicht, Ordner-Drop und 1–4-fach-Folgen erweitert. Preview und Medieninfo übernehmen den tatsächlich konfigurierten Standard-/DV-Ausgabecontainer.
+
+**V9.8.6 Patch BU:** Asynchrone Metadatenabfragen sperren jetzt alle semantischen Mapping-Aktionen, alte Episodenzeilen werden vor Serien-/Staffelwechsel sofort verworfen und verspätete Suchergebnisse sind zusätzlich an den gestarteten Medientyp gebunden. Bei Filmen wird der bewusst aktivierte Treffer festgehalten; ein später markierter Suchtreffer kann die Zuordnung nicht unbemerkt ändern. Auto-Zuordnung überschreibt keine vorhandene Filmzuordnung, und nicht fortlaufende Provider-Episoden erzeugen eine sichtbare Warnung statt einer unbehandelten Qt-Slot-Exception.
 
 ## Historischer Entwicklungsstand 9.8.2 – 13.09.2026
 
@@ -43,6 +63,8 @@ Der aktuell vermessene Quellstand umfasst **787 Python-Dateien einschließlich `
 
 - Windows 10 oder neuer
 - Python 3.12 oder 3.13
+
+Die CI prüft beide Python-Versionen unter Linux und Windows. Zusätzlich wird unter Windows eine eingefrorene `DragonToolsSmoke.exe` mit PyInstaller gebaut und über `--smoke-test` gestartet; HDRTVDM besitzt einen verpflichtenden CPU-Lifecycle-Test. Reale DV/HDR-Roundtrips laufen auf dem gelabelten self-hosted Windows-Runner bei `v*`-Release-Tags oder manuell.
 - Git zum Klonen und Aktualisieren des Projekts
 - FFmpeg und FFprobe für die grundlegende Medienanalyse und -verarbeitung
 - weitere Werkzeuge abhängig von den verwendeten Funktionen
@@ -234,7 +256,7 @@ Kontrolliere anschließend, dass alle externen Werkzeuge unter `third_party` vor
 build_v9.bat
 ```
 
-Der fertige Build wird unter `dist/DragonToolsV9.8.6/` abgelegt. `build/` und `dist/` sind lokale Ausgaben und werden nicht in Git gespeichert.
+Der fertige Build wird unter `dist/DragonToolsV9.8.7/` abgelegt. `build/` und `dist/` sind lokale Ausgaben und werden nicht in Git gespeichert.
 
 ## Programm-Updates über GitHub
 
@@ -267,6 +289,6 @@ git push
 - Große fertige Programmpakete gehören später in einen GitHub Release und nicht direkt in die Git-Historie.
 - Medien dürfen nur im Rahmen der jeweils geltenden Rechte und Gesetze verarbeitet werden.
 
-## Public-Paketierung ohne externe Werkzeuge (25.09.2026)
+## Öffentliche Veröffentlichung 9.8.7
 
-Der Public-Build bindet keine Dateien aus `third_party` ein. Externe Medienwerkzeuge werden separat installiert; `TOOLS_INSTALLIEREN.txt` liegt im Paket. `scripts/check_public_bundle.py` prüft Build-Ordner und ZIP auf ausgeschlossene Werkzeugdateien und nichtleere `Programme`-/`third_party`-Verzeichnisse. Diese Prüfung muss auch nach jedem erneuten Abgleich mit dem privaten Projekt bestehen. Die benötigten Python-/Qt-Laufzeitbibliotheken bleiben enthalten; dies ist keine pauschale Lizenzfreigabe für diese Bibliotheken.
+Diese Arbeitskopie enthält den anonymisierten Stand 9.8.7 vom 02.10.2026. Der öffentliche Builder übernimmt die aktuelle Build-Sicherung und den finalen EXE-Starttest, bindet jedoch keine externen Medienwerkzeuge ein. Python-/Qt-Laufzeitbibliotheken bleiben enthalten. Die aktuellen Release-Hinweise und die transparent dokumentierten Testgrenzen stehen in `RELEASE_NOTES_v9.8.7.md`.

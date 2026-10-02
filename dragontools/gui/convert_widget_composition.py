@@ -193,6 +193,7 @@ class ConvertWidgetComposition:
         owner._ui.start_btn.clicked.connect(owner._start)
         owner._ui.dv_remux_btn.clicked.connect(owner._start_dv_remux)
         owner._ui.move_only_btn.clicked.connect(owner._start_move_only)
+        owner.watch_scan_btn.clicked.connect(owner._scan_watch_folders_now)
         owner._ui.move_finished_btn.clicked.connect(owner._move_finished_now)
         owner._ui.pause_btn.clicked.connect(owner._toggle_pause)
         owner._ui.abort_btn.clicked.connect(owner._abort)

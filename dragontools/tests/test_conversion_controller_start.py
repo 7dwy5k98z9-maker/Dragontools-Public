@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+import pytest
 
 
 class _Button:
@@ -258,7 +259,8 @@ def test_100_percent_progress_does_not_overwrite_postprocess_star_with_hourglass
     assert ui.eta_lbl.text == "Video fertig · NFO/Trickplay wird erstellt"
 
 
-def test_single_initial_file_still_uses_parallel_thread_when_limit_is_above_one(monkeypatch):
+@pytest.mark.parametrize("jobs", [1, 2])
+def test_single_initial_file_uses_coordinator_for_live_worker_changes(monkeypatch, jobs):
     from dragontools.gui.conversion_worker_factory import ConversionConfigBuilder, ConversionWorkerFactory
 
     class _Spin:
@@ -322,12 +324,12 @@ def test_single_initial_file_still_uses_parallel_thread_when_limit_is_above_one(
     worker = factory.create_converter(
         ["einzeldatei.mkv"],
         encoder_options={"encoder": "nvenc"},
-        parallel_jobs=2,
+        parallel_jobs=jobs,
     )
 
     assert isinstance(worker, FakeParallel)
     assert worker.files == ["einzeldatei.mkv"]
-    assert worker.parallel_jobs == 2
+    assert worker.parallel_jobs == jobs
     assert worker.config.codec == "h265"
     assert worker.config.encoder_options["encoder"] == "nvenc"
 
@@ -459,3 +461,143 @@ def test_start_worker_ui_state_does_not_start_worker_when_job_journal_fails(monk
     assert ui.abort_btn.enabled is False
     assert start_enabled[-1] is True
     assert any("nicht gestartet" in text for text in logs)
+
+
+def test_start_convert_blocks_reentrant_double_start_before_worker_reports_running(monkeypatch):
+    """Regression: two click/auto-start events must never launch the same queue twice."""
+    import sys
+    import types
+
+    pyqt = types.ModuleType("PyQt6")
+    qtcore = types.ModuleType("PyQt6.QtCore")
+    qtwidgets = types.ModuleType("PyQt6.QtWidgets")
+    qtcore.QSettings = object
+    qtwidgets.QMessageBox = object
+    monkeypatch.setitem(sys.modules, "PyQt6", pyqt)
+    monkeypatch.setitem(sys.modules, "PyQt6.QtCore", qtcore)
+    monkeypatch.setitem(sys.modules, "PyQt6.QtWidgets", qtwidgets)
+    sys.modules.pop("dragontools.gui.conversion_start_coordinator", None)
+
+    import dragontools.gui.conversion_start_coordinator as module
+    from dragontools.gui.conversion_start_coordinator import ConversionStartCoordinator
+
+    starts: list[object] = []
+    logs: list[str] = []
+    worker = object()
+    state = SimpleNamespace(thread=None, start_reserved=False)
+    ui = SimpleNamespace(
+        file_list=SimpleNamespace(get_paths=lambda: ["film.mkv"]),
+        pause_btn=_Button(),
+        progress_bar=_Bar(),
+        over_cb=SimpleNamespace(isChecked=lambda: False),
+    )
+
+    class _Lifecycle:
+        def active_worker(self):
+            # Model the exact race: QThread.start() happened, but isRunning() is
+            # still False when the second event arrives.
+            return None
+
+        def connect_worker_signals(self, *_args, **_kwargs):
+            return None
+
+        def start_worker_ui_state(self, value, *_args, **_kwargs):
+            starts.append(value)
+            return True
+
+    monkeypatch.setattr(module, "parallel_jobs_for_encoder", lambda *_args, **_kwargs: 1)
+    monkeypatch.setattr(ConversionStartCoordinator, "confirm_disk_space", lambda *_args, **_kwargs: True)
+
+    coordinator = ConversionStartCoordinator(
+        state=state,
+        ui=ui,
+        log=lambda text, *_a, **_k: logs.append(str(text)),
+        collect_encoder_options=lambda: {"encoder": "cpu"},
+        get_target_paths=lambda: {},
+        refresh_queue=lambda: None,
+        set_start_enabled=lambda _value: None,
+        set_queue_edit=lambda _value: None,
+        preflight=SimpleNamespace(run_if_needed=lambda _files: True),
+        worker_factory=SimpleNamespace(create_converter=lambda *_a, **_k: worker),
+        lifecycle=_Lifecycle(),
+        progress_presenter=SimpleNamespace(reset=lambda _count: None, on_total_progress=lambda _pct: None),
+        qt_parent=SimpleNamespace(settings=object()),
+    )
+
+    coordinator.start_convert()
+    coordinator.start_convert()
+
+    assert starts == [worker]
+    assert state.start_reserved is True
+    assert state.thread is worker
+    assert any("doppelter Start" in message for message in logs)
+
+
+def test_failed_worker_launch_releases_start_reservation(monkeypatch):
+    import sys
+    import types
+
+    pyqt = types.ModuleType("PyQt6")
+    qtcore = types.ModuleType("PyQt6.QtCore")
+    qtwidgets = types.ModuleType("PyQt6.QtWidgets")
+    qtcore.QSettings = object
+    qtwidgets.QMessageBox = object
+    monkeypatch.setitem(sys.modules, "PyQt6", pyqt)
+    monkeypatch.setitem(sys.modules, "PyQt6.QtCore", qtcore)
+    monkeypatch.setitem(sys.modules, "PyQt6.QtWidgets", qtwidgets)
+    sys.modules.pop("dragontools.gui.conversion_start_coordinator", None)
+
+    import dragontools.gui.conversion_start_coordinator as module
+    from dragontools.gui.conversion_start_coordinator import ConversionStartCoordinator
+
+    state = SimpleNamespace(thread=None, start_reserved=False)
+    ui = SimpleNamespace(
+        file_list=SimpleNamespace(get_paths=lambda: ["film.mkv"]),
+        pause_btn=_Button(),
+        progress_bar=_Bar(),
+        over_cb=SimpleNamespace(isChecked=lambda: False),
+    )
+
+    class _Lifecycle:
+        def active_worker(self):
+            return None
+
+        def connect_worker_signals(self, *_args, **_kwargs):
+            return None
+
+        def start_worker_ui_state(self, *_args, **_kwargs):
+            return False
+
+    monkeypatch.setattr(module, "parallel_jobs_for_encoder", lambda *_args, **_kwargs: 1)
+    monkeypatch.setattr(ConversionStartCoordinator, "confirm_disk_space", lambda *_args, **_kwargs: True)
+
+    coordinator = ConversionStartCoordinator(
+        state=state,
+        ui=ui,
+        log=lambda *_a, **_k: None,
+        collect_encoder_options=lambda: {"encoder": "cpu"},
+        get_target_paths=lambda: {},
+        refresh_queue=lambda: None,
+        set_start_enabled=lambda _value: None,
+        set_queue_edit=lambda _value: None,
+        preflight=SimpleNamespace(run_if_needed=lambda _files: True),
+        worker_factory=SimpleNamespace(create_converter=lambda *_a, **_k: object()),
+        lifecycle=_Lifecycle(),
+        progress_presenter=SimpleNamespace(reset=lambda _count: None, on_total_progress=lambda _pct: None),
+        qt_parent=SimpleNamespace(settings=object()),
+    )
+
+    coordinator.start_convert()
+
+    assert state.thread is None
+    assert state.start_reserved is False
+
+
+def test_reset_for_run_preserves_active_start_reservation():
+    from dragontools.gui.conversion_session_state import ConversionSessionState
+
+    state = ConversionSessionState()
+    state.start_reserved = True
+    state.reset_for_run(1)
+
+    assert state.start_reserved is True

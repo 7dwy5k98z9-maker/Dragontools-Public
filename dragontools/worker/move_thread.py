@@ -90,6 +90,7 @@ class MoveThread(
         self._companion_resume_sources: dict[str, str] = dict(
             companion_resume_sources or {}
         )
+        self._settings_snapshot = self._worker_settings()
         self._trickplay_conflict_mode = self._read_trickplay_conflict_mode()
         self.abort_requested = False
         self.abort_type: str | None = None

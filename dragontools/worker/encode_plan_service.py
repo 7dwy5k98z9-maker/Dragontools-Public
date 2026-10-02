@@ -5,8 +5,8 @@ from .crop_geometry import normalize_crop_filter
 from .encode_plan import EncodePlan
 from .encoder_args import _scale
 from .hdr10_color import (
-    DV_P5_LIBPLACEBO_FILTER,
-    HDR10_SETPARAMS_FILTER,
+    dv_p5_libplacebo_filter,
+    hdr10_setparams_filter,
     should_apply_standard_hdr10_color,
 )
 from ..core.models import TargetCodec
@@ -145,15 +145,15 @@ class EncodePlanService:
         pipeline_value = str(getattr(pipeline, "value", pipeline) or "").strip().lower()
         is_standard_pipeline = pipeline_value not in {"dv", "av1_dv", "pipeline.dv", "pipeline.av1_dv"}
         if is_standard_pipeline and _is_dv5_source(media_info):
-            color_pre_filter = DV_P5_LIBPLACEBO_FILTER
-            color_post_filters = [HDR10_SETPARAMS_FILTER]
+            color_pre_filter = dv_p5_libplacebo_filter(active_options)
+            color_post_filters = [hdr10_setparams_filter(active_options)]
             self._logger.info(
                 "⚠️ DV Profil 5 erkannt (ICtCp-Farbraum) – "
                 "Farbkorrektur libplacebo aktiv (Dolby Vision P5→BT.2020/PQ)."
             )
 
         elif is_standard_pipeline and should_apply_standard_hdr10_color(media_info, active_codec):
-            color_post_filters = [HDR10_SETPARAMS_FILTER]
+            color_post_filters = [hdr10_setparams_filter(active_options)]
             if getattr(media_info, "has_dv", False):
                 self._logger.info(
                     "STANDARD-Modus: Dolby Vision wird entfernt; HDR10-Basis "

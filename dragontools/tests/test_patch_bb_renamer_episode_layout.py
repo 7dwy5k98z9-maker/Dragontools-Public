@@ -57,7 +57,7 @@ def test_episode_override_helper_rejects_out_of_range():
     assert unchanged.episode == 2
 
 
-def test_episode_button_and_equal_three_by_five_toolbar_are_wired():
+def test_episode_button_and_equal_four_by_four_toolbar_are_wired():
     root = Path(__file__).resolve().parents[1]
     view = (root / "gui" / "movie_renamer_view.py").read_text(encoding="utf-8")
     widget = (root / "gui" / "movie_renamer_widget.py").read_text(encoding="utf-8")
@@ -69,8 +69,8 @@ def test_episode_button_and_equal_three_by_five_toolbar_are_wired():
     assert "self.edit_episode_btn" in state
     assert "series_episode_override=episode_override" in resolver
 
-    # Exactly 15 actions are arranged in 3 logical rows with equal 5-column stretch.
+    # Year editing adds a sixteenth action, arranged in four equal columns.
     toolbar_block = view.split("toolbar_rows = (", 1)[1].split("for row_index", 1)[0]
-    assert toolbar_block.count("self.") == 15
-    assert "for column_index in range(5):" in view
+    assert toolbar_block.count("self.") == 16
+    assert "for column_index in range(4):" in view
     assert "QSizePolicy.Policy.Expanding" in view

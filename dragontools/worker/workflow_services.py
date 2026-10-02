@@ -68,6 +68,29 @@ class WorkflowServices:
     def build_plan(self, ctx: "WorkflowContext", override: dict) -> None:
         self._planning.build_plan(ctx, override)
 
+
+    def _apply_pipeline_result_state(self, ctx: "WorkflowContext", result) -> None:
+        ctx.sidecar_paths = list(result.sidecar_paths)
+        ctx.pipeline_verified_hdr10plus = bool(result.verified_hdr10plus)
+        ctx.pipeline_verified_dolby_vision = bool(result.verified_dolby_vision)
+        ctx.pipeline_verified_dv_crop_alignment = bool(
+            getattr(result, "verified_dv_crop_alignment", False)
+        )
+        ctx.pipeline_final_rpu_checked = bool(getattr(result, "final_rpu_checked", False))
+        ctx.pipeline_final_rpu_present = bool(getattr(result, "final_rpu_present", False))
+        ctx.pipeline_final_rpu_matches_injected = getattr(result, "final_rpu_matches_injected", None)
+        ctx.pipeline_final_rpu_expected_sha256 = str(getattr(result, "final_rpu_expected_sha256", "") or "")
+        ctx.pipeline_final_rpu_actual_sha256 = str(getattr(result, "final_rpu_actual_sha256", "") or "")
+        ctx.pipeline_final_rpu_level5_offsets = tuple(getattr(result, "final_rpu_level5_offsets", ()) or ())
+        ctx.pipeline_final_rpu_level5_dynamic = bool(getattr(result, "final_rpu_level5_dynamic", False))
+        ctx.pipeline_final_rpu_message = str(getattr(result, "final_rpu_message", "") or "")
+        failure_archive_path = str(getattr(result, "failure_archive_path", "") or "")
+        if failure_archive_path:
+            ctx.replacement_archived_path = failure_archive_path
+            self._logger.warn(f"📦 DV/HDR10+-Diagnosearchiv: {failure_archive_path}")
+        if bool(getattr(result, "preserve_failed_output", False)):
+            ctx.keep_failed_output = True
+
     def process(self, ctx: "WorkflowContext", override: dict) -> None:
         request = PipelineExecutionRequest.from_context(ctx, override)
         ctx.strategy_name = "strip_only" if request.strip_only else request.pipeline
@@ -96,20 +119,7 @@ class WorkflowServices:
             ctx.strategy_name = request.pipeline
             result = self._pipeline_executor.execute(request)
 
-        ctx.sidecar_paths = list(result.sidecar_paths)
-        ctx.pipeline_verified_hdr10plus = bool(result.verified_hdr10plus)
-        ctx.pipeline_verified_dolby_vision = bool(result.verified_dolby_vision)
-        ctx.pipeline_verified_dv_crop_alignment = bool(
-            getattr(result, "verified_dv_crop_alignment", False)
-        )
-        ctx.pipeline_final_rpu_checked = bool(getattr(result, "final_rpu_checked", False))
-        ctx.pipeline_final_rpu_present = bool(getattr(result, "final_rpu_present", False))
-        ctx.pipeline_final_rpu_matches_injected = getattr(result, "final_rpu_matches_injected", None)
-        ctx.pipeline_final_rpu_expected_sha256 = str(getattr(result, "final_rpu_expected_sha256", "") or "")
-        ctx.pipeline_final_rpu_actual_sha256 = str(getattr(result, "final_rpu_actual_sha256", "") or "")
-        ctx.pipeline_final_rpu_level5_offsets = tuple(getattr(result, "final_rpu_level5_offsets", ()) or ())
-        ctx.pipeline_final_rpu_level5_dynamic = bool(getattr(result, "final_rpu_level5_dynamic", False))
-        ctx.pipeline_final_rpu_message = str(getattr(result, "final_rpu_message", "") or "")
+        self._apply_pipeline_result_state(ctx, result)
         if result.success:
             externalized_subs = tuple(getattr(result, "externalized_subtitle_stream_indices", ()) or ())
             if request.pipeline == "dv" and bool(getattr(result, "effective_crop_known", False)):

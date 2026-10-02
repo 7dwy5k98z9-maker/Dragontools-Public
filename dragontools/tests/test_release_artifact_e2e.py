@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import ast
+import subprocess
+import sys
 import zipfile
 
 import pytest
@@ -56,6 +58,8 @@ def test_source_release_roundtrip_validates_cleanly(tmp_path):
     assert by_title["Build-Umgebung"].status == "ok"
     assert by_title["CI-Workflow"].status == "ok"
     assert by_title["DV/HDR-Integrationstests"].status == "ok"
+    privacy = [check for check in checks if check.title.startswith("Datenschutz:")]
+    assert privacy == []
 
 
 def test_architecture_tests_do_not_depend_on_project_cwd():
@@ -91,3 +95,41 @@ def test_source_release_omits_generated_pyinstaller_specs(tmp_path):
         names = archive.namelist()
     assert "module.py" in names
     assert not any(name.casefold().endswith(".spec") for name in names)
+
+
+def test_main_entrypoint_version_switch_is_headless_and_uses_central_version():
+    from dragontools.core.version import APP_VERSION
+
+    completed = subprocess.run(
+        [sys.executable, str(PROJECT_ROOT / "DragonToolsV9.py"), "--version"],
+        cwd=PROJECT_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=20,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert completed.stdout.strip() == APP_VERSION
+
+
+def test_private_snapshot_manifest_matches_current_source_inventory():
+    manifest = PROJECT_ROOT / "SNAPSHOT_CONTENTS.json"
+    if not manifest.is_file():
+        pytest.skip("Kein privates Snapshot-Manifest in diesem Source-Stand")
+
+    from extras.snapshot_manifest import verify_snapshot_manifest
+
+    assert verify_snapshot_manifest(PROJECT_ROOT) == []
+
+
+def test_smoke_test_initializes_real_qapplication_contract():
+    source = (PROJECT_ROOT / "DragonToolsV9.py").read_text(encoding="utf-8")
+    assert 'QApplication(["DragonTools", "--smoke-test"])' in source
+    assert "probe_widget = QWidget()" in source
+    assert "probe_widget.ensurePolished()" in source
+
+
+def test_pytest_default_paths_include_standalone_generator_suite():
+    config = (PROJECT_ROOT / "pytest.ini").read_text(encoding="utf-8")
+    assert "dragontools/tests" in config
+    assert "dragon_hdr10plus_generator/tests" in config

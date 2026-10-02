@@ -57,6 +57,9 @@ def test_about_html_is_short_general_overview(tmp_path):
     assert f"Dragon Tools V{APP_VERSION}" in html
     assert "Video &amp; HDR" in html
     assert "Dolby Vision" in html and "HDR10+" in html
+    assert "Untertitel &amp; Batch-Steuerung" in html
+    assert "Deutsch/Englisch" in html and "frei editierbare Spurtitel" in html
+    assert "NFO und Trickplay" in html and "Worker-Anzahl 1–8" in html
     assert "Projektumfang" in html
     assert "Dragon HDR10+ Generator" in html
     assert "Externe Werkzeuge &amp; optionale Komponenten" in html
@@ -67,3 +70,22 @@ def test_about_html_is_short_general_overview(tmp_path):
     assert "Metadaten &amp; Mediathek" not in html
     assert "Entwicklungszeit" not in html
     assert "Shortcuts" not in html
+
+def test_collect_project_statistics_includes_generator_entry_and_extras(tmp_path):
+    from dragontools.core.project_info import collect_project_statistics
+
+    (tmp_path / "DragonToolsV9.py").write_text("print('x')\n", encoding="utf-8")
+    generator = tmp_path / "dragon_hdr10plus_generator"
+    generator.mkdir(parents=True)
+    (generator / "hdrplusgenerator_entry.py").write_text("ENTRY = True\n", encoding="utf-8")
+    extras = tmp_path / "extras" / "comfyui"
+    extras.mkdir(parents=True)
+    (extras / "nodes.py").write_text("NODE = True\n", encoding="utf-8")
+
+    stats = collect_project_statistics(tmp_path)
+
+    assert stats.dynamic is True
+    assert stats.python_files == 3
+    assert stats.total_lines == 3
+    assert stats.code_lines == 3
+

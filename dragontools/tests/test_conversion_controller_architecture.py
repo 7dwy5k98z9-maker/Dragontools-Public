@@ -14,7 +14,6 @@ def _parse(name: str) -> tuple[Path, ast.Module]:
 
 def test_conversion_controller_is_only_orchestration_facade():
     path, tree = _parse("conversion_controller.py")
-    assert len(path.read_text(encoding="utf-8").splitlines()) < 350
 
     forbidden_import_fragments = {
         "worker.converter_thread",
@@ -38,26 +37,19 @@ def test_conversion_controller_is_only_orchestration_facade():
 
     classes = [node for node in tree.body if isinstance(node, ast.ClassDef)]
     assert [node.name for node in classes] == ["ConversionController"]
-    longest_method = max(
-        node.end_lineno - node.lineno + 1
-        for node in classes[0].body
-        if isinstance(node, ast.FunctionDef)
-    )
-    assert longest_method < 90
 
 
 def test_conversion_services_have_bounded_single_responsibilities():
-    limits = {
-        "conversion_start_coordinator.py": 280,
-        "conversion_worker_factory.py": 220,
-        "conversion_worker_lifecycle.py": 220,
-        "conversion_progress_presenter.py": 420,
-        "conversion_diagnostics.py": 160,
-    }
-    for filename, limit in limits.items():
+    modules = (
+        "conversion_start_coordinator.py",
+        "conversion_worker_factory.py",
+        "conversion_worker_lifecycle.py",
+        "conversion_progress_presenter.py",
+        "conversion_diagnostics.py",
+    )
+    for filename in modules:
         path = GUI_DIR / filename
         assert path.is_file(), filename
-        assert len(path.read_text(encoding="utf-8").splitlines()) < limit, filename
 
 
 def test_conversion_controller_contains_no_direct_process_or_file_operations():

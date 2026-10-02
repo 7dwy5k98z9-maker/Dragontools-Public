@@ -65,7 +65,13 @@ def _configure_hdr10plus_generator(worker, tools, options: dict) -> None:
     generator_version = ""
 
     if generator_enabled and generator_available:
-        probe = HDR10PlusGeneratorClient(generator_path, worker=worker, log=worker.log).probe_version()
+        probe = HDR10PlusGeneratorClient(
+            generator_path,
+            worker=worker,
+            log=worker.log,
+            ffmpeg_path=getattr(tools, "ffmpeg", "ffmpeg"),
+            ffprobe_path=getattr(tools, "ffprobe", "ffprobe"),
+        ).probe_version()
         generator_available = bool(probe.success and probe.version)
         generator_version = probe.version if generator_available else ""
         if not generator_available:

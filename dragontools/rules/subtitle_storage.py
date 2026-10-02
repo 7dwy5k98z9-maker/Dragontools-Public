@@ -37,6 +37,24 @@ def text_to_srt_sidecar_enabled(subtitle_rules: dict | None) -> bool:
     )
 
 
+
+def pgs_to_srt_enabled(subtitle_rules: dict | None) -> bool:
+    """Ob ausgewählte PGS/SUP-Spuren zusätzlich per OCR als SRT erzeugt werden."""
+    rules = subtitle_rules or {}
+    return _safe_bool(rules.get("pgs_to_srt_enabled"), False)
+
+
+def pgs_original_storage(subtitle_rules: dict | None) -> str:
+    """Speicherziel für die unveränderte PGS-Originalspur.
+
+    ``internal_mkv`` behält PGS bei MKV intern; bei MP4 ist technisch weiterhin
+    ein Sidecar erforderlich. ``sidecar`` exportiert PGS auch bei MKV extern.
+    """
+    rules = subtitle_rules or {}
+    value = str(rules.get("pgs_original_storage", "internal_mkv") or "internal_mkv").strip().lower()
+    return value if value in {"internal_mkv", "sidecar"} else "internal_mkv"
+
+
 def ass_to_srt_sidecar_enabled(subtitle_rules: dict | None) -> bool:
     """Kompatibilitätsalias für Regeln aus Schema 5."""
     return text_to_srt_sidecar_enabled(subtitle_rules)
@@ -50,6 +68,8 @@ def any_sidecar_export_enabled(subtitle_rules: dict | None, *, container: str = 
     return (
         additional_sidecars_enabled(subtitle_rules)
         or text_to_srt_sidecar_enabled(subtitle_rules)
+        or pgs_to_srt_enabled(subtitle_rules)
+        or pgs_original_storage(subtitle_rules) == "sidecar"
     )
 
 

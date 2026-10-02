@@ -13,6 +13,9 @@ from types import SimpleNamespace
 def test_tool_runner_does_not_leave_resource_warnings():
     from dragontools.worker.tool_runner import run_tool
 
+    # Fremde Ressourcen aus vorherigen Tests vor dem Messfenster einsammeln.
+    # Warnungen innerhalb des Fensters gehören damit tatsächlich run_tool.
+    gc.collect()
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always", ResourceWarning)
         for _ in range(3):
@@ -45,6 +48,7 @@ def test_converter_progress_run_closes_pipes_without_resource_warning():
             return None
 
     helper = ConverterProgressHelper(Worker())
+    gc.collect()
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always", ResourceWarning)
         assert helper.run([sys.executable, "-c", "print('ok')"], timeout_s=10) == 0

@@ -341,3 +341,30 @@ def test_comfyui_runtime_marks_hdrtvdm_ready_only_with_api_assets_nodes_and_work
     assert options["_comfyui_workflow_valid"] is True
     assert "params_3DM.pth" in options["_comfyui_model_checkpoint"]
     assert any("HDRTVDM-Modell" in message for _, message in logs)
+
+
+def test_comfyui_video_wait_aborts_after_inactivity(monkeypatch, tmp_path: Path):
+    from dragontools.worker import comfyui_video_worker as module
+    from dragontools.worker.comfyui_client import ComfyUIResult
+
+    clock = {"value": 0.0}
+    monkeypatch.setattr(module.time, "monotonic", lambda: clock["value"])
+    monkeypatch.setattr(module.time, "sleep", lambda seconds: clock.__setitem__("value", clock["value"] + seconds))
+
+    class Client:
+        def history(self, _prompt_id):
+            return ComfyUIResult(True, payload={"p": {"status": {"status_str": "running", "completed": False}}})
+        def cancel(self, _prompt_id):
+            return ComfyUIResult(True, message="cancelled")
+
+    service = module.ComfyUIHDRVideoService(tools=SimpleNamespace(), worker=None)
+    result = service._wait_for_completion(
+        Client(),
+        "p",
+        tmp_path / "missing_manifest.json",
+        "source.mkv",
+        inactivity_timeout_s=30.0,
+    )
+    assert result.success is False
+    assert result.error == "INACTIVITY_TIMEOUT"
+    assert "source.mkv" in result.message

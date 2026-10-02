@@ -1,24 +1,12 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-import json
-import math
+from tempfile import TemporaryFile
 from dataclasses import dataclass
 from fractions import Fraction
 
 from ..core.process_runner import tool_available
-
-
-@dataclass(frozen=True, slots=True)
-class PacketStreamSnapshot:
-    stream_index: int
-    codec_type: str
-    ordinal: int
-    packet_count: int
-    hashes: tuple[str, ...]
-    max_pts_s: float | None
-    max_dts_s: float | None
-    max_duration_s: float | None
+from .packet_snapshot import PacketStreamSnapshot, read_snapshot
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,14 +38,14 @@ class PacketIntegrityVerifier:
         tolerance_s: float = 0.4,
     ) -> PacketIntegrityResult:
         if not tool_available(self._ffprobe_path):
-            return PacketIntegrityResult(True, False, ("ffprobe fehlt für die Paket-/Hashprüfung; 3-Tool-/Dauerprüfung bleibt aktiv.",))
+            return PacketIntegrityResult(False, False, ("ffprobe fehlt für die Paket-/Hashprüfung; automatische Reparaturübernahme gesperrt.",))
         try:
             before = self._snapshot(before_path)
             after = self._snapshot(after_path)
         except Exception as exc:
             return PacketIntegrityResult(
-                True, False,
-                (f"Paket-/Hashprüfung war nicht verfügbar: {exc}. 3-Tool-/Dauerprüfung bleibt aktiv.",),
+                False, False,
+                (f"Paket-/Hashprüfung war nicht verfügbar: {exc}. Automatische Reparaturübernahme gesperrt.",),
             )
 
         messages: list[str] = []
@@ -81,9 +69,7 @@ class PacketIntegrityVerifier:
                 )
                 continue
             if old.hashes != new.hashes:
-                first_diff = self._first_hash_difference(old.hashes, new.hashes)
-                suffix = f" ab Paket {first_diff + 1}" if first_diff is not None else ""
-                messages.append(f"{label}: Paket-Nutzdatenhashes unterscheiden sich{suffix}.")
+                messages.append(f"{label}: Paket-Nutzdatenhashes unterscheiden sich.")
 
         video = next((item for item in after if item.codec_type == "video" and item.ordinal == 0), None)
         if video is None:
@@ -122,71 +108,14 @@ class PacketIntegrityVerifier:
             "-of", "json",
             str(path),
         ]
-        run = self._run_tool(command, label="ffprobe Paket-/SHA256-Prüfung")
-        if getattr(run, "returncode", 1) != 0:
-            detail = str(getattr(run, "stderr", "") or getattr(run, "stdout", "") or "ffprobe fehlgeschlagen")
-            raise RuntimeError(detail.strip())
-        payload = json.loads(str(getattr(run, "stdout", "") or "{}"))
-        streams = [
-            stream for stream in (payload.get("streams") or [])
-            if str(stream.get("codec_type") or "") in {"video", "audio", "subtitle"}
-        ]
-        streams.sort(key=lambda item: int(item.get("index", 0)))
-        ordinals: dict[str, int] = {"video": 0, "audio": 0, "subtitle": 0}
-        meta: dict[int, tuple[str, int]] = {}
-        for stream in streams:
-            index = int(stream.get("index", 0))
-            kind = str(stream.get("codec_type") or "")
-            ordinal = ordinals[kind]
-            ordinals[kind] += 1
-            meta[index] = (kind, ordinal)
-
-        packet_rows: dict[int, list[dict]] = {index: [] for index in meta}
-        for packet in payload.get("packets") or []:
-            try:
-                index = int(packet.get("stream_index"))
-            except (TypeError, ValueError):
-                continue
-            if index in packet_rows:
-                packet_rows[index].append(packet)
-
-        snapshots: list[PacketStreamSnapshot] = []
-        for index, (kind, ordinal) in sorted(meta.items(), key=lambda item: item[0]):
-            packets = packet_rows.get(index, [])
-            hashes = tuple(str(packet.get("data_hash") or "") for packet in packets)
-            if packets and any(not value for value in hashes):
-                raise ValueError(f"ffprobe lieferte für {kind} #{ordinal + 1} nicht für jedes Paket einen SHA-256-Hash")
-            snapshots.append(
-                PacketStreamSnapshot(
-                    stream_index=index,
-                    codec_type=kind,
-                    ordinal=ordinal,
-                    packet_count=len(packets),
-                    hashes=hashes,
-                    max_pts_s=self._max_time(packets, "pts_time"),
-                    max_dts_s=self._max_time(packets, "dts_time"),
-                    max_duration_s=self._max_time(packets, "duration_time"),
-                )
-            )
-        return tuple(snapshots)
-
-    @staticmethod
-    def _max_time(packets: list[dict], key: str) -> float | None:
-        values: list[float] = []
-        for packet in packets:
-            try:
-                value = float(packet.get(key))
-            except (TypeError, ValueError):
-                continue
-            if math.isfinite(value):
-                values.append(value)
-        return max(values) if values else None
-
-    @staticmethod
-    def _first_hash_difference(before: tuple[str, ...], after: tuple[str, ...]) -> int | None:
-        for index, (left, right) in enumerate(zip(before, after)):
-            if left != right:
-                return index
-        if len(before) != len(after):
-            return min(len(before), len(after))
-        return None
+        # The child writes directly to disk; parse one packet at a time.
+        with TemporaryFile(mode="w+", encoding="utf-8") as output:
+            run = self._run_tool(command, label="ffprobe Paket-/SHA256-Prüfung", stdout_file=output)
+            if getattr(run, "returncode", 1) != 0:
+                raise RuntimeError(str(getattr(run, "stderr", "") or "ffprobe fehlgeschlagen")[-4096:])
+            # Compatibility with injected test/tool adapters returning text.
+            if getattr(run, "stdout", ""):
+                output.write(run.stdout)
+                run.stdout = ""
+            output.seek(0)
+            return read_snapshot(output)

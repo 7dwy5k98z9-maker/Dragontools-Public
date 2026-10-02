@@ -15,6 +15,11 @@ class MovieRenamerResolveSearchMixin:
             key = path_compare_key(path)
             request_id = self._request_versions.get(key, 0) + 1
             self._request_versions[key] = request_id
+            # Snapshot the year for every search route; legacy jobs without an
+            # override retain their existing shape and filename-year behavior.
+            year = self.table_controller.row_year_override(job[0])
+            if year is not None:
+                job = (*job[:7], *([None] * max(0, 7 - len(job))), year)
             versioned.append((*job, request_id))
         return versioned
 

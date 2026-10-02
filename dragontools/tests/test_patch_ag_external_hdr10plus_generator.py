@@ -203,6 +203,57 @@ def test_generator_version_contract_and_exact_cli_command_with_unicode_paths(tmp
     assert calls[-1] == [str(exe), "analyze", "--input", str(source), "--output", str(output)]
 
 
+
+
+def test_generator_analyze_uses_inactivity_timeout_not_absolute_runtime_limit(tmp_path):
+    exe = _fake_executable(tmp_path)
+    source = tmp_path / "source.mkv"
+    source.write_bytes(b"video")
+    output = tmp_path / "hdr10plus.json"
+    captured: dict[str, object] = {}
+
+    def fake_run(command, **kwargs):
+        captured.update(kwargs)
+        Path(command[command.index("--output") + 1]).write_text('{"SceneInfo":[]}', encoding="utf-8")
+        return ToolRunResult(
+            command=list(command),
+            returncode=0,
+            stdout=json.dumps({"success": True, "frames": 1, "scenes": 1}),
+        )
+
+    client = HDR10PlusGeneratorClient(str(exe), run_tool_fn=fake_run)
+    result = client.analyze(source, output)
+
+    assert result.success is True
+    assert captured["timeout_s"] == 600
+    assert captured["timeout_mode"] == "inactivity"
+    assert captured["abort_on_request"] is True
+
+
+def test_generator_analyze_timeout_is_structured_and_removes_partial_output(tmp_path):
+    exe = _fake_executable(tmp_path)
+    output = tmp_path / "hdr10plus.json"
+
+    def fake_run(command, **_kwargs):
+        output.write_text("partial", encoding="utf-8")
+        return ToolRunResult(
+            command=list(command),
+            returncode=124,
+            stderr="timeout",
+            timed_out=True,
+            timeout_s=600,
+            timeout_mode="inactivity",
+        )
+
+    result = HDR10PlusGeneratorClient(str(exe), run_tool_fn=fake_run).analyze(
+        tmp_path / "source.mkv", output
+    )
+    assert result.success is False
+    assert result.error == "TIMEOUT"
+    assert result.timed_out is True
+    assert not output.exists()
+
+
 def test_generator_structured_failure_exitcode_invalid_json_and_abort(tmp_path):
     exe = _fake_executable(tmp_path)
 
@@ -497,7 +548,7 @@ def test_source_packager_keeps_standalone_generator_project_separate_from_pyinst
     root = Path(__file__).resolve().parents[2]
     source_zip = (root / "DragonTools_Source_ZIP.bat").read_text(encoding="utf-8")
     build = (root / "build_v9.bat").read_text(encoding="utf-8")
-    assert 'CopyRequiredDir "dragon_hdr10plus_generator"' in source_zip
+    assert "create_source_release_zip" in source_zip
     assert "dragon_hdr10plus_generator" not in build
 
 
@@ -525,3 +576,51 @@ def test_dv_source_cannot_force_generated_hdr10plus_through_non_dv_hdrplus_pipel
             hdr10plus_generator_enabled=True,
             hdr10plus_generator_available=True,
         )
+
+
+def test_generator_client_forwards_explicit_ffmpeg_and_ffprobe_paths(tmp_path):
+    exe = tmp_path / "HDRPlusGenerator.exe"
+    exe.write_bytes(b"exe")
+    client = HDR10PlusGeneratorClient(
+        str(exe),
+        ffmpeg_path=r"C:\Tools mit Leerzeichen\ffmpeg.exe",
+        ffprobe_path=r"C:\Tools mit Leerzeichen\ffprobe.exe",
+    )
+    command = client.build_analyze_command("input ä.mkv", "output ä.json")
+    assert command[-4:] == [
+        "--ffmpeg", r"C:\Tools mit Leerzeichen\ffmpeg.exe",
+        "--ffprobe", r"C:\Tools mit Leerzeichen\ffprobe.exe",
+    ]
+
+
+def test_generator_client_keeps_path_fallback_when_tool_paths_are_omitted(tmp_path):
+    exe = tmp_path / "HDRPlusGenerator.exe"
+    exe.write_bytes(b"exe")
+    command = HDR10PlusGeneratorClient(str(exe)).build_analyze_command("in.mkv", "out.json")
+    assert "--ffmpeg" not in command
+    assert "--ffprobe" not in command
+
+
+def test_generator_failure_preserves_valid_json_as_untrusted_diagnostic(tmp_path):
+    exe = _fake_executable(tmp_path)
+    output = tmp_path / "hdr10plus.json"
+
+    def fake_run(command, **_kwargs):
+        output.write_text('{"SceneInfo": [{"SceneFrameIndex": [0, 10]}]}', encoding="utf-8")
+        return ToolRunResult(
+            command=list(command),
+            returncode=7,
+            stdout=json.dumps({
+                "success": False,
+                "error": "POST_ANALYSIS_FAILURE",
+                "message": "analysis written, later stage failed",
+            }),
+        )
+
+    result = HDR10PlusGeneratorClient(str(exe), run_tool_fn=fake_run).analyze(
+        tmp_path / "source.mkv", output
+    )
+    assert result.success is False
+    assert result.diagnostic_output_preserved is True
+    assert output.is_file()
+    assert json.loads(output.read_text(encoding="utf-8"))["SceneInfo"]

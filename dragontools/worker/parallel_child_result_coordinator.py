@@ -13,6 +13,31 @@ class ParallelChildResultCoordinator:
         self._queue = queue_state
         self._results = result_state
 
+    def on_encode_stage_complete(
+        self,
+        child,
+        input_path: str,
+        output_path: str,
+        *,
+        abort_requested: bool,
+        start_pending_workers,
+        emit_encode_stage_complete,
+        emit_aggregate_progress,
+        finish_if_done,
+    ) -> None:
+        if input_path in self._queue.terminal_inputs:
+            return
+        self._queue.dv_postprocessing_inputs.add(input_path)
+        self._queue.file_progress_pct[input_path] = 90
+        if child in self._registry.active_workers:
+            self._registry.active_workers.discard(child)
+            self._registry.postprocessing_workers.add(child)
+            if not abort_requested:
+                invoke_callback(start_pending_workers)
+        invoke_callback(emit_encode_stage_complete, input_path, output_path)
+        invoke_callback(emit_aggregate_progress)
+        invoke_callback(finish_if_done)
+
     def on_file_result(
         self,
         child,
@@ -48,6 +73,7 @@ class ParallelChildResultCoordinator:
 
         if status in {"✅", "❌", "⚠️", "⏭️"}:
             self._queue.postprocessing_inputs.discard(input_path)
+            self._queue.dv_postprocessing_inputs.discard(input_path)
             self._queue.terminal_inputs.add(input_path)
             self._queue.file_progress_pct.pop(input_path, None)
         invoke_callback(emit_file_result, input_path, output_path, status)
@@ -111,6 +137,7 @@ class ParallelChildResultCoordinator:
             self._results.failure_details[path] = details
             self._queue.terminal_inputs.add(path)
             self._queue.postprocessing_inputs.discard(path)
+            self._queue.dv_postprocessing_inputs.discard(path)
             self._queue.file_progress_pct.pop(path, None)
             self._queue.assigned.pop(path_compare_key(path), None)
             if child_failed_count <= 0:

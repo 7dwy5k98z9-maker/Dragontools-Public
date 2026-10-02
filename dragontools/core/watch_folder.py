@@ -11,6 +11,24 @@ from typing import Callable, Mapping
 from .path_syntax import is_video_file, normalize_user_path, path_compare_key, strip_long_path_prefix, to_long_path
 
 _ALLOWED_CODECS = {"h265", "h264", "av1"}
+_MANAGED_DIRECTORY_NAMES = {
+    "archiv",
+    "fehler",
+    "__temp_overwrite__",
+    "__temp_dv_remux__",
+}
+_MANAGED_DIRECTORY_PREFIXES = (
+    "dragontools_",
+)
+
+
+def _is_managed_directory_name(name: str) -> bool:
+    folded = str(name or "").casefold()
+    return (
+        folded in _MANAGED_DIRECTORY_NAMES
+        or folded.startswith(_MANAGED_DIRECTORY_PREFIXES)
+        or (folded.startswith(".") and folded.endswith(".partial"))
+    )
 
 
 @dataclass(frozen=True)
@@ -73,7 +91,10 @@ def _iter_rule_files(rule: WatchFolderRule):
     if not root or not os.path.isdir(root):
         return
     if rule.recursive:
-        for dirpath, _dirnames, filenames in os.walk(root):
+        for dirpath, dirnames, filenames in os.walk(root):
+            # Only prune descendants.  The configured watch root itself is
+            # intentionally still valid even when its basename is e.g. Archiv.
+            dirnames[:] = [name for name in dirnames if not _is_managed_directory_name(name)]
             for filename in filenames:
                 path = strip_long_path_prefix(os.path.join(dirpath, filename))
                 if is_video_file(path):
@@ -109,8 +130,14 @@ class WatchFolderScanner:
         *,
         now: float | None = None,
         should_stop: Callable[[], bool] | None = None,
+        stable_seconds_override: int | None = None,
     ) -> list[WatchFolderCandidate]:
         stamp = time.monotonic() if now is None else float(now)
+        stable_seconds = (
+            self.stable_seconds
+            if stable_seconds_override is None
+            else max(0, int(stable_seconds_override))
+        )
         ready: list[WatchFolderCandidate] = []
         seen: set[str] = set()
 
@@ -138,11 +165,11 @@ class WatchFolderScanner:
                 observation = self._observations.get(key)
                 if observation is None or observation.signature != signature:
                     self._observations[key] = _Observation(signature, stamp)
-                    if self.stable_seconds > 0:
+                    if stable_seconds > 0:
                         continue
                     observation = self._observations[key]
 
-                if stamp - observation.stable_since < self.stable_seconds:
+                if stamp - observation.stable_since < stable_seconds:
                     continue
                 ready.append(WatchFolderCandidate(
                     rule_id=rule.rule_id,

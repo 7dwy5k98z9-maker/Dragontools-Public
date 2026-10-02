@@ -305,7 +305,7 @@ def test_subtitle_migration_renames_schema5_ass_srt_option():
         "ass_to_srt_sidecar_enabled": "1",
     })
 
-    assert migrated["_schema_version"] == 6
+    assert migrated["_schema_version"] == 7
     assert migrated["text_to_srt_sidecar_enabled"] is True
     assert "ass_to_srt_sidecar_enabled" not in migrated
 

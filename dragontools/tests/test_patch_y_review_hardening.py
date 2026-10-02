@@ -89,11 +89,10 @@ def test_real_windows_dpapi_roundtrip():
     assert secret_settings._dpapi_unprotect(protected) == plain
 
 
-def test_source_zip_bat_writes_portable_entry_names_and_rejects_backslashes():
+def test_source_zip_bat_uses_single_canonical_python_packager():
     source = (ROOT / "DragonTools_Source_ZIP.bat").read_text(encoding="utf-8")
 
-    assert ".CreateEntry($entryName" in source
-    assert ".Replace('\\','/')" in source
-    assert "$badSeparators=" in source
-    assert "ZIP entries use invalid backslash separators" in source
+    assert "create_source_release_zip" in source
+    assert "validate_release" in source
     assert "CreateFromDirectory" not in source
+    assert "robocopy" not in source.casefold()

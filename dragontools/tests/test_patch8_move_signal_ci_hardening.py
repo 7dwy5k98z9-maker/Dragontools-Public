@@ -227,6 +227,14 @@ def test_current_ci_and_build_contracts_pass():
     assert _check_ci_workflow(PROJECT_ROOT).status == "ok"
     assert _check_build_environment(PROJECT_ROOT).status == "ok"
 
+    workflow = (PROJECT_ROOT / ".github" / "workflows" / "tests.yml").read_text(encoding="utf-8")
+    assert "pyinstaller-smoke:" in workflow
+    assert "DragonToolsSmoke.exe" in workflow
+    assert "--smoke-test" in workflow
+    assert "hdrtvdm-bridge:" in workflow
+    assert "test_patch_ai_hdrtvdm_bridge_optional.py" in workflow
+    assert "refs/tags/v" in workflow
+
 
 def test_critical_qt_connections_do_not_install_injected_signal_objects_as_slots():
     launcher = (WORKER_DIR / "parallel_worker_launcher.py").read_text(encoding="utf-8")

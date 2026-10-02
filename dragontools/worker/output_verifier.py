@@ -16,6 +16,7 @@ from .output_contract_verifier import (
 )
 from .output_probe import probe_output
 from .workflow_engine import WorkflowVerifyResult
+from .timestamp_diagnostics import wrap_message
 
 
 class OutputVerifier:
@@ -145,6 +146,12 @@ class OutputVerifier:
             result.messages.append("Quelle hatte Audio, aber die Ausgabe enthält keine Audiospur.")
         if not result.duration_ok:
             result.messages.append("Ausgabedauer ist nicht plausibel.")
+            warning = wrap_message(
+                expected_duration_ms / 1000.0 if expected_duration_ms else None,
+                probe.duration_s, container=container, stream="Container; Stream nicht bestimmt",
+            )
+            if warning:
+                result.messages.append(warning)
         if expected_contract is not None:
             apply_contract(
                 result, expected_contract, video_streams=videos, audio_streams=audios,

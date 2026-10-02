@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from ..core.output_timestamps import build_output_timestamp_args
 
 from ..core.media_analyzer import analyze_media
 from ..core.quality_tester import QualityMetricResult, automatic_quality_segments, parse_extra_args, parse_quality_segments, quality_output_name
@@ -103,7 +104,7 @@ class QualityTestService:
     def encode_segment(self, input_path: str, output_path: str, run, segment) -> None:
         cmd = [str(self._tools.ffmpeg), "-y", "-hide_banner", "-loglevel", "error",
                "-ss", f"{segment.start_s:.3f}", "-t", f"{segment.duration_s:.3f}", "-i", input_path,
-               "-map", "0:v:0", "-an", "-sn", *self.video_args(run), output_path]
+               "-map", "0:v:0", "-an", "-sn", *self.video_args(run), *build_output_timestamp_args(output_path), output_path]
         self._runner.run(cmd, label="Encode")
 
     def probe_output(self, output_path: str) -> dict:

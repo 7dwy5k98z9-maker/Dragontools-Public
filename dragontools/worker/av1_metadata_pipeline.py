@@ -7,6 +7,7 @@ from typing import Callable
 
 from ..core.media_analyzer import analyze_media, inspect_dynamic_hdr_with_mediainfo
 from ..core.media_metadata import normalize_video_codec
+from ..core.output_timestamps import build_output_timestamp_args
 from .hdr10_color import HDR10_OUTPUT_ARGS
 from .standard_pipeline_runner import _clear_reencoded_video_stat_tags
 from .subtitle_sidecar_service import SubtitleSidecarService
@@ -92,6 +93,7 @@ class _AV1MetadataPipelineBase:
     def _base_command(self, request: PipelineExecutionRequest, video_args: list[str]) -> list[str]:
         plan = request.plan
         output_args = ["-map_metadata", "0"] + _clear_reencoded_video_stat_tags()
+        output_args += build_output_timestamp_args(request.container)
         if str(request.container).lower() in {"mp4", "m4v", "mov"}:
             output_args += ["-movflags", "+faststart"]
         return (

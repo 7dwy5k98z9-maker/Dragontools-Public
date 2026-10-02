@@ -11,6 +11,17 @@ from ..core.callback_dispatch import invoke_callback, is_callback_like
 
 
 class ConvertWidgetWatchMixin:
+    def _scan_watch_folders_now(self) -> None:
+        from .watch_folder_main_window_bridge import scan_watch_folders_now
+
+        if not scan_watch_folders_now(self.window()):
+            self._log("Watch-Folder: manueller Scan konnte nicht gestartet werden.", "warn")
+
+    def _watch_intake_is_blocked(self) -> bool:
+        shutdown_control = getattr(self, "shut_cb", None)
+        return bool(getattr(self._state, "watch_intake_blocked", False)
+                    or (shutdown_control is not None and shutdown_control.isChecked()))
+
     def enqueue_watch_folder_files(
         self,
         paths: list[str],
@@ -19,6 +30,8 @@ class ConvertWidgetWatchMixin:
         auto_start: bool = True,
         completion_callback=None,
     ) -> list[str]:
+        if self._watch_intake_is_blocked():
+            return []
         if self._is_queue_blocking_move_active():
             self._log("Watch-Folder wartet: Queue ist während des Verschiebens gesperrt.", "warn")
             return []
@@ -27,11 +40,7 @@ class ConvertWidgetWatchMixin:
         self._watch_auto_start_eligible = eligible
         owners = getattr(self, "_watch_owned_items", {})
         self._watch_owned_items = owners
-        for key, (path, item) in list(owners.items()):
-            if self.file_list.item_for_path(path) is not item:
-                owners.pop(key, None)
-                eligible.discard(key)
-                getattr(self, "_watch_completion_callbacks", {}).pop(key, None)
+        self._watch_prune_ownership(owners, eligible)
         handled: list[str] = []
         added: list[str] = []
         for path in paths:
@@ -89,6 +98,13 @@ class ConvertWidgetWatchMixin:
                     eligible.discard(path_compare_key(path))
         return handled
 
+    def _watch_prune_ownership(self, owners, eligible) -> None:
+        for key, (path, item) in list(owners.items()):
+            if self.file_list.item_for_path(path) is not item:
+                owners.pop(key, None)
+                eligible.discard(key)
+                getattr(self, "_watch_completion_callbacks", {}).pop(key, None)
+
     def _watch_live_add(self, paths: list[str]) -> set[str]:
         thread = self._state.thread
         if thread is None or not hasattr(thread, "add_file"):
@@ -109,6 +125,9 @@ class ConvertWidgetWatchMixin:
         return rejected
 
     def _watch_maybe_auto_start(self) -> None:
+        if self._watch_intake_is_blocked():
+            getattr(self, "_watch_auto_start_eligible", set()).clear()
+            return
         if self._active_worker() is not None:
             return
         current = self.file_list.get_paths()

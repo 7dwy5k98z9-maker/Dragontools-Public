@@ -8,6 +8,7 @@ from typing import Callable
 
 from .dv_command_runner import DVCommandRunner
 from .dv_pipeline_context import DVPipelineState
+from .frame_count_evidence import FrameCountEvidence
 from .dv_pipeline_timeouts import (
     timeout_dovi_editor as _TIMEOUT_DOVI_EDITOR,
     timeout_hevc_extract as _TIMEOUT_HEVC_EXTRACT,
@@ -141,10 +142,13 @@ class DVDynamicMetadataService:
                 return False
 
         state.rpu_input_hevc = rpu_input_hevc
+        if not requires_hdr10plus:
+            state.rpu_input_frame_evidence = getattr(state, "encoded_frame_evidence", None)
         if not validate_rpu_frame_parity(
             runner,
             rpu_path=state.rpu_to_use,
             hevc_path=rpu_input_hevc,
+            frame_evidence=state.rpu_input_frame_evidence,
         ):
             return False
 
@@ -188,6 +192,7 @@ class DVDynamicMetadataService:
             if self._generator_client is None:
                 self._log("❌ [DV+HDR10+] Generator-Service ist nicht verfügbar.", "error")
                 return None
+            self._log("🧠 [DV+HDR10+] Phase: HDR10+-Analyse", "info")
             generated = self._generator_client.analyze(files.enc_hevc, files.hdr10plus_json)
             if not generated.success:
                 reason = generated.message or generated.error or f"Exitcode {generated.returncode}"
@@ -196,7 +201,32 @@ class DVDynamicMetadataService:
                 return None
             if not self._assert_nonempty_file(files.hdr10plus_json, "DV+HDR10+ Generator JSON"):
                 return None
+            if generated.frames and generated.frame_count_reliability == "reliable":
+                encoded_evidence = getattr(state, "encoded_frame_evidence", None)
+                temporal = encoded_evidence.temporal_mapping if encoded_evidence is not None else "unknown"
+                state.hdr10plus_frame_evidence = FrameCountEvidence.reliable(
+                    generated.frames,
+                    source=generated.frame_count_source or "hdr10plus_analysis_actual",
+                    path=files.enc_hevc,
+                    stage="STEP 6/7 HDR10+-Analyse",
+                    temporal_mapping=temporal,
+                )
+                encoded = encoded_evidence
+                if encoded is not None and encoded.is_reliable_for(files.enc_hevc):
+                    if encoded.count != generated.frames:
+                        reason = (
+                            "Encoder-/HDR10+-Analyse-Bildzahl weicht ab: "
+                            f"Encode={encoded.count}, Analyse={generated.frames}."
+                        )
+                        self._temp_state.record_failure(reason=reason, stage="STEP 6/7 HDR10+ Generator")
+                        self._log(f"❌ [DV+HDR10+] {reason}", "error")
+                        return None
+                self._vlog(
+                    f"[DV+HDR10+] Analyse vollständig: {generated.frames} Frames "
+                    "(verlässliche tatsächliche Analysebildzahl)."
+                )
 
+        self._log("🧬 [DV+HDR10+] Phase: HDR10+-Injection", "info")
         self._vlog("[DV+HDR10+][DETAIL] HDR10+-Metadaten injizieren")
         run_hdr_inject = runner.adapter(
             timeout=_TIMEOUT_RPU_INJECT(), label="DV+HDR10+ Metadata-Injection"
@@ -214,6 +244,19 @@ class DVDynamicMetadataService:
             return None
         if not self._assert_nonempty_file(files.hdr10plus_hevc, "DV+HDR10+ HDR10+-Injection"):
             return None
+        base_evidence = getattr(state, "hdr10plus_frame_evidence", None) or getattr(state, "encoded_frame_evidence", None)
+        if base_evidence is not None and base_evidence.is_reliable_for(files.enc_hevc):
+            state.rpu_input_frame_evidence = base_evidence.derive_for_metadata_only_output(
+                files.hdr10plus_hevc,
+                source="hdr10plus_metadata_injection",
+                stage="STEP 6/7 HDR10+-Injection",
+            )
+        else:
+            state.rpu_input_frame_evidence = FrameCountEvidence.unknown(
+                source="hdr10plus_metadata_injection_no_reliable_input_count",
+                path=files.hdr10plus_hevc,
+                stage="STEP 6/7 HDR10+-Injection",
+            )
         return files.hdr10plus_hevc
     def _verify_hdr10plus_after_dv(
         self, state: DVPipelineState, runner: DVCommandRunner
@@ -242,18 +285,42 @@ class DVDynamicMetadataService:
         *,
         rpu_path: Path,
         hevc_path: Path,
+        frame_evidence: FrameCountEvidence | None = None,
         probe_rpu_frame_count: Callable[[DVCommandRunner, Path], int | None] | None = None,
         probe_hevc_frame_count: Callable[[DVCommandRunner, Path], int | None] | None = None,
     ) -> bool:
-        """Bricht nur bei eindeutig nachweisbarer Frame-Differenz ab."""
+        """Compare only reliable frame evidence; estimates never pass DV parity."""
+        self._log("🧬 [DV] Phase: DV-Prüfung und DV-Injection", "info")
         rpu_probe = probe_rpu_frame_count or self.probe_rpu_frame_count
-        hevc_probe = probe_hevc_frame_count or self.probe_hevc_frame_count
         rpu_count = rpu_probe(runner, rpu_path)
-        hevc_count = hevc_probe(runner, hevc_path)
+
+        hevc_count = None
+        evidence = frame_evidence
+        if evidence is not None and evidence.is_reliable_for(hevc_path):
+            if evidence.temporal_mapping == "changed":
+                reason = (
+                    "DV-RPU-Zuordnung ist nach einer bildzeitverändernden Verarbeitung nicht sicher; "
+                    "gleiche Bildzahl allein reicht nicht als zeitlicher Nachweis."
+                )
+                self._temp_state.record_failure(reason=reason, stage="STEP 6/7 RPU-Injektion")
+                self._log(f"❌ [DV] {reason}", "error")
+                return False
+            hevc_count = evidence.count
+            self._vlog(
+                f"[DV][STEP 6/7] HEVC-Bildzahl wiederverwendet: {hevc_count} "
+                f"({evidence.source}, {evidence.reliability})."
+            )
+        elif probe_hevc_frame_count is not None:
+            # Compatibility-only fast metadata probe. It must never decode the
+            # entire HEVC stream and therefore intentionally does not use
+            # ffprobe -count_frames.
+            hevc_count = probe_hevc_frame_count(runner, hevc_path)
+
         if rpu_count is None or hevc_count is None:
             self._vlog(
-                "[DV][STEP 6/7] Frame-Paritaet konnte nicht vollstaendig bestimmt werden; "
-                "Injection bleibt fail-closed ueber Tool-RC und RPU-Rueckpruefung."
+                "[DV][STEP 6/7] Kein verlässlicher vollständiger Bildzahlnachweis verfügbar; "
+                "keine Schätzung wird als Parität akzeptiert. Injection bleibt über Tool-RC, "
+                "RPU-Rückextraktion und Inhaltsprüfung abgesichert."
             )
             return True
         if rpu_count == hevc_count:
@@ -290,9 +357,9 @@ class DVDynamicMetadataService:
     def probe_hevc_frame_count(self, runner: DVCommandRunner, path: Path) -> int | None:
         proc = runner.run(
             [
-                self._tools.ffprobe, "-v", "error", "-count_frames",
+                self._tools.ffprobe, "-v", "error",
                 "-select_streams", "v:0", "-show_entries",
-                "stream=nb_read_frames,nb_frames", "-of", "default=nw=1", str(path),
+                "stream=nb_frames", "-of", "default=nw=1", str(path),
             ],
             allow_error=True,
             return_process=True,
@@ -302,7 +369,7 @@ class DVDynamicMetadataService:
         if proc is None or getattr(proc, "returncode", 1) != 0:
             return None
         text = str(getattr(proc, "stdout", "") or "")
-        for match in re.finditer(r"(?:nb_read_frames|nb_frames)=(\d+)", text):
+        for match in re.finditer(r"nb_frames=(\d+)", text):
             value = int(match.group(1))
             if value > 0:
                 return value

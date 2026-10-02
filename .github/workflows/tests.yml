@@ -2,6 +2,8 @@ name: tests
 
 on:
   push:
+    branches: ["**"]
+    tags: ["v*"]
   pull_request:
   workflow_dispatch:
 
@@ -25,18 +27,96 @@ jobs:
       - name: Install test tooling
         run: python -m pip install -r requirements-test.txt
       - name: Reject syntax and undefined-name regressions
-        run: python -m ruff check DragonToolsV9.py dragontools --select E9,F821,F822,F823
+        run: python -m ruff check DragonToolsV9.py dragontools dragon_hdr10plus_generator/src dragon_hdr10plus_generator/tests --select E9,F821,F822,F823
 
   pytest:
-    name: pytest (${{ matrix.os }})
+    name: pytest (${{ matrix.os }}, Python ${{ matrix.python }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        include:
+          - os: ubuntu-latest
+            python: "3.12"
+          - os: windows-latest
+            python: "3.12"
+          - os: ubuntu-latest
+            python: "3.13"
+          - os: windows-latest
+            python: "3.13"
     env:
       QT_QPA_PLATFORM: offscreen
       DRAGONTOOLS_REQUIRE_QT_TESTS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: |
+            requirements-test.txt
+            requirements-runtime.txt
+            requirements-optional.txt
+      - name: Install test environment
+        run: python -m pip install -r requirements-test.txt
+      - name: Run DragonTools standard suite
+        run: python -m pytest -m "not dv_hdr_integration"
+
+  pyinstaller-smoke:
+    name: Frozen main-app smoke (Windows)
+    runs-on: windows-latest
+    needs: pytest
+    env:
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            requirements-build.txt
+            requirements-runtime.txt
+            requirements-optional.txt
+            requirements-whisper.txt
+      - name: Install reproducible build environment
+        run: python -m pip install -r requirements-build.txt
+      - name: Build source-free DragonTools smoke executable
+        shell: pwsh
+        run: |
+          python -m PyInstaller `
+            --noconfirm `
+            --clean `
+            --onedir `
+            --noconsole `
+            --contents-directory Daten `
+            --name DragonToolsSmoke `
+            --paths "$PWD" `
+            --distpath "$PWD/dist-smoke" `
+            --workpath "$PWD/build/smoke-main" `
+            --specpath "$PWD/build/smoke-main" `
+            --hidden-import cv2 `
+            --collect-submodules cv2 `
+            --collect-binaries cv2 `
+            --collect-data cv2 `
+            --collect-submodules cryptography `
+            --collect-binaries cryptography `
+            --collect-data cryptography `
+            --hidden-import faster_whisper `
+            --hidden-import ctranslate2 `
+            --collect-all faster_whisper `
+            --collect-all ctranslate2 `
+            --add-data "dragontools/config;dragontools/config" `
+            DragonToolsV9.py
+      - name: Execute frozen import smoke
+        shell: pwsh
+        run: |
+          & "$PWD/dist-smoke/DragonToolsSmoke/DragonToolsSmoke.exe" --smoke-test
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+  hdrtvdm-bridge:
+    name: HDRTVDM bridge lifecycle (CPU)
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -49,16 +129,24 @@ jobs:
             requirements-optional.txt
       - name: Install test environment
         run: python -m pip install -r requirements-test.txt
-      - name: Run standard suite
-        run: python -m pytest -m "not dv_hdr_integration"
+      - name: Install CPU HDRTVDM test dependencies
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install imageio
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+      - name: Verify HDRTVDM prerequisites
+        run: python -c "import imageio, shutil, torch; assert shutil.which('ffmpeg'); print(torch.__version__)"
+      - name: Run HDRTVDM bridge tests without optional skips
+        run: python -m pytest -q dragontools/tests/test_patch_ai_hdrtvdm_bridge_optional.py -W error::ResourceWarning
 
   dv-hdr-contract:
     # Real external-tool validation is deliberately not faked on a GitHub-hosted
     # runner. A labelled Windows self-hosted runner must provide the tools in
     # PATH (or via DRAGONTOOLS_* variables). The strict flag turns any missing
     # prerequisite into a hard failure instead of a skip.
-    if: github.event_name == 'workflow_dispatch'
-    name: Real DV/HDR roundtrip (self-hosted)
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+    name: Real DV/HDR roundtrip (self-hosted release gate)
     runs-on: [self-hosted, Windows, X64, dragontools-media]
     env:
       QT_QPA_PLATFORM: offscreen
@@ -80,5 +168,36 @@ jobs:
         shell: pwsh
         run: |
           python -c "from dragontools.tests.ci_requirements import external_media_environment as e; x=e(); print(x); assert not x.missing, 'Missing tools: ' + ', '.join(x.missing)"
+      - name: Build standalone HDR10+ generator with canonical builder
+        shell: pwsh
+        run: |
+          $env:DRAGON_HDRPLUS_BUILD_NO_PAUSE = "1"
+          cmd /c "dragon_hdr10plus_generator\build.bat"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $exe = Join-Path $PWD "dragon_hdr10plus_generator/dist/HDRPlusGenerator.exe"
+          if (-not (Test-Path $exe)) { throw "Canonical HDRPlusGenerator build did not produce $exe" }
+          "DRAGONTOOLS_HDR10PLUS_GENERATOR_EXE=$exe" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+      - name: Stage third-party bundle for canonical DragonTools release build
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "$PWD/third_party")) {
+            if (-not $env:DRAGONTOOLS_THIRD_PARTY_ROOT) {
+              throw "Release-tag build requires DRAGONTOOLS_THIRD_PARTY_ROOT on the self-hosted runner."
+            }
+            if (-not (Test-Path $env:DRAGONTOOLS_THIRD_PARTY_ROOT)) {
+              throw "DRAGONTOOLS_THIRD_PARTY_ROOT does not exist: $env:DRAGONTOOLS_THIRD_PARTY_ROOT"
+            }
+            Copy-Item -Recurse -Force $env:DRAGONTOOLS_THIRD_PARTY_ROOT "$PWD/third_party"
+          }
+      - name: Build and smoke exact DragonTools release bundle
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          $env:QT_QPA_PLATFORM = "windows"
+          python -m pip install -r requirements-build.txt
+          $env:DRAGONTOOLS_BUILD_NO_PAUSE = "1"
+          cmd /c "build_v9.bat"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Run real DV/HDR integration
         run: python -m pytest -m dv_hdr_integration

@@ -85,6 +85,18 @@ class DVRemuxMuxer:
             lang = (subtitle_track.language or "und").lower()
             title = (subtitle_track.title or "").replace('"', "'").strip()
             forced = "yes" if subtitle_track.forced else "no"
+            if getattr(subtitle_track, "source_direct", False):
+                track_id = int(subtitle_track.stream_index)
+                cmd += [
+                    "--no-video", "--no-audio", "--no-attachments", "--no-chapters",
+                    "--subtitle-tracks", str(track_id),
+                    "--language", f"{track_id}:{lang}",
+                    "--forced-display-flag", f"{track_id}:{forced}",
+                ]
+                if title:
+                    cmd += ["--track-name", f"{track_id}:{title}"]
+                cmd += [str(subtitle_track.path)]
+                continue
             cmd += ["--language", f"0:{lang}", "--forced-display-flag", f"0:{forced}"]
             if title:
                 cmd += ["--track-name", f"0:{title}"]

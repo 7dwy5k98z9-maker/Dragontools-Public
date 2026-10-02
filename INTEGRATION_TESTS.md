@@ -39,7 +39,7 @@ $env:DRAGONTOOLS_REQUIRE_DV_HDR_INTEGRATION = "1"
 python -m pytest -m dv_hdr_integration
 ```
 
-Im GitHub-Workflow wird dieser reale Medienlauf bewusst nur manuell (`workflow_dispatch`) auf dem dafür vorgesehenen self-hosted Windows-Runner mit Label `dragontools-media` gestartet. Das ist eine Release-/Entwicklungsprüfung, keine dauerhafte Überwachung des normalen Konverterbetriebs.
+Im GitHub-Workflow läuft dieser reale Medienlauf auf dem vorgesehenen self-hosted Windows-Runner mit Label `dragontools-media` entweder manuell (`workflow_dispatch`) oder automatisch bei `v*`-Release-Tags. Damit ist er ein striktes Release-Gate, bleibt aber außerhalb normaler Push-/PR-Läufe.
 
 ## Move-/Jellyfin-Härtung (Patch AD)
 
@@ -64,7 +64,7 @@ Ein Fallback ist absichtlich eine Warnung; ein `✅` ist nur für den erfolgreic
 
 ## ComfyUI + HDRTVDM Vorbereitung (Patch AI; durch Patch AL erweitert)
 
-Patch AI führte API-, Modell-, Node- und Workflow-Readiness zunächst fail-closed ein. Der damalige TIFF-/Vorbereitungsstand ist historisch und wird ab Patch AL durch den unten beschriebenen ausführbaren Voll-Datei-Streaming-Worker ersetzt. Eine echte AI-HDR-Abnahme benötigt weiterhin Windows + NVIDIA-GPU + lokale ComfyUI/HDRTVDM-Installation und ist daher nicht Bestandteil des normalen CI-Laufs.
+Patch AI führte API-, Modell-, Node- und Workflow-Readiness zunächst fail-closed ein. Der damalige TIFF-/Vorbereitungsstand ist historisch und wird ab Patch AL durch den unten beschriebenen ausführbaren Voll-Datei-Streaming-Worker ersetzt. Eine echte AI-HDR-Bildqualitätsabnahme benötigt weiterhin Windows + NVIDIA-GPU + lokale ComfyUI/HDRTVDM-Installation. Der Bridge-/Prozesslebenszyklus wird dagegen in der normalen CI zusätzlich mit CPU-Torch, ImageIO und FFmpeg verpflichtend getestet.
 
 ## ComfyUI + HDRTVDM Voll-Datei-Abnahme (Patch AL)
 
@@ -157,3 +157,67 @@ Statisch und im GUI-Smoketest prüfen:
 - die Help-Datei enthält eigenständige Kapitel `SDR → HDR mit ComfyUI / HDRTVDM`, `Dragon HDR10+ Generator` und `HDR-Erkennung, Datei-Overrides & Strip-Only`,
 - das Inhaltsverzeichnis verlinkt alle drei Kapitel und die nachfolgenden Kapitelnummern bleiben fortlaufend,
 - Projektstatistik/Über-Dialog zählen DragonTools und den eigenständigen Generator gemeinsam, ohne `build`/`dist` zu zählen.
+
+## Renamer-Metadaten-Browser (Patch BT/BU)
+
+Diese Fälle ergänzen die automatischen Unit-/Contract-Tests und sollten in einer echten Windows-/PyQt6-Sitzung als GUI-Smoke ausgeführt werden:
+
+1. Renamer mit **leerer Dateiliste** öffnen und den Metadaten-Browser starten. Nach einer Serie suchen, für die TMDB und TheTVDB mehrere gleichnamige Treffer/Jahre liefern. Prüfen, dass Provider, Jahr und ID getrennt bleiben.
+2. Einen Serien-Treffer laden, während der Request läuft auf keinen anderen Treffer/keine Staffel mappen können. Direkt nach dem Umschalten müssen alte Episodenzeilen verschwinden; verspätete Antworten dürfen die neue Auswahl nicht überschreiben.
+3. Staffel **S00/Specials** sowie eine normale Staffel laden. Eine Datei per Drag & Drop einer Episode zuordnen und danach 2-, 3- und 4-fache Folgen erzeugen. Nicht zusammenhängende/gap-behaftete Episodennummern müssen als kontrollierte Warnung abgewiesen werden, ohne ein vorher gültiges Mapping zu verlieren.
+4. Einen Film suchen und mit **Film auswählen** explizit aktivieren. Danach eine andere Ergebniszeile markieren und eine lokale Datei zuordnen. Das Mapping muss weiterhin auf dem explizit aktivierten Film liegen.
+5. Eine Datei zunächst als Film zuordnen und anschließend **automatisch ab Episode zuordnen** ausführen. Bereits als Film gemappte Dateien dürfen nicht in ein Serien-Mapping überschrieben werden.
+6. Einen Ordner mit natürlich zu sortierenden Namen (`1`, `2`, `10`) droppen, automatisch mappen und anschließend **Zuordnung in Renamer übernehmen**. Dort Zielnamen, Provider-ID, Mehrfachfolgen-Schreibweise und Collision-Check kontrollieren. Erst danach den normalen Rename in einem isolierten Testordner ausführen.
+7. Dialog während einer laufenden TMDB/TheTVDB-Anfrage schließen. Späte Worker-Rückgaben dürfen keinen Zugriff auf zerstörte Widgets oder nachträgliche Mappings verursachen.
+
+## Converter-Doppelstart / Watch-Folder-Stress (Patch BS)
+
+1. Eine einzige Testdatei in die Queue legen und Startbutton sowie Watch-Folder-Auto-Start möglichst im selben Qt-Eventloop-Tick auslösen. Es darf genau **ein** realer Worker für den Pfad entstehen.
+2. Den Test mit mehreren Dateien wiederholen. Nach Abschluss darf keine Datei erneut in einem zweiten Worker anlaufen und kein Folgejob wegen bereits verschobener/gelöschter Quelle fehlschlagen.
+3. Dieselbe Datei über unterschiedlich geschriebene Windows-Pfade einspeisen. Die Queue muss sie vor Worker-Erzeugung deduplizieren.
+
+## Ausgabecontainer in Regeltester / Medieninfo (Patch BT)
+
+Jeweils vor dem Öffnen der Vorschau den Ausgabecontainer umstellen und prüfen:
+
+- Dolby Vision + **MKV** → Regeltester, Medieninfo/DragonTools und Batch-Preflight zeigen `.mkv`.
+- Dolby Vision + **MP4** → alle drei zeigen `.mp4`.
+- Standard + **MP4** → alle drei zeigen `.mp4`.
+- Standard + **MKV** → alle drei zeigen `.mkv`.
+## Patch BV – Änderungshistorie / Release-Validierung
+
+- `Aenderungshistorie/CHANGELOG.json` über `load_changelog()` laden; alle Einträge unter `sections` müssen strukturierte JSON-Objekte sein.
+- Im Dialog `Hilfe → Änderungshistorie V9` muss der erste Bereich `00 Aktuelle Änderungen` sichtbar sein und BV/BU/BS-BT/BJ/BI enthalten.
+- Source-, App- und Dist-Release-Validierung müssen ein syntaktisch gültiges, aber strukturell falsches `CHANGELOG.json` als Fehler melden statt nur dessen Existenz zu bestätigen.
+- Ungültige Typen in `format_version` dürfen den Release-Validator nicht abstürzen lassen; das Ergebnis muss ein kontrollierter Fehlercheck sein.
+- `CHANGELOG.txt` bleibt als Fallback synchron zum JSON-Stand.
+
+
+## Patch BY – Watchfolder / PGS
+- Watchfolder: EXE starten, Watchfolder aktivieren und manuellen Scan auslösen; unmittelbar danach zweiten Scan/Settings-Refresh provozieren. Kein QThread-Absturz, keine doppelte Queue.
+- PGS→SRT aus: Original-PGS bleibt je nach Regel intern im MKV bzw. als `.sup`-Sidecar; keine OCR-Aktivität.
+- PGS→SRT an: gültige PGS erzeugt zusätzlich `.srt`; Original-PGS bleibt unverändert erhalten.
+- Defekte PGS (`Not enough data` / `Invalid data found when processing input`): OCR/SRT wird mit Warnung übersprungen, Datei-Encoding läuft weiter; Original-PGS bleibt gemäß Speicherregel erhalten.
+- DV→MKV mit PGS: keine FFmpeg-SUP-Zwischenextraktion der Originalspur; PGS wird direkt in mkvmerge übernommen.
+- Standard-Encoding und Strip/Remux jeweils mit `pgs_original_storage=internal_mkv` und `sidecar` gegenprüfen.
+
+
+## V9.8.7 – Manueller Watchfolder-Sofortscan
+
+Zusätzlich zu den automatisierten Watch-Folder-Tests in einer echten Windows-/PyQt6-Sitzung prüfen:
+
+1. Globale Watch-Automatik **aus**, mindestens eine Watch-Regel **aktiv**. Eine vollständig geschriebene neue Videodatei ablegen und **Watchfolder durchsuchen** drücken. Die Datei muss genau einmal in der passenden Converter-Queue erscheinen.
+2. Dieselbe Suche erneut ausführen. Die bereits eingereihte Datei darf nicht dupliziert werden.
+3. Während eines laufenden Batches eine weitere vollständige Datei ablegen und manuell scannen. Sie muss über die bestehende Live-Queue nachgereicht werden, ohne den laufenden Worker neu zu starten.
+4. Im Leerlauf manuell scannen: Treffer werden nur eingereiht; der Batch darf nicht selbstständig starten.
+5. Einen Scan auslösen, während bereits ein Watch-Scan läuft. Es darf genau ein manueller Folgescan vorgemerkt werden.
+6. Nach terminalem Erfolg denselben unveränderten Pfad erneut scannen. Die persistente Signatur muss ihn ausschließen. Nach einem Fehler/Skip muss er erneut versuchbar bleiben.
+7. Der Sofortscan überspringt absichtlich die Stabilitätswartezeit. Deshalb zusätzlich mit einer noch wachsenden Testdatei prüfen, dass diese Betriebsgrenze im UI/Handbuch eindeutig dokumentiert ist; produktiv nur vollständig geschriebene Dateien manuell nachziehen.
+
+## V9.8.7 – Dolby Vision Direct-MKV / Frame-Recovery
+
+1. Je eine kurze DV5-, DV7- und DV8-MKV verarbeiten. Im Log darf der normale Bildpfad keine erste `source.hevc`-/`p8.hevc`-Arbeitskopie als Encoderquelle mehr verwenden.
+2. RPU wird direkt aus der MKV extrahiert/normalisiert; `encoded.hevc` ist der erste reguläre rohe HEVC-Bildoutput.
+3. DV5 muss weiterhin denselben libplacebo-ICtCp→BT.2020/PQ-Pfad verwenden.
+4. Einen kontrollierten Frame-Mismatch nur in isoliertem Testmaterial provozieren. Eine Teilreparatur darf ausschließlich bei bewiesenem Alignment, zulässiger Fehlbildzahl, sicherem GOP-/IRAP-Fenster und erfolgreicher vollständiger Decode-/Frame-/Übergangsprüfung übernommen werden.
+5. Kann das Reparaturfenster nicht sicher bestimmt werden, muss der Auftrag fehlschlagen und diagnostisch archiviert werden; kein stiller Voll-Reencode und kein fragwürdiger Commit.

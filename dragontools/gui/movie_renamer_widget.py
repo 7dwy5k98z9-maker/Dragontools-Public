@@ -63,6 +63,7 @@ class MovieRenamerWidget(QWidget):
         for name in (
             "add_files_btn",
             "add_folder_btn",
+            "metadata_browser_btn",
             "resolve_btn",
             "manual_series_search_btn",
             "manual_movie_search_btn",
@@ -70,6 +71,7 @@ class MovieRenamerWidget(QWidget):
             "edit_search_btn",
             "edit_season_btn",
             "edit_episode_btn",
+            "edit_year_btn",
             "accept_selected_btn",
             "accept_safe_btn",
             "reject_selected_btn",
@@ -85,6 +87,7 @@ class MovieRenamerWidget(QWidget):
     def _connect_actions(self) -> None:
         self.add_files_btn.clicked.connect(self._actions.choose_files)
         self.add_folder_btn.clicked.connect(self._actions.choose_folder)
+        self.metadata_browser_btn.clicked.connect(self._actions.open_metadata_browser)
         self.resolve_btn.clicked.connect(self.resolve_proposals)
         self.manual_series_search_btn.clicked.connect(self._actions.manual_series_search)
         self.manual_movie_search_btn.clicked.connect(self._actions.manual_movie_search)
@@ -92,6 +95,7 @@ class MovieRenamerWidget(QWidget):
         self.edit_search_btn.clicked.connect(self._actions.edit_search_query)
         self.edit_season_btn.clicked.connect(self._actions.edit_selected_season)
         self.edit_episode_btn.clicked.connect(self._actions.edit_selected_episode)
+        self.edit_year_btn.clicked.connect(self._actions.edit_selected_year)
         self.accept_selected_btn.clicked.connect(self.accept_selected)
         self.accept_safe_btn.clicked.connect(self.accept_safe)
         self.reject_selected_btn.clicked.connect(self.reject_selected)

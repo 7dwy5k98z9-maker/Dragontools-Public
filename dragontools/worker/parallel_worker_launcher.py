@@ -33,6 +33,8 @@ class ParallelWorkerLauncher:
         relay_crop_decision,
         on_file_progress,
         on_file_result,
+        on_encode_stage_complete,
+        dv_postprocess_gate,
         emit_progress,
         on_finished,
     ):
@@ -44,6 +46,8 @@ class ParallelWorkerLauncher:
         )
         worker = self._worker_factory(files, child_config, shared_logger=self._logger, parent=parent)
         worker._suppress_session_header = True
+        worker._enable_dv_encode_overlap = True
+        worker._dv_postprocess_gate = dv_postprocess_gate
         worker._display_index_by_path = self._queue_state.display_index_by_path
         worker._display_total = self._queue_state.display_total
         worker.log_line.connect(lambda message: invoke_callback(log_emit, message))
@@ -60,6 +64,12 @@ class ParallelWorkerLauncher:
                 on_file_result, child, input_path, output_path, status
             )
         )
+        if hasattr(worker, "encode_stage_complete"):
+            worker.encode_stage_complete.connect(
+                lambda input_path, output_path, child=worker: invoke_callback(
+                    on_encode_stage_complete, child, input_path, output_path
+                )
+            )
         worker.progress.connect(lambda _pct: invoke_callback(emit_progress))
         worker.finished.connect(lambda child=worker: invoke_callback(on_finished, child))
         self._registry.workers.append(worker)

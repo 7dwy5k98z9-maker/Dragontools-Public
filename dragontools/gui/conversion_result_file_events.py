@@ -53,6 +53,7 @@ class ConversionResultFileEventsMixin:
 
         state.pending_postprocess_inputs.discard(input_path)
         state.completed_inputs.add(input_path)
+        state.release_file_analysis(input_path)
         thread = self._state.thread
         bundle = ConversionArtifactBundle.from_worker(
             thread, input_path, output_path=output_path, status=status
@@ -81,6 +82,7 @@ class ConversionResultFileEventsMixin:
                 "info",
             )
             self._refresh_queue()
+            self._finish_pending_postprocess_run()
             return
 
         if status == "✅":
@@ -110,6 +112,10 @@ class ConversionResultFileEventsMixin:
                     state.file_overrides[output_path] = override
 
         self._refresh_queue()
+        self._finish_pending_postprocess_run()
+
+    def _finish_pending_postprocess_run(self) -> None:
+        state = self._state
         if state.finish_waiting_for_postprocess and not state.pending_postprocess_inputs:
             state.finish_waiting_for_postprocess = False
             self.on_finished()

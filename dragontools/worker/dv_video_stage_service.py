@@ -8,15 +8,27 @@ from .command_formatting import command_to_log_string as _cmd_str
 from .dv_command_runner import DVCommandRunner
 from .dv_crop_reconcile import reconcile_dv_crop, replace_crop_in_vf_args
 from .dv_encode_command import build_dv_encode_command
+from .encoder_args import encoder_10bit_filter_pixel_format
+from .frame_count_evidence import FrameCountEvidence, temporal_mapping_for_filters
 from .dv_pipeline_context import DVPipelineState
+from .dv_partial_frame_repair import DVPartialFrameRepair
 from .dv_pipeline_timeouts import (
-    timeout_dovi_convert as _TIMEOUT_DOVI_CONVERT,
     timeout_dovi_editor as _TIMEOUT_DOVI_EDITOR,
     timeout_encode as _TIMEOUT_ENCODE,
     timeout_hevc_extract as _TIMEOUT_HEVC_EXTRACT,
     timeout_rpu_extract as _TIMEOUT_RPU_EXTRACT,
 )
 from ..core.media_hdr_detection import choose_dovi_convert_mode
+
+
+def _dovi_tool_can_read_container_directly(input_path: str | Path) -> bool:
+    """Return True for Matroska inputs supported by dovi_tool extract-rpu.
+
+    dovi_tool can extract RPU directly from Matroska, but not from arbitrary
+    containers such as MP4.  Keeping the fallback here avoids reintroducing a
+    raw-HEVC picture source for MKV while preserving non-Matroska compatibility.
+    """
+    return Path(input_path).suffix.lower() in {".mkv", ".mk3d"}
 
 
 class DVVideoStageService:
@@ -52,8 +64,38 @@ class DVVideoStageService:
         self._crop_decision = crop_decision
 
     def extract_source_hevc(self, state: DVPipelineState, runner: DVCommandRunner) -> bool:
+        """Prepare only metadata-side raw HEVC when the source container requires it.
+
+        Matroska sources (P5/P7/P8) no longer create ``source.hevc`` for Dolby
+        Vision: dovi_tool reads the MKV directly and the picture encode also reads
+        the MKV directly.  A raw HEVC helper is still created when HDR10+ metadata
+        must be extracted or when the source container is not Matroska (for
+        example MP4), because dovi_tool ``extract-rpu`` cannot read arbitrary
+        containers directly.  The helper is never used as the picture encode
+        source.
+        """
         req, files = state.request, state.files
-        self._log("ℹ️  [DV][STEP 1/7] HEVC", "info")
+        direct_rpu = _dovi_tool_can_read_container_directly(req.input_path)
+        need_raw_rpu = not direct_rpu
+        need_raw_hdr10plus = bool(req.preserve_dv_hdr10plus_combo)
+
+        if not need_raw_rpu and not need_raw_hdr10plus:
+            self._log(
+                f"ℹ️  [DV][STEP 1/7] P{req.profile_major or '?'}: kein source.hevc nötig – "
+                "RPU und Video werden direkt aus der MKV gelesen.",
+                "info",
+            )
+            return True
+
+        purposes = []
+        if need_raw_rpu:
+            purposes.append("RPU-Fallback für Nicht-Matroska")
+        if need_raw_hdr10plus:
+            purposes.append("HDR10+-Metadaten")
+        self._log(
+            "ℹ️  [DV][STEP 1/7] Temporärer HEVC-Hilfsstream nur für " + " + ".join(purposes),
+            "info",
+        )
         rc = runner.run(
             [
                 self._tools.ffmpeg, "-y",
@@ -63,18 +105,20 @@ class DVVideoStageService:
                 "-an", "-sn", "-dn", "-f", "hevc", str(files.src_hevc),
             ],
             timeout=_TIMEOUT_HEVC_EXTRACT(),
-            label="STEP 1/7 HEVC-Extraktion",
+            label="STEP 1/7 DV-Metadaten-Hilfsstream",
         )
-        if rc != 0:
-            self._log("❌ [DV][STEP 1/7] ERROR - HEVC-Extraktion fehlgeschlagen.", "error")
-            return False
-        if not self._assert_nonempty_file(files.src_hevc, "STEP 1 HEVC-Extraktion"):
+        if rc != 0 or not self._assert_nonempty_file(
+            files.src_hevc, "STEP 1 DV-Metadaten-Hilfsstream"
+        ):
+            self._log(
+                "❌ [DV] HEVC-Hilfsstream für dynamische Metadaten konnte nicht erstellt werden.",
+                "error",
+            )
             return False
 
-        if not req.preserve_dv_hdr10plus_combo:
+        if not need_raw_hdr10plus:
             return True
 
-        self._vlog("[DV+HDR10+][DETAIL] HDR10+-Metadaten aus Quelle extrahieren")
         run_extract = runner.adapter(
             timeout=_TIMEOUT_HEVC_EXTRACT(),
             label="DV+HDR10+ Metadata-Extract",
@@ -92,44 +136,58 @@ class DVVideoStageService:
         return True
 
     def convert_profile_to_81(self, state: DVPipelineState, runner: DVCommandRunner) -> bool:
-        req, files = state.request, state.files
-        dovi_mode = choose_dovi_convert_mode(req.media_info)
+        """Compatibility stage: P8.1 normalization now happens during RPU extraction.
+
+        ``dovi_tool -m <mode> extract-rpu`` applies the same RPU conversion
+        without rewriting the full HEVC stream.  Keeping this stage as a no-op
+        avoids breaking older stage instrumentation while removing p8.hevc from
+        the productive encoder path.
+        """
+        req = state.request
+        mode = choose_dovi_convert_mode(req.media_info)
+        state.profile_hevc = None
         self._log(
-            f"ℹ️  [DV][STEP 2/7] DV-Profilkonvertierung zu 8.1 "
-            f"(Profil: {getattr(req.media_info, 'dv_profile', None) or 'unbekannt'}, "
-            f"dovi_tool -m {dovi_mode})",
+            f"ℹ️  [DV][STEP 2/7] Profilnormalisierung wird direkt bei der RPU-Extraktion angewendet "
+            f"(dovi_tool -m {mode}); kein p8.hevc wird erzeugt.",
             "info",
         )
-        rc = runner.run(
-            [
-                self._tools.dovi_tool, "-m", dovi_mode, "convert",
-                "--discard", str(files.src_hevc), "-o", str(files.p8_hevc),
-            ],
-            timeout=_TIMEOUT_DOVI_CONVERT(),
-            label="STEP 2/7 DV-Profilkonvertierung",
-        )
-        if rc != 0:
-            self._log("❌ [DV][STEP 2/7] ERROR - DV-Profilkonvertierung fehlgeschlagen.", "error")
-            return False
-        if not self._assert_nonempty_file(files.p8_hevc, "STEP 2 DV-Profilkonvertierung"):
-            return False
-        state.profile_hevc = files.p8_hevc
         return True
 
     def extract_rpu(self, state: DVPipelineState, runner: DVCommandRunner) -> bool:
-        files = state.files
-        input_hevc = state.profile_hevc or files.p8_hevc
-        self._log("ℹ️  [DV][STEP 3/7] RPU-Extraktion", "info")
+        req, files = state.request, state.files
+        mode = choose_dovi_convert_mode(req.media_info)
+        direct_mkv = _dovi_tool_can_read_container_directly(req.input_path)
+        rpu_source = Path(req.input_path) if direct_mkv else files.src_hevc
+        source_label = "MKV" if direct_mkv else "HEVC-Metadaten-Hilfsstream"
+        self._log(
+            f"ℹ️  [DV][STEP 3/7] P{req.profile_major or '?'}: RPU aus {source_label} extrahieren "
+            f"und auf P8.1 normalisieren (dovi_tool -m {mode})",
+            "info",
+        )
+        if not direct_mkv and not self._assert_nonempty_file(
+            files.src_hevc, "STEP 3 RPU-Quellstream"
+        ):
+            return False
         run_extract = runner.adapter(
             timeout=_TIMEOUT_RPU_EXTRACT(),
             label="STEP 3/7 RPU-Extraktion",
         )
-        if not self._rpu_service.extract_rpu(
-            run_extract,
-            input_hevc=input_hevc,
-            output_rpu=files.rpu_orig,
-        ):
-            self._log("❌ [DV][STEP 3/7] ERROR - RPU-Extraktion fehlgeschlagen.", "error")
+        kwargs = {
+            "output_rpu": files.rpu_orig,
+            "mode": mode,
+        }
+        if direct_mkv:
+            kwargs["input_path"] = req.input_path
+            # FFmpeg encodes 0:v:0; make dovi_tool read the same first video
+            # track explicitly when the Matroska file contains several videos.
+            kwargs["track_number"] = 0
+        else:
+            kwargs["input_hevc"] = files.src_hevc
+        if not self._rpu_service.extract_rpu(run_extract, **kwargs):
+            self._log(
+                "❌ [DV][STEP 3/7] ERROR - RPU-Extraktion/Normalisierung fehlgeschlagen.",
+                "error",
+            )
             return False
         return self._assert_nonempty_file(files.rpu_orig, "STEP 3 RPU-Extraktion")
 
@@ -185,25 +243,25 @@ class DVVideoStageService:
         req, files = state.request, state.files
         self._log("ℹ️  [DV][STEP 4/7] Video-Encoding", "info")
 
-        profile_hevc = state.profile_hevc or files.p8_hevc
         plan = build_dv_encode_command(
             ffmpeg_path=self._tools.ffmpeg,
             encoder_config=self._encoder_config,
             input_path=req.input_path,
-            p8_hevc=profile_hevc,
+            p8_hevc=None,
             output_hevc=files.enc_hevc,
             vf_args=state.effective_vf_args or req.vf_args,
             profile_major=req.profile_major,
         )
         if plan.uses_libplacebo:
+            pixel_format = encoder_10bit_filter_pixel_format(self._encoder_config.options)
             self._vlog(
                 "[DV][STEP 4/7] P5: libplacebo-HDR10-Base-Layer-Konvertierung "
-                "aus Originalcontainer startet (ICtCp → BT.2020nc/PQ/p010le)."
+                f"aus Originalcontainer startet (ICtCp → BT.2020nc/PQ/{pixel_format})."
             )
         else:
             self._vlog(
-                f"[DV][STEP 4/7] P{req.profile_major or '?'}: Encode aus "
-                f"DV-Arbeitsstream {profile_hevc.name}."
+                f"[DV][STEP 4/7] P{req.profile_major or '?'}: Video-Encode direkt aus "
+                "dem Originalcontainer; die normalisierte RPU läuft getrennt."
             )
 
         self._vlog(f"[DV CMD] {_cmd_str(plan.command)}")
@@ -229,8 +287,116 @@ class DVVideoStageService:
         if not self._assert_nonempty_file(files.enc_hevc, "STEP 4 Video-Encoding"):
             self.cleanup_burn_sub(req)
             return False
-        self.cleanup_burn_sub(req)
+        output_frames = self._progress_runner.take_output_frame_count(
+            req.input_path,
+            process_rc=rc,
+        )
+        if output_frames:
+            state.encoded_frame_evidence = FrameCountEvidence.reliable(
+                output_frames,
+                source="ffmpeg_encode_progress",
+                path=files.enc_hevc,
+                stage="STEP 4/7 Video-Encoding",
+                temporal_mapping=temporal_mapping_for_filters(state.effective_vf_args or req.vf_args),
+            )
+            self._vlog(
+                f"[DV][STEP 4/7] Verlässliche Encoder-Ausgabebildzahl: {output_frames} Frames "
+                f"(Quelle: ffmpeg -progress)."
+            )
+        else:
+            state.encoded_frame_evidence = FrameCountEvidence.unknown(
+                source="ffmpeg_encode_progress_missing",
+                path=files.enc_hevc,
+                stage="STEP 4/7 Video-Encoding",
+            )
+            self._vlog(
+                "[DV][STEP 4/7] Encoder lieferte keine verlässliche Ausgabebildzahl; "
+                "es wird kein geschätzter Wert als DV-Paritätsnachweis verwendet."
+            )
         return True
+
+    def ensure_frame_parity_or_recover(
+        self,
+        state: DVPipelineState,
+        runner: DVCommandRunner,
+        *,
+        probe_rpu_frame_count: Callable[[DVCommandRunner, Path], int | None],
+    ) -> bool:
+        """Validate encoder progress against the extracted RPU before releasing the encode slot."""
+        evidence = getattr(state, "encoded_frame_evidence", None)
+        files = state.files
+        if evidence is None or not evidence.is_reliable_for(files.enc_hevc):
+            self._vlog(
+                "[DV][RECOVERY] Kein verlässlicher Encoder-Framecount direkt nach STEP 4; "
+                "die normale STEP-6-Paritätsprüfung bleibt als Guard aktiv."
+            )
+            return True
+        if evidence.temporal_mapping == "changed":
+            # The existing STEP-6 validator owns this policy error and produces
+            # the more specific user-facing reason.
+            return True
+
+        rpu_count = probe_rpu_frame_count(runner, files.rpu_orig)
+        if not rpu_count:
+            self._vlog(
+                "[DV][RECOVERY] RPU-Framecount direkt nach STEP 4 nicht ermittelbar; "
+                "kein automatischer Retry ohne exakten Sollwert."
+            )
+            return True
+
+        encode_count = int(evidence.count)
+        if int(rpu_count) == encode_count:
+            self._vlog(
+                f"[DV][STEP 4/7] Frühe RPU/Encode-Parität OK: {encode_count} Frames."
+            )
+            return True
+
+        if self._attempt_partial_frame_repair(
+            state,
+            runner,
+            expected_rpu_frames=int(rpu_count),
+            actual_encode_frames=encode_count,
+        ):
+            state.encoded_frame_evidence = FrameCountEvidence.reliable(
+                int(rpu_count),
+                source="ffmpeg_partial_repair_validated",
+                path=files.enc_hevc,
+                stage="STEP 4/7 DV Partial-Recovery",
+                temporal_mapping=evidence.temporal_mapping,
+            )
+            return True
+
+        reason = (
+            "RPU/Encode-Frame-Mismatch nach Video-Encoding: "
+            f"RPU={int(rpu_count)}, HEVC={encode_count}. "
+            "Eine konservative Teilreparatur des betroffenen GOP-Bereichs war nicht eindeutig und sicher möglich. "
+            "Da der normale DV-Pfad bereits direkt aus der Original-MKV encodiert, wird kein identischer Voll-Reencode automatisch wiederholt."
+        )
+        self._temp_state.record_failure(reason=reason, stage="STEP 4/7 Frame-Recovery")
+        self._log(f"❌ [DV][RECOVERY] {reason}", "error")
+        return False
+
+    def _attempt_partial_frame_repair(
+        self,
+        state: DVPipelineState,
+        runner: DVCommandRunner,
+        *,
+        expected_rpu_frames: int,
+        actual_encode_frames: int,
+    ) -> bool:
+        """Try the conservative GOP-bounded repair before failing the DV job."""
+        return DVPartialFrameRepair(
+            tools=self._tools,
+            encoder_config=self._encoder_config,
+            progress_runner=self._progress_runner,
+            log=self._log,
+            verbose_log=self._vlog,
+        ).attempt(
+            state=state,
+            runner=runner,
+            expected_rpu_frames=expected_rpu_frames,
+            actual_encode_frames=actual_encode_frames,
+        )
 
     def cleanup_burn_sub(self, request) -> None:
         self._failure_recovery.cleanup_tmp_sub(

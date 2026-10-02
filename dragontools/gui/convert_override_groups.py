@@ -156,6 +156,7 @@ class ConvertOverrideGroupBuilderMixin:
 
     def _build_hdr_policy_group(self, cv: QVBoxLayout, ov: dict):
         from ..core.settings_conversion import (
+            DEFAULT_HDR10PLUS_GENERATOR_ENABLED, SET_KEY_HDR10PLUS_GENERATOR_ENABLED,
             DEFAULT_SDR_HDR_ENABLED, SET_KEY_AV1_PRESERVE_DV, SET_KEY_AV1_PRESERVE_HDRPLUS,
             SET_KEY_PRESERVE_DV, SET_KEY_PRESERVE_HDRPLUS, SET_KEY_SDR_HDR_ENABLED,
         )
@@ -169,13 +170,15 @@ class ConvertOverrideGroupBuilderMixin:
         global_dv = qs.value(dv_key, True, type=bool)
         global_hdp = qs.value(hdp_key, True, type=bool)
         global_sdr_hdr = qs.value(SET_KEY_SDR_HDR_ENABLED, DEFAULT_SDR_HDR_ENABLED, type=bool)
+        global_hdrgen = qs.value(SET_KEY_HDR10PLUS_GENERATOR_ENABLED, DEFAULT_HDR10PLUS_GENERATOR_ENABLED, type=bool)
 
         hdr_grp = QGroupBox("HDR Policy (per Datei)")
         hdr_l = QGridLayout(hdr_grp)
         dv_combo = QComboBox()
         hdp_combo = QComboBox()
         sdr_hdr_combo = QComboBox()
-        for combo in (dv_combo, hdp_combo, sdr_hdr_combo):
+        hdrgen_combo = QComboBox()
+        for combo in (dv_combo, hdp_combo, sdr_hdr_combo, hdrgen_combo):
             combo.addItem("Global-Standard", None)
             combo.addItem("✅ Aktiv / anwenden", True)
             combo.addItem("⛔ Deaktivieren", False)
@@ -192,6 +195,7 @@ class ConvertOverrideGroupBuilderMixin:
         _set_combo(dv_combo, "preserve_dv")
         _set_combo(hdp_combo, "preserve_hdrplus")
         _set_combo(sdr_hdr_combo, "sdr_hdr")
+        _set_combo(hdrgen_combo, "generate_hdr10plus")
         hdr_l.addWidget(QLabel("🎨 Dolby Vision:"), 0, 0)
         hdr_l.addWidget(dv_combo, 0, 1)
         hdr_l.addWidget(
@@ -229,5 +233,12 @@ class ConvertOverrideGroupBuilderMixin:
             2,
             2,
         )
+        hdr_l.addWidget(QLabel("HDR10+ generieren:"), 3, 0)
+        hdr_l.addWidget(hdrgen_combo, 3, 1)
+        hdr_l.addWidget(InfoButton(
+            f"Global-Standard = globale Generator-Einstellung benutzen "
+            f"(aktuell: {'aktiv' if global_hdrgen else 'aus'}).\n"
+            "Aktivieren oder deaktivieren überschreibt diese Einstellung nur für diese Datei."
+        ), 3, 2)
         cv.addWidget(hdr_grp)
-        return dv_combo, hdp_combo, sdr_hdr_combo
+        return dv_combo, hdp_combo, sdr_hdr_combo, hdrgen_combo

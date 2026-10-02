@@ -85,10 +85,19 @@ class ParsedSeriesReleaseName:
     technical_tags: tuple[str, ...] = ()
     warnings: tuple[str, ...] = ()
     season_missing: bool = False
+    # Explicit metadata-browser mappings may bind one physical file to up to
+    # four consecutive episodes.  Empty tuples preserve the legacy single-
+    # episode model for every existing caller.
+    episodes: tuple[int, ...] = ()
+    episode_titles: tuple[str, ...] = ()
 
     @property
     def query_title(self) -> str:
         return self.series
+
+    @property
+    def episode_numbers(self) -> tuple[int, ...]:
+        return self.episodes or (self.episode,)
 
 
 @dataclass(frozen=True)
@@ -103,11 +112,26 @@ class SeriesRenameCandidate:
     episode_id: int | None = None
     score: float = 0.0
     match_reason: str = ""  # DragonTools patch: fuzzy display confidence v6
+    episodes: tuple[int, ...] = ()
+    episode_titles: tuple[str, ...] = ()
+    title_mode: str = "all"
+
+    @property
+    def episode_numbers(self) -> tuple[int, ...]:
+        return self.episodes or (self.episode,)
 
     @property
     def display_title(self) -> str:
-        ep = f"S{self.season:02d}E{self.episode:02d}"
-        title = f" - {self.episode_title}" if self.episode_title else ""
+        numbers = self.episode_numbers
+        ep = f"S{self.season:02d}" + "".join(f"E{number:02d}" for number in numbers)
+        titles = self.episode_titles or ((self.episode_title,) if self.episode_title else ())
+        if self.title_mode == "none":
+            title_text = ""
+        elif self.title_mode == "first":
+            title_text = next((value for value in titles if value), "")
+        else:
+            title_text = " + ".join(value for value in titles if value)
+        title = f" - {title_text}" if title_text else ""
         year = f" ({self.year})" if self.year else ""
         return f"{self.series}{year} - {ep}{title}"
 

@@ -240,3 +240,135 @@ def test_real_hdr10plus_extract_inject_verify_roundtrip(tmp_path: Path):
         scratch_json=verify_json,
         expected_json=source_json,
     )
+
+
+
+def _make_pq_hevc(*, ffmpeg: str, target: Path, frames: int) -> None:
+    _run([
+        ffmpeg,
+        "-hide_banner",
+        "-loglevel", "error",
+        "-y",
+        "-f", "lavfi",
+        "-i", f"testsrc2=s=128x72:r=24:d={max(1, frames) / 24:.6f}",
+        "-frames:v", str(frames),
+        "-c:v", "libx265",
+        "-preset", "ultrafast",
+        "-x265-params",
+        "log-level=error:repeat-headers=1:colorprim=bt2020:transfer=smpte2084:colormatrix=bt2020nc",
+        "-pix_fmt", "yuv420p10le",
+        "-color_primaries", "bt2020",
+        "-color_trc", "smpte2084",
+        "-colorspace", "bt2020nc",
+        "-an", "-sn", "-dn",
+        "-f", "hevc",
+        str(target),
+    ], timeout=300)
+    assert target.is_file() and target.stat().st_size > 1024
+
+
+def test_real_generated_hdr10plus_metadata_inject_extract_roundtrip(tmp_path: Path):
+    """Prove that metadata created by our generator is accepted by hdr10plus_tool."""
+    import sys
+
+    env = external_media_environment()
+    assert not env.missing
+    assert env.ffmpeg and env.ffprobe and env.hdr10plus_tool
+
+    generator_src = Path(__file__).resolve().parents[2] / "dragon_hdr10plus_generator" / "src"
+    sys.path.insert(0, str(generator_src))
+    try:
+        from dragon_hdr10plus_generator.analyzer.decoder import probe_video
+        from dragon_hdr10plus_generator.analyzer.scanner import scan_pq_video
+        from dragon_hdr10plus_generator.metadata.json_writer import write_json_atomic
+        from dragon_hdr10plus_generator.metadata.st2094_40 import build_st2094_40_metadata
+
+        base_hevc = tmp_path / "generated-base.hevc"
+        generated_json = tmp_path / "generated-hdr10plus.json"
+        injected_hevc = tmp_path / "generated-injected.hevc"
+        extracted_json = tmp_path / "generated-extracted.json"
+
+        _make_pq_hevc(ffmpeg=env.ffmpeg, target=base_hevc, frames=6)
+        probe = probe_video(base_hevc, ffprobe=env.ffprobe, timeout_s=30)
+        assert probe.transfer.casefold() in {"smpte2084", "pq"}
+        assert probe.primaries.casefold().replace("_", "").replace("-", "") in {"bt2020", "rec2020"}
+
+        scan = scan_pq_video(
+            base_hevc,
+            probe,
+            ffmpeg=env.ffmpeg,
+            analysis_width=64,
+            inactivity_timeout_s=30,
+            progress_interval_s=0.25,
+        )
+        assert len(scan.frames) == 6
+        metadata = build_st2094_40_metadata(scan.frames, min_scene_frames=1, tool_version="integration-test")
+        write_json_atomic(generated_json, metadata)
+
+        service = HDR10PlusBitstreamService(
+            hdr10plus_tool_path=env.hdr10plus_tool,
+            log=lambda *_: None,
+        )
+        assert service.inject_metadata(
+            _run_callback,
+            input_hevc=base_hevc,
+            metadata_json=generated_json,
+            output_hevc=injected_hevc,
+        )
+        assert service.verify_metadata(
+            _run_callback,
+            source_stream=injected_hevc,
+            scratch_json=extracted_json,
+            expected_json=generated_json,
+        )
+    finally:
+        try:
+            sys.path.remove(str(generator_src))
+        except ValueError:
+            pass
+
+
+def test_real_built_hdr10plus_generator_exe_uses_explicit_tool_paths(tmp_path: Path):
+    """Exercise the packaged generator process, not only its Python library."""
+    import os
+
+    exe = Path(os.environ.get("DRAGONTOOLS_HDR10PLUS_GENERATOR_EXE", ""))
+    if not exe.is_file():
+        pytest.skip("Built HDRPlusGenerator.exe not provided by the integration runner")
+
+    env = external_media_environment()
+    assert not env.missing
+    assert env.ffmpeg and env.ffprobe and env.hdr10plus_tool
+
+    base_hevc = tmp_path / "generator-exe-base.hevc"
+    generated_json = tmp_path / "generator-exe.json"
+    injected_hevc = tmp_path / "generator-exe-injected.hevc"
+    extracted_json = tmp_path / "generator-exe-extracted.json"
+    _make_pq_hevc(ffmpeg=env.ffmpeg, target=base_hevc, frames=6)
+
+    from dragontools.worker.hdr10plus_generator_client import HDR10PlusGeneratorClient
+
+    client = HDR10PlusGeneratorClient(
+        str(exe),
+        ffmpeg_path=env.ffmpeg,
+        ffprobe_path=env.ffprobe,
+    )
+    result = client.analyze(base_hevc, generated_json, timeout_s=60)
+    assert result.success, (result.error, result.message, result.command)
+    assert generated_json.is_file() and generated_json.stat().st_size > 0
+    assert "--ffmpeg" in result.command and env.ffmpeg in result.command
+    assert "--ffprobe" in result.command and env.ffprobe in result.command
+
+    service = HDR10PlusBitstreamService(hdr10plus_tool_path=env.hdr10plus_tool, log=lambda *_: None)
+    assert service.inject_metadata(
+        _run_callback,
+        input_hevc=base_hevc,
+        metadata_json=generated_json,
+        output_hevc=injected_hevc,
+    )
+    assert service.verify_metadata(
+        _run_callback,
+        source_stream=injected_hevc,
+        scratch_json=extracted_json,
+        expected_json=generated_json,
+    )

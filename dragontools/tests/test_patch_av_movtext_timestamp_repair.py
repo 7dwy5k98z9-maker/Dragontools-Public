@@ -202,7 +202,7 @@ def test_packet_integrity_compares_hashes_per_stream_not_global_mux_order(monkey
         "after.mkv": _packet_payload(reordered=True),
     }
 
-    def run_tool(cmd, *, label):
+    def run_tool(cmd, *, label, **kwargs):
         return SimpleNamespace(returncode=0, stdout=json.dumps(payloads[str(cmd[-1])]), stderr="")
 
     verifier = PacketIntegrityVerifier(ffprobe_path="ffprobe", run_tool=run_tool)
@@ -223,7 +223,7 @@ def test_packet_integrity_rejects_changed_payload(monkeypatch):
         "after.mkv": _packet_payload(changed_audio_hash=True),
     }
 
-    def run_tool(cmd, *, label):
+    def run_tool(cmd, *, label, **kwargs):
         return SimpleNamespace(returncode=0, stdout=json.dumps(payloads[str(cmd[-1])]), stderr="")
 
     verifier = PacketIntegrityVerifier(ffprobe_path="ffprobe", run_tool=run_tool)

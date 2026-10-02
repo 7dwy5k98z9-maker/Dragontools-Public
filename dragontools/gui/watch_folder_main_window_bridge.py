@@ -35,6 +35,13 @@ def stop_watch_folder_controller(window) -> bool:
     return bool(controller.stop())
 
 
+def scan_watch_folders_now(window) -> bool:
+    controller = getattr(window, "_watch_folder_controller", None)
+    if controller is None:
+        return False
+    return bool(controller.scan_now())
+
+
 def enqueue_watch_folder_files(
     window,
     *,
@@ -74,5 +81,6 @@ def enqueue_watch_folder_files(
 
 __all__ = [
     "start_watch_folder_controller", "refresh_watch_folder_controller",
-    "stop_watch_folder_controller", "enqueue_watch_folder_files",
+    "stop_watch_folder_controller", "scan_watch_folders_now",
+    "enqueue_watch_folder_files",
 ]

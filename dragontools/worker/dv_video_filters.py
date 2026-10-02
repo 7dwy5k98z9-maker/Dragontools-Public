@@ -8,25 +8,31 @@ _DV_SETPARAMS = (
     ":color_trc=smpte2084"
 )
 
-_DV_VF_PREFIX = f"format=p010le,{_DV_SETPARAMS},"
-_DV_VF_SUFFIX = f",format=p010le,{_DV_SETPARAMS}"
-
 _DV_P5_ICTCP_TO_BT2020 = (
     "zscale="
     "matrixin=ictcp:transferin=smpte2084:primariesin=bt2020:rangein=full"
     ":matrix=bt2020nc:transfer=smpte2084:primaries=bt2020:range=tv"
 )
 
-_DV_P5_LIBPLACEBO_FILTER = (
-    "libplacebo=format=p010le"
-    ":colorspace=bt2020nc"
-    ":color_primaries=bt2020"
-    ":color_trc=smpte2084"
-    ":range=tv"
-)
+def _dv_vf_prefix(pixel_format: str) -> str:
+    return f"format={pixel_format},{_DV_SETPARAMS},"
 
 
-def build_dv5_libplacebo_vf(vf_args: list) -> list:
+def _dv_vf_suffix(pixel_format: str) -> str:
+    return f",format={pixel_format},{_DV_SETPARAMS}"
+
+
+def _dv_p5_libplacebo_filter(pixel_format: str) -> str:
+    return (
+        f"libplacebo=format={pixel_format}"
+        ":colorspace=bt2020nc"
+        ":color_primaries=bt2020"
+        ":color_trc=smpte2084"
+        ":range=tv"
+    )
+
+
+def build_dv5_libplacebo_vf(vf_args: list, *, pixel_format: str = "p010le") -> list:
     """Build ffmpeg filter args for DV Profile 5 base-layer conversion."""
     cleaned: list = []
     i = 0
@@ -42,48 +48,56 @@ def build_dv5_libplacebo_vf(vf_args: list) -> list:
         fc_idx = cleaned.index("-filter_complex")
         chain = cleaned[fc_idx + 1]
         if "[0:v:0]" in chain:
-            chain = chain.replace("[0:v:0]", f"[0:v:0]{_DV_P5_LIBPLACEBO_FILTER},", 1)
+            chain = chain.replace("[0:v:0]", f"[0:v:0]{_dv_p5_libplacebo_filter(pixel_format)},", 1)
         else:
-            chain = f"{_DV_P5_LIBPLACEBO_FILTER},{chain}"
+            chain = f"{_dv_p5_libplacebo_filter(pixel_format)},{chain}"
         cleaned[fc_idx + 1] = chain
         return cleaned
 
     try:
         vf_idx = cleaned.index("-vf")
         old_chain = cleaned[vf_idx + 1]
-        cleaned[vf_idx + 1] = f"{_DV_P5_LIBPLACEBO_FILTER},{old_chain}"
+        cleaned[vf_idx + 1] = f"{_dv_p5_libplacebo_filter(pixel_format)},{old_chain}"
     except (ValueError, IndexError):
-        cleaned += ["-vf", _DV_P5_LIBPLACEBO_FILTER]
+        cleaned += ["-vf", _dv_p5_libplacebo_filter(pixel_format)]
 
     return cleaned
 
 
-def inject_dv_colorspace(vf_args: list, is_p5: bool = False) -> list:
-    """Inject stable DV color metadata and p010 handoff into ffmpeg filter args."""
+def inject_dv_colorspace(
+    vf_args: list,
+    is_p5: bool = False,
+    *,
+    pixel_format: str = "p010le",
+) -> list:
+    """Inject stable DV color metadata using the encoder-native 10-bit format."""
     result = list(vf_args)
     vf_prefix = (
-        f"format=p010le,{_DV_P5_ICTCP_TO_BT2020},{_DV_SETPARAMS},"
+        f"format={pixel_format},{_DV_P5_ICTCP_TO_BT2020},{_DV_SETPARAMS},"
         if is_p5
-        else _DV_VF_PREFIX
+        else _dv_vf_prefix(pixel_format)
     )
+    vf_suffix = _dv_vf_suffix(pixel_format)
 
     if "-filter_complex" in result:
         fc_idx = result.index("-filter_complex")
         old_chain = result[fc_idx + 1]
 
-        if "[1:v:0]" in old_chain:
-            tail = old_chain[old_chain.index("[1:v:0]") + len("[1:v:0]") :]
+        video_label = next((label for label in ("[1:v:0]", "[0:v:0]") if label in old_chain), None)
+        if video_label is not None:
+            tail = old_chain[old_chain.index(video_label) + len(video_label) :]
             if tail.startswith("["):
                 old_chain = old_chain.replace(
-                    "[1:v:0]",
-                    f"[1:v:0]{vf_prefix.rstrip(',')}[_dvfmt];[_dvfmt]",
+                    video_label,
+                    f"{video_label}{vf_prefix.rstrip(',')}[_dvfmt];[_dvfmt]",
+                    1,
                 )
             else:
-                old_chain = old_chain.replace("[1:v:0]", f"[1:v:0]{vf_prefix}")
+                old_chain = old_chain.replace(video_label, f"{video_label}{vf_prefix}", 1)
         if "[vout]" in old_chain:
-            old_chain = old_chain.replace("[vout]", f"{_DV_VF_SUFFIX}[vout]")
+            old_chain = old_chain.replace("[vout]", f"{vf_suffix}[vout]")
         else:
-            old_chain += _DV_VF_SUFFIX
+            old_chain += vf_suffix
 
         result[fc_idx + 1] = old_chain
         return result
@@ -91,9 +105,9 @@ def inject_dv_colorspace(vf_args: list, is_p5: bool = False) -> list:
     try:
         vf_idx = result.index("-vf")
         old_chain = result[vf_idx + 1]
-        result[vf_idx + 1] = vf_prefix + old_chain + _DV_VF_SUFFIX
+        result[vf_idx + 1] = vf_prefix + old_chain + vf_suffix
     except (ValueError, IndexError):
-        result += ["-vf", f"format=p010le,{_DV_SETPARAMS}"]
+        result += ["-vf", f"format={pixel_format},{_DV_SETPARAMS}"]
 
     return result
 

@@ -110,6 +110,13 @@ class ConvertWidgetQueueContextActionsMixin:
 
     def _rule_test_preview_options(self) -> dict:
         from ..core.encoder_profile_override import SCALE_LABELS_TO_MODE
+        from ..core.settings_access import settings_text
+        from ..core.settings_conversion import (
+            DEFAULT_OUTPUT_CONTAINER_DV,
+            DEFAULT_OUTPUT_CONTAINER_STANDARD,
+            SET_KEY_OUTPUT_CONTAINER_DV,
+            SET_KEY_OUTPUT_CONTAINER_STANDARD,
+        )
 
         scale_text = str(self.scale_combo.currentText() or "original")
         scale_mode = SCALE_LABELS_TO_MODE.get(scale_text, SCALE_LABELS_TO_MODE.get(scale_text.lower(), "original"))
@@ -123,6 +130,18 @@ class ConvertWidgetQueueContextActionsMixin:
             "default_scale_mode": scale_mode,
             "default_encoder_options": encoder_options,
             "autocrop_enabled": bool(self.autocrop_cb.isChecked()),
+            "standard_container": settings_text(
+                self.settings,
+                SET_KEY_OUTPUT_CONTAINER_STANDARD,
+                DEFAULT_OUTPUT_CONTAINER_STANDARD,
+                allowed=("mkv", "mp4"),
+            ),
+            "dv_container": settings_text(
+                self.settings,
+                SET_KEY_OUTPUT_CONTAINER_DV,
+                DEFAULT_OUTPUT_CONTAINER_DV,
+                allowed=("mkv", "mp4"),
+            ),
         }
 
     def _show_rule_test(self, path: str) -> None:

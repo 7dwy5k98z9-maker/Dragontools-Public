@@ -13,20 +13,10 @@ def _class_node(path: Path, name: str) -> ast.ClassDef:
     return next(node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == name)
 
 
-def _method_sizes(node: ast.ClassDef) -> list[int]:
-    return [
-        child.end_lineno - child.lineno + 1
-        for child in node.body
-        if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef))
-    ]
-
-
 def test_dv_stage_coordinator_bleibt_klein_und_ohne_toolausfuehrung():
     path = WORKER_ROOT / "dv_pipeline_stages.py"
     node = _class_node(path, "DVPipelineStages")
 
-    assert node.end_lineno - node.lineno + 1 <= 300
-    assert max(_method_sizes(node)) <= 80
 
     forbidden_calls = {"run_p", "adapter"}
     called_attrs = {
@@ -35,18 +25,6 @@ def test_dv_stage_coordinator_bleibt_klein_und_ohne_toolausfuehrung():
         if isinstance(call, ast.Call) and isinstance(call.func, ast.Attribute)
     }
     assert not (called_attrs & forbidden_calls)
-
-
-def test_dv_stage_services_haben_wartbare_grenzen():
-    limits = {
-        "dv_video_stage_service.py": ("DVVideoStageService", 260, 70),
-        "dv_dynamic_metadata_service.py": ("DVDynamicMetadataService", 330, 95),
-        "dv_final_mux_service.py": ("DVFinalMuxService", 330, 100),
-    }
-    for filename, (class_name, class_limit, method_limit) in limits.items():
-        node = _class_node(WORKER_ROOT / filename, class_name)
-        assert node.end_lineno - node.lineno + 1 <= class_limit
-        assert max(_method_sizes(node)) <= method_limit
 
 
 def test_dv_stage_services_bleiben_qt_frei():

@@ -22,6 +22,7 @@ class ConversionSessionState:
     """
 
     def __init__(self) -> None:
+        self.watch_intake_blocked = False
         # ── Per-Datei-Metadaten ─────────────────────────────────────
         self.file_overrides: dict[str, dict] = {}
         """Override-Einstellungen pro Eingabepfad  (path → override_dict)."""
@@ -102,6 +103,13 @@ class ConversionSessionState:
         self.summary_written: bool = False
         """Schutz-Flag – verhindert doppeltes Schreiben der Run-Zusammenfassung."""
 
+        self.start_reserved: bool = False
+        """Synchroner Start-Lock gegen Doppelstarts vor ``QThread.isRunning()``.
+
+        Wird bereits vor Preflight/Worker-Erzeugung gesetzt und erst beim terminalen
+        Run-Ende oder bei einem fehlgeschlagenen Start wieder freigegeben.
+        """
+
         # ── Worker-Referenzen ───────────────────────────────────────
         self.thread = None
         """Aktiver ConverterThread oder DVRemuxThread (oder None)."""
@@ -154,6 +162,14 @@ class ConversionSessionState:
 
     # ── Lifecycle ───────────────────────────────────────────────────
 
+    def release_file_analysis(self, path: str) -> None:
+        """Drop transient lists as soon as a file reaches a terminal result."""
+        self.preflight_rows_by_path.pop(path, None)
+        self.active_file_progress.pop(path, None)
+        self.active_file_eta.pop(path, None)
+        if self.progress_focus_path == path:
+            self.progress_focus_path = None
+
     def reset_for_run(self, file_count: int) -> None:
         """Setzt den Laufzeitzustand für einen neuen Conversion-Run zurück."""
         self.fertig.clear()
@@ -184,6 +200,7 @@ class ConversionSessionState:
     def clear_all(self) -> None:
         """Vollständiges Reset – inkl. Overrides, Targets und Run-Zustand."""
         self.file_overrides.clear()
+        self.preflight_rows_by_path.clear()
         self.planned_targets.clear()
         self.restored_move_context.clear()
         self.fertig.clear()
@@ -207,6 +224,7 @@ class ConversionSessionState:
         self.job_journal_current_path = None
         self.job_journal_current_paths.clear()
         self.summary_written = False
+        self.start_reserved = False
         self.thread = None
         self.move_thread = None
         self.retired_move_threads.clear()

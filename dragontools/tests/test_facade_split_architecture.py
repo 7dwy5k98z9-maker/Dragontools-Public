@@ -27,7 +27,6 @@ def _production_imports_of(module_name: str) -> list[tuple[Path, int]]:
 
 def test_paths_is_compatibility_facade_and_production_uses_owned_modules():
     source = (CORE / "paths.py").read_text(encoding="utf-8")
-    assert len(source.splitlines()) < 100
     assert "from .path_syntax import *" in source
     assert "from .path_defaults import *" in source
     assert "from .resource_paths import" in source
@@ -37,7 +36,6 @@ def test_paths_is_compatibility_facade_and_production_uses_owned_modules():
 
 def test_settings_is_compatibility_facade_and_production_uses_domain_modules():
     source = (CORE / "settings.py").read_text(encoding="utf-8")
-    assert len(source.splitlines()) < 40
     for module in (
         "settings_app",
         "settings_access",

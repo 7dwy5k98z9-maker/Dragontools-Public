@@ -1,9 +1,10 @@
-# Dragon Tools – Patchprotokoll für Version 9.8.5
+# Dragon Tools – Patchprotokoll bis Version 9.8.7
 
-**Ausgangsbasis:** Dragon Tools 9.8.4  
-**Zielversion:** Dragon Tools 9.8.5  
+**Ausgangsbasis:** Dragon Tools 9.8.5  
+**Zwischenrelease:** Dragon Tools 9.8.6  
+**Zielversion / aktueller Stand:** Dragon Tools 9.8.7  
 **Status:** laufende Entwicklung  
-**Letzte Aktualisierung:** 21.09.2026
+**Letzte Aktualisierung:** 27.09.2026
 
 Dieses Dokument wird mit jedem Patch fortlaufend ergänzt. Es trennt bewusst zwischen **bereits umgesetzten Änderungen** und **geplanten Folgepatches**. Nur Einträge unter „Umgesetzte Patches“ gelten als Bestandteil des aktuell gepatchten Projektstands.
 
@@ -2895,7 +2896,7 @@ Neu/erweitert geprüft werden insbesondere:
 - `compileall`: erfolgreich.
 - Direkte Import-Smokes der neuen HDR10+-/Runtime-/DV-Module und des Generatorpakets: erfolgreich.
 - `ruff` ist auf dem Review-Host nicht installiert; deshalb wurde lokal kein separater Ruff-F821-Lauf behauptet. Die umfangreiche pytest-/Import-/AST-/compileall-Prüfung lief dagegen tatsächlich.
-- Release-Validator auf bereinigtem Source-Baum: **29 OK, 4 bekannte Warnungen, 0 Fehler**. Warnungen: kein lokaler `dist`-Build vorhanden sowie drei bereits vorhandene Datenschutz-Hinweise auf den Namen „Dragon Developer“ in Dokumentations-/Legacy-Dateien.
+- Release-Validator auf bereinigtem Source-Baum: **29 OK, 4 bekannte Warnungen, 0 Fehler**. Warnungen: kein lokaler `dist`-Build vorhanden sowie drei bereits vorhandene Autorenhinweise in Dokumentations-/Legacy-Dateien.
 
 Ein einzelner monolithischer `pytest -q`-Aufruf wird in dieser Ausführungsumgebung bei ca. 80 % durch das externe Tool-Zeitlimit beendet. Deshalb wurde die vollständige Testsuite deterministisch in drei Chunks ausgeführt; zusammen decken sie sämtliche Testdateien ab.
 
@@ -4134,7 +4135,7 @@ Das Inhaltsverzeichnis sowie alle nachfolgenden Help-Kapitelnummern wurden fortl
 
 - Regressionen prüfen internen `mov_text → subrip`-Mux, Strip-Only, expliziten Ausschluss beim Retry, verlustfreien Subtitle-only-MP4-Backup und die Anpassung des Medienvertrags.
 - Relevanter Subtitle-/Fallback-/Architektur-Testverbund: **101 bestanden, 8 umgebungsbedingte PyQt6-Skips, 0 Fehler**.
-- Gesamter DragonTools-Testbestand in zwei deterministischen Gruppen ausgeführt: **1.762 bestanden, 25 umgebungsbedingte/optionale Skips, 0 Fehler**.
+- Gesamter DragonTools-Testbestand in zwei deterministischen Gruppen ausgeführt: **1.767 bestanden, 25 umgebungsbedingte/optionale Skips, 0 Fehler**.
 - `compileall` über DragonTools und den eingebetteten Dragon HDR10+ Generator: **erfolgreich**.
 - Realer FFmpeg-Smoke-Test bestätigt: `mov_text` lässt sich nach SubRip in MKV wandeln und die unveränderte Originalspur lässt sich separat als subtitle-only MP4 mit `mov_text` stream-copieren.
 
@@ -4207,7 +4208,7 @@ Das Inhaltsverzeichnis sowie alle nachfolgenden Help-Kapitelnummern wurden fortl
 
 ---
 
-## Patch BB – Renamer: Episode manuell ändern und 3×5-Werkzeugleiste – 25.09.2026
+## Patch BB – Renamer: Episode manuell ändern und gleichmäßige Werkzeugleiste – 25.09.2026
 
 ### Manuelle Episodenwahl
 
@@ -4219,14 +4220,14 @@ Das Inhaltsverzeichnis sowie alle nachfolgenden Help-Kapitelnummern wurden fortl
 
 ### Gleichmäßige Renamer-Werkzeugleiste
 
-- Die jetzt **15 Renamer-Aktionen** sind exakt auf **3 Zeilen mit je 5 Buttons** verteilt.
-- Alle fünf Spalten erhalten denselben Layout-Stretch; die Buttons dürfen horizontal gleichmäßig mitwachsen.
-- Die Reihen sind logisch gruppiert: Datei/Suche, Treffer/Struktur/Auswahl sowie Annahme/Umbenennen/Entfernen.
+- Die inzwischen **16 Renamer-Aktionen** sind auf **4 Zeilen mit je 4 Buttons** verteilt.
+- Alle vier Spalten erhalten denselben Layout-Stretch; die Buttons dürfen horizontal gleichmäßig mitwachsen.
+- Episode, Staffel und Jahr bleiben als getrennte manuelle Korrekturen verfügbar; die übrigen Aktionen sind logisch auf die vier Reihen verteilt.
 - Dadurch bleibt die Leiste sowohl auf breiten als auch schmaleren Fenstern ausgeglichen und erzeugt keine unnötige Mindestbreite.
 
 ### Regression
 
-- Neue Tests prüfen Episoden-Override, kombinierte Staffel-/Episoden-Overrides, ungültige Episodennummern, Button-Verdrahtung sowie die 3×5-Verteilung.
+- Neue Tests prüfen Episoden-Override, kombinierte Staffel-/Episoden-Overrides, ungültige Episodennummern, Button-Verdrahtung sowie die aktuelle 4×4-Verteilung.
 - Relevanter Duration-/Renamer-/Architektur-Testverbund: **74 bestanden, 1 umgebungsbedingter PyQt6-Skip, 0 Fehler**.
 - `compileall` über `dragontools`: **erfolgreich**.
 
@@ -4247,3 +4248,897 @@ Das Inhaltsverzeichnis sowie alle nachfolgenden Help-Kapitelnummern wurden fortl
 - Bereits laufende oder abgeschlossene Queue-Dateien können weiterhin nicht geändert werden. Bei gemischter Auswahl werden noch nicht gestartete Dateien übernommen und abgelehnte Dateien gesammelt gemeldet.
 - Für jede erfolgreich geänderte Datei werden Preflight-Cache und Queue-Badges aktualisiert.
 - Bei benutzerdefinierten Audio-/Untertitelspuren weist der Dialog darauf hin, dass die Track-Indizes der Referenzdatei übernommen werden; bei unterschiedlicher Spurstruktur sollen die Dateien getrennt eingestellt werden.
+
+
+---
+
+## Patch BD – HDR10+-Hardening, zusätzliche Verhaltenstests und Queue-Zoom-Regressionsschutz – 26.09.2026
+
+### Dragon HDR10+ Generator
+
+- `ffprobe` besitzt jetzt einen begrenzten Probe-Timeout; fehlendes `ffprobe` wird sauber als `TOOL_NOT_FOUND` statt als fehlende Eingabedatei klassifiziert.
+- PQ wird nur noch bei **explizit vorhandenem BT.2020-Primärfarbraum** akzeptiert. Fehlende Primärfarben werden fail-closed als `SOURCE_NOT_BT2020` abgelehnt.
+- Fehlende oder ungültige Breite/Höhe führen zu `PROBE_INCOMPLETE`; der Generator erfindet keine 1920×1080-Geometrie mehr.
+- FFmpeg-`stderr` wird parallel geleert, damit umfangreiche Decoderdiagnosen die Rawvideo-Pipe nicht blockieren können.
+- Der Scanner besitzt einen Frame-Inaktivitäts-Watchdog und beendet festhängende FFmpeg-Analysen kontrolliert als `ANALYSIS_TIMEOUT`.
+- DragonTools startet die Generatoranalyse standardmäßig mit einem **600-s-Inaktivitäts-Timeout** statt einem starren Gesamtlaufzeitlimit. Lange Dateien dürfen dadurch beliebig lange rechnen, solange Fortschrittsausgabe eintrifft.
+
+### Tests / CI
+
+- Standalone-Generator-Suite von 7 auf **14 Tests** erweitert: fehlende BT.2020-Tags, fehlende Dimensionen, Tool-Fehler, Probe-Timeout, Scanner-Dimensionen und echter Inaktivitätsabbruch.
+- DragonTools-Clienttests prüfen jetzt explizit Inaktivitätsmodus, Timeout-Rückgabe und Cleanup partieller Generatorausgaben.
+- Neue echte Qt-Verhaltenstests sichern die Queue-Reihenfolgebuttons **↑/↓ im Zoom-/Warteschlangenfenster**, inklusive Reorder und Sperre während blockierendem Move.
+- Zusätzliche Verhaltenstests prüfen Batch-Datei-Einstellungen auf mehreren Dateien sowie die manuelle Episodenänderung im Renamer, ohne bestehende Tests zu ersetzen.
+- Der reale DV/HDR-Self-Hosted-Test enthält jetzt zusätzlich `Generator → JSON → hdr10plus_tool inject → extract/verify`.
+- Die normale CI führt die eigenständige Generator-Test-Suite explizit aus; Ruff prüft auch dessen Source/Tests. Python **3.12 und 3.13** werden im Standard-CI getestet.
+
+### Projektstatistik
+
+- Aktueller Quellumfang: **1.019 Python-Dateien/Programme**, **154.103 Gesamtzeilen**, **130.304 Codezeilen**.
+- Produktivcode ohne Tests: **764 Dateien**, **107.551 Gesamtzeilen**, **92.616 Codezeilen**.
+- Testpakete: **255 Python-Dateien**, davon **250 `test_*.py`** mit **1.819 statisch erkannten Tests**.
+
+
+---
+
+## Patch BE – Review-Follow-up: Generator-Vertrag, Toolpfade, HDRTVDM-Lifecycle und Release-Hardening – 26.09.2026
+
+### Dragon HDR10+ Generator als fester Source-Bestandteil
+
+- Der eigenentwickelte `dragon_hdr10plus_generator` ist jetzt verbindlicher Bestandteil jedes DragonTools-Source-Releases und bleibt gleichzeitig als separate CLI/EXE standalone baubar.
+- Python-Source-Packager, `DragonTools_Source_ZIP.bat` und Release-Validator verwenden denselben Vertrag. Der Validator verlangt Generator-Source, Entry-Point, Buildskript und Tests.
+- Die lokal erzeugte `HDRPlusGenerator.spec` wurde aus dem gepflegten Source entfernt. Sie wird beim PyInstaller-Build bei Bedarf neu erzeugt und darf weiterhin nicht in Source-Releases gelangen.
+- Die Datenschutzprüfung berücksichtigt nun auch Generator-Build-/README-/Entry-Point-Dateien.
+
+### Explizite FFmpeg-/FFprobe-Übergabe
+
+- DragonTools übergibt seine bereits aufgelösten `ffmpeg`- und `ffprobe`-Pfade explizit an `HDRPlusGenerator.exe analyze`. Damit funktioniert der Generator auch dann, wenn die gebündelten Tools nicht im globalen `PATH` liegen.
+- Standalone bleiben `--ffmpeg` und `--ffprobe` optional. Werden sie nicht angegeben, nutzt der Generator weiterhin `ffmpeg`/`ffprobe` aus `PATH` als Fallback.
+- Pfade mit Leerzeichen und Unicode werden durch neue Regressionstests abgesichert.
+
+### Probe- und Quellvalidierung
+
+- Der Generator verwendet für die Voranalyse keinen vollständigen `ffprobe -count_frames`-Scan mehr. `nb_frames` wird genutzt, wenn vorhanden; andernfalls wird die erwartete Framezahl aus Dauer × FPS geschätzt.
+- Damit ist der kurze Metadaten-Probe-Timeout unabhängig von der Gesamtlänge einer UHD-Datei.
+- Eindeutig widersprüchliche Farbraummatrix bzw. gemeldete Bit-Tiefe unter 10 Bit werden fail-closed abgelehnt.
+
+### HDRTVDM / ComfyUI Prozesslebenszyklus
+
+- Decoder-stdout wird über einen überwachten Reader-Thread gelesen; ein Decoder ohne Framefortschritt wird nach Inaktivität beendet.
+- Encoder-stdin wird über einen überwachten Writer geführt, sodass blockierende Pipe-Schreibvorgänge nicht mehr unbegrenzt hängen können.
+- Decoder-/Encoder-Prozesse und ihre stdin/stdout/stderr-Streams werden in Erfolgs-, Fehler- und Abortpfaden deterministisch geschlossen; nach `kill()` wird auf Prozessende gewartet.
+- DragonTools überwacht zusätzlich den ComfyUI-Gesamtjob auf echten Fortschritt. Status-/Framefortschritt setzt den Watchdog zurück; dauerhafte Inaktivität führt zu `INACTIVITY_TIMEOUT` und kontrolliertem Cancel.
+- Der zuvor reproduzierbare `ResourceWarning: unclosed file <_io.BufferedReader ...>` ist durch einen Sequenztest abgesichert.
+
+### CI / Integration
+
+- Windows + Python 3.13 ist jetzt Bestandteil der Standard-Testmatrix.
+- Der self-hosted DV/HDR-Workflow baut zusätzlich die echte `HDRPlusGenerator.exe` und stellt sie den Integrationstests bereit.
+- Ein neuer Realtest prüft den Prozessvertrag `DragonTools-Client → gebaute Generator-EXE → explizite ffmpeg/ffprobe-Pfade → JSON → hdr10plus_tool inject/extract`.
+- Der Generator-Build verwendet einen reproduzierbaren PyInstaller-Bereich `>=6.10,<7`.
+
+### Projektstatistik
+
+- Aktueller Quellumfang: **1.019 Python-Dateien/Programme**, **154.103 Gesamtzeilen**, **130.304 Codezeilen**.
+- Produktivcode ohne Tests: **764 Dateien**, **107.551 Gesamtzeilen**, **92.616 Codezeilen**.
+- Testpakete: **255 Python-Dateien**, davon **250 `test_*.py`** mit **1.819 statisch erkannten Tests**.
+
+---
+
+## Patch BF – Release-Candidate-Hardening: Packaging, Snapshot, CI und Testhygiene – 26.09.2026
+
+### Source-Packaging / PyInstaller
+
+- Der Standalone-HDR10+-Generator erzeugt `HDRPlusGenerator.spec` nur noch unter seinem lokalen `build/`-Baum.
+- `DragonTools_Source_ZIP.bat` schließt `*.spec` in erforderlichen und optionalen Verzeichnissen explizit aus.
+- Der Python-Packager und `find_forbidden_release_artifacts()` behandeln `*.spec` nun einheitlich als generiertes/verbotenes Source-Artefakt.
+- Regressionstests sichern Generator-`--specpath`, BAT-Filter und Validatorerkennung ab.
+
+### Snapshot-Integrität / historische Manifeste
+
+- `extras/snapshot_manifest.py` erzeugt und verifiziert das private SHA-256-Inventar reproduzierbar gegen das tatsächliche Quellinventar.
+- Ein E2E-Test erkennt fehlende Dateien, zusätzliche Dateien und Hashdrift im `SNAPSHOT_CONTENTS.json`.
+- Historische Manifeste sind eindeutig benannt: `RELEASE_REVIEW_MANIFEST_9.8.3.json` und `PATCH_MANIFEST_2026-09-15.json`; generische historische Dubletten wurden entfernt.
+
+### Testhygiene
+
+- SQLite-Testverbindungen werden mit `closing(...)` plus Connection-Kontext deterministisch geschlossen, ohne bisherige Commit/Rollback-Semantik zu verlieren.
+- ResourceWarning-Tests sammeln Altressourcen vor ihrem Messfenster ein, sodass Warnungen dem tatsächlich geprüften Prozesspfad zugeordnet werden.
+
+### CI / Release-Gates
+
+- Neue Windows-CI baut eine source-free `DragonToolsSmoke.exe` mit PyInstaller und startet deren `--smoke-test`; der Einstiegspunkt importiert dabei die kritischen Frozen-Abhängigkeiten ohne GUI-Eventloop.
+- Ein separater HDRTVDM-CPU-Job installiert Torch/ImageIO/FFmpeg explizit und führt die Bridge-Lifecycle-Tests mit `ResourceWarning` als Fehler aus.
+- Der reale DV/HDR-self-hosted-Test ist neben manuellem Start bei `v*`-Tags ein Release-Gate.
+- `--version` ist am Haupteinstiegspunkt headless verfügbar und wird per Regressionstest gegen die zentrale `APP_VERSION` geprüft.
+
+### Projektstatistik
+
+- Aktueller Quellumfang: **1.019 Python-Dateien/Programme**, **154.191 Gesamtzeilen**, **130.371 Codezeilen**.
+- Produktivcode ohne Tests: **764 Dateien**, **107.551 Gesamtzeilen**, **92.616 Codezeilen**.
+- Testpakete: **255 Python-Dateien**, davon **250 `test_*.py`** mit **1.823 statisch erkannten Tests**.
+
+
+
+---
+
+## Patch BG – kanonisches Source-Packaging, reale Frozen-Smokes und HDR10+-RAM-Optimierung – 26.09.2026
+
+### Einheitlicher öffentlicher Source-Vertrag
+
+- `DragonTools_Source_ZIP.bat` besitzt keine zweite Datei-Inventarlogik mehr, sondern delegiert direkt an `dragontools.core.release_packaging.create_source_release_zip()`. BAT und Python erzeugen damit denselben öffentlichen Source-Inhalt; der rohe Arbeitsbaum wird vorab nicht mehr gegen Cache-Artefakte validiert, sondern ausschließlich das gefilterte, tatsächlich erzeugte ZIP.
+- Der öffentliche Inventarvertrag enthält DragonTools, den eigenentwickelten `dragon_hdr10plus_generator`, Tests, CI, Help/Handbuch/Changelog und Buildskripte; private `SNAPSHOT_*`, historische Reviewberichte, `.diff`-Dateien und `reviews/` bleiben ausschließlich im privaten Arbeitsstand.
+- Die Datenschutzprüfung verwendet dasselbe kanonische öffentliche Inventar und kann dadurch weder mitgelieferte Textdateien übersehen noch private Snapshotdateien fälschlich dem öffentlichen Release zurechnen.
+
+### Generator-Builder / reproduzierbare Standalone-Nutzung
+
+- `dragon_hdr10plus_generator/build.bat` sucht Python in dieser Reihenfolge: eigene `.venv`, DragonTools-`.venv`, `py -3`, `python`. Der Generator kann damit auch als ausgekoppeltes Unterprojekt gebaut werden.
+- NumPy ist für Generator und Build auf `>=2,<3`, PyInstaller auf `>=6.10,<7` begrenzt; die Haupt-Build-Hooks besitzen ebenfalls eine obere Versionsgrenze.
+- Der Builder prüft nicht nur den PyInstaller-Exitcode: Die fertige `HDRPlusGenerator.exe` muss innerhalb von 30 s ein erfolgreiches, parsebares `--version`-JSON liefern, andernfalls endet der Build mit Fehlercode.
+
+### Finaler DragonTools-Frozen-Smoke
+
+- `build_v9.bat` startet nach der Bundle-Validierung **exakt die finale** `%DIST_ROOT%\%BUILD_NAME%.exe --smoke-test`; ein fehlgeschlagener Start blockiert den Release.
+- Der Smoke initialisiert eine echte `QApplication`, erzeugt ein minimales `QWidget`, verarbeitet Events, importiert die kritischen Frozen-Pakete und konstruiert `ToolPaths`. Dadurch werden insbesondere fehlende/defekte Qt-Platform-Plugins erkannt, die ein reiner Importtest nicht abdeckt.
+- Der GitHub-Windows-Smoke verwendet zusätzlich `--noconsole` und `--contents-directory Daten`; die endgültige lokale Release-EXE bleibt durch `build_v9.bat` selbst hart gegatet.
+
+### HDR10+-Speichereffizienz
+
+- Die 64 Histogrammbins pro Frame werden nicht mehr als 64 Python-Floats, sondern als kompakte `array('I')`-uint32-Zähler gespeichert. `histogram_distance()` normalisiert ohnehin beide Eingaben, daher bleibt die Szenenerkennungs-Mathematik identisch.
+- Ein 64-Bin-Histogramm benötigt im Referenzlauf etwa 336 Byte statt rund 2.088 Byte. Für 172.800 Frames (2 h bei 24 fps) sinkt allein dieser Anteil rechnerisch von rund **344 MiB auf 55 MiB** – etwa **289 MiB weniger**.
+- Die Optimierung verändert weder Framezahl noch Perzentile, Szenengrenzen oder das erzeugte ST-2094-40-JSON.
+
+### Tests / Testvertrag
+
+- `pytest.ini` sammelt standardmäßig sowohl `dragontools/tests` als auch `dragon_hdr10plus_generator/tests`; der separate CI-Generatorlauf bleibt als zusätzlicher expliziter Schutz erhalten.
+- Neue Regressionen sichern kanonisches Public-Inventar, Ausschluss privater Snapshot-/Reviewartefakte, BAT→Python-Delegation, finalen EXE-Smokevertrag, Generator-Build-Smoke und kompakte Histogrammspeicherung.
+- Projektstatistik: **1.019 Python-Dateien/Programme**, **154.404 Gesamtzeilen**, **130.531 Codezeilen**; Produktivcode **764 Dateien / 107.694 Zeilen / 92.727 Codezeilen**; **250 `test_*.py` / 1.830 statisch erkannte Tests**.
+
+---
+
+## Patch BH – DV-Encode/Postprocessing-Overlap, HDR10+-Fortschritt und Release-Gates – 26.09.2026
+
+### Dolby Vision: nächster Encode startet bereits während Postprocessing
+
+- Nach erfolgreichem HEVC-Encode signalisiert der DV-Pipeline-Stage exakt einmal den Übergang in `🧩 Postprocessing`. Der `ParallelConverterThread` gibt damit den belegten Encode-Slot frei, während RPU-/HDR10+-Injection, Audio/Untertitel und Final-Mux des vorherigen Jobs weiterlaufen.
+- Die konfigurierte maximale Encode-Parallelität bleibt unverändert: Bei `parallel_jobs=1` läuft weiterhin höchstens ein Encoder gleichzeitig; nur die Metadaten-/Mux-Nachbearbeitung darf mit dem nächsten Encode überlappen.
+- Mehrdatei-Queues verwenden dafür auch bei einem einzelnen Encode-Slot den vorhandenen Parallel-Koordinator. Abort-, Current-Job- und Prozesssteuerung berücksichtigen sowohl aktive Encoder als auch Postprocessing-Worker.
+- Regressionstests sichern erfolgreiche/einmalige Slotfreigabe, Fehlerpfade ohne Freigabe und den Ein-Slot-Mehrdateibetrieb ab.
+
+### Dragon HDR10+ Generator: sichtbarer Langfilm-Fortschritt
+
+- Während der Bildanalyse schreibt der Generator standardmäßig alle 5 Sekunden Fortschritt nach stderr: aktuelle/erwartete Frames, Prozent, Analyse-FPS, verstrichene Zeit und ETA. Ohne verlässliche Framezahl werden Frames, FPS und Laufzeit ausgegeben.
+- DragonTools übernimmt diese Zeilen live ins Job-Log (`🧠 HDR10+ scan ...`). Die Ausgabe hält zugleich den Inaktivitäts-Watchdog aktiv, sodass stundenlange, aber fortschreitende Analysen nicht als Hänger wirken.
+- Das maschinenlesbare finale JSON bleibt unverändert auf stdout. Standalone-Nutzer können das Intervall über `--progress-interval` anpassen.
+
+### HDR10+-Quellvalidierung
+
+- Die Bit-Tiefe wird bei fehlendem `bits_per_raw_sample` zusätzlich aus `pix_fmt` und HEVC-Profil abgeleitet. Eindeutig 8-Bit codierte PQ/BT.2020-Quellen (`yuv420p`/`Main`) werden jetzt fail-closed mit `SOURCE_BIT_DEPTH_UNEXPECTED` abgelehnt; Main10-/10-Bit-Pixelformate bleiben zulässig.
+
+### Build / CI / Release-Robustheit
+
+- Der finale DragonTools-Smoke besitzt einen 90-s-Watchdog. Ein hängender Frozen-Prozess wird beendet und der Build schlägt kontrolliert fehl.
+- `build_v9.bat` bewahrt den letzten funktionierenden Dist-Stand als temporäres Backup und stellt ihn bei PyInstaller-/Bundle-/Smoke-Fehlern wieder her.
+- `v*`-Release-Tags auf dem self-hosted Windows-Runner benutzen die kanonischen Builder (`dragon_hdr10plus_generator\build.bat` und `build_v9.bat`) statt abweichender PyInstaller-Kommandos.
+- Der Generatorvertrag ist auf Python >=3.12 konsolidiert. Das öffentliche Source-Paket anonymisiert personenbezogene Entwicklungs-/Serverpfade über denselben kanonischen Inventarvertrag, den auch der Datenschutzvalidator prüft.
+
+### Projektstatistik
+
+- Aktueller Quellumfang: **1.020 Python-Dateien/Programme**, **154.744 Gesamtzeilen**, **130.814 Codezeilen**.
+- Produktivcode ohne Tests: **764 Dateien**, **107.829 Gesamtzeilen**, **92.843 Codezeilen**.
+- Testpakete: **256 Python-Dateien**, davon **251 `test_*.py`** mit **1.839 statisch erkannten Tests**.
+
+
+## Patch BI – DV/HDR-Frame-Nachweise, Postprocessing-Limit und transparente Langfilm-Fortschritte – 26.09.2026
+
+### Parallelität / Scheduler
+- DV-HEVC-Encode und schwere DV/HDR-Nachbearbeitung sind getrennte Ressourcenphasen.
+- Nach erfolgreichem HEVC-Encode wird der Encode-Slot über ein eigenes `encode_stage_complete`-Ereignis freigegeben; der historische `🧩`-Status bleibt ausschließlich für bereits committedes Video mit NFO/Trickplay-Nacharbeit.
+- Schwere DV/HDR-Nachbearbeitung ist standardmäßig auf **4 parallele Jobs** begrenzt. Weitere fertig encodierte Dateien warten auf den Postprocessing-Slot, blockieren aber keinen neuen Encode-Slot.
+- Gesamtfortschritt bleibt während DV/HDR/Mux bei maximal 99 %, bis ein finales Dateiergebnis vorliegt; GUI unterscheidet aktive Encodes und Nachbearbeitungen.
+
+### Bildzahl / DV-HDR10+-Pipeline
+- Neuer strukturierter `FrameCountEvidence`-Vertrag mit Bildzahl, Herkunft, Verlässlichkeit, Pipeline-Stufe, zeitlicher Abbildung und leichter Stream-Identität (Pfad, Größe, mtime). Kein zusätzlicher Vollhash.
+- Der erfolgreiche FFmpeg-DV-Encode übernimmt die **tatsächliche Ausgabebildzahl direkt aus `-progress frame=`** als verlässlichen Nachweis.
+- Die HDR10+-Analyse liefert ihre **tatsächlich vollständig decodierte Bildzahl** als verlässlichen Nachweis und kann diesen nach frame-erhaltender HDR10+-Metadateninjection weiterreichen.
+- `ffprobe -count_frames` wurde aus dem normalen DV/HDR10+-Pfad entfernt. Der schnelle Probe nutzt nur vorhandene Metadaten; rohe HEVC-Streams ohne belastbare Gesamtzahl bleiben `unknown`.
+- `FPS × Dauer` wird ausschließlich als `estimated` für die Fortschrittsanzeige verwendet und niemals als exakter DV-Paritätsnachweis.
+- Veraltete Nachweise werden nach Dateiänderung/Austausch über Größe+mtime verworfen. Offensichtlich bildzeitverändernde Filter (FPS, select, setpts, Interpolation/Decimation usw.) sperren die RPU-Parität fail-closed, weil gleiche Bildzahl keine korrekte zeitliche Zuordnung beweist.
+- Wenn kein verlässlicher HEVC-Bildzahlnachweis vorhanden ist, wird kein zusätzlicher Vollscan erzwungen; Tool-Rückgabecode, RPU-Rückextraktion und Inhaltsvergleich bleiben die Sicherheitsfallbacks.
+
+### HDR10+-Fortschritt
+- Generator unterscheidet `unknown`, `estimated` und gemeldete Gesamtbildzahlen.
+- Bei unbekannter Gesamtzahl: Frames, Analyse-FPS und Laufzeit ohne erfundene Prozent/ETA.
+- Bei `duration × fps`: Prozent/ETA werden ausdrücklich als **geschätzt** markiert. Überschreitet die reale Analyse die Schätzung, werden Prozent/ETA automatisch nicht weiter angezeigt.
+- Maschinenlesbares Abschluss-JSON bleibt getrennt auf stdout; Fortschritts-/Phasenmeldungen laufen weiterhin über stderr und werden vom DragonTools-Client live geloggt.
+- Phasen sind sichtbar: Vorprüfung → HDR10+-Analyse → HDR10+-Injection → DV-Prüfung/Injection → Final-Mux.
+
+### Release-Hygiene / P2
+- Standalone-Generator-Builder verlangt konsistent Python **>=3.12**.
+- Release-Tag-Build setzt für den kanonischen Frozen-Smoke `QT_QPA_PLATFORM=windows`; pytest-Qt darf weiterhin offscreen laufen.
+
+### Tests
+- Neue Regressionstests für Postprocessing-Limit 4, getrenntes Encode-Ereignis, unbekannte/geschätzte Bildzahlen, rohe HEVC-Eingaben, verlässliche Encoder-/Analysewerte, DV ohne Generator, RPU-Mismatch, stale Stream-Nachweise, zeitverändernde Filter, Abort beim Gate und den Nachweis ohne `-count_frames`-Vollscan.
+- Bestehende Architekturgrenzwerte wurden nicht erhöht; die zusätzliche Frame-Erfassung wurde aus `read_progress()` in eine eigene Hilfsfunktion extrahiert.
+- Projektumfang nach Patch BI: **1.024 Python-Dateien/Programme**, **155.781 Gesamtzeilen**, **131.721 Codezeilen**; Testpakete **258 Dateien**, davon **253 `test_*.py`** mit **1.861 statisch erkannten Tests**. Produktivcode: **766 Dateien**, **108.337 Gesamtzeilen**, **93.301 Codezeilen**.
+
+---
+
+## Patch BJ – DV/HDR10+ Diagnosearchiv bei fehlgeschlagenem HDR10+-Nachweis – 26.09.2026
+
+### Sicherer Fehlerpfad nach erzeugter HDR10+-JSON
+- Sobald der HDR10+-Generator eine gültige JSON erzeugt hat, werden spätere Fehler in der DV/HDR10+-Injection oder der finalen Metadatenprüfung nicht mehr als disposable Temp-Output behandelt.
+- Vor dem Ende des DV-`TemporaryDirectory` erzeugt `DVFailureRecovery.preserve_dynamic_metadata_failure()` ein eindeutiges Diagnosepaket direkt im `Archiv`-Ordner der Quelle.
+- Bevorzugt wird der bereits gemuxte MKV/MP4-Kandidat erhalten; existiert er noch nicht, wird der weitest fortgeschrittene Stream (`injected.hevc` → `hdr10plus.hevc` → `encoded.hevc`) gesichert.
+- Die erzeugte `hdr10plus.json` und eine eventuell vorhandene Verify-JSON werden zwingend in das Paket übernommen.
+- RPU-Diagnostik wird best-effort vollständig erhalten: tatsächlich verwendete RPU sowie – sofern vorhanden und verschieden – originale, bearbeitete, Verify- und aus dem finalen Mux extrahierte RPU.
+- `status.txt` dokumentiert Quelle, geplantes Ziel, Fehlerstufe und Fehlergrund. Das Original wird ausdrücklich nicht ersetzt oder gelöscht.
+- Kann das Diagnosepaket selbst nicht vollständig erzeugt werden, propagiert die Pipeline `preserve_failed_output`; der generische Workflow-Cleanup darf den Arbeitskandidaten dann nicht löschen.
+- Fehleranzeige und Error-Report referenzieren den Diagnosearchiv-Pfad.
+
+### Tests
+- Neue Regressionen prüfen finales MKV/MP4 + HDR10+-JSON + RPU im Archiv, HEVC-Fallback vor Final-Mux, Adapter-Vertragsweitergabe und Archivierung direkt aus einem fehlgeschlagenen Final-Mux/Metadatenpfad.
+- Projektumfang: **1.025 Python-Dateien/Programme**, **156.222 Gesamtzeilen**, **132.114 Codezeilen**; Produktivcode **766 Dateien / 108.590 Zeilen / 93.529 Codezeilen**; Testpakete **259 Dateien**, davon **254 `test_*.py`** mit **1.865 statisch erkannten Tests**.
+
+## Patch BK – Review-Fixes: verlässlicher FFmpeg-Abschluss, transaktionales Diagnosearchiv und Watchfolder-Härtung – 26.09.2026
+
+### P1 – FFmpeg-FrameCountEvidence nur nach vollständigem Progress-Abschluss
+- `converter_progress_parser.read_progress()` verarbeitet bereits aus stdout gelesene Zeilen auch dann weiter, wenn FFmpeg laut `poll()` schon beendet ist. Gepufferte Abschlusszeilen werden nicht mehr verworfen.
+- Eine Encoder-Bildzahl gilt nur dann als verlässlich, wenn der Prozess erfolgreich (`rc == 0`) beendet wurde **und** `progress=end` tatsächlich gesehen wurde. Ein letzter Zwischenwert aus `frame=` allein wird verworfen.
+- Regressionstest simuliert exakt den Review-Fall: `poll() == 0`, während `frame=` und `progress=end` noch im stdout-Buffer liegen.
+
+### P1 – transaktionales DV/HDR10+-Diagnosearchiv
+- Fehlgeschlagene DV/HDR10+-Diagnosen werden zuerst vollständig in einem versteckten `.partial`-Staging unter `Archiv` **kopiert**, nicht verschoben.
+- Pflichtartefakte sind ein nichtleerer Video-Kandidat und eine syntaktisch gültige HDR10+-JSON. Erst danach wird das Staging per atomarem Rename als finales Diagnosepaket committed.
+- Solange der Commit nicht vollständig erfolgreich war, bleiben die ursprünglichen Arbeitsartefakte unangetastet. Scheitert die Archivierung teilweise, bleibt zusätzlich der komplette `dragontools_dv_*`-Arbeitsordner erhalten; JSON/RPU können dadurch nicht mehr vom Temp-Cleanup verloren gehen.
+- Gültige HDR10+-JSON wird nach einem Generator-Fehlerstatus als **untrusted Diagnoseartefakt** erhalten; ungültige/partielle JSON wird weiterhin entfernt.
+- Die Archivlogik wurde in kleine Hilfsfunktionen zerlegt; der bestehende Architektur-/Responsibility-Grenzwert wurde nicht aufgeweicht.
+
+### P1 – Watchfolder ignoriert DragonTools-eigene Arbeits-/Diagnoseverzeichnisse
+- Rekursive Watchfolder prunen `Archiv`, `Fehler`, `__temp_overwrite__`, `__temp_dv_remux__`, interne `dragontools_*`-Tempordner sowie `.partial`-Staging-Unterordner.
+- Nur Unterordner eines Watchroots werden ausgeschlossen. Wird z. B. ein Ordner namens `Archiv` bewusst selbst als Watchroot konfiguriert, bleibt dieser Root gültig.
+
+### P2 – Release-Validator / Help
+- `validate_source_release()` normalisiert den Root sofort per `.resolve()`; direkte Aufrufe mit `Path('.')` können dadurch nicht mehr an absolut/relativ gemischten `relative_to()`-Operationen scheitern.
+- Ein direkter In-Process-Aufruf des Validators ohne `python -B` führt nicht mehr zu einem falschen Releasefehler, wenn ausschließlich der Validator-Import selbst Bytecode im aktuellen DragonTools-Quellbaum erzeugt hat. Offizielle Build-/Source-ZIP-Pfade mit `-B` bleiben unverändert strikt.
+- Veraltete Help-Testdateizahl korrigiert und die aktuelle Projektstatistik synchronisiert.
+
+### Regressionen / Stand
+- Neue Regressionen decken Progress-Drain, fehlendes `progress=end`, partiell fehlgeschlagenes Diagnosearchiv mit persistentem JSON/RPU, gültige Generator-JSON trotz Fehlerstatus, Watchfolder-Pruning und relative Validator-Roots ab.
+- Aktueller Quellumfang: **1.025 Python-Dateien/Programme**, **156.630 Gesamtzeilen**, **132.462 Codezeilen**.
+- Produktivcode ohne Tests: **766 Dateien**, **108.809 Gesamtzeilen**, **93.726 Codezeilen**.
+- Testpakete: **259 Python-Dateien**, davon **254 `test_*.py`** mit **1.871 statisch erkannten Tests**.
+
+## Patch BL – Gemeinsame Ausgabe-Timestamps, Video-Referenzdauer und Wrap-Diagnose – 27.09.2026
+
+### Befund
+- `converter_media_probe.probe_ms()` verwendete das Maximum aller Streamdauern, einschließlich Subtitle/Data. Die Medienanalyse verwendete eine andere, reine Containerreferenz. Beide Pfade nutzen jetzt eine gemeinsame Video-/Container-/Audio-Priorisierung.
+- Normale FFmpeg-Commands besaßen keine explizite Mux-Timestamp-Policy. `core/output_timestamps.py` verschiebt finale MKV/MP4/MOV-Ausgaben mit `-avoid_negative_ts make_zero` gemeinsam; relative A/V/S-Offsets bleiben erhalten.
+- Der konkrete 2^32-ms-Fehler der gemeldeten 95% ist mit den verfügbaren synthetischen CPU-/NVENC-Quellen **nicht reproduziert**. Der Referenzfehler ist nachgewiesen; die Ausgangs-Policy ist geprüfte Prävention, kein belegter Allein-Fix dieses Nutzerfalls.
+
+### Pfade / Module
+- Standard-Encoding, mov_text-Retry, ComfyUI-Finalmux/Retry, Strip-Only/Retry, Audio-Mux, MP4-Remux, AV1-DV/HDR10+, AV-Match-Finalmux, Subtitle-Injection, ISO-Fallback und Qualitäts-Testclips verwenden die zentrale Policy.
+- HEVC-DV/HDR10+-Finalmux und Merge verwenden mkvmerge/MP4Box. Elementary Streams, einzelne Audio-/Subtitle-Donoren und Reparaturkandidaten erhalten bewusst keine unabhängige Nullsetzung.
+- Vollständiges Pfadinventar und Vorher-/Nachher-Commands: `reviews/TIMESTAMP_POLICY_9.8.6_BL.md`.
+- `core/media_duration.py`, `media_analyzer_result.py`, `converter_media_probe.py`: plausible primäre Videodauer vor Container, Audio nur Fallback; N/A/0/negativ/nichtendlich/extreme Werte, MKV-Endzeit-Tags, mehrere Videos, VFR und MediaInfo-Fallback berücksichtigt.
+- OutputVerifier und AV-Match prüfen weiterhin die echte Ausgabedauer; keine Aufweichung der Schutzschwellen oder Reparaturmaßnahmen.
+
+### Diagnose und Tests
+- `worker/timestamp_diagnostics.py` protokolliert Quelle/Ausgabe vor der Reparatur: Format-/Streamdauer, start_time, time_base, Frameraten, DURATION-Tags und maximal 16 Startpakete für PTS/DTS.
+- Explizite 2^32-ms-Warnung mit Soll/Ist/Differenz, Wrap-Anzahl, Restabweichung, Container und ermittelbarer Streamzuordnung. Keine zusätzlichen vollständigen Frame-Scans.
+- Neue Tests: `test_patch_bl_output_timestamps.py`, `test_patch_bl_timestamp_media.py`; Referenzfälle A–H, echte MKV/MP4/MOV-Encodes, negativer MPEG-TS-Start, Strip, Audio-Mux/Remux, Retry/ComfyUI-Commands und unveränderte Ablehnung kaputter Ausgabedauer.
+- Version bleibt 9.8.6; neue Module sind in den Release-Smoke-Prüfungen registriert. Der private Snapshot wird nach Abschluss aller Quell-/Dokumentationsänderungen aktualisiert.
+
+### Abschlussprüfungen
+- Gezielte Duration-/Timestamp-/Streamguard-/Packet-Suite: **125 bestanden**, darunter **53 neue Fälle**; reale negative Starts, MKV/MP4/MOV, erhaltene Audio-/Subtitle-Offsets und keine Reparatur bei gesunden Ausgaben.
+- HDR10+-Generator-Quellsuite: **26 bestanden**. Reale DV/HDR10+-Integration einschließlich vorhandener Generator-EXE nach expliziter Pfadkonfiguration: **4 bestanden**.
+- AST-Prüfung: **1.034 Python-Dateien** gültig. Ruff F821/E9 für alle geänderten Python-Module/Tests bestanden.
+- Vollständige DragonTools-/Generator-Suite ausgeführt. Zwei unabhängig reproduzierbare GUI-Testfehler bleiben außerhalb dieses Patches: `test_patch_bc_multi_file_settings_runtime.py` konstruiert einen Owner ohne `default_codec`. Diese bestehenden Test-/GUI-Dateien wurden nicht verändert. Optionaler Torch-Test bleibt mangels Torch in der Projekt-Testumgebung übersprungen.
+- Der Source-/Release-Validator wurde ausgeführt und meldet vorhandene Bytecode-Dateien vom 26.09.2026 sowie drei veraltete Dokumentationsdateien im vorhandenen EXE-Bundle (Help, Changelog JSON/TXT); zusätzlich drei bestehende Datenschutzwarnungen. Kein EXE-Neubuild und keine Entfernung fremder Artefakte.
+
+
+## Patch BM – Public-Python-Privacy und präzise Bytecode-Ausnahme – 27.09.2026
+
+### Befund
+- Der im früheren Reviewstand vorhandene Public-Source-Fix war im aktuellen Timestamp-Arbeitsstand nicht mehr enthalten: `.py` fehlte wieder in der Sanitizing-Liste, der Privacy-Validator prüfte Python nicht auf hart codierte Secrets und die In-Process-Bytecode-Ausnahme akzeptierte beliebige `*.pyc` unter `dragontools/core/__pycache__`.
+- Die Timestamp-Implementierung aus Patch BL war dagegen vollständig vorhanden und wurde unverändert beibehalten.
+
+### Umsetzung
+- `core/release_packaging.py`: Python-Dateien werden beim kanonischen Public-Source-ZIP wieder textbasiert anonymisiert. Private Organisations-/Autoren-/Benutzer-/Server-/Arbeitsordner-Marker werden ersetzt; die Sanitizer-Definitionen selbst sind so aufgebaut, dass ein bereits anonymisiertes Public-Paket seine Sanitizing-Funktion behält.
+- `core/release_validation_package.py`: Python wird separat AST-basiert auf hart codierte API-Keys/Tokens/Client-Secrets/Passwörter geprüft. Setting-Key-Konstanten, Defaults und offensichtliche Test-/Placeholderwerte werden nicht als Secret gewertet.
+- `core/release_validation_source.py`: Die direkte In-Process-Ausnahme akzeptiert nur Bytecodepfade, die über `__cached__` tatsächlich aktuell geladenen DragonTools-Modulen zugeordnet sind. Fremde/stale `*.pyc` bleiben Releasefehler.
+- Neuer Regressionstest `test_patch_bm_release_privacy.py`.
+
+### Timestamp-Kontrolle
+- `core/output_timestamps.py` setzt `-avoid_negative_ts make_zero` ausschließlich an vollständigen finalen MKV/MP4/MOV/M4V-Muxgrenzen. Donor-, Elementary- und Repair-Rollen bleiben ausgenommen.
+- Standard-Encoding, Strip-Only, mov_text-Retry und ComfyUI-Finalmux verwenden dieselbe Policy; DV/HDR10+-Finalmux bleibt korrekt getrennt über mkvmerge/MP4Box.
+- `core/media_duration.py` priorisiert die primäre Videodauer, anschließend Container und Audio als Fallback. Subtitle/Data können die Referenzdauer nicht mehr aufblasen.
+- Die bekannte `2^32 ms`-Signatur und die begrenzte PTS/DTS-Diagnose vor der Reparatur bleiben aktiv; es wurde kein zusätzlicher Vollscan eingeführt.
+- Die konkrete Ursache des früher gemeldeten 95%-Wrap-Verhaltens ist ohne reale betroffene Datei/Log weiterhin nicht beweisbar. Die aktuelle Policy ist technisch konsistent und durch reale negative-Start-/Offset-Regressionen abgesichert.
+
+### Prüfungen
+- Timestamp-/Privacy-Kombination: 57 Tests bestanden.
+- Release-/Privacy-Fokus im anonymisierten Public-Source: 64 Tests bestanden; AST aller Public-Python-Dateien fehlerfrei; Validator 0 Fehler und 0 Datenschutzwarnungen (abgesehen vom erwartbaren fehlenden `dist` als Warnung).
+- Architektur + Timestamp + Privacy: 227 bestanden, 1 erwarteter Skip wegen fehlendem PyQt6 in der Linux-Prüfumgebung.
+- Version bleibt 9.8.6.
+
+## Patch BN – Release-Validator-Refactor und Backup-Härtung – 27.09.2026
+
+### Private vs. öffentliche Anonymisierung
+- Der private Entwicklungsbaum bleibt bewusst **nicht anonymisiert**. Lokale Organisationsnamen, UNC-Pfade, Autoren-/Benutzerdaten und andere private Entwicklungswerte dürfen dort vorhanden sein.
+- Anonymisierung findet ausschließlich beim kanonischen **Public-Source-Export** statt.
+- Die UNC-Testfixtures wurden wieder semantisch konsistent auf den privaten Host zurückgeführt. Der Public-Sanitizer erkennt jetzt beide äquivalenten Schreibweisen `\\<SERVER>\\...` und `//<SERVER>/...`, sodass der Export beide Varianten identisch anonymisiert.
+
+### Release-Validator refaktoriert
+- Die Privacy-/Secret-Erkennung wurde aus `core/release_validation_package.py` in das neue Modul `core/release_validation_privacy.py` ausgelagert.
+- `release_validation_package.py` enthält wieder nur die Paket-/Manifest-/Smoke-/Artefakt-Verantwortung und liegt mit vier Top-Level-Funktionen deutlich unter der bestehenden Architekturgrenze von acht.
+- Bestehende interne Importpfade für `_scan_private_markers` und `_iter_release_text_files` bleiben als Re-Exports kompatibel.
+- Das neue Privacy-Modul ist im Release-Smoke-Inventar und den Architekturverträgen registriert; keine Architekturgrenze wurde erhöht.
+
+### Backupformat fail-closed
+- `manifest.json` akzeptiert nur noch Legacy-Format **v1** und das aktuelle `BACKUP_FORMAT_VERSION == 2`.
+- Unbekannte zukünftige Versionen (z. B. `format_version = 999`) werden vor jeder Änderung an QSettings oder Dateien abgewiesen.
+- Nicht-ganzzahlige Versionswerte werden ebenfalls strikt zurückgewiesen; fehlende `format_version` bleibt aus Kompatibilitätsgründen Legacy-v1.
+
+### ZIP-/Ressourcenhärtung
+- Neues Modul `core/settings_backup_limits.py` zentralisiert die Restore-Grenzen.
+- Vor dem Lesen/Entpacken werden Archivgröße, Memberzahl, Einzelgröße, gesamte unkomprimierte Größe, Duplikate, ZIP-Verschlüsselung, Kompressionstyp und verdächtige Kompressionsverhältnisse geprüft.
+- Aktuelle großzügige Sicherheitsgrenzen: 128 MiB ZIP-Datei, 256 Mitglieder, 64 MiB pro Mitglied und 256 MiB gesamte unkomprimierte Daten; Manifest/Settings/Secret-Metadaten besitzen zusätzliche engere Read-Limits.
+- Die Prüfung läuft vor dem transaktionalen Restore. Bei einem Limitfehler bleiben vorhandene Settings und Dateien unverändert.
+
+### Krypto-Härtung
+- Verschlüsselte Backups akzeptieren nur das von DragonTools tatsächlich erzeugte scrypt-Profil `(N=2^15, r=8, p=1)`.
+- Manipulierte extrem teure KDF-Parameter werden **vor** der Schlüsselableitung abgewiesen und können daher keinen mehrgigabytegroßen scrypt-Speicherbedarf mehr erzwingen.
+- Salt-, Nonce- und Ciphertext-Größen werden zusätzlich validiert.
+
+### Regressionen
+- Neue Tests prüfen unbekannte zukünftige Backupformate ohne Zustandsänderung, Member-/Größen-/Kompressionslimits, KDF-Parameter vor der Derivation sowie konsistente private/public UNC-Behandlung.
+- Legacy-v1-Restore und aktuelle verschlüsselte v2-Backups bleiben kompatibel.
+- Projektumfang nach Patch BN: **1.033 Python-Dateien**, **157.661 Gesamtzeilen**, **133.300 Codezeilen**; Testpakete **262 Python-Dateien**, davon **257 `test_*.py`** mit **1.902 statisch erkannten Tests**.
+- Vollständige DragonTools-Suite nach Patch BN: **2.650 bestanden, 38 erwartete Skips, 0 Fehler**; HDR10+-Generator: **26/26 bestanden**.
+- Version bleibt **9.8.6**.
+
+## Patch BO – CPU/libx265 Filter-Pixelformat und x265-Laufzeitdiagnose – 27.09.2026
+
+### Befund
+- Ein reales DV-Produktionskommando zeigte trotz CPU/libx265 im Filtergraph zweimal `format=p010le`, während der Encoder selbst korrekt `-pix_fmt yuv420p10le` erhielt. Dadurch konnte FFmpeg im CPU-Pfad unnötige planar↔semiplanar-Formatübergaben einfügen.
+- Derselbe feste P010-Filter war im normalen HDR10-Farbpfad vorhanden. Das widersprach dem bereits dokumentierten Encodervertrag: CPU/libx265 arbeitet planar in `yuv420p10le`, NVENC/QSV/AMF verwenden `p010le`.
+- Die x265-Startdiagnose wurde bisher aus stderr nur intern gepuffert; Threadpool-/WPP-Informationen waren im Verbose-Log nicht sichtbar.
+
+### Umsetzung
+- `encoder_args.py` stellt mit `encoder_10bit_filter_pixel_format()` die gemeinsame 10-bit-Filterformat-Policy bereit: CPU/libx265 bzw. CPU-SVT-AV1 → `yuv420p10le`, Hardwareencoder → `p010le`.
+- `dv_video_filters.py` ist nicht mehr global auf P010 festgelegt. DV-P5-Libplacebo sowie DV-P7/P8-Prefix/Suffix verwenden das zum aktiven Encoder passende 10-bit-Filterformat.
+- `dv_encode_command.py` löst das Filterformat aus der effektiven `DVEncoderConfig` auf. CPU-DV bleibt damit im Filtergraph und am libx265-Handoff durchgehend planar 10-bit; NVENC/QSV/AMF behalten P010.
+- `hdr10_color.py` besitzt encoderabhängige Builder für HDR10-Setparams und DV-P5-Libplacebo. `EncodePlanService` verwendet diese Builder im Standard-HDR10-/DV5-Pfad.
+- `converter_process_executor.py` schreibt kompakte x265-Laufzeitdiagnosen in den Verbose-Log: CPU-Capabilities, erzeugte Threadpools, `frame threads / pool features` inklusive WPP sowie die effektive Lookahead-/B-Frame-Zeile. x265-Warnungen/-Fehler werden ebenfalls übernommen.
+- Die bewusst gesetzten Qualitäts-/Kompressionsparameter **`bframes=8` und `rc-lookahead=40` bleiben unverändert**; Patch BO verändert weder Preset, CRF noch diese x265-Tuningwerte.
+
+### Regressionen / Prüfung
+- Neuer Test `test_patch_bo_cpu_x265_filter_path.py` prüft CPU-vs.-Hardware-Filterformate, DV- und Standard-HDR10-Kommandos, unveränderte `bframes=8`/`rc-lookahead=40` sowie die Übernahme der x265-Threaddiagnose in den Verbose-Log.
+- Gezielte DV/HDR/x265-Suite: **137 bestanden**.
+- Prozess-/ResourceWarning-Fokus: **19 bestanden**.
+- Vollständige DragonTools-Suite in fünf disjunkten Gruppen: **2.657 bestanden, 38 erwartete Skips, 0 Fehler**.
+- Dragon HDR10+ Generator: **26/26 bestanden**.
+- Projektumfang nach Patch BO: **1.034 Python-Dateien**, **157.943 Gesamtzeilen**, **133.530 Codezeilen**; Testpakete **263 Python-Dateien**, davon **258 `test_*.py`** mit **1.909 statisch erkannten Tests**. Produktivcode: **771 Dateien / 109.355 Gesamtzeilen / 94.181 Codezeilen**.
+- Version bleibt **9.8.6**.
+
+## Patch BR – Review: transaktionale Datei-/Backup-Sicherheit – 27.09.2026
+
+- Same-Path-Replace: Das Commit-Journal wird vor Backup-Löschung verbindlich geschrieben. Scheitert es nach Installation, werden neuer Output ins Staging und Original aus dem Backup tatsächlich zurückgesetzt; Journalfehler dürfen keinen Rollback vortäuschen.
+- Cross-Volume-Moves vergleichen vor Quellenlöschung den gesamten Inhalt mit begrenztem Speicherbedarf. Verzeichnis-Staging prüft alle Dateien und Symlinks. Fehlgeschlagene Kopien werden nicht unter dem endgültigen Zielnamen sichtbar; vorhandene Ziele bleiben geschützt. Der zusätzliche vollständige Lesevorgang ist bewusst zugunsten der Datensicherheit erforderlich.
+- Backup-Export schreibt ein temporäres ZIP im Zielordner, schließt und synchronisiert es und ersetzt erst dann atomar das bisherige Backup. Restore kontrolliert den QSettings-Status; AccessError wurde mit echtem PyQt6 unter Windows nachgestellt.
+- Build: Auch der Legacy-Build wird gesichert und bei Fehler wiederhergestellt. Vorhandene Sicherungen eines früheren Laufs werden nicht still gelöscht. Windows-Tests führen die tatsächlichen Backup-/Rollback-Blöcke in isolierten Testordnern aus, ohne einen Releasebuild anzustoßen.
+- Der Terminate-Adapter reicht die ausdrücklich angeforderte Prozessreferenz weiter. Direkte QSettings-Erzeugung in Workern ist durch zentrale, abgekoppelte Nur-Lese-Snapshots ersetzt.
+- Die sechs Tests aus `review tests.zip` wurden übernommen. Beim Verzeichnistest wurde ausschließlich die Fehlerauslösung von `shutil.move` auf die neue Staging-Grenze umgestellt; alle Schutz-Assertions bleiben erhalten. Zehn weitere Regressionen prüfen reale Qt-Fehler, Disk-Full, Ordnerintegrität, Snapshots und Build-Rollback.
+- Zwei bestehende GUI-Tests erhielten den bislang fehlenden `default_codec` ihres Test-Doubles; Produktions-GUI und Assertions bleiben unverändert. Parallel-Tests mocken jetzt die zentrale Snapshot-Grenze.
+- Version bleibt **9.8.6**. Laufende Prozesse, Mediendateien und bestehende dist-Builds wurden nicht verändert.
+
+## Patch BQ – Keine fremden Aufträge beim Live-Umsortieren – 27.09.2026
+
+- Ursache: Der Parallel-Koordinator reichte die globale GUI-Reihenfolge an jeden Kind-Worker weiter. Dessen lokale Queue übernahm bislang auch fremde und von anderen Workern bereits erledigte Dateien. Live-Hinzufügen löst ebenfalls diese Synchronisierung aus; dadurch entstanden erneute Starts, fehlende alte Quellpfade und konkurrierende Ersetzversuche (WinError 32).
+- Der Koordinator übergibt jetzt ausschließlich dem jeweiligen Worker zugewiesene Einträge. Die lokale Queue akzeptiert beim Umsortieren zusätzlich nur ihre eigenen wartenden Dateien, entfernt Duplikate und erhält Einträge, die in einer veralteten GUI-Reihenfolge fehlen.
+- Sechs neue Regressionstests decken fremde/erledigte Aufträge, doppelte Pfadvarianten, Live-Hinzufügen, Zuordnung im Koordinator und DV-Nachbearbeitungsüberlappung ab. Gezielte Queue-/Parallel-/DV-/Architektur-Suite: **60 bestanden**.
+- Version bleibt **9.8.6**. Keine Änderung an Mediendateien, Backup-/Commit-Verhalten oder laufenden Prozessen. Bereits laufende Instanzen müssen neu gestartet werden; bestehende Fehlermarkierungen werden nicht rückwirkend geändert.
+
+## Patch BP – SDR→HDR/libplacebo CPU-Pixelformat und präzise DV-Diagnoselogs – 27.09.2026
+
+### Befund
+- Patch BO hatte den CPU/libx265-Pixelformatpfad für DV und normales HDR10 bereits auf `yuv420p10le` korrigiert. Der optionale FFmpeg/libplacebo-SDR→HDR-Pfad in `core/sdr_hdr_enhancement.py` war jedoch weiterhin fest auf `p010le` verdrahtet.
+- Zwei DV-P5-Diagnosemeldungen nannten nach BO weiterhin pauschal `p010le`, obwohl CPU/libx265 dort korrekt `yuv420p10le` verwendet.
+
+### Umsetzung
+- Die gemeinsame 10-bit-Filterformat-Policy liegt jetzt in `core/codec_utils.py`. `worker/encoder_args.py` verwendet denselben Helper weiter, sodass bestehende Importpfade kompatibel bleiben.
+- `build_sdr_to_hdr_filters()` ist encoderabhängig: CPU/libx265 und CPU-SVT-AV1 erhalten `yuv420p10le`; NVENC/QSV/AMF behalten `p010le`. Der produktive `decide_sdr_hdr_enhancement()` übergibt die effektiven Encoderoptionen an den Filterbuilder.
+- Der kleine libplacebo-Verfügbarkeitstest in `worker/sdr_hdr_runtime.py` bleibt bewusst auf `p010le`; er ist kein finaler CPU-Encodepfad.
+- DV-P5-Preflight und STEP-4-Verbose-Log melden jetzt das tatsächlich gewählte Filterpixelformat statt eines hart codierten `p010le`.
+- Die bewusst gesetzten x265-Kompressionsparameter `bframes=8` und `rc-lookahead=40` bleiben unverändert. Timestamp-, DV-RPU-, HDR10+-, Backup- und Move/Commit-Logik wurden nicht verändert.
+
+### Regressionen / Prüfung
+- Neuer Test `test_patch_bp_sdr_hdr_pixel_format_and_logs.py` prüft CPU-vs.-Hardware-Pixelformate sowie die dynamischen DV-P5-Diagnoselogs.
+- Gezielte BP/BO/SDR→HDR-Suite: **23 bestanden**.
+- Erweiterte DV/HDR/Encoder-/Architektur-Suite: **96 bestanden**.
+- Vollständige DragonTools-Suite in disjunkten Gruppen: **2.661 bestanden, 38 erwartete Skips, 0 Fehler**; Dragon HDR10+ Generator: **26/26 bestanden**.
+- Projektumfang nach Patch BP: **1.035 Python-Dateien**, **158.035 Gesamtzeilen**, **133.610 Codezeilen**; Testpakete **264 Python-Dateien**, davon **259 `test_*.py`** mit **1.913 statisch erkannten Tests**.
+- Version bleibt **9.8.6**.
+
+## Patch BS – Doppelstart-Härtung, Queue-Deduplizierung und Converter-Schnellschalter – 28.09.2026
+
+### Befund
+- Der Converter sperrte einen zweiten Start ausschließlich über `active_worker()`/`QThread.isRunning()`. Direkt nach `QThread.start()` existiert jedoch ein kurzes Startfenster, in dem ein zweites Click-/Auto-Start-Ereignis denselben Queue-Inhalt erneut starten konnte. Bei einer einzelnen Datei entstanden so zwei voneinander unabhängige Worker auf derselben Quelle.
+- Die initiale `ParallelQueueState` übernahm eingehende Pfade ungefiltert. Doppelte Windows-Pfadvarianten konnten dadurch ebenfalls mehreren Child-Workern zugeordnet werden, obwohl Live-Adds bereits dedupliziert wurden.
+- Wenn das Job-Journal den Start fail-closed abwies, blieb die zuvor gesetzte `state.thread`-Referenz im Startkoordinator stehen.
+- Die freie Zeile rechts neben den Queue-Pfeilen war ungenutzt, obwohl HDR10+-Generator, SDR→HDR und Watch-Folder häufig global umgeschaltet werden.
+
+### Umsetzung
+- `ConversionSessionState.start_reserved` ist jetzt ein synchroner Run-Start-Lock. Er wird vor Preflight/Worker-Erzeugung gesetzt und blockiert reentrante Starts unabhängig von `QThread.isRunning()`.
+- `ConversionStartCoordinator` räumt den Lock bei abgebrochenem/fehlgeschlagenem Start sicher auf und entfernt eine nicht gestartete Worker-Referenz. Beim terminalen Run-Ende wird der Lock wieder freigegeben.
+- `ConversionWorkerLifecycle.start_worker_ui_state()` liefert jetzt explizit Erfolg/Misserfolg zurück.
+- `ParallelQueueState` dedupliziert die initiale Queue über `path_compare_key()`. Zusätzlich verhindert `_start_pending_workers()` als letzte Schutzschicht eine zweite Worker-Zuordnung desselben Pfads und protokolliert sie.
+- Rechts neben den vier Queue-Pfeilen stehen nun persistente Checkboxen `HDR+ Generator`, `SDR → HDR` und `Watch-Folder`. Sie verwenden exakt die bestehenden globalen Setting-Keys. Bereits geladene Converter-Tabs werden synchronisiert; der Watch-Folder-Controller wird beim Umschalten sofort aktualisiert.
+
+### Regressionen / Prüfung
+- Neue Regressionen prüfen den konkreten Reentrant-Start vor `isRunning()`, Start-Lock-Aufräumen nach fehlgeschlagenem Launch, initiale Pfad-Deduplizierung sowie Setting-Key/Persistenz/Layout der drei Schnellschalter.
+- Gezielte Queue-/Parallel-/Watch-/HDR-Suite: **79 bestanden**.
+- Dragon HDR10+ Generator: **26/26 bestanden**.
+- `compileall` für `dragontools` und `dragon_hdr10plus_generator`: fehlerfrei.
+- In der bereitgestellten Linux-Prüfumgebung ist PyQt6 nicht installiert. Der breite Testlauf erreichte **1.151 bestandene Tests** bis zum ersten verbleibenden umgebungsbedingten PyQt6-Importfehler; mehrere GUI-Tests werden aus demselben Grund erwartungsgemäß übersprungen. Daher wird hier bewusst kein vollständiges „0 Fehler“-Ergebnis behauptet.
+- Projektumfang nach Patch BS: **1.044 Python-Dateien**, **159.718 Gesamtzeilen**, **135.018 Nichtleer-/Nichtkommentarzeilen**; **1.940** statisch erkannte Testfunktionen.
+- Version bleibt **9.8.6**.
+
+## Patch BT – Renamer-Metadatenbrowser, Mehrfachfolgen und containerkorrekte Previews – 28.09.2026
+
+### Renamer: Provider zuerst statt Dateiname zuerst
+- Neuer Button `🌐 Metadaten-Browser` im Renamer. Der Dialog funktioniert ausdrücklich auch bei **leerer Renamer-Liste** und kann Serien oder Filme direkt über die vorhandenen TMDB-/TheTVDB-Zugänge suchen.
+- Treffer von TMDB und TheTVDB bleiben absichtlich getrennt sichtbar (Titel, Jahr, Provider, Provider-ID). Dadurch können gleichnamige Remakes/Neuauflagen und unterschiedliche Provider-Zählungen bewusst ausgewählt werden, statt erneut durch Fuzzy-Matching zu laufen.
+- Nach Auswahl einer Serie werden vorhandene Staffeln einschließlich **Staffel 0 / Specials** geladen und anschließend die Episoden mit Nummer, Titel und Ausstrahlungsdatum angezeigt.
+- Dateien oder komplette Ordner können in den Dialog gezogen werden. Ordner werden rekursiv auf Videodateien reduziert, Pfade dedupliziert und natürlich sortiert (`1, 2, …, 10` statt `1, 10, 2`).
+- Dateien lassen sich per Drag&Drop oder Auswahl einer Episode explizit zuordnen. `Ab markierter Episode automatisch zuordnen` verteilt noch nicht zugeordnete Dateien ab einer gewählten Episode.
+- Eine physische Datei kann **1 bis 4 aufeinanderfolgende Episoden** enthalten. Zielnamen verwenden die vorhandene DragonTools-Konvention `S01E01E02E03E04`. Für Mehrfachfolgen kann gewählt werden: alle Episodentitel, nur der erste Titel oder keine Episodentitel.
+- Überlappende Episodenzuordnungen, Staffelgrenzen und mehr als vier Episoden werden fail-closed abgewiesen. Eine lokale Datei kann nicht gleichzeitig als Film und Serie zugeordnet bleiben; eine neue explizite Zuordnung ersetzt die jeweils andere Art.
+- Filmzuordnung ist provider-explizit und absichtlich 1:1: Ein Film-Treffer wird genau einer lokalen Datei zugeordnet, damit nicht versehentlich mehrere Dateien denselben Zielnamen erhalten.
+- `Zuordnung in Renamer übernehmen` erzeugt normale `MovieRenameProposal`-/`SeriesRenameProposal`-Objekte und übergibt sie an die bestehende Renamer-Tabelle. Der bestehende Collision-Check, editierbare Zielname und der vorhandene Rename-Commitpfad bleiben unverändert. Bereits laufende/stale Resolver-Anfragen werden für die explizit gemappten Pfade invalidiert und dürfen das Mapping nicht nachträglich überschreiben.
+
+### Datenmodell / Mehrfachfolgen
+- Neues Qt-freies Kernmodul `core/renamer_metadata_browser.py` kapselt Provider-Suche, Staffel-/Episodenauflösung, explizite Datei-Mappings und die Brücke in den bestehenden Renamer.
+- `ParsedSeriesReleaseName` und `SeriesRenameCandidate` besitzen rückwärtskompatible optionale Mehrfachfolgenfelder. Bestehende Einzelfolgen bleiben unverändert.
+- `build_series_multi_target_filename()` zentralisiert die 1–4-Episoden-Namensbildung. Auch die Kandidatenentscheidung verwendet denselben Builder, sodass ein explizites Mapping beim Anzeigen/erneuten Anwenden des Kandidaten nicht auf eine Einzelfolge zurückfällt.
+- Der Metadaten-Dialog invalidiert verspätete Worker-Rückgaben beim Accept/Reject/Schließen. Staffel `0` wird nicht mehr durch Truthiness (`0 -> false`) mit „keine Staffel“ verwechselt.
+
+### Regeltester / Medieninfo: Ausgabecontainer folgt jetzt den Einstellungen
+- Ursache des gemeldeten Preview-Fehlers: `build_rules_preview()` rief `resolve_pipeline_context()` bislang ohne die beiden Container-Einstellungen auf. Dadurch zeigte die Preview unabhängig von den echten Einstellungen immer die Defaultwerte **DV → MP4** und **Standard → MKV**.
+- `build_rules_preview()` akzeptiert jetzt `standard_container` und `dv_container` und reicht beide an die zentrale Pipeline-/Containerentscheidung weiter.
+- Der Regel-/Profil-Simulator liest `convert/output_container_standard` und `convert/output_container_dv` aus den aktuellen Settings und übergibt sie an die Preview.
+- Der Medieninfo-Dialog liest dieselben Settings beim Öffnen und reicht sie bis zum DragonTools-Reiter durch. Damit wird z. B. **DV + MKV als MKV** und **Standard + MP4 als MP4** angezeigt. Die eigentliche Worker-Ausgabecontainerlogik wird nicht dupliziert oder verändert; Preview und reale Pipeline verwenden dieselben Setting-Keys.
+- Die Batch-Preflight-Ausgabepfade verwenden weiterhin `preview["target_container"]`; dadurch folgt auch die dort berechnete Dateiendung automatisch dem korrigierten Container.
+
+### Regressionen / Prüfung
+- Neue Patch-BT-Tests decken TMDB+TheTVDB-Paralleltreffer, Serien- und Filmsuche, Specials/S00, natürliche Dateisortierung, explizite Provider-IDs, Zielkonflikte sowie Einzel-/Doppel-/Dreifach-/Vierfachfolgen und alle drei Mehrfachfolgen-Titelmodi ab.
+- Zusätzliche Contract-Tests prüfen Drag&Drop-/Dialogverdrahtung, Resolver-Invalidierung und die Weiterverwendung des bestehenden Rename-Commitpfads.
+- Container-Regressionen prüfen für **DV** und **Standard** jeweils MKV und MP4 sowie die Weitergabe bis zum Medieninfo-Text und den Setting-Zugriff von Regeltester und Medieninfo.
+- Patch-BT-Fokussuite: **26 bestanden**. Erweiterte Renamer-/Metadaten-/Pipeline-/Preflight-/Architektur-Suite: **136 bestanden, 0 Fehler**.
+- Vollständiger Qt-Runtime-Test des neuen Dialogs ist in dieser Linux-Prüfumgebung nicht möglich, weil PyQt6 nicht installiert ist. Die GUI-Module werden daher zusätzlich per AST/`compileall` geprüft; die Kernlogik ist vollständig Qt-frei getestet.
+- Version bleibt **9.8.6**.
+
+## Patch BU – Metadaten-Browser Async-/Mapping-Härtung und Dokumentationssync – 28.09.2026
+
+### Befund
+- Der neue Renamer-Metadaten-Browser ließ während einer laufenden Serien-/Staffelabfrage die vorherigen Episoden im internen Zustand und teilweise noch in der Tabelle stehen. Ein schneller weiterer Zuordnungsversuch konnte dadurch theoretisch gegen Episoden der vorherigen Serie/Staffel erfolgen.
+- Bei Filmen war „Film auswählen“ nur eine Statusanzeige. Die eigentliche Zuordnung las später erneut die aktuell markierte Suchergebniszeile; eine beiläufige Auswahländerung konnte damit einen anderen Film als den explizit aktivierten Treffer verwenden.
+- „Automatisch ab Episode zuordnen“ filterte nur bereits vorhandene Serien-Mappings. Eine zuvor als Film zugeordnete Datei konnte dadurch versehentlich wieder als Serie gemappt werden.
+- Providerdaten mit Lücken/nicht fortlaufenden Episodennummern werden vom Kernmodell korrekt abgewiesen, die GUI fing den resultierenden `ValueError` jedoch nicht ab. Zusätzlich wurde ein altes Mapping vor der Validierung des neuen entfernt.
+- README, Hilfe, Integrationsprüfungen, DOCX-Handbuch und Änderungsübersicht waren nach Patch BS/BT nicht vollständig synchron zum neuen Funktionsstand.
+
+### Umsetzung
+- Serien-/Staffelwechsel löschen alte Episoden sofort vor Start der asynchronen Anfrage. Semantisch relevante Bedienelemente werden während einer laufenden Metadatenabfrage gesperrt; Mapping-Slots besitzen zusätzlich einen Busy-Guard.
+- Suchrückgaben sind an den beim Start gültigen Medien-Typ gebunden. Verspätete oder typfremde Treffer werden nicht in den aktuellen Browserzustand übernommen.
+- Filme besitzen jetzt eine explizite `_current_movie_hit`-Auswahl. Erst „Film auswählen“ pinnt den Treffer; spätere reine Zeilenselektion ändert die Zuordnung nicht.
+- Auto-Zuordnung lässt Dateien aus, die bereits als Serie **oder Film** gemappt sind.
+- Mehrfachfolgen-Mappings werden zuerst vollständig validiert. Gap-/Sondernummerierung wird als kontrollierte Benutzerwarnung angezeigt. Erst nach erfolgreicher Validierung ersetzt das neue Mapping ein vorhandenes Mapping.
+- Dokumentation wurde auf Patch BU synchronisiert: README, `help.html`, `INTEGRATION_TESTS.md`, DOCX-Handbuch, PDF-Handbuch und Änderungsverlauf dokumentieren Metadaten-Browser, Doppelstartschutz, Schnellschalter und die containerkorrekte Preview.
+- `core/project_info.py` zählt jetzt auch den Standalone-Generator-Einstiegspunkt und gepflegte Python-Quellen unter `extras`; die Frozen-Fallbackwerte des Hilfe-→-Über-Dialogs sind auf die dynamisch ermittelte Inventur synchronisiert. Eine Regression erzwingt die Gleichheit beider Statistiken.
+
+### Regressionen / Prüfung
+- Neue BU-Regressionen prüfen gepinnte Filmauswahl, Busy-/Async-Schutz, sofortiges Leeren stale Episoden, Schutz vorhandener Film-Mappings bei Auto-Zuordnung, kontrollierte Gap-Behandlung und Dokumentationsverträge.
+- Die bestehenden Patch-BT-Tests bleiben Teil der Fokussuite; zusätzlich werden Containerpreview, Quick-Toggles, Startkoordination, Preflight und Medieninfo erneut geprüft.
+- Vollständige interaktive Qt-Drag&Drop-/Eventloop-Abnahme bleibt in dieser Linux-Prüfumgebung mangels PyQt6/pytest-qt ein separater Windows-Smoke-Test.
+- Version bleibt **9.8.6**.
+
+### Patch-BU Abschlussprüfung
+- Fokussuite für BT/BU, Containerpreview, Quick-Toggles, Startkoordination, Batch-Preflight und Medieninfo: **67 bestanden**.
+- Breitere Renamer-/Metadaten-/Queue-/Parallel-/Watch-/Conversion-/Preflight-Suite: **355 bestanden, 4 erwartete PyQt6-Skips, 0 Fehler**.
+- Dragon HDR10+ Generator: **26 bestanden**.
+- `compileall` erfolgreich; AST-Prüfung: **1.049 Python-Dateien, 0 Syntaxfehler**.
+- Ein veralteter Headless-Teststub in `test_auxiliary_workers.py` wurde an den seit Patch BR beim Worker-Konstruktor erfassten read-only Settings-Snapshot angepasst. Das war ein Testharness-Defekt, kein Produktionsfehler: Der Qt-Stub bleibt nun bis nach der Worker-Konstruktion aktiv und stellt `allKeys()` bereit.
+- Ein monolithischer Lauf aller DragonTools-Tests wurde zusätzlich gestartet und lief ohne Fehler bis etwa **39 %**, bevor das 300-s-Limit der Review-Sandbox griff. Er wird deshalb ausdrücklich **nicht** als vollständiger Green-Run gewertet.
+- Aktueller Umfang: **1.049 Python-Dateien**, **161.861 Gesamtzeilen**, **136.882 nichtleere/nicht reine Kommentarzeilen**; 271 Test-Python-Dateien, davon 266 `test_*.py` mit **1.965** statisch erkannten Testfunktionen.
+
+## Patch BX – Watchfolder respektiert Abbruch und Herunterfahren – 30.09.2026
+
+- Stop sperrt vor dem Warten auch bereits vorgemerkte Scan-/Ergebnis-Callbacks; ein späteres Signal kann keine neue Queue mehr füllen. Beim Fensterschließen wird der Watchfolder vor den Konvertierungsworkern gestoppt.
+- Ein manueller Abbruch sperrt Watchfolder-Annahme und verzögerten Auto-Start im betroffenen Converter bis zu einem bewussten manuellen Neustart des Auftrags (oder Rücknahme des Abbruchs nach Datei). Aktiviertes Herunterfahren blockiert Watchfolder-Nachschub ebenfalls, damit die aktuelle Queue endlich auslaufen kann.
+- Vor dem Shutdown-Dialog wird die zentrale Überwachung gestoppt. Dies gilt für den Rest der Anwendungssitzung; ein abgelehntes Herunterfahren aktiviert sie nicht unbemerkt erneut. Erfolgsrückmeldungen laufender Dateien werden weiterhin gespeichert.
+- Sieben neue Regressionen prüfen Stop mit/ohne laufenden Scan, verzögerte Rückmeldungen, Abbruch, Shutdown-Option und Reihenfolge beim Schließen. Kein gewaltsames Beenden von Worker-Threads.
+- Version bleibt **9.8.6**.
+
+## Patch BW – DV-Untertitel vor Encode prüfen, späte Fehler sichern – 30.09.2026
+
+- Interne MKV-/MP4-Untertitel werden vor HEVC-Extraktion und Video-Encoding tatsächlich aufbereitet. Die erzeugten Tracks werden beim finalen Mux wiederverwendet; eine defekte ausgewählte Spur bricht früh ab und wird nicht still verworfen.
+- Ein erfolgreich abgeschlossener Video-Encode wird unabhängig von HDR10+-Generierung markiert. Bei späterem DV-Pipeline-Fehler oder unerwarteter Exception wird der gesamte Arbeitsordner einschließlich Video, RPU und bereits erzeugter Audio-/Untertiteldateien unter `Archiv/<Film>__DV_FAILED__...` gesichert.
+- Die Sicherung verwendet eine atomare Ordnerumbenennung ohne erneutes Kopieren großer Medien. Scheitern Statusdatei oder Archivierung (einschließlich anderem Laufwerk), bleibt der Arbeitsordner erhalten; Diagnosepfade und Cleanup-Sperre werden weitergereicht. Erfolgreiche Läufe und unvollständige frühe Encodes werden weiterhin normal bereinigt.
+- `recovery.json` dokumentiert Quelle, geplantes Ziel, Fehlerstufe, Crop und vorhandene Arbeitsdateien. Das Archiv ist kein validierter Finalfilm und keine automatische Resume-Funktion; es ermöglicht gezielte manuelle Weiterverarbeitung ohne erneutes Video-Encoding, soweit die erhaltenen Artefakte dafür geeignet sind.
+- Acht neue Regressionen prüfen frühes Abbrechen, einmalige Untertitelaufbereitung, normale und unerwartete späte Fehler, nicht verfügbares Archiv und Cleanup. Gezielte DV-/Archiv-/Transaktions-Suite: **86 bestanden**. Keine Änderung laufender Prozesse oder bestehender Mediendateien. Version bleibt **9.8.6**.
+
+## Patch BV – Änderungshistorie sichtbar machen und Release-Validierung fail-closed härten – 28.09.2026
+
+### Befund
+- `Aenderungshistorie/CHANGELOG.txt` enthielt die neuesten Einträge bereits, aber die ersten vier Einträge von `CHANGELOG.json` waren rohe Strings statt gültiger Abschnittsobjekte.
+- Die GUI lädt für V9 bevorzugt `CHANGELOG.json`. `load_changelog()` übersprang Nicht-Objekte bisher still. Dadurch waren BI/BJ/BS/BT/BU trotz aktualisierter Dateien im sichtbaren Änderungshistorie-Dialog nicht vorhanden.
+- Die Source-, App- und Dist-Release-Prüfung kontrollierte beim Changelog nur, ob die JSON-Datei existiert. Ein semantisch defektes JSON konnte daher bis zum Release durchrutschen.
+- Zusätzlich konnte ein exotisch falsch typisiertes `format_version` (z. B. Liste statt Zahl) beim Release-Validator einen `TypeError` auslösen, statt als kontrollierter Validierungsfehler zurückzukommen.
+
+### Umsetzung
+- Die aktuellen Einträge BI, BJ, BS/BT und BU wurden in einen gültigen strukturierten Abschnitt `00 Aktuelle Änderungen` überführt; Patch BV steht dort an erster Stelle.
+- `load_changelog()` validiert `sections` jetzt strikt: Die Liste muss vorhanden und nicht leer sein, jeder Abschnitt muss ein JSON-Objekt sein und einen gültigen Titel besitzen. Fehlerhafte Einträge werden nicht mehr still verschluckt.
+- Neue `_check_changelog_file()`-Prüfung lädt den Changelog tatsächlich und meldet Abschnitts-/Eintragszahl. Source-, App- und Dist-Validierung verwenden diese Prüfung für `CHANGELOG.json`.
+- Malformed `format_version` wird an der Release-Grenze fail-closed als Fehlercheck behandelt; der Validator selbst bleibt lauffähig.
+- `CHANGELOG.txt`, README, Help, technisches DOCX/PDF-Handbuch und Projektstatistik wurden auf den BV-Stand synchronisiert.
+
+### Regressionen / Review
+- Neue/erweiterte Tests prüfen rohe String-Abschnitte, den realen Repository-Changelog über den produktiven Loader sowie strukturell ungültige Changelogs im Release-Validator.
+- Fokuslauf Changelog + Release-Validierung: **19 bestanden**.
+- Erweiterter Start-/Queue-/Watch-/Renamer-/Metadaten-/Changelog-/Release-Lauf: **99 bestanden**.
+- Aktuelle `test_patch_b*.py`-Suite ohne den PyQt6-pflichtigen BR-QSettings-Test: **172 bestanden, 2 erwartete PyQt6-Skips**; die übrigen nicht-Qt-BR-Tests: **5 bestanden, 2 Windows-Skips**.
+- Dragon HDR10+ Generator: **26 bestanden**.
+- Vollständiger DragonTools-Lauf wurde erneut gestartet und lief ohne Fehler bis rund **39 %**, bevor das 300-s-Limit der Sandbox griff; daher kein behaupteter vollständiger Green-Run.
+- AST-Prüfung: **1.049 Python-Dateien, 0 Syntaxfehler**; `compileall` erfolgreich.
+- Source-Release-Validierung nach Bereinigung von Test-/Bytecode-Artefakten: **0 Fehler**; verbleibende Warnungen betreffen nur den fehlenden `dist`-Build bzw. beim direkten In-Process-Aufruf erzeugbaren Bytecode. Die offiziellen `-B`-Build-/Source-ZIP-Wege bleiben strikt.
+- Aktueller Umfang: **1.049 Python-Dateien**, **161.945 Gesamtzeilen**, **136.952 nichtleere/nicht reine Kommentarzeilen**; 271 Test-Python-Dateien, davon 266 `test_*.py` mit **1.968** statisch erkannten Testfunktionen. Produktivcode ohne Tests: 778 Dateien, 112.039 Gesamtzeilen und 96.547 Codezeilen.
+- Version bleibt **9.8.6**.
+
+## Patch BY – Watchfolder-QThread-Härtung und globale PGS→SRT/Original-PGS-Regeln – 30.09.2026
+
+### Befund
+- Der Watchfolder konnte beim Start eines Scans in der gefrorenen EXE hart abstürzen, obwohl derselbe Lauf aus der Python-/Anaconda-Umgebung funktionierte. Ursache war eine QThread-Lifecycle-Race: ein alter `finished`-Callback konnte nach Start eines neuen Scans `self._thread` auf den neuen Thread zeigen lassen und dadurch den falschen, noch laufenden QThread per `deleteLater()` entsorgen.
+- PGS-Aufbereitung war in mehreren Pfaden zu eng mit dem Dateierfolg gekoppelt. Besonders im DV→MKV-Pfad wurde die Original-PGS-Spur vor dem finalen Mux per FFmpeg als rohe `.sup` extrahiert. Beschädigte/ungewöhnliche PGS-Pakete (`Not enough data`, `Invalid data found when processing input`) konnten dadurch die komplette Datei abbrechen.
+- PGS→SRT war nicht als globale Untertitelregel für Standard-Encoding, Strip/Remux, HDR10+/DV und gemeinsame Sidecar-Ausgabe vorhanden. Original-PGS-Erhalt und OCR-Konvertierung waren nicht sauber voneinander getrennt.
+
+### Umsetzung
+- Watchfolder-Thread-Cleanup ist jetzt an genau den QThread gebunden, der `finished` emittiert hat. Ein alter Scan darf weder den aktuellen Thread-Zeiger löschen noch einen neu gestarteten Scan zerstören.
+- Neue Untertitelregeln (Schema 7):
+  - `pgs_to_srt_enabled`: PGS/SUP zusätzlich per FFmpeg+Tesseract als SRT versuchen.
+  - `pgs_original_storage`: `internal_mkv` oder `sidecar`.
+- GUI im Untertitel-Regelwerk erweitert:
+  - **PGS/SUP zusätzlich per OCR zu SRT konvertieren** (Ja/Nein).
+  - **Original-PGS zur Sicherheit**: im MKV behalten (MP4 technisch Sidecar) oder immer als `.sup`-Sidecar ausgeben.
+- PGS→SRT ist ausdrücklich **Best-Effort**. Fehler beim Lesen/Rendern von PGS-Paketen, FFprobe/FFmpeg oder Tesseract erzeugen eine Warnung und überspringen nur die SRT-Erzeugung. Der Video-/Dateijob wird dadurch nicht fehlgeschlagen.
+- Original-PGS-Erhalt ist vollständig vom OCR-Ergebnis getrennt. Scheitert PGS→SRT, bleibt die Originalspur gemäß Regelwerk erhalten.
+- DV→MKV schleust ausgewählte PGS-Spuren nicht mehr durch FFmpegs rohen SUP-Zwischenschritt. Die Original-PGS wird direkt aus der Quelle in den finalen mkvmerge-Mux übernommen. Damit kann der bekannte `sup`-Muxfehler nicht mehr die DV-Datei vor dem finalen MKV-Mux abbrechen.
+- Standard-Encoding und Strip/Remux beachten `pgs_original_storage` ebenfalls: bei `internal_mkv` bleibt PGS im MKV, bei `sidecar` wird sie aus dem internen Mapping entfernt und über den Sidecar-Service gesichert.
+- Der gemeinsame Sidecar-Service erzeugt optionales PGS→SRT für alle angebundenen Pipelines. Optionale OCR-SRTs zählen als Zusatzartefakte und können den Vollständigkeitsstatus verpflichtender Sidecars nicht verschlechtern.
+
+### Regressionen / Prüfung
+- Neue Regressionen prüfen Regelmigration, internes vs. externes Original-PGS, DV-PGS ohne FFmpeg-SUP-Zwischenextraktion, tolerierten PGS→SRT-Fehler mit dem Fehlerbild `Not enough data`, erfolgreichen optionalen OCR-SRT-Export und Watchfolder-Thread-Bindung.
+- Erweiterte Standard-/Strip-/DV-/Subtitle-Suite: **129 bestanden, 4 erwartete PyQt6-Skips, 0 Fehler**.
+- Zusätzliche fokussierte OCR-/Sidecar-/DV-Suite: **73 bestanden, 0 Fehler**.
+- `compileall` für DragonTools und `DragonToolsV9.py` erfolgreich.
+- Interaktive Qt-Watchfolder-Abnahme bleibt auf Windows/EXE sinnvoll, da PyQt6 in der Linux-Prüfumgebung nicht installiert ist.
+- Version bleibt **9.8.6**.
+
+---
+
+## Review-Patch 02.10.2026 – Untertitel/PGS, Move-Only-Sidecars und Konfigurationsschema
+
+**Status:** umgesetzt und fokussiert getestet  
+**Bereiche:** Untertitel-Tab, PGS→SRT/OCR, PGS-Sidecar-Erhalt, Move-Only, Config-Migration, Architekturgrenzen
+
+### 1. Move-Only erkennt vorhandene Sidecars
+
+Move-Only hat bisher nur Sidecars aus Conversion-Artefakten oder Recovery-Journalen an `MoveThread` übergeben. Bereits neben einer Quelldatei vorhandene Begleitdateien wurden nicht automatisch erkannt.
+
+Neu:
+- konservative Erkennung passend zum Video-Stem,
+- Untertitel: `.srt`, `.ass`, `.ssa`, `.sup`, `.sub`, `.idx`, `.vtt`,
+- exakte `<Videostem>.nfo`,
+- `<Videostem>.trickplay`-Ordner,
+- Zusammenführung mit bereits registrierten Sidecars ohne Duplikate.
+
+Der vorhandene transaktionale Companion-Move bleibt unverändert zuständig für Staging, Umbenennung und Commit.
+
+### 2. Untertitel-Tab: Font/Größe + Live-Vorschau
+
+Für `SRT → ASS` und `TXT → ASS` stehen jetzt Schriftart und Schriftgröße zur Verfügung. Die Werte werden in den ASS-Default-Style geschrieben.
+
+Für `TXT → SRT` stehen dieselben Bedienelemente und das Vorschau-Bild zur Verfügung. Da SRT keine verlässliche Schriftformatierung speichert, dienen Font/Größe hier ausdrücklich nur der visuellen Vorschau.
+
+Die GUI erzeugt ein 16:9-Beispielbild und rendert darauf einen Beispiel-Untertitel mit Outline, damit Größenänderungen unmittelbar sichtbar werden.
+
+### 3. PGS→SRT OCR gehärtet
+
+Die bisherige Renderlogik startete FFmpeg direkt am Cue-Mittelpunkt. Bei PGS kann das mitten in einer Display-/Palette-/Object-Sequenz liegen und zu unvollständigen Decoderzuständen führen.
+
+Neu:
+- kurzer Preroll vor dem Cue,
+- Sampling kurz nach Cue-Beginn statt blind am Mittelpunkt,
+- OCR-Renderpfad verwendet `+discardcorrupt`/`ignore_err` ausschließlich best-effort,
+- Original-PGS bleibt unabhängig von OCR erhalten.
+
+### 4. PGS/SUP-Erhalt: MKVToolNix-Fallback
+
+Wenn FFmpeg beim nativen PGS→SUP-Sidecar-Export aus MKV scheitert, versucht DragonTools jetzt einen zweiten, unabhängigen Pfad:
+
+1. `ffprobe` bestimmt die Subtitle-Ordinalposition,
+2. `mkvmerge -J` bestimmt die zugehörige Matroska-Track-ID,
+3. `mkvextract tracks` extrahiert den Original-PGS-Track direkt.
+
+Damit ist `PGS behalten` technisch von `PGS zusätzlich per OCR → SRT` getrennt. Ein OCR-Fehler darf den Original-PGS nicht vernichten.
+
+### 5. Subtitle-Regeln Schema 7 korrigiert
+
+`DEFAULT_SUBTITLE_RULES` verwendete bereits Schema 7, während `CURRENT_SCHEMA_VERSIONS` noch Schema 6 meldete. Dadurch konnten aktuelle Regeldateien fälschlich als Future-Schema abgewiesen werden.
+
+Die zentrale Schema-Version ist jetzt auf 7 synchronisiert; der veraltete Regressionstest wurde entsprechend aktualisiert.
+
+### 6. Architekturgrenzen bereinigt
+
+Drei bereits vorhandene Verstöße gegen die eigene Architekturprüfung wurden beseitigt:
+- öffentliche `active_encoder()`-API ergänzt,
+- externe Aufrufe von `_active_encoder()` entfernt,
+- externe Aufrufe von `_log()` durch `log_message()` ersetzt.
+
+### Fokussierte Regression
+
+- `python -m compileall -q dragontools`: erfolgreich
+- Untertitel-Konverter / PGS-OCR / Move-Only-Companions / Config-Migration / Architektur: **40/40 bestanden**
+- Subtitle-Sidecar-Service inklusive MKVToolNix-Fallback: **38/38 bestanden**
+- frühere fokussierte Gruppe inklusive Move-Sidecars: **20 bestanden, 1 Skip** (`PyQt6` in Review-Umgebung nicht installiert)
+
+Die komplette Suite umfasst 2.822 gesammelte Tests. Ein vollständiger Lauf ist in der Review-Umgebung nicht möglich, weil `PyQt6` fehlt und mindestens ein GUI-Test bereits bei der Collection hart importiert. Der GUI-Code wurde deshalb zusätzlich per `compileall`/AST-Syntax geprüft; eine echte Qt-Laufzeitprüfung muss im Windows-/Projekt-Venv erfolgen.
+
+
+### Patch – Nativer PGS/SUP Display-Set-Parser für OCR
+
+**Status:** umgesetzt und getestet  
+**Bereich:** Untertitel / PGS→SRT / OCR-Timing / Fehler-Recovery
+
+#### Änderungen
+
+- Neues Modul `dragontools/core/pgs_display_set.py`.
+- Liest rohe SUP-Segmente (`PG`-Header, PTS/DTS, PCS/PDS/ODS/WDS/END).
+- PCS mit Composition Objects wird als sichtbarer Untertitelzustand interpretiert; PCS ohne Objects als Clear-Event.
+- Sichtbare Zustände werden zu exakten OCR-Zeitintervallen zusammengesetzt.
+- Beschädigte Daten führen nicht sofort zum Abbruch: der Parser sucht den nächsten plausiblen `PG`-Header und setzt dort fort.
+- Fehlende END-Segmente werden als unvollständiges Display Set protokolliert, der PCS-Zeitpunkt kann für OCR trotzdem weiterverwendet werden.
+- 32-Bit-PTS/DTS-Wrap wird beim sequenziellen Parsen berücksichtigt.
+- Für MKV versucht die OCR-Timinganalyse zuerst `mkvmerge -J` + `mkvextract`, damit die PGS-Spur nicht durch FFmpegs SUP-Muxer normalisiert werden muss.
+- Falls MKVToolNix nicht verfügbar ist, wird FFmpeg verwendet; auch eine partielle SUP-Datei nach FFmpeg-Fehler darf analysiert werden, sofern sie einen gültigen SUP-Anfang besitzt.
+- Liefert der Display-Set-Parser keine verwertbaren Cues, bleibt der bisherige FFprobe-Paketpfad als Fallback aktiv.
+- Das eigentliche PGS-Bitmap-Rendering bleibt bewusst bei FFmpeg; DragonTools implementiert keinen eigenen Palette-/RLE-Renderer.
+
+#### Tests
+
+Neue Regressionstests decken ab:
+- sichtbarer PCS bis Clear-PCS,
+- sichtbarer PCS wird durch neuen sichtbaren PCS ersetzt,
+- fragmentierte ODS-Segmente,
+- Garbage/Resync,
+- abgeschnittene Segmente mit Recovery,
+- fehlendes END,
+- offener letzter Cue mit begrenzter Default-Dauer,
+- Display-Set-Priorität vor FFprobe,
+- FFprobe-Fallback,
+- MKVToolNix-Track-Mapping über Subtitle-Ordinal,
+- partielle FFmpeg-SUP-Datei trotz Non-Zero-Returncode.
+
+
+**Validierung:** 15 neue Display-Set-/Integrationsfälle grün; fokussiert insgesamt 109/109 relevante PGS-/Subtitle-/Config-Tests bestanden. `compileall` erfolgreich.
+
+
+## Patch 02.10.2026 – Automatische DV Frame-Mismatch-Recovery
+
+> **Historischer Zwischenstand:** Dieser Abschnitt dokumentiert den zunächst eingebauten Voll-Reencode-Fallback. Er wurde durch den nachfolgenden Patch **„DV Direct-MKV + konservative GOP-Teilreparatur“** vollständig abgelöst. Der produktive Code enthält keinen automatischen Voll-Reencode-Fallback mehr.
+
+**Status:** abgelöst  
+**Bereich:** Dolby Vision / STEP 4–6 / RPU-Parität / Recovery
+
+### Ausgangsfehler
+
+Bei einzelnen DV-Encodes kann der aus `source.hevc`/`p8.hevc` decodierte Arbeitsstream Bilder verlieren, obwohl die ursprüngliche MKV vollständig decodierbar ist. Der bisherige Guard erkannte den Zustand korrekt erst vor der RPU-Injektion, z. B.:
+
+`RPU/Encode-Frame-Mismatch vor Injection: RPU=191878, HEVC=191516`
+
+Der Encode wurde anschließend archiviert, aber nicht automatisch repariert.
+
+### Neue Recovery-Strategie
+
+DragonTools prüft die verlässliche FFmpeg-Encoder-Bildzahl jetzt unmittelbar nach STEP 4 gegen die Bildzahl der bereits extrahierten Original-RPU, **bevor der Encode-Slot freigegeben wird**.
+
+Bei exakter Parität läuft die Pipeline unverändert weiter. Bei einem Mismatch für DV Profil 7/8:
+
+1. Der fehlerhafte Erstencode bleibt unverändert erhalten.
+2. DragonTools startet genau einen Recovery-Encode **direkt aus dem Originalcontainer** statt aus `p8.hevc`.
+3. Es werden dieselben bereits aufgelösten Filter, Crop-Werte, Burn-In-Untertitel und Encoderparameter wiederverwendet.
+4. Der Recovery-Kandidat wird nur akzeptiert, wenn FFmpeg über einen vollständig abgeschlossenen `-progress`-Lauf exakt dieselbe Bildzahl wie die RPU meldet.
+5. Anschließend wird der komplette Recovery-HEVC einmal mit FFmpeg bis zum Ende decodiert. Decoderfehler verwerfen den Kandidaten.
+6. Erst nach beiden Prüfungen wird atomar umgeschaltet:
+   - alter Encode → `encoded_frame_mismatch.hevc`
+   - geprüfter Recovery-Encode → `encoded.hevc`
+7. Die normale STEP-6-RPU-Paritätsprüfung, RPU-Injektion und SHA-256-Rückextraktionsprüfung bleiben als zusätzliche Guards aktiv.
+
+Der fehlerhafte Erstencode bleibt bis zum erfolgreichen Abschluss der gesamten Pipeline im Arbeitsordner. Scheitert später erneut etwas, landet er zusammen mit dem Recovery-Status im bestehenden DV-Diagnosearchiv.
+
+### Sicherheitsgrenzen
+
+- Automatischer Direkt-Recovery-Pfad nur für DV Profil 7/8.
+- DV Profil 5 wird nicht erneut identisch gestartet, da der normale P5-Pfad bereits direkt aus dem Originalcontainer encodiert.
+- Zeitlich bildverändernde Filter (`fps`, `select`, entsprechende `setpts`-Pfade usw.) sperren die Recovery weiterhin; gleiche Bildzahl allein wäre dort kein gültiger RPU-Zuordnungsnachweis.
+- Schlägt der Direkt-Recovery-Encode fehl, liefert erneut die falsche Bildzahl oder lässt sich nicht vollständig decodieren, bleibt der Job fehlgeschlagen und wird diagnostisch archiviert.
+- Es wird bewusst **keine automatische HEVC-GOP-Splice-/CRA→BLA-NAL-Reparatur** durchgeführt. Diese wäre encoder-, GOP- und Bitstream-spezifisch und deutlich riskanter als ein deterministischer Voll-Recovery-Encode aus der Original-MKV.
+
+### Burn-In / Parallelisierung
+
+Temporär extrahierte Text-Untertitel für Forced-Burn-In werden jetzt bis nach der frühen Paritätsprüfung aufbewahrt, damit sie auch beim Recovery-Encode noch verfügbar sind. Danach werden sie wie bisher gelöscht.
+
+Die Recovery läuft vor dem Encode-Slot-Handoff. Dadurch startet nicht bereits der nächste CPU-Encode parallel, während der betroffene Film erneut encodiert werden muss.
+
+### Nebenfund
+
+`default_subtitle_rules.json` stand noch auf `_schema_version: 6`, obwohl Python-Default und zentraler Migrationskern bereits Schema 7 verwenden. Die JSON-Defaultdatei und der veraltete Regressionstest wurden auf Schema 7 synchronisiert.
+
+### Tests
+
+- Neue DV-Frame-Recovery-Regressionen: **7/7 bestanden**.
+- Breite DV/HDR-/Pipeline-Suite: **193/193 bestanden**.
+- Subtitle/PGS/Config-Suite: **100/100 bestanden**.
+- `python -m compileall -q dragontools DragonToolsV9.py`: erfolgreich.
+
+## Patch 02.10.2026 – DV Direct-MKV + konservative GOP-Teilreparatur
+
+**Status:** produktiver Stand, umgesetzt und getestet  
+**Bereich:** Dolby Vision Profil 5/7/8 / RPU-Normalisierung / Video-Encoding / Frame-Recovery
+
+### Zielarchitektur
+
+Der normale Dolby-Vision-Pfad verwendet für Matroska keine erste HEVC-Arbeitskopie mehr. Metadaten- und Bildpfad sind getrennt:
+
+```text
+Original.mkv
+ ├─ dovi_tool extract-rpu -m <Profilmodus> → metadata.rpu
+ │      P5  → Mode 3 → P8.1-RPU
+ │      P7  → Mode 2 → P8.1-RPU
+ │      P8  → Mode 2 → P8.1-normalisierte RPU
+ │
+ └─ FFmpeg + Encoder direkt aus Original.mkv → encoded.hevc
+                                                │
+                                                └─ dovi_tool inject-rpu
+                                                     → DV8.1 HEVC → Mux
+```
+
+Damit entfallen `source.hevc` und `p8.hevc` vollständig aus dem normalen MKV-Bildpfad. Der Encoder decodiert immer den Originalcontainer inklusive dessen Zeitstempeln. Erst der fertige neue Video-Encode liegt als roher HEVC-Stream vor, weil `dovi_tool inject-rpu` diesen für die Injection benötigt.
+
+### Profil 5
+
+DV5 wurde ausdrücklich auf denselben Direct-MKV-Grundpfad umgestellt:
+
+- RPU direkt aus der MKV.
+- `dovi_tool -m 3 extract-rpu` normalisiert P5 → P8.1.
+- Der Bildpfad liest ebenfalls direkt die MKV.
+- Die vorhandene libplacebo-Konvertierung ICtCp → HDR10 Base Layer bleibt unverändert Teil des Bildfilters.
+- Die finale P8.1-RPU wird erst in `encoded.hevc` injiziert.
+
+### Profil 7 und Profil 8
+
+- RPU direkt aus der MKV.
+- `dovi_tool -m 2 extract-rpu` erzeugt/normalisiert eine P8.1-kompatible RPU.
+- Kein `source.hevc → p8.hevc` mehr vor dem Encode.
+- FFmpeg/x265 liest die Original-MKV direkt.
+- RPU-Injection erst nach erfolgreichem Encode.
+
+### Ausnahmen für `source.hevc`
+
+Ein temporärer `source.hevc` darf weiterhin entstehen, aber nur als **Metadaten-Hilfsstream**, niemals als Bildquelle des normalen Encodes:
+
+1. Quelle ist kein von `dovi_tool extract-rpu` direkt unterstütztes Matroska-Inputformat (z. B. MP4-Fallback).
+2. DV + HDR10+ sollen gemeinsam erhalten werden und das HDR10+-Tool benötigt den rohen HEVC-Strom zur Metadatenextraktion.
+
+### Frame-Mismatch: Teilreparatur statt Voll-Reencode
+
+Nach STEP 4 wird die verlässliche FFmpeg-Ausgabebildzahl unmittelbar gegen die normalisierte RPU geprüft. Bei z. B. `RPU=191878, HEVC=191516` wird nicht automatisch der gesamte Film erneut encodiert.
+
+Der neue Recovery-Pfad:
+
+1. Erzeugt kleine zeitliche Bild-Fingerprints aus Original-MKV und fehlerhaftem Encode.
+2. Für DV5 wird die Quelle vor dem Vergleich durch **dieselbe libplacebo-P5-Bildkonvertierung** geführt wie beim normalen Encode; P7/P8 verwenden ebenfalls exakt den produktiven Filterpfad.
+3. Beweist die zeitliche Ausrichtung vor und nach dem Defekt anhand mehrerer Frame-Blöcke. Dadurch sind Anime, Standbilder und Fades robuster als bei Einzelbild-Hashing.
+4. Lokalisiert einen zusammenhängenden Unsicherheitsbereich, der alle fehlenden Bilder enthält.
+5. Analysiert den vorhandenen Annex-B-HEVC-Strom auf VPS/SPS/PPS und IRAP-Zugriffspunkte (BLA/IDR/CRA).
+6. Erweitert den Reparaturbereich auf sichere GOP-/IRAP-Grenzen und berücksichtigt einen B-Frame-Sicherheitsabstand.
+7. Encodiert **nur diesen Quellbereich** erneut, direkt aus der Original-MKV und mit derselben Filter-/Encoderkonfiguration. Für das Ersatzsegment werden geschlossene GOPs und wiederholte Header erzwungen.
+8. Baut aus altem Prefix + neuem Ersatzsegment + altem Suffix zunächst nur einen Kandidaten.
+9. Der Kandidat wird nur übernommen, wenn er vollständig decodierbar ist, exakt der RPU-Bildzahl entspricht und die visuellen Fingerprints an beiden Übergängen zur Quelltimeline passen.
+10. Erst danach ersetzt der Kandidat atomar `encoded.hevc`; der vorherige Stream bleibt als `encoded_frame_mismatch.hevc` erhalten.
+11. STEP 6 prüft anschließend weiterhin Frame-Parität, injiziert die RPU und führt die bestehenden DV-/RPU-Validierungen aus.
+
+### Sicherheitsgrenzen
+
+Die Teilreparatur ist bewusst konservativ:
+
+- nur DV5/DV7/DV8,
+- nur fehlende Bilder (`RPU-Frames > Encode-Frames`),
+- maximal 5.000 fehlende Bilder,
+- derzeit nur CPU/libx265,
+- keine zeitlich bildverändernden Filter,
+- kein `filter_complex`, dessen exakte Teilbereichssemantik nicht sicher reproduziert werden kann,
+- Annex-B-Framezählung muss mit der Encoder-Evidenz übereinstimmen,
+- Quell- und Encode-Fingerprints müssen exakt die erwarteten Bildzahlen liefern,
+- unklare Ausrichtung oder unsichere Übergänge führen zum Abbruch.
+
+Scheitert eine dieser Bedingungen, wird **kein identischer kompletter Re-Encode automatisch gestartet**. Der bestehende Diagnose-/Archivpfad übernimmt, damit keine fragwürdige Datei stillschweigend freigegeben wird.
+
+### Validierung
+
+- Direct-MKV/RPU/Partial-Recovery/Architektur fokussiert: **56/56 bestanden**.
+- Breiter DV/HDR-Testlauf: **169 bestanden, 4 übersprungen**; die 4 Skips sind reale Tool-Integrationstests ohne lokal konfigurierte `dovi_tool`/`hdr10plus_tool`/`MP4Box`-Binaries.
+- Untertitel/PGS/Move-Sidecars/Config als Cross-Regression: **89 bestanden, 1 übersprungen** (`PyQt6` fehlt in der Review-Umgebung).
+- `python -m compileall -q dragontools DragonToolsV9.py`: erfolgreich.
+- Zusätzlicher synthetischer Realtest mit echtem FFmpeg/x265: 600-Frame-Quelle, sechs absichtlich aus dem HEVC-Encode entfernte Bilder; Teilreparatur lokalisierte den Defekt, encodierte nur das sichere Reparaturfenster und erzeugte wieder einen vollständig decodierbaren **600/600-Frame-HEVC**.
+
+
+
+## Patch 02.10.2026 – Manueller Watchfolder-Sofortscan + Release-Smoke-Fix
+
+**Status:** umgesetzt und fokussiert getestet  
+**Bereiche:** Watch-Folder / Live-Queue / GUI / Release-Validierung
+
+### Watchfolder durchsuchen
+
+- Neuer Button `🔎 Watchfolder durchsuchen` in jedem Converter-Tab.
+- Der Button scannt alle aktivierten Watch-Folder-Regeln unabhängig vom globalen Automatikschalter.
+- Der manuelle Scan verwendet den bestehenden `WatchFolderScanner`/`WatchFolderController`-Pfad; es gibt keine zweite Dateisuche und keine parallele Sonderqueue.
+- Bereits bestätigte Dateisignaturen bleiben ausgeschlossen. Bereits vorhandene Queue-Zeilen werden nicht dupliziert.
+- Bei laufendem Converter werden neue Dateien über `add_file_with_override`/`add_file` in die bestehende Live-Queue übernommen.
+- Im Leerlauf reiht der manuelle Scan Treffer nur ein und startet bewusst keinen neuen Batch.
+- Läuft gerade ein automatischer Scan, wird genau ein manueller Scan für direkt danach vorgemerkt.
+- Der manuelle Scan setzt die Stabilitäts-Wartezeit für diesen einen Lauf auf `0`, ohne die gespeicherte Automatik-Einstellung zu verändern. Das ist bewusst ein Sofortscan und sollte nur auf vollständig geschriebenen Quellen verwendet werden.
+
+### Release-Smoke
+
+Im Gesamt-Review fiel auf, dass `core/pgs_display_set.py` trotz produktiver Verwendung und Tests nicht in `_SMOKE_MODULES` enthalten war. Das Modul wurde in die verpflichtende Release-Smoke-Liste aufgenommen.
+
+### Regression
+
+- Watch-Folder-Kern: 13/13 bestanden.
+- Release-Validierung/-Packaging/-Privacy: 42/42 bestanden.
+- `python -m compileall -q DragonToolsV9.py dragontools`: erfolgreich.
+
+
+## Release-Abschluss 9.8.7 – 02.10.2026
+
+**Status:** Source-Release konsolidiert, Dokumentation synchronisiert, fokussierte Release-Regression grün  
+**Basis:** Direct-MKV-DV-Pfad + konservative Frame-Teilreparatur + manueller Watchfolder-Sofortscan
+
+### Versions- und Releasevertrag
+
+- Zentrale `APP_VERSION` auf **9.8.7** angehoben; `release_manifest.json`, Build-Hinweise, Hilfe, Über-Dialog, README, Changelog und Release-Tests verwenden denselben Stand.
+- Der dynamische Builder erzeugt daraus `DragonToolsV9.8.7`; es wurden keine hart codierten Buildnamen in den produktiven Buildpfad eingeführt.
+- `core/pgs_display_set.py` ist verpflichtender Bestandteil des Paket-Smokes.
+- Die Release-Fallbackstatistik im Über-Dialog wurde auf den final vermessenen 9.8.7-Quellstand aktualisiert.
+
+### Funktionsstand 9.8.7
+
+- **Dolby Vision Direct-MKV:** P5/P7/P8-RPU wird bei Matroska direkt aus der Quelle extrahiert/normalisiert; der Encode liest ebenfalls direkt aus der Original-MKV. Roher HEVC-Output entsteht erst für die spätere RPU-/HDR10+-Injection.
+- **Frame-Mismatch-Recovery:** bei eindeutig lokalisierbarem Fehlbereich kann ein begrenztes GOP-/IRAP-Fenster neu encodiert und nur nach Frame-, Decode- und Übergangsvalidierung übernommen werden. Unklare Fälle bleiben Fehler und gehen in Diagnose/Archiv.
+- **Watchfolder durchsuchen:** manueller Sofortscan über alle aktivierten Watch-Regeln, unabhängig vom globalen Automatikschalter; Queue-Deduplizierung und persistenter Erfolgsstatus bleiben erhalten. Im Leerlauf startet der Scan bewusst keinen Batch.
+- **Release-Smoke:** der native PGS-Display-Set-Parser wird bei Paketvollständigkeit/Syntax zwingend geprüft.
+
+### Dokumentationsabschluss
+
+- `README.md`, `PATCH.md`, `Info.txt`, `help.html`, `INTEGRATION_TESTS.md`, `TECHNISCHES_REVIEW_20261002.md` sowie beide V9-Changelog-Formate sind auf 9.8.7 synchronisiert.
+- `DragonToolsV9_Dokumentation.docx` beschreibt jetzt den Direct-MKV-DV-Pfad, die Teilreparatur und den manuellen Watchfolder-Sofortscan.
+- `Handbuch/Handbuch.pdf` wird aus derselben aktualisierten DOCX-Fassung neu erzeugt und visuell geprüft.
+
+### Finale 9.8.7-Validierung
+
+- `python DragonToolsV9.py --version` liefert **9.8.7**.
+- `python -m compileall -q DragonToolsV9.py dragontools dragon_hdr10plus_generator` läuft fehlerfrei.
+- Fokussierte Version-/Release-/Changelog-/Watchfolder-/PGS-/DV-Regression: **136 bestanden, 2 Windows-Skips, 3 Qt-only-QSettings-Tests mangels PyQt6 in der Review-Umgebung abgewählt**.
+- Die aktualisierte DOCX-Fassung wurde als **377-seitiges A4-PDF** exportiert und an den geänderten Stellen visuell geprüft.

@@ -53,6 +53,9 @@ class ConvertWidgetHostActions:
         self._open_path(str(path))
 
     def confirm_shutdown(self) -> None:
+        from .watch_folder_main_window_bridge import stop_watch_folder_controller
+        self.state.watch_intake_blocked = True
+        stop_watch_folder_controller(self.parent_widget.window())
         res = QMessageBox.question(
             self.parent_widget,
             "Herunterfahren",

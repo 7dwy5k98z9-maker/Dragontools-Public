@@ -261,7 +261,8 @@ def terminate_process_tree(
         except subprocess.TimeoutExpired:
             try:
                 proc.kill()
-            except OSError as exc:
+                proc.wait(timeout=kill_timeout)
+            except (OSError, subprocess.SubprocessError) as exc:
                 if callable(log):
                     log(f"{label}: Python-Kill-Fallback fehlgeschlagen: {exc}", "error")
     else:
@@ -299,9 +300,13 @@ def terminate_process_tree(
             if callable(log):
                 log(f"{label}: Prozess konnte nicht beendet werden: {exc}", "error")
 
-    with lock:
-        _clear_registered_unlocked(proc)
-    return True
+    ended = proc.poll() is not None
+    if ended:
+        with lock:
+            _clear_registered_unlocked(proc)
+    else:
+        _log_process_control(log, f"{label}: Prozessende nicht bestätigt; Prozess bleibt registriert.", "error")
+    return ended
 
 
 # ---------------------------------------------------------------------------

@@ -29,6 +29,7 @@ def build_pipeline_stages(
     assert_nonempty_file: Callable,
     clear_burn_sub_tmp: Callable,
     crop_decision: Callable | None,
+    encode_complete: Callable | None = None,
 ) -> DVPipelineStages:
     return DVPipelineStages(
         tools=tools,
@@ -51,6 +52,7 @@ def build_pipeline_stages(
         assert_nonempty_file=assert_nonempty_file,
         clear_burn_sub_tmp=clear_burn_sub_tmp,
         crop_decision=crop_decision,
+        encode_complete=encode_complete,
     )
 
 

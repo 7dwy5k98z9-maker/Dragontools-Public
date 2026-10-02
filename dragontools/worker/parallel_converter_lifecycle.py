@@ -28,9 +28,16 @@ class ParallelConverterLifecycleMixin:
             encoder_options=self.encoder_options,
             manual_override_count=len(self.file_overrides),
         )
+        duplicates = list(getattr(self._queue_state, "duplicate_inputs_ignored", []) or [])
+        if duplicates:
+            self._logger.warn(
+                f"⚠️ {len(duplicates)} doppelter Queue-Eintrag wurde vor dem Start verworfen; "
+                "jede Quelldatei darf pro Run nur einem Worker gehören."
+            )
         self._logger.info(
             f"⚙️  Parallele Bearbeitung: {worker_count} Worker aktiv "
-            f"(Limit: {self.parallel_jobs})."
+            f"(Encode-Limit: {self.parallel_jobs}; DV/HDR-Postprocessing-Limit: "
+            f"{getattr(self, 'max_postprocessing_jobs', 4)})."
         )
         if not self._pending_files:
             self._finish_if_done()
@@ -43,8 +50,14 @@ class ParallelConverterLifecycleMixin:
     def aggregate_progress_percent(self) -> int:
         return self._queue_state.aggregate_progress_percent()
 
-    def active_file_count(self) -> int:
+    def encode_active_count(self) -> int:
         return sum(1 for worker in self._active_workers if worker.isRunning())
+
+    def postprocessing_file_count(self) -> int:
+        return len(self._queue_state.dv_postprocessing_inputs | self._queue_state.postprocessing_inputs)
+
+    def active_file_count(self) -> int:
+        return self.encode_active_count() + self.postprocessing_file_count()
 
     def display_position_for_path(
         self,
@@ -64,7 +77,9 @@ class ParallelConverterLifecycleMixin:
             "abort_type": self.abort_type or "",
             "parallel_jobs": int(self.parallel_jobs),
             "active_count": int(self.active_file_count()),
-            "postprocessing_count": int(len(self._postprocessing_workers)),
+            "postprocessing_count": int(self.postprocessing_file_count()),
+            "heavy_postprocessing_active": int(getattr(getattr(self, "_dv_postprocess_gate", None), "active", 0)),
+            "postprocessing_limit": int(getattr(self, "max_postprocessing_jobs", 4)),
             "progress_percent": int(self.aggregate_progress_percent()),
             "total_files": len(self.files),
             "done_files": list(self._terminal_inputs),
@@ -75,7 +90,12 @@ class ParallelConverterLifecycleMixin:
         }
 
     def _finish_if_done(self) -> None:
-        if self._active_workers or self._postprocessing_workers or self._postprocessing_inputs:
+        if (
+            self._active_workers
+            or self._postprocessing_workers
+            or self._postprocessing_inputs
+            or self._queue_state.dv_postprocessing_inputs
+        ):
             return
         if self._pending_files and not self.abort_requested:
             return

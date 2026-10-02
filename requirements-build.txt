@@ -1,4 +1,4 @@
 -r requirements-runtime.txt
 -r requirements-optional.txt
 PyInstaller>=6.10,<7
-pyinstaller-hooks-contrib>=2025.0
+pyinstaller-hooks-contrib>=2025.0,<2027

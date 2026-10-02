@@ -13,6 +13,7 @@ from typing import Callable, Iterable
 from ..core.process_runner import subprocess_no_window_kwargs as _no_window_kwargs
 from ..core.callback_dispatch import invoke_callback, is_callback_like
 from .log_dispatch import dispatch_log
+from .tool_output_buffer import ToolOutputBuffer
 from .tool_process_lifecycle import (
     ProcessLifecycle,
     TimeoutMode,
@@ -31,8 +32,10 @@ def _cmd_for_log(cmd: Iterable[object]) -> str:
 
 
 def _normalize_command(cmd: Iterable[object], *, function_name: str) -> list[str]:
+    if cmd is None or isinstance(cmd, (str, bytes)):
+        raise ValueError(f"{function_name}() erwartet eine Liste von Kommandoargumenten.")
     command = [str(part) for part in cmd]
-    if not command:
+    if not command or not command[0].strip():
         raise ValueError(f"{function_name}() benötigt ein nicht-leeres Kommando.")
     return command
 
@@ -84,7 +87,10 @@ def _dispatch_callbacks(
     label: str,
     log: LogFn | None,
 ) -> None:
-    while True:
+    deadline = time.monotonic() + 0.02
+    for _ in range(32):
+        if time.monotonic() >= deadline:
+            return
         try:
             callback, text = callback_queue.get_nowait()
         except queue.Empty:
@@ -101,17 +107,25 @@ def _start_text_drain(
     callback: LineFn | None,
     callback_queue: "queue.SimpleQueue[tuple[LineFn, str]]",
     lifecycle: ProcessLifecycle,
+    stop: threading.Event,
 ) -> threading.Thread:
     def _drain() -> None:
         if stream is None:
             return
         try:
-            for line in stream:
+            for line in iter(lambda: stream.readline(65536), ''):
+                if stop.is_set():
+                    return
                 text = line.rstrip()
-                target.append(text)
+                target.append(line)
                 lifecycle.note_activity()
                 if is_callback_like(callback):
-                    callback_queue.put((callback, text))
+                    while not stop.is_set():
+                        try:
+                            callback_queue.put((callback, text), timeout=0.1)
+                            break
+                        except queue.Full:
+                            continue
         except (OSError, ValueError):
             return
 
@@ -124,6 +138,17 @@ def _join_threads(*threads: threading.Thread | None, timeout: float) -> None:
     for thread in threads:
         if thread is not None:
             thread.join(timeout=timeout)
+
+
+def _finish_text_drains(threads, callback_queue, *, label, log, timeout=5.0):
+    deadline = time.monotonic() + timeout
+    while any(thread is not None and thread.is_alive() for thread in threads) or not callback_queue.empty():
+        _dispatch_callbacks(callback_queue, label=label, log=log)
+        if time.monotonic() >= deadline:
+            return False
+        _join_threads(*threads, timeout=0.01)
+    _dispatch_callbacks(callback_queue, label=label, log=log)
+    return True
 
 
 def run_tool(
@@ -140,6 +165,7 @@ def run_tool(
     timeout_mode: TimeoutMode = "absolute",
     merge_stderr: bool = False,
     activity_file: str | os.PathLike | None = None,
+    stdout_file=None,
 ) -> ToolRunResult:
     """Run a text-producing tool with shared timeout/abort/process semantics."""
     command = _normalize_command(cmd, function_name="run_tool")
@@ -153,9 +179,10 @@ def run_tool(
         timeout_mode=timeout_mode,
         file_path=activity_file,
     )
-    stdout_lines: list[str] = []
-    stderr_lines: list[str] = []
-    callback_queue: "queue.SimpleQueue[tuple[LineFn, str]]" = queue.SimpleQueue()
+    stdout_lines = ToolOutputBuffer()
+    stderr_lines = ToolOutputBuffer(limit=256 * 1024)
+    callback_queue = queue.Queue(maxsize=256)
+    stop = threading.Event()
     stdout_thread: threading.Thread | None = None
     stderr_thread: threading.Thread | None = None
     rc: int | None = None
@@ -164,7 +191,7 @@ def run_tool(
     try:
         proc = subprocess.Popen(
             command,
-            stdout=subprocess.PIPE,
+            stdout=stdout_file if stdout_file is not None else subprocess.PIPE,
             stderr=subprocess.STDOUT if merge_stderr else subprocess.PIPE,
             stdin=subprocess.DEVNULL,
             text=True,
@@ -176,12 +203,13 @@ def run_tool(
             **_process_group_kwargs(),
         )
         lifecycle.register(proc)
-        stdout_thread = _start_text_drain(
-            proc.stdout, stdout_lines, stdout_line, callback_queue, lifecycle
-        )
+        if stdout_file is None:
+            stdout_thread = _start_text_drain(
+                proc.stdout, stdout_lines, stdout_line, callback_queue, lifecycle, stop
+            )
         if not merge_stderr:
             stderr_thread = _start_text_drain(
-                proc.stderr, stderr_lines, stderr_line, callback_queue, lifecycle
+                proc.stderr, stderr_lines, stderr_line, callback_queue, lifecycle, stop
             )
 
         while True:
@@ -203,13 +231,17 @@ def run_tool(
                 rc = proc.wait(timeout=1)
             except (subprocess.TimeoutExpired, OSError):
                 rc = proc.poll()
-        _join_threads(stdout_thread, stderr_thread, timeout=2)
+        drained = _finish_text_drains((stdout_thread, stderr_thread), callback_queue, label=label, log=log)
+        if not drained and rc == 0:
+            rc = 75
+            stderr_lines.append("Tool-Ausgabe konnte nicht vollständig gelesen werden.")
         _dispatch_callbacks(callback_queue, label=label, log=log)
         rc = int(rc if rc is not None else 124)
     except FileNotFoundError:
         rc = 127
         stderr_lines.append(f"Tool nicht gefunden: {command[0]}")
     finally:
+        stop.set()
         _close_process_streams(lifecycle.proc)
         _join_threads(
             stdout_thread if stdout_thread is not None and stdout_thread.is_alive() else None,
@@ -218,12 +250,20 @@ def run_tool(
         )
         _dispatch_callbacks(callback_queue, label=label, log=log)
         lifecycle.finish(rc)
+        stdout_text, stderr_text = stdout_lines.text(), stderr_lines.text()
+        if stdout_lines.truncated and rc == 0:
+            rc = 75
+            stderr_text += "\nStandardausgabe überschreitet Speichergrenze; Ausgabe nicht vollständig."
+        if stderr_lines.truncated:
+            stderr_text = "[Diagnoseausgabe gekürzt]\n" + stderr_text
+        stdout_lines.release()
+        stderr_lines.release()
 
     return ToolRunResult(
         command=command,
         returncode=int(rc if rc is not None else 1),
-        stdout="\n".join(stdout_lines),
-        stderr="\n".join(stderr_lines),
+        stdout=stdout_text,
+        stderr=stderr_text,
         timed_out=lifecycle.timed_out,
         aborted=lifecycle.aborted,
         timeout_s=timeout_s,

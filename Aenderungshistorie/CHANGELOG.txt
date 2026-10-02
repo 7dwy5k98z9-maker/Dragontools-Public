@@ -16,6 +16,49 @@ Legacy-Historie
 
 === 📦 01 Release, Build & Packaging ===
 
+Release-Abschluss und Versionskonsolidierung (V9.8.7 · 02.10.2026)
+- Zentrale APP_VERSION, release_manifest.json, Build-Hinweise, Hilfe/Über, README und release-feste Regressionstests sind auf 9.8.7 synchronisiert.
+- Der dynamische Builder erzeugt DragonToolsV9.8.7; ältere 9.8.6-Einträge bleiben als historische Releasepunkte erhalten.
+- core/pgs_display_set.py ist verpflichtender Bestandteil des Release-Smokes.
+- Finaler Projektumfang: 1.064 Python-Dateien/Programme, 165.934 Gesamtzeilen und 140.321 Codezeilen; 276 test_*.py mit 2.037 statisch erkannten Testfunktionen.
+
+Änderungshistorie- und Release-Schema-Validierung (V9.8.6 · 28.09.2026)
+- Die V9-Änderungshistorie war im TXT-Fallback bereits aktuell, während neueste JSON-Einträge außerhalb des gültigen Abschnittsschemas lagen und vom bevorzugten GUI-JSON-Lader übersprungen wurden.
+- Die aktuellen Änderungen sind wieder als gültige strukturierte Abschnitte sichtbar.
+- Der Changelog-Parser verwirft ungültige Abschnittstypen nicht mehr still, sondern meldet ein fehlerhaftes JSON-Schema explizit.
+- Source-, App- und Dist-Release-Validierung laden und prüfen die strukturierte Änderungshistorie statt nur die Existenz der Datei.
+- Aktueller Projektumfang: 1.049 Python-Dateien/Programme, 161.945 Gesamtzeilen, 136.952 Codezeilen; 266 test_*.py mit 1.968 statisch erkannten Testfunktionen.
+
+DV-Encode-Overlap, HDR10+-Fortschritt und finale Release-Gates (V9.8.6 · 26.09.2026)
+- Dolby-Vision-Jobs geben nach erfolgreichem HEVC-Encode ihren Encode-Slot frei; DV/HDR10+-Injection, Audio/Untertitel und Final-Mux dürfen parallel zum Encode der nächsten Queue-Datei weiterlaufen, ohne die konfigurierte Encode-Parallelität zu erhöhen.
+- Der Dragon HDR10+ Generator meldet bei langen Bildanalysen regelmäßig Frames, Prozent, Analyse-FPS, Laufzeit und ETA; DragonTools übernimmt diese Meldungen live ins Job-Log.
+- 8-Bit-HEVC mit PQ/BT.2020-Tags wird auch bei fehlendem bits_per_raw_sample über pix_fmt/Profil erkannt und abgelehnt.
+- Der finale Frozen-Smoke besitzt einen 90-s-Watchdog, fehlgeschlagene Builds stellen den vorherigen Dist-Stand wieder her, und v*-Release-Tags verwenden die kanonischen Generator-/DragonTools-Builder.
+- Aktueller Projektumfang: 1.024 Python-Dateien/Programme, 155.781 Gesamtzeilen, 131.721 Codezeilen; 253 test_*.py mit 1.861 statisch erkannten Tests.
+
+Release-Candidate-Finalisierung Packager/Smoke/HDR10+-RAM (V9.8.6 · 26.09.2026)
+- `DragonTools_Source_ZIP.bat` delegiert vollständig an den Python-Packager; beide verwenden damit exakt denselben öffentlichen Source-Inventarvertrag. Private Snapshot-, Review- und Diff-Artefakte werden nicht in öffentliche Source-ZIPs übernommen.
+- Der Standalone-HDR10+-Builder findet Python über lokale Generator-`.venv`, DragonTools-`.venv`, `py -3` oder `python`, begrenzt NumPy auf `<3` und validiert die gebaute EXE samt strukturiertem `--version`-JSON.
+- `build_v9.bat` startet nach der App-Bundle-Prüfung exakt die finale DragonTools-EXE mit `--smoke-test`; dieser initialisiert eine echte `QApplication` und ein Widget und erkennt damit fehlende Qt-Platform-Plugins.
+- Standard-`pytest` umfasst jetzt auch die Standalone-Generator-Suite; Datenschutzprüfung und Source-Packaging verwenden dasselbe öffentliche Dateiinventar.
+- HDR10+-Framehistogramme liegen kompakt als uint32-Zähler vor. Für 2 h/24 fps sinkt der reine 64-Bin-Histogrammanteil rechnerisch von rund 344 MiB auf rund 55 MiB.
+- Aktueller Projektumfang: 1.019 Python-Dateien/Programme, 154.404 Gesamtzeilen, 130.531 Codezeilen; 250 test_*.py mit 1.830 statisch erkannten Tests.
+
+Release-Candidate-Hardening Packaging/CI/Tests (V9.8.6 · 26.09.2026)
+- Generator-Build legt PyInstaller-Specs nur noch unter `build/` ab; Source-BAT, Python-Packager und Validator behandeln `*.spec` einheitlich als generiertes, verbotenes Source-Artefakt.
+- Privates Snapshot-Manifest wird reproduzierbar aus dem finalen Quellinventar erzeugt und besitzt einen Selbsttest für fehlende Dateien bzw. SHA-256-Drift.
+- SQLite-Testverbindungen werden deterministisch geschlossen; ResourceWarning-Tests isolieren ihr Messfenster gegen Altlasten vorheriger Tests.
+- CI ergänzt einen echten Windows-PyInstaller-Smoke der Haupt-EXE und einen verpflichtenden HDRTVDM-CPU-Lifecycle-Test; reale DV/HDR-Roundtrips sind bei `v*`-Release-Tags bzw. manuell ein striktes self-hosted Gate.
+- Historische Review-/Änderungsmanifeste tragen eindeutige versions-/datumsbezogene Dateinamen statt generischer aktueller Namen.
+- Aktueller Projektumfang: 1.019 Python-Dateien/Programme, 154.404 Gesamtzeilen, 130.531 Codezeilen; 250 test_*.py mit 1.830 statisch erkannten Tests.
+
+Release-Hardening HDR10+/Queue/CI (V9.8.6 · 26.09.2026)
+- Dragon HDR10+ Generator: ffprobe-Timeout, saubere Tool-Fehlerklassifikation, explizite BT.2020-Pflicht, keine erfundene Fallback-Geometrie, paralleles stderr-Draining und FFmpeg-Inaktivitäts-Watchdog.
+- DragonTools überwacht Generatoranalysen mit einem 600-s-Inaktivitätslimit statt einer starren Gesamtlaufzeit.
+- Queue-Zoomfenster ist per Qt-Regressionsprüfung gegen Verlust der Hoch-/Runter-Aktionen abgesichert; Batch-Datei-Einstellungen und Renamer-Episodenänderung erhalten zusätzliche Verhaltenstests.
+- CI führt die Standalone-Generator-Suite mit aus, prüft Generator-Source per Ruff und deckt Python 3.12/3.13 ab; der reale DV/HDR-Runner prüft zusätzlich Generator→hdr10plus_tool-Injection/Verifikation.
+- Aktueller Projektumfang: 1.018 Python-Dateien/Programme, 153.855 Gesamtzeilen, 130.101 Codezeilen; 249 test_*.py mit 1.814 statisch erkannten Tests.
+
 Release-Konsolidierung und Dokumentationsabgleich (V9.8.6 · 24.09.2026)
 - Zentrale App-Version, Build-Metadaten, Versionsanzeige und Über-Dialog sind auf 9.8.6 angehoben.
 - Help, DOCX-Handbuch, PDF-Handbuch und V9-Änderungshistorie tragen denselben Release-Stand.
@@ -28,22 +71,17 @@ HDR-Direktzugriffe, Help-Ausbau und Dokumentationssync (V9.8.5 · 23.09.2026)
 - Aktueller Projektumfang: 986 Python-Dateien/Programme, 150.125 Gesamtzeilen, 126.908 Codezeilen; 229 test_*.py mit 1.736 statisch erkannten Tests.
 
 Dokumentation, Projektstatistik und Dragon-HDR10+-Generator-Inventur (V9.8.5 · 22.09.2026)
-- Help, README, DOCX-Handbuch, PDF-Handbuch, COMFYUI-HDR-Setup und Integrationstest-Dokumentation sind auf Patch AQ/AR synchronisiert.
+- Help, README, DOCX-Handbuch, PDF-Handbuch, COMFYUI-HDR-Setup und Integrationstest-Dokumentation sind auf den damaligen HDR-/Generatorstand synchronisiert.
 - Aktueller Quellumfang einschließlich des eigenständigen Dragon-HDR10+-Generators: 984 Python-Dateien/Programme, 149.473 Gesamtzeilen und 126.368 Codezeilen.
 - Produktivcode ohne Tests: 752 Dateien, 105.329 Gesamtzeilen und 90.676 Codezeilen. Kombinierte Testpakete: 232 Python-Dateien, 228 test_*.py und 1.722 statisch erkannte Tests.
 - Hilfe → Über zählt im Entwicklungs-/Onedir-Stand jetzt auch `dragon_hdr10plus_generator/src` und `dragon_hdr10plus_generator/tests`; Frozen-Builds verwenden dieselben verifizierten Fallbackwerte. Lokale build-/dist-Artefakte werden nicht mitgezählt.
 - Der SDR→HDR-Infotext beschreibt ComfyUI/HDRTVDM als ausführbaren Backend-Pfad statt nur als Vorbereitung und nennt den gemessenen 1080p-Praxiswert auf RTX 4080 SUPER von ungefähr 4:1 Konvertierungsdauer zu Filmdauer.
 
-Review-Hardening Source-ZIP/Secrets/Qt (V9.8.5 · 20.09.2026)
-- Source-ZIP-Vertrag erzwingt die benötigten Integrations-/Release-Dokumente und lässt generierte PyInstaller-Specs weg.
-- API-Secrets werden unter Windows in realen QSettings per DPAPI geschützt; Backups bleiben über die bestehende Passwortverschlüsselung portabel.
-- HTTP-Jellyfin-Adressen erzeugen beim erstmaligen Speichern/Aktivieren eine Transportwarnung, bleiben für bewusst interne Konfigurationen aber zulässig.
+Source-Paket- und Release-Prüfungen gehärtet (V9.8.5 · 20.09.2026)
+- Der Source-ZIP-Vertrag erzwingt die benötigten Integrations-/Release-Dokumente und lässt generierte PyInstaller-Specs weg.
 - Das starre 380-Zeilen-Limit des Release-Paketprüfers wurde durch Kohäsions-/Komplexitätsprüfungen ersetzt.
-- Patches V/W sichern Qt-Signal-Callbacks über `.emit()` ab und vermeiden die Kollision mit `QObject.event()` durch `worker_event`.
-- Vollständig stumme `except Exception: pass`-Blöcke im Produktcode wurden durch Debug-Protokollierung ersetzt.
 
-
-Projektstatistik nach den Fachpatches N–P (V9.8.5 · 19.09.2026)
+Projektstatistik nach der Stabilitäts- und Integrationsnacharbeit (V9.8.5 · 19.09.2026)
 - Aktueller Quellumfang: 924 Python-Dateien einschließlich DragonToolsV9.py, 140.276 Gesamtzeilen und 118.657 Codezeilen.
 - Produktivcode ohne Testpaket: 716 Dateien, 99.828 Gesamtzeilen und 85.943 Codezeilen.
 - Testpaket: 208 Python-Dateien, 205 test_*.py und 1.565 statisch erkannte Tests.
@@ -56,11 +94,11 @@ Source-free-Build und Whisper-Paketierung (V9.8.5 · 17.09.2026)
 Versionierte Whisper-Buildabhängigkeiten (V9.8.5 · 18.09.2026)
 - requirements-whisper.txt trennt faster-whisper/CTranslate2 von NumPy/OpenCV. Der Builder prüft Importierbarkeit und Versionsbereiche (faster-whisper >=1.1,<2; CTranslate2 >=4.4,<5).
 - Die Reparaturinstallation verwendet nur requirements-whisper.txt. Der Validator verfolgt -r-Includes und prüft den neuen Vertrag.
-- Das historische Reviewmanifest liegt als RELEASE_REVIEW_MANIFEST_9.8.3.json vor. Die frühere zweite Patch-Historie unter dragontools/PATCH.md wurde entfernt; maßgeblich ist ausschließlich die Root-Datei PATCH.md.
+- Das historische Reviewmanifest liegt als RELEASE_REVIEW_MANIFEST_9.8.3.json vor. Die frühere zweite Änderungshistorie unter `dragontools/PATCH.md` wurde entfernt; maßgeblich ist ausschließlich die Root-Datei `PATCH.md`.
 
-Release-/Dokumentationsstand A–M (V9.8.5 · 17.09.2026)
+Release-/Dokumentationsstand mit erweiterten Laufzeitkomponenten (V9.8.5 · 17.09.2026)
 - Zentrale App-Version auf 9.8.5 angehoben; About-Fallbackwerte auf 917 Python-Dateien, 138.042 Gesamtzeilen und 116.731 Codezeilen aktualisiert.
-- Help, Handbuch/PDF und V9-Changelog dokumentieren den Patchstand A–M und die neuen optionalen Laufzeitkomponenten.
+- Help, Handbuch/PDF und V9-Changelog dokumentieren den erweiterten Funktionsstand und die neuen optionalen Laufzeitkomponenten.
 - Testpaket: 206 Python-Dateien, 203 test_*.py, 1.531 statisch erkannte Tests; Reviewlauf 1.548 bestanden, 18 übersprungen, 0 fehlgeschlagen.
 
 [14.09.2026] V9.8.3: Release-Prüfungen und Public-Paketvertrag
@@ -134,6 +172,20 @@ V9.5-01) Release- und Dokumentationsstand auf Dragon Tools V9.5 synchronisiert
 
 === 📚 02 Dokumentation & Hilfe ===
 
+Dokumentationsabschluss Direct-MKV/Watchfolder (V9.8.7 · 02.10.2026)
+- Word-Handbuch und PDF-Handbuch erklären den Direct-MKV-DV-Pfad für Profil 5/7/8, die konservative Frame-Mismatch-Teilreparatur und den manuellen Watchfolder-Sofortscan.
+- README, PATCH, Help, Integrationscheckliste, technisches Review sowie JSON-/TXT-Changelog sind auf denselben 9.8.7-Releasevertrag synchronisiert.
+- Aktuelle Build-/Über-Angaben und Projektstatistik verwenden denselben final vermessenen Quellstand.
+
+Dokumentation und Über-Dialog aktualisiert (V9.8.6 · 01.10.2026)
+- Hilfe, Word-Dokumentation und beide PDF-Handbücher erläutern die automatische Untertitelsuche, Sprache/Spurtitel, zehn Schnellschalter und die Live-Worker-Steuerung.
+- Datum, Dokumentmetadaten und Projektstatistik sind abgeglichen; bestehende Fachkapitel und historische Einträge bleiben erhalten.
+
+Dokumentation und Projektinventar auf aktuellen Funktionsstand synchronisiert (V9.8.6 · 28.09.2026)
+- Help, README, Integrationscheckliste sowie DOCX-/PDF-Handbuch dokumentieren Metadaten-Browser, 1–4-fach-Episodenzuordnung, Queue-Schnellschalter, Doppelstart-Schutz und containerkorrekte Regel-/Medieninfo-Previews.
+- Änderungshistorie und Review sind auf denselben technischen Stand synchronisiert.
+- Hilfe → Über verwendet wieder denselben vollständigen Quellumfang und dieselben verifizierten Release-Fallbackwerte wie die aktuelle Inventur.
+
 Dokumentation thematisch auf den Stand vom 19.09.2026 gebracht (V9.8.5 · 19.09.2026)
 - VFR-Original-Timeline, Jellyfin-Pfadvalidierung/Metadatenanalyse, Live-Werkzeugpfade und Whisper-/NFO-Sprachsync sind in die vorhandenen Fachkapitel einsortiert.
 - Versionsspezifische Sammelkapitel im Handbuch wurden entfernt; die technische Dokumentation endet wieder in der regulären thematischen Struktur.
@@ -144,7 +196,7 @@ Themenbezogene Hilfe und Historie (V9.8.5 · 18.09.2026)
 - Gemischte Hardening-Notizen in die passenden Changelog-Fachbereiche aufgeteilt. Datum/Version bleiben am einzelnen Änderungspunkt.
 - Datenschutzangaben um Watch-Folder, Jellyfin und Whisper-Modell-Download ergänzt; widersprüchliche Dateizahl in der Hilfe korrigiert. Offene Reviewbefunde als Grenzen dokumentiert.
 
-Dokumentation auf Patchstand A–M aktualisiert (V9.8.5 · 17.09.2026)
+Dokumentation auf erweiterten Funktionsstand aktualisiert (V9.8.5 · 17.09.2026)
 - Hilfe und Handbuch dokumentieren Watch-Folder, Jellyfin-API, Fix Queue, Spracherkennung/OCR, VMAF-Zielsuche, Windows-Benachrichtigungen und SDR→HDR.
 - Der Über-Dialog zeigt aktuelle Release-Fallbackwerte und berechnet im Quell-/Onedir-Betrieb weiterhin live aus den vorhandenen Python-Dateien.
 - Versionierte Sammelkapitel sind nicht Teil des aktuellen Handbuchaufbaus; historische Versionsangaben bleiben ausschließlich dort erhalten, wo sie für die Änderungshistorie oder eine datierte Abnahme fachlich nötig sind.
@@ -295,6 +347,16 @@ V9.5-Blockfix 19) Prozess- und Worker-Helfer entkoppelt
 
 === 🎬 04 Konverter, Encoder & Profile ===
 
+Worker-Anzahl im laufenden Betrieb ändern (V9.8.6 · 01.10.2026)
+- Auswahl Worker 1–8 neben Pause; Erhöhen startet wartende Dateien sofort, Reduzieren lässt aktive Dateien vollständig fertig werden.
+- Pause und Abbruch sperren neue Starts; Fortsetzen beziehungsweise Zurücknehmen des Abbruchs nutzt das neue Limit. DV/HDR-Nachbearbeitung bleibt getrennt.
+- CPU-/GPU-Vorgaben werden getrennt gespeichert. Auch ein Einzeldatei-Lauf mit Limit 1 nutzt den Koordinator für später hinzugefügte Dateien.
+
+Zehn Schnellschalter in einer horizontalen Zeile (V9.8.6 · 01.10.2026)
+- Forced einbrennen, Untertitel extern, PGS → SRT, Text → SRT, Auto-Qualität, HDR+ Generator, SDR → HDR, NFO, Trickplay und Watch-Folder.
+- Bei schmalem Fenster seitlich scrollbar; globale Einstellungen und Untertitelregeln bleiben die gemeinsame Quelle.
+- VMAF-Qualitätsziel gilt für geeignete SDR-Ausgaben; OCR benötigt FFmpeg und Tesseract.
+
 Automatisches VMAF-Qualitätsziel (V9.8.5 · 17.09.2026)
 - Optionaler Modus testet repräsentative SDR-Segmente und sucht adaptiv nach dem höchsten CQ/CRF/Q/QP-Wert, der das konfigurierte Ziel-VMAF erreicht.
 - Der gefundene Wert gilt nur für die aktuelle Datei; feste Profilwerte bleiben Standard und Fallback.
@@ -387,6 +449,18 @@ Automatisches VMAF-Qualitätsziel (V9.8.5 · 17.09.2026)
      - globale Metadaten sowie Audio-/Untertitel-Metadaten bleiben unverändert erhalten
 
 === 🌈 05 HDR, Dolby Vision, HDR10+ & Farbraum ===
+
+DV Direct-MKV und konservative Frame-Mismatch-Teilreparatur (V9.8.7 · 02.10.2026)
+- Bei Matroska wird die Dolby-Vision-RPU für Profil 5/7/8 direkt aus dem Originalcontainer extrahiert und auf den P8.1-Metadatenpfad normalisiert; der Video-Encode liest ebenfalls direkt die Original-MKV.
+- source.hevc/p8.hevc entfallen als normale Bildquelle. Ein HEVC-Hilfsstream bleibt nur für Container-/Metadaten-Fallbacks zulässig.
+- Bei nachgewiesen fehlenden Encode-Frames kann unter engen Sicherheitsgrenzen ein lokalisierter GOP-/IRAP-Bereich aus der Originalquelle neu encodiert und validiert eingespleißt werden. Unklare Alignments oder fehlerhafte Kandidaten werden fail-closed verworfen.
+- DV5 verwendet beim Vergleich und Recovery denselben libplacebo-ICtCp→BT.2020/PQ-Bildpfad wie der produktive Encode.
+
+DV/HDR10+-Frame-Nachweise und Fortschrittssemantik (V9.8.6 · 26.09.2026)
+- Tatsächliche Encoder-Ausgabeframes und vollständig analysierte HDR10+-Frames werden als verlässliche, streamgebundene Nachweise wiederverwendet.
+- FPS×Dauer bleibt nur eine gekennzeichnete Schätzung und darf keine exakte DV-Parität vortäuschen.
+- Zusätzliche `ffprobe -count_frames`-Vollscans entfallen im normalen erfolgreichen Ablauf; bei fehlendem belastbarem Wert bleiben Tool-RC, RPU-Rückextraktion und Inhaltsprüfung als Sicherheitsfallbacks.
+- Bei unbekannter Gesamtbildzahl zeigt der HDR10+-Fortschritt Frames, FPS und Laufzeit ohne erfundene Prozent- oder ETA-Werte; überschrittene Schätzungen werden verworfen.
 
 Dragon HDR10+ Generator 0.2.0 und automatische HDR10+-Erzeugung (V9.8.5 · 22.09.2026)
 - Der eigenständige Generator scannt PQ/ST2084 + BT.2020 zeitlich framegenau, erkennt Szenen und erzeugt ein hdr10plus_tool-kompatibles ST-2094-40-Profile-A-JSON.
@@ -579,10 +653,10 @@ DV-Remux folgt jetzt der konfigurierten Dolby-Vision-Containerwahl
 - Ist Auto-Crop aktiv und der konkrete Crop kann im reinen Regel-Simulator noch nicht ausgeführt werden, wird die angezeigte Endauflösung ausdrücklich als Stand vor Auto-Crop gekennzeichnet.
 - Die Detailansicht und der Bericht nennen die Zielauflösung damit nachvollziehbar zusammen mit Video-, HDR/DV-, Audio-, Untertitel- und Zielpfadentscheidung.
 
-[13.09.2026] V9.8.2: Technical Review Patch v4 und Dokumentationsabgleich abgeschlossen
+[13.09.2026] V9.8.2: Technical Review und Dokumentationsabgleich abgeschlossen
 - Release-Validierung, Timestamp-Kandidatenprüfung und -archivierung, Strip-Only, Audio-/Video-Time-Mapping, Qualitätsvergleich und -test, Streamargumente, finaler DV-Mux, Conversion-Fortschritt und ISO-Eingabeverarbeitung sind in fokussierte Fachservices getrennt.
 - Die bisherigen Fassaden, Importpfade, Monkeypatch-Punkte und Kompatibilitätshooks bleiben erhalten; die ausgelagerten Fachservices bleiben Qt-frei.
-- README, Hilfe, DOCX-Dokumentation, PDF-Handbuch, Hilfe -> Über und beide Changelog-Formate wurden auf denselben v4-Stand gebracht.
+- README, Hilfe, DOCX-Dokumentation, PDF-Handbuch, Hilfe -> Über und beide Changelog-Formate wurden auf denselben damaligen Reviewstand gebracht.
 - Zu diesem Änderungspunkt vermessener Stand: 787 Python-Dateien einschließlich DragonToolsV9.py, 119.402 Gesamtzeilen, 101.135 nichtleere/nicht reine Kommentarzeilen, 172 Python-Dateien im Testpaket, 169 test_*.py und 1.245 statisch erkennbare Testfunktionen.
 - Vollständiger lokaler Testlauf: 1.269 bestanden, 2 reale DV/HDR-Integrationstests mangels konfigurierter Werkzeuge und Testmedien übersprungen; compileall ohne Fehler.
 
@@ -644,6 +718,15 @@ V9.5-05) DV+HDR10+ Finalverifikation: MediaInfo zuerst, Bitstream als Fallback
 - Nur nicht bestätigte Merkmale werden aus dem finalen MP4 als Annex-B extrahiert und mit dovi_tool/hdr10plus_tool streng nachgeprüft.
 - Der Fallback bleibt fail-closed und prüft nur die tatsächlich offenen Merkmale.
 
+V9.8.6 – 02.10.2026) DV Frame-Mismatch-Recovery ergänzt
+     - die verlässliche FFmpeg-Ausgabebildzahl wird direkt nach dem DV-Encode mit der bereits extrahierten RPU-Bildzahl verglichen, noch bevor der Encode-Slot freigegeben wird
+     - bei RPU/Encode-Mismatch in DV Profil 7/8 startet genau ein Recovery-Encode direkt aus dem Originalcontainer statt aus dem potenziell fehlerhaften p8.hevc-Arbeitsstream
+     - Crop, Filtergraph, Forced-Burn-In und Encoderparameter werden unverändert übernommen
+     - der Recovery-Stream wird nur akzeptiert, wenn die exakte RPU-Bildzahl erreicht und der komplette HEVC anschließend fehlerfrei decodiert wurde
+     - der fehlerhafte Erstencode bleibt bis zum erfolgreichen Pipeline-Ende als encoded_frame_mismatch.hevc erhalten; bei Folgefehlern landet er im bestehenden DV-Diagnosearchiv
+     - Profil 5 und zeitlich bildverändernde Filter bleiben bewusst vom automatischen Retry ausgeschlossen
+     - eine automatische GOP-/NAL-Splice-Reparatur wird aus Sicherheitsgründen nicht durchgeführt; DragonTools nutzt den deterministischen Voll-Recovery-Encode aus der Originalquelle
+
 === 🔊 06 Audioverarbeitung & Stream-Mapping ===
 
 01) Renamer-Auswertung für Scene-/Release-Dateinamen grundlegend erweitert
@@ -699,6 +782,12 @@ V9.5-05) DV+HDR10+ Finalverifikation: MediaInfo zuerst, Bitstream als Fallback
      - der Info-Text erklärt nun explizit den Unterschied zwischen kopierbaren E-AC3-7.1-Quellen und nicht unterstütztem E-AC3/AC3-7.1-Neu-Encoding in FFmpeg
 
 === 💬 07 Untertitel & Burn-In ===
+
+Automatische Untertitelzuordnung und freie Spurtitel (V9.8.6 · 01.10.2026)
+- Einfügen startet ohne ausgewählte Untertiteldatei und sucht neben jedem Video nach passenden .de/.deu/.ger- oder .en/.eng-Dateien.
+- Exakter Videostamm wird bevorzugt; ansonsten müssen Serienname, Staffel und Episode zusammenpassen. Fehlende oder mehrdeutige Kandidaten werden mit Loghinweis übersprungen.
+- Deutsch/Englisch wählbar, Standard Deutsch; Spurtitel frei editierbar, beispielsweise Deutsch GPT oder Custom. Sprache, Titel und Forced-Flag werden dem neuen Track zugeordnet.
+- MKV-Trackname und MP4-Spurname/handler_name werden geschrieben; MP4/MOV akzeptiert hier nur Textuntertitel und übernimmt keine bisherigen Untertitelspuren. Originale werden nicht überschrieben.
 
 OCR-Dateischutz (V9.8.5 · 18.09.2026)
 - Review-Berichte sind an den Medienauftrag und die zugehörigen Pending-Pfade gebunden. Verknüpfungen, ungültige Sprach-Tags und während der Prüfung geänderte Berichte werden abgelehnt.
@@ -802,6 +891,25 @@ Untertitel-Injection und Bitmap-OCR gehärtet (V9.8.5 · 17.09.2026)
      - typische Dezimalwerte wie 23.976 werden als rationale Werte wie 24000/1001 dargestellt
 
 === 📊 09 Queue, Parallelverarbeitung, Jobsteuerung & Shutdown ===
+
+Manueller Watchfolder-Sofortscan und Release-Smoke-Nachzug (V9.8.7 · 02.10.2026)
+- Neuer Converter-Button „Watchfolder durchsuchen“ scannt alle aktivierten Watch-Regeln auf Anforderung, auch wenn die globale Automatik deaktiviert ist.
+- Bereits erfolgreich bestätigte Signaturen und vorhandene Queue-Einträge werden nicht erneut eingereiht; ein laufender Converter erhält neue Dateien über die bestehende Live-Queue.
+- Im Leerlauf startet der manuelle Scan bewusst keinen neuen Batch. Die manuelle Suche überspringt die Stabilitäts-Wartezeit und ist daher für bereits vollständig geschriebene Quellen gedacht.
+- Der neue native PGS-Display-Set-Parser ist jetzt zusätzlich Teil der verpflichtenden Release-Smoke-Modulliste.
+
+Watchfolder-Abbruch und Herunterfahren abgesichert (V9.8.6 · 30.09.2026)
+- Nach Abbruch oder bei aktiviertem Herunterfahren werden keine neuen Watchfolder-Aufträge angenommen oder automatisch gestartet. Ein manueller Auftragsstart hebt die Abbruchsperre wieder auf.
+- Beim Schließen wird die Überwachung zuerst gestoppt; bereits vorgemerkte Scan-Rückmeldungen bleiben gesperrt.
+- Nach dem Shutdown-Dialog bleibt die zentrale Überwachung für diese Anwendungssitzung gestoppt.
+
+Reentrante Doppelstarts und Queue-Schnellschalter gehärtet (V9.8.6 · 28.09.2026)
+- Ein synchroner Start-Lock schließt das Race-Fenster vor `QThread.isRunning()`; initiale Parallelqueue und Child-Worker-Zuordnung deduplizieren dieselbe Quelle zusätzlich.
+- Neben den Queue-Pfeilen stehen persistente Schnellschalter für HDR+ Generator, SDR → HDR und Watch-Folder.
+
+Postprocessing-Limit und Encode-Lifecycle getrennt (V9.8.6 · 26.09.2026)
+- Schwere DV/HDR-Nachbearbeitung ist auf vier parallele Jobs begrenzt; die Encode-Parallelität bleibt davon getrennt.
+- Ein eigenes Encode-fertig-Ereignis ersetzt die Wiederverwendung des historischen NFO-/Trickplay-Status.
 
 Watch-Herkunft und Auto-Start (V9.8.5 · 18.09.2026)
 - Auto-Start berücksichtigt die konkrete vom Watch-Folder erzeugte Queue-Zeile. Manuelle Einträge werden auch bei gleichem Pfad nicht übernommen; nach Entfernen und manuellem Wiedereinfügen gilt die alte Freigabe nicht mehr.
@@ -1162,6 +1270,13 @@ V9.5-Blockfix 20) MoveJournal-Recovery konservativ fail-closed gemacht
      - Restore- und Journalwrite-Fehler werden gezielt getestet und führen nicht zu stiller Recovery-Bereinigung
 
 === 🌐 11 Online-Metadaten, Renamer & Benennung ===
+
+Metadaten-Browser und Mapping-Härtung (V9.8.6 · 28.09.2026)
+- Renamer kann Serien und Filme ohne vorher importierte Datei direkt bei TMDB und TheTVDB suchen und Provider-Treffer bewusst auswählen.
+- Asynchrone Providerabfragen sperren semantische Mapping-Aktionen; Serien-/Staffelwechsel löschen veraltete Episodenzeilen vor dem Request.
+- Filmzuordnungen verwenden den ausdrücklich aktivierten Treffer; Auto-Zuordnung überschreibt keine vorhandene Filmzuordnung.
+- Nicht fortlaufende Provider-Episoden werden sichtbar abgefangen, ohne eine vorhandene gültige Zuordnung zu zerstören.
+- Serienansicht lädt Staffeln und Episoden inklusive S00; Dateien/Ordner werden per Drag & Drop oder automatisch auf 1–4 Folgen gemappt und anschließend als normale Renamer-Vorschläge übernommen.
 
 Asynchrone Provideraktionen und begrenzte Wartezeiten (V9.8.5 · 17.09.2026)
 - Manuelle Suche und Provider-Verbindungstests laufen außerhalb des GUI-Threads; der Shutdown wartet auf noch laufende Metadatenaktionen.
@@ -1659,7 +1774,7 @@ Qualitätstester als Basis der automatischen VMAF-Zielsuche (V9.8.5 · 17.09.202
 - Repräsentative Testsegmente werden encodiert, per ffprobe geprüft und gegen die passend skalierte Referenz mit VMAF verglichen.
 - Fehlt libvmaf oder kann ein Kandidat nicht sicher bewertet werden, bleibt der bisherige feste Qualitätswert aktiv.
 
-37) Review-Patchset: Prozessgrenzen, Fail-Safe-Pfade und GUI-Refactoring abgeschlossen
+37) Prozessgrenzen, Fail-Safe-Pfade und GUI-Refactoring abgeschlossen
 - ToolRunner und ConverterProgress schließen stdout/stderr-Pipes deterministisch; ResourceWarning-Regressionstests sichern lange Tool-Sessions ab.
 - Qualitätstester nutzt den zentralen ToolRunner mit konfigurierbarem Hard-Timeout (Standard 3600 s), Prozessbaum-Abbruch und einheitlicher Timeout-/Abort-Klassifizierung.
 - Suspend/Resume liefert echten Erfolgsstatus, protokolliert OS-Fehler und verhindert einen falschen Pausenzustand; Windows-Prozesshandles verwenden explizite 64-bit-sichere ctypes-Signaturen.
@@ -1719,6 +1834,13 @@ Normaler MP4-Remux prüft Abbruch erneut nach Sidecar-Arbeit und unmittelbar in 
      - Logmeldung verweist auf DV-Remux bzw. Standard-Converter mit Metadaten-Erhalt
 
 === ⚙️ 16 Regeln, Einstellungen, Migration & Backup ===
+
+Containerkorrekte Regel- und Medieninfo-Preview (V9.8.6 · 28.09.2026)
+- Regel-/Profil-Simulator und Medieninfo/DragonTools-Reiter übernehmen den tatsächlich konfigurierten Standard-/DV-Ausgabecontainer.
+
+Secret-Speicherung und Jellyfin-Transporthinweise gehärtet (V9.8.5 · 20.09.2026)
+- API-Secrets werden unter Windows in realen QSettings per DPAPI geschützt; passwortgeschützte Backups bleiben portabel.
+- HTTP-Jellyfin-Adressen erzeugen beim erstmaligen Speichern oder Aktivieren eine Transportwarnung, bleiben für bewusst interne Konfigurationen aber zulässig.
 
 Forward-Schema-Schutz (V9.8.5 · 17.09.2026)
 - Neuere unbekannte Regel-/Profil-Schemata bleiben erhalten; keine automatische Herabstufung oder Überschreibung.
@@ -1827,7 +1949,20 @@ V9.5-01) Renamer-Regelschema ergänzt
 
 Der Bereich „Ausgabecontainer“ ist sowohl im globalen Einstellungsfenster als auch direkt über Einstellungen → 📦 Ausgabecontainer erreichbar.
 
+V9.8.6 – 02.10.2026) Untertitel-Defaultschema vollständig auf Schema 7 synchronisiert
+     - Python-Default und zentraler Migrationskern verwendeten bereits Schema 7, die ausgelieferte default_subtitle_rules.json stand jedoch noch auf Schema 6
+     - JSON-Defaultdatei und Regressionstest wurden auf Schema 7 angeglichen; gültige aktuelle Regeln werden damit konsistent geladen und migriert
+
 === 📝 17 Logging, Diagnose, Job-Journal & Berichte ===
+
+DV/HDR10+-Diagnosearchiv bei Metadatenfehlern (V9.8.6 · 26.09.2026)
+- Nach bereits erzeugter HDR10+-JSON werden fehlgeschlagene DV/HDR10+-Injection- oder finale HDR10+-Nachweispfade vor dem Temp-Cleanup archiviert.
+- Das Diagnosepaket wird unter `Archiv/<Ziel>__DV_HDR10PLUS_FAILED__<Zeitstempel>` angelegt.
+- Gesichert werden bevorzugt finales MKV/MP4, sonst der weitest fortgeschrittene HEVC-Stream, die erzeugte HDR10+-JSON, die Verify-JSON sowie vorhandene verwendete, originale, finale und Verify-RPUs.
+- Das Original wird weder ersetzt noch gelöscht. Falls die Archivierung selbst unvollständig scheitert, schützt `preserve_failed_output` den Arbeitskandidaten zusätzlich vor generischem Failure-Cleanup.
+
+Best-Effort- und Recovery-Fehler sichtbar protokolliert (V9.8.5 · 20.09.2026)
+- Vollständig stumme Broad-Exception-Pass-Blöcke im Produktcode protokollieren Best-Effort-Fehler jetzt auf Debug-Ebene.
 
 GUI-Fehlerberichte und Queue-Reihenfolge im Journal (V9.8.5 · 17.09.2026)
 - Fehlgeschlagene Lazy-Tab-Initialisierung wird nicht als geladen gecacht, kann über „Erneut versuchen“ wiederholt werden und schreibt einen vollständigen Traceback nach Logging/<Jahr>/<Monat>/ErrorReports/GUI.
@@ -1913,6 +2048,9 @@ V9.5-Blockfix 23) JobJournal-Schreib- und Archivfehler sichtbar gemacht
 - Dateivalidierungs- und Toolfehler übernehmen den zuletzt bekannten Tool-/Command-Kontext, damit auch fehlende oder 0-Byte-Zwischenartefakte nachvollziehbar bleiben.
 
 === 🎨 18 GUI, Bedienung & Performance ===
+
+Qt-Signal- und Event-Kollisionen gehärtet (V9.8.5 · 20.09.2026)
+- Qt-Signal-Callbacks werden über `.emit()` abgesichert; die Kollision mit `QObject.event()` wurde durch die getrennte Bezeichnung `worker_event` beseitigt.
 
 Bedienung und Benachrichtigungen (V9.8.5 · 17.09.2026)
 - Queue erhält Buttons für ⤒/↑/↓/⤓ mit stabiler Mehrfachauswahl und Schutz aktiver Jobs.
@@ -2043,20 +2181,23 @@ V9.5-Blockfix 17) ConvertWidget-God-Class weiter aufgelöst
 
 === ✅ 19 Tests & Qualitätssicherung ===
 
-Fokussierte Abnahme der Fachpatches N–P (V9.8.5 · 19.09.2026)
-- Patch N: 45/45 fokussierte Duration-/Workflow-/Architekturtests; zusätzlich 40 bestanden und 1 übersprungen im angrenzenden Satz.
-- Patch O: 116/116 für Jellyfin, Release-/Architektur sowie Mediathek-/Mapping-Regressions.
-- Patch P: 41/41 fokussierte Tool-/Whisper-/Settings-Tests; zusätzliche Mediathek-/Fix-/Release-nahe Prüfungen liefen erfolgreich, soweit die Containerumgebung keine PyQt6-/Repository-Root-Voraussetzung benötigte.
+Changelog-Schema und GUI-Ladepfad regressionsgesichert (V9.8.6 · 28.09.2026)
+- Regressionstests weisen rohe String-Abschnitte als ungültig zurück und prüfen, dass die aktuellen Änderungen über den realen GUI-Ladepfad sichtbar bleiben.
+
+Fokussierte Abnahme von Workflow-, Jellyfin- und Toolpfaden (V9.8.5 · 19.09.2026)
+- Duration-/Workflow-/Architekturpfade: 45/45 fokussierte Tests; zusätzlich 40 bestanden und 1 übersprungen im angrenzenden Satz.
+- Jellyfin-, Release-/Architektur- und Mediathek-/Mapping-Pfade: 116/116 Tests bestanden.
+- Tool-/Whisper-/Settings-Pfade: 41/41 fokussierte Tests; zusätzliche Mediathek-/Fix-/Release-nahe Prüfungen liefen erfolgreich, soweit die Containerumgebung keine PyQt6-/Repository-Root-Voraussetzung benötigte.
 - Aktueller statischer Testbestand: 205 test_*.py mit 1.565 erkannten Testfunktionen; compileall wurde für den bereitgestellten aktuellen Paketstand erfolgreich ausgeführt.
 
 Schutztests für Review-Befunde (V9.8.5 · 18.09.2026)
 - Die bisherigen Fehler-Charakterisierungen wurden durch regulär laufende Schutz-Regressionsprüfungen ersetzt: OCR-Pfade und Konkurrenz, Watch-Zeilenherkunft, Sprache, Abbruch, veraltete Tracks und Jellyfin-Shutdown.
-- Aktuelle Gesamtergebnisse und Validierungsgrenzen stehen im Patch-Abschlussbericht; ältere datierte Prüfwerte bleiben als Historie erhalten.
+- Aktuelle Gesamtergebnisse und Validierungsgrenzen stehen im Review-/Abschlussbericht; ältere datierte Prüfwerte bleiben als Historie erhalten.
 
 Erneuter Review des überschriebenen Arbeitsstands (V9.8.5 · 18.09.2026)
 - Erster vollständiger Windows-Lauf: 1.584 bestanden, eine neue Architekturregression (Paketprüfer 386 statt maximal 380 Zeilen).
 - Sechs neue Moduleinträge in das vorhandene Smoke-Modulverzeichnis verschoben; alle 474 Einträge bleiben exakt erhalten, Testlimit unverändert. 47 gezielte Architektur-/Release-/Hardening-Tests bestanden.
-- Die acht damaligen Fehlernachweise bestätigten zu diesem Zeitpunkt R1–R7 des internen Reviews; spätere V9.8.5-Patches haben diese Punkte separat bearbeitet und mit Regressionstests abgesichert.
+- Die acht damaligen Fehlernachweise bestätigten zu diesem Zeitpunkt R1–R7 des internen Reviews; spätere V9.8.5-Korrekturen haben diese Punkte separat bearbeitet und mit Regressionstests abgesichert.
 - Aktuelle Quellstatistik nach der Korrektur: 917 Python-Dateien, 138.035 Gesamtzeilen, 116.725 Codezeilen; 203 Testdateien und 1.531 statische Tests. About-Fallbackwerte und Hilfetabellen angepasst.
 - Abschließender Gesamtlauf: 1.585 bestanden, keine Fehler oder Skips, 56,25 Sekunden; Qt und reale DV/HDR-Integration verpflichtend.
 
@@ -2064,9 +2205,9 @@ Lokaler Gesamt- und Grenzfallreview (V9.8.5 · 18.09.2026)
 - Vollständige Testsuite mit verpflichtenden Qt-/DV-/HDR-Integrationstests: 1.585 bestanden, keine übersprungen.
 - Acht isolierte Charakterisierungstests bestätigen sieben Fehlergruppen: Watch-Auto-Start, OCR-Berichtspfade, OCR-Schreibkollision, Sprachheuristik, Abbruch vor Headeränderung, veraltete Trackdaten und fehlende Jellyfin-Shutdown-Einbindung. Das sind Fehlernachweise, keine bestandenen Sicherheitsregressionen.
 - Quellumfang unverändert: 917 Python-Dateien, 138.035 Gesamtzeilen, 116.725 Codezeilen; 206 Testpaket-Dateien / 203 test_*.py / 1.531 statische Testfunktionen.
-- Aus diesem damaligen Review wurde keine EXE-Abnahme oder allgemeine Release-Freigabe abgeleitet; spätere Korrekturen sind in der regulären PATCH-/Änderungshistorie dokumentiert.
+- Aus diesem damaligen Review wurde keine EXE-Abnahme oder allgemeine Release-Freigabe abgeleitet; spätere Korrekturen sind in der regulären Änderungshistorie dokumentiert.
 
-Patch-A–M-Regression (V9.8.5 · 17.09.2026)
+Regression des erweiterten V9.8.5-Funktionsstands (V9.8.5 · 17.09.2026)
 - Finaler Reviewstand: 1.548 Tests bestanden, 18 übersprungen, 0 fehlgeschlagen. Die zuvor paketbedingten Release-/CI-Baselinefehler sind im vollständigen 9.8.5-Quellpaket behoben.
 - Neue Regressionen decken Untertitel-Injection, Lazy-Loading, Queue-Reorder, Provider-Retry, Episoden-Ersetzung, Jellyfin, Watch-Folder, Fix Queue, Sprach-/OCR-Pfade, VMAF, Notifications und SDR→HDR ab.
 - Reale Windows-/CUDA-/PGS/VobSub-/libvmaf-/libplacebo-Smoke-Tests bleiben Teil der finalen Release-Abnahme.
@@ -2074,7 +2215,7 @@ Patch-A–M-Regression (V9.8.5 · 17.09.2026)
 [15.09.2026] V9.8.3: Regression gegen überbreites Hauptfenster und Renamer ergänzt
 - Architekturtests schützen die schrumpfbare Tab-Leiste: Scrollbuttons, Text-Elide und eine begrenzte minimumSizeHint verhindern, dass die Summe aller Tab-Titel wieder die Mindestbreite des Hauptfensters bestimmt.
 - Ein zusätzlicher statischer Regressionstest sichert den mehrzeiligen Renamer-Toolbar-Aufbau, interaktive Spaltenbreiten, das Spaltenmenü, die kompakte Standardansicht und die QSettings-Persistenz ab.
-- Der gezielte Architekturtestlauf besteht mit 5/5 Tests. Der letzte vollständige Release-Basislauf vor diesem GUI-Nachpatch bleibt 1.390 bestanden, 0 fehlgeschlagen, 0 übersprungen; der GUI-Nachpatch wurde auf diesem Review-Host zusätzlich mit compileall, AST-/Architekturtests und Source-Release-Prüfung validiert.
+- Der gezielte Architekturtestlauf besteht mit 5/5 Tests. Der letzte vollständige Release-Basislauf vor diesem GUI-Nachkorrektur bleibt 1.390 bestanden, 0 fehlgeschlagen, 0 übersprungen; der GUI-Nachkorrektur wurde auf diesem Review-Host zusätzlich mit compileall, AST-/Architekturtests und Source-Release-Prüfung validiert.
 
 [14.09.2026] V9.8.3: Release- und Regressionsteststand
 - Vollständiger Testlauf des anonymisierten Public-Projekts: 1.390 bestanden, 0 fehlgeschlagen, 0 übersprungen.
@@ -2214,6 +2355,13 @@ V9.5-Produktionsfix DV/HDR10+) Regressionsteststand v5
 - Neue Tests decken Pipeline-Diagnose, fehlende DV-Stage-Verdrahtung, Profil-8-HDR10/PQ-Passthrough, CM-v4-No-op-Vermeidung, HDR10+-Aliasfelder, Stale-Artifact-Schutz und semantische Endkontrolle ab.
 - Vollständiger Headless-Lauf des finalen v5-Stands: 734 bestanden, 10 echte Qt-Tests übersprungen, 0 Fehler.
 - Statische Inventarisierung: 102 Python-Dateien im Testpaket, 100 test_*.py-Dateien und 746 statisch erkennbare test_*-Funktionen.
+
+V9.8.6 – 02.10.2026) DV Frame-Recovery regressionsseitig abgesichert
+     - neue Tests prüfen Direktencode aus der Original-MKV, Filtergraph mit Bilduntertiteln, exakte Frame-Parität, Decoder-Vollprüfung, atomaren Austausch, P5-Sperre und die Reihenfolge Recovery → Untertitel-Cleanup → Encode-Slot-Freigabe
+     - neue Recovery-Suite: 7/7 bestanden
+     - breite DV/HDR-/Pipeline-Suite: 193/193 bestanden
+     - Subtitle/PGS/Config-Suite: 100/100 bestanden
+     - compileall für dragontools und DragonToolsV9.py erfolgreich
 
 === 🗄️ 20 Mediathek-Datenbank, SQLite & Bestandssuche ===
 

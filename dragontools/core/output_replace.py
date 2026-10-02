@@ -131,15 +131,9 @@ def _commit_same_path(
     try:
         _check_commit_abort(abort_check)
         transaction.commit(on_backup=lambda *_: _check_commit_abort(abort_check))
-        journal.set_status("committed")
+        journal.set_status("committed", fatal=True)
         if abort_check is not None and abort_check():
-            aborted = RuntimeError("Abgebrochen vor Replace-Backup-Cleanup")
-            try:
-                os.replace(str(destination), str(staging))
-                transaction.rollback()
-            except OSError as exc:
-                raise PathTransactionRollbackError(aborted, exc, backup) from exc
-            raise aborted
+            raise RuntimeError("Abgebrochen vor Replace-Backup-Cleanup")
     except PathTransactionRollbackError as exc:
         journal.set_status("rollback_failed", message=str(exc))
         log(
@@ -148,14 +142,27 @@ def _commit_same_path(
             "error",
         )
         raise
-    except (OSError, RuntimeError, ReplaceJournalWriteError):
+    except Exception as operation_error:
+        # A journal failure after installation is not a filesystem rollback.
+        # Restore the actual original before reporting failure to the caller.
+        if transaction.committed:
+            try:
+                os.replace(str(destination), str(staging))
+                transaction.rollback()
+            except OSError as rollback_error:
+                log(f"Kritisch: Rollback unvollständig; Backup bleibt: {backup}", "error")
+                raise PathTransactionRollbackError(operation_error, rollback_error, backup) from operation_error
         if source.exists() and not backup.exists():
             log(
                 f"Rollback: Original wiederhergestellt nach fehlgeschlagenem Ersetzen: {source.name}",
                 "warn",
             )
-        journal.set_status("rolled_back")
-        journal.finish()
+        try:
+            journal.set_status("rolled_back", fatal=True)
+        except OSError as journal_error:
+            log(f"Rollback ausgeführt; Journal bleibt zur Prüfung erhalten: {journal_error}", "warn")
+        else:
+            journal.finish()
         raise
 
     try:

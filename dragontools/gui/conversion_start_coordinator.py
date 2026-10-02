@@ -59,10 +59,10 @@ class ConversionStartCoordinator:
         return files
 
     def start_convert(self) -> None:
+        if not self._claim_start():
+            return
+        launched = False
         try:
-            if self._lifecycle.active_worker():
-                self._log("Start während laufender Verarbeitung oder Verschieben gesperrt.", "warn")
-                return
             files = self.get_start_files()
             if not files or not self._preflight.run_if_needed(files):
                 return
@@ -87,18 +87,27 @@ class ConversionStartCoordinator:
                 total_progress_slot=self._progress.on_total_progress,
             )
             self._ui.pause_btn.setEnabled(True)
-            self._lifecycle.start_worker_ui_state(
+            launch_result = self._lifecycle.start_worker_ui_state(
                 worker,
                 f"▶ Starte {len(files)} Datei(en) ...",
                 mode="convert",
                 files=files,
             )
+            launched = launch_result is not False
+            if not launched:
+                self._state.thread = None
         except Exception:
             self._log("❌ Unbehandelte Ausnahme in start_convert()", "error")
             self._log(traceback.format_exc(), "error")
+        finally:
+            if not launched:
+                self._release_start_claim()
 
     def start_move_only(self) -> None:
         try:
+            if bool(getattr(self._state, "start_reserved", False)) or self._lifecycle.active_worker():
+                self._log("Start während laufender Verarbeitung oder Verschieben gesperrt.", "warn")
+                return
             from PyQt6.QtWidgets import QDialog
             from .preflight_dialog import PreFlightDialog
 
@@ -118,6 +127,12 @@ class ConversionStartCoordinator:
             )
             preserved_planned_targets = dict(self._state.planned_targets)
             preserved_sidecars = dict(self._state.sidecar_outputs_by_video)
+
+            # Move-Only starts with arbitrary existing media, not conversion
+            # artifacts. Discover already-present subtitle/NFO/trickplay
+            # companions so MoveThread can stage and move them transactionally.
+            from ..core.move_companion_discovery import merge_discovered_move_companions
+            preserved_sidecars = merge_discovered_move_companions(files, preserved_sidecars)
 
             if use_restored_move_context:
                 for key in ("tv", "anime", "film"):
@@ -141,7 +156,9 @@ class ConversionStartCoordinator:
                     return
                 self._state.planned_targets = dlg.get_planned_targets()
                 preserved_planned_targets = dict(self._state.planned_targets)
-                preserved_sidecars = dict(self._state.sidecar_outputs_by_video)
+                preserved_sidecars = merge_discovered_move_companions(
+                    files, self._state.sidecar_outputs_by_video
+                )
                 self._state.restored_move_context.clear()
                 restore_context = {}
                 if dlg.should_save_report():
@@ -172,10 +189,10 @@ class ConversionStartCoordinator:
             self._log(traceback.format_exc(), "error")
 
     def start_dv_remux(self) -> None:
+        if not self._claim_start():
+            return
+        launched = False
         try:
-            if self._lifecycle.active_worker():
-                self._log("Start während laufender Verarbeitung oder Verschieben gesperrt.", "warn")
-                return
             files = self.get_start_files()
             if not files:
                 return
@@ -189,15 +206,40 @@ class ConversionStartCoordinator:
             )
             self._ui.pause_btn.setEnabled(False)
             self._ui.pause_btn.setText("⏸ Pause")
-            self._lifecycle.start_worker_ui_state(
+            launch_result = self._lifecycle.start_worker_ui_state(
                 thread,
                 f"📦 DV-Remux startet für {len(files)} Datei(en) ...",
                 mode="dv_remux",
                 files=files,
             )
+            launched = launch_result is not False
+            if not launched:
+                self._state.thread = None
         except Exception:
             self._log("❌ Unbehandelte Ausnahme in start_dv_remux()", "error")
             self._log(traceback.format_exc(), "error")
+        finally:
+            if not launched:
+                self._release_start_claim()
+
+    def _claim_start(self) -> bool:
+        """Atomarer GUI-seitiger Start-Lock.
+
+        ``QThread.start()`` und ``QThread.isRunning()`` sind nicht als synchroner
+        Doppelstart-Schutz geeignet: zwischen beiden Zuständen kann ein zweites
+        Click-/Auto-Start-Ereignis eintreffen.
+        """
+        if bool(getattr(self._state, "start_reserved", False)):
+            self._log("Start bereits vorgemerkt; doppelter Start wurde blockiert.", "warn")
+            return False
+        if self._lifecycle.active_worker():
+            self._log("Start während laufender Verarbeitung oder Verschieben gesperrt.", "warn")
+            return False
+        self._state.start_reserved = True
+        return True
+
+    def _release_start_claim(self) -> None:
+        self._state.start_reserved = False
 
     def confirm_disk_space(self, files: list[str], parallel_jobs: int) -> bool:
         try:

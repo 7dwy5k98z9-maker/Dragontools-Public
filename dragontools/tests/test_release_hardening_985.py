@@ -14,9 +14,9 @@ def test_release_manifest_matches_985() -> None:
     from dragontools.core.version import APP_VERSION
 
     manifest = json.loads((ROOT / "release_manifest.json").read_text(encoding="utf-8"))
-    assert APP_VERSION == "9.8.6"
+    assert APP_VERSION == "9.8.7"
     assert manifest["app_version"] == APP_VERSION
-    assert "9.8.6" in manifest["help_policy"]
+    assert "9.8.7" in manifest["help_policy"]
 
 
 def test_whisper_is_declared_and_build_script_auto_installs_and_collects_it() -> None:

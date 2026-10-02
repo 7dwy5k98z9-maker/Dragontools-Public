@@ -135,6 +135,7 @@ def _path_lines(ctx: Any) -> list[str]:
         f"Arbeitsordner: {_value(getattr(ctx, 'base_dir', None))}",
         f"Geplante Ausgabe: {_value(getattr(ctx, 'output_path', None))}",
         f"Finale Ausgabe: {_value(getattr(ctx, 'final_output_path', None))}",
+        f"Diagnosearchiv: {_value(getattr(ctx, 'replacement_archived_path', None))}",
         f"Sidecars: {len(sidecars)}",
     ]
     lines.extend(f"  - {_value(path)}" for path in sidecars[:_MAX_LINES_PER_GROUP])

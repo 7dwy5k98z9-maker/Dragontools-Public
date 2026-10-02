@@ -1,11 +1,14 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
+from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
-    QComboBox, QHBoxLayout, QLabel, QPushButton, QFrame, QSizePolicy, QTextEdit,
-    QVBoxLayout,
+    QCheckBox, QComboBox, QHBoxLayout, QLabel, QPushButton, QFrame, QSizePolicy, QTextEdit,
+    QVBoxLayout, QScrollArea, QWidget,
 )
 from .convert_widget_custom_widgets import DragonProgressBar
 from .convert_widget_layout_components import CollapsibleGroupBox, FileListBannerOverlay
+from .convert_widget_quick_settings import QUICK_TOGGLE_SPECS, quick_toggle_value, set_quick_toggle_value
+from .convert_widget_parallel_controls import ParallelWorkerControl
 
 class ConvertWidgetLayoutRuntimeMixin:
     def _build_file_list_section(self, root: QVBoxLayout) -> None:
@@ -48,7 +51,37 @@ class ConvertWidgetLayoutRuntimeMixin:
         ):
             btn.setMaximumWidth(48)
             order_row.addWidget(btn)
-        order_row.addStretch(1)
+        # Keep all quick switches on one line without forcing a wide window.
+        # A narrow window can scroll this line horizontally.
+        quick_content = QWidget()
+        quick_row = QHBoxLayout(quick_content)
+        quick_row.setContentsMargins(0, 0, 0, 0)
+        quick_row.setSpacing(10)
+        quick_row.addStretch(1)
+        for spec in QUICK_TOGGLE_SPECS:
+            checkbox = QCheckBox(spec.label)
+            checkbox.setChecked(quick_toggle_value(self.settings, spec))
+            checkbox.setToolTip(spec.tooltip)
+            checkbox.toggled.connect(
+                lambda checked, current_spec=spec: self._on_quick_toggle(current_spec, checked)
+            )
+            setattr(self.w, spec.attr_name, checkbox)
+            quick_row.addWidget(checkbox)
+        quick_scroll = QScrollArea()
+        quick_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        quick_scroll.setWidgetResizable(True)
+        quick_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        quick_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        quick_scroll.setStyleSheet(
+            "QScrollBar:horizontal { height: 6px; margin: 0; } "
+            "QScrollBar::handle:horizontal { background: #777; min-width: 24px; border-radius: 3px; } "
+            "QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; }"
+        )
+        quick_scroll.setWidget(quick_content)
+        quick_scroll.setFixedHeight(quick_content.sizeHint().height() + 8)
+        quick_scroll.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.w.quick_toggle_scroll = quick_scroll
+        order_row.addWidget(quick_scroll, 1)
         ll.addLayout(order_row)
 
         # Nur die Dateiliste soll bei hoeherem Fenster vertikal mitwachsen.
@@ -56,6 +89,43 @@ class ConvertWidgetLayoutRuntimeMixin:
         # nachfolgenden Bereiche (insbesondere den Log-Container).
         lg.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
         root.addWidget(lg, 1)
+
+    def _on_quick_toggle(self, spec, enabled: bool) -> None:
+        try:
+            set_quick_toggle_value(self.settings, spec, enabled)
+        except Exception as exc:
+            checkbox = getattr(self.w, spec.attr_name)
+            checkbox.blockSignals(True)
+            checkbox.setChecked(not enabled)
+            checkbox.blockSignals(False)
+            self.w.log_message(f"Schnellschalter konnte nicht gespeichert werden: {exc}", "warn")
+            return
+        window = self.w.window()
+        # Mehrere bereits geladene Converter-Tabs teilen dieselben globalen
+        # Settings. Ihre Schnellschalter muessen sofort denselben Zustand zeigen.
+        for peer in getattr(window, "_tab_widgets", {}).values():
+            checkbox = getattr(peer, spec.attr_name, None)
+            if checkbox is None or not hasattr(checkbox, "setChecked"):
+                continue
+            blocker = getattr(checkbox, "blockSignals", None)
+            if callable(blocker):
+                blocker(True)
+            try:
+                checkbox.setChecked(bool(enabled))
+            finally:
+                if callable(blocker):
+                    blocker(False)
+
+        if spec.attr_name != "watch_folder_quick_cb":
+            return
+        try:
+            from .watch_folder_main_window_bridge import refresh_watch_folder_controller
+
+            refresh_watch_folder_controller(window)
+        except Exception as exc:
+            log = getattr(self.w, "_log", None)
+            if callable(log):
+                log(f"Watch-Folder-Schnellschalter konnte den Controller nicht aktualisieren: {exc}", "warn")
 
     def _build_controls_section(self, root: QVBoxLayout) -> None:
         start_row = QHBoxLayout()
@@ -78,9 +148,21 @@ class ConvertWidgetLayoutRuntimeMixin:
             "Der Verschiebebericht wird trotzdem erstellt."
         )
         self.w.move_only_btn.setStyleSheet("font-size:12px;")
+        self.w.watch_scan_btn = QPushButton("🔎 Watchfolder durchsuchen")
+        self.w.watch_scan_btn.setMinimumHeight(34)
+        self.w.watch_scan_btn.setToolTip(
+            "Durchsucht alle aktivierten Watch-Folder-Regeln sofort und fügt neue, "
+            "noch nicht erfolgreich verarbeitete Dateien der passenden Queue hinzu.\n"
+            "Bereits vorhandene Queue-Einträge werden nicht dupliziert. Die manuelle Suche "
+            "funktioniert auch bei deaktiviertem globalem Watch-Folder-Automatikschalter.\n"
+            "Ist kein Lauf aktiv, werden Treffer nur eingereiht und nicht automatisch gestartet.\n"
+            "Manueller Sofortscan: nur verwenden, wenn die Quelldateien vollständig geschrieben sind."
+        )
+        self.w.watch_scan_btn.setStyleSheet("font-size:12px;")
         start_row.addWidget(self.w.start_btn, 3)
         start_row.addWidget(self.w.dv_remux_btn, 2)
         start_row.addWidget(self.w.move_only_btn, 2)
+        start_row.addWidget(self.w.watch_scan_btn, 2)
         root.addLayout(start_row)
 
         action_row = QHBoxLayout()
@@ -100,6 +182,10 @@ class ConvertWidgetLayoutRuntimeMixin:
         self.w.abort_btn.setEnabled(False)
         action_row.addWidget(self.w.move_finished_btn, 1)
         action_row.addWidget(self.w.pause_btn, 1)
+        self.w._parallel_controls = ParallelWorkerControl(self.w)
+        action_row.addWidget(QLabel("Worker:"))
+        action_row.addWidget(self.w._parallel_controls.spin)
+        action_row.addWidget(self.w._parallel_controls.active_label)
         action_row.addWidget(self.w.abort_combo, 2)
         action_row.addWidget(self.w.abort_btn, 1)
         root.addLayout(action_row)

@@ -128,13 +128,21 @@ def load_changelog(path: str | Path, *, title: str = "Änderungshistorie") -> Ch
             f"Nicht unterstützte CHANGELOG-Formatversion {version}; "
             f"erwartet {CHANGELOG_FORMAT_VERSION}"
         )
-    sections = tuple(
-        section
-        for section in (_section_from_json(item) for item in raw.get("sections", []))
-        if section is not None
-    )
-    if not sections:
+    sections_raw = raw.get("sections")
+    if not isinstance(sections_raw, list) or not sections_raw:
         raise ValueError("CHANGELOG.json enthält keine Abschnitte")
+    sections_list: list[ChangelogSection] = []
+    for index, item in enumerate(sections_raw, start=1):
+        if not isinstance(item, dict):
+            raise ValueError(
+                f"CHANGELOG.json: Abschnitt {index} muss ein JSON-Objekt sein, "
+                f"gefunden: {type(item).__name__}"
+            )
+        section = _section_from_json(item)
+        if section is None:
+            raise ValueError(f"CHANGELOG.json: Abschnitt {index} besitzt keinen gültigen Titel")
+        sections_list.append(section)
+    sections = tuple(sections_list)
     doc_title = str(raw.get("title") or title).strip() or title
     return ChangelogDocument(title=doc_title, sections=sections, source_format="json")
 

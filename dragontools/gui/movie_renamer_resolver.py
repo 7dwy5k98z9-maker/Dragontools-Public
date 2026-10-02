@@ -45,6 +45,7 @@ class MovieRenameResolveThread(QThread):
                 season_override = job[5] if len(job) > 5 else None
                 # Alte 7er-Jobs bleiben ohne Episoden-Override lesbar.
                 episode_override = job[6] if len(job) > 7 else None
+                year_override = job[7] if len(job) > 8 else None
                 request_id = int(job[-1]) if len(job) > 6 else 0
                 parsed = parse_movie_release_name(path)
                 use_series = force_kind == "series" or (force_kind != "movie" and parsed.is_probable_series)
@@ -63,12 +64,17 @@ class MovieRenameResolveThread(QThread):
                     show_all_candidates=show_all_candidates,
                     series_season_override=season_override,
                     series_episode_override=episode_override,
+                    year_override=year_override,
                 )
                 self.proposal_ready.emit(path, request_id, proposal)
         except OnlineMetadataError as exc:
+            self._jobs.close()
             self.failed.emit(str(exc))
         except Exception as exc:
+            self._jobs.close()
             self.failed.emit(f"Unerwarteter Fehler bei der Metadaten-Suche: {exc}")
+        finally:
+            self._jobs.close()
 
 
 class MovieRenamerResolveCoordinator(MovieRenamerResolveSearchMixin):
@@ -131,8 +137,7 @@ class MovieRenamerResolveCoordinator(MovieRenamerResolveSearchMixin):
             if 0 <= row < self.view.table.rowCount():
                 self.table_controller.set_status(row, "🔎 Suche")
 
-        if priority and self.thread is not None and self.thread.isRunning():
-            self.thread.enqueue_priority(versioned)
+        if priority and self.thread is not None and self.thread.isRunning() and self.thread.enqueue_priority(versioned):
             self.is_automatic = False
             self.view.set_busy(True)
             self.view.status_lbl.setText(
@@ -161,12 +166,15 @@ class MovieRenamerResolveCoordinator(MovieRenamerResolveSearchMixin):
         self.view.status_lbl.setText(f"{prefix}Metadaten-Vorschläge werden geladen: {len(jobs)} Datei(en).")
         thread = MovieRenameResolveThread(versioned, config, self.owner)
         thread.proposal_ready.connect(self.on_proposal_ready)
-        thread.failed.connect(self.on_failed)
-        thread.finished.connect(self.on_finished)
+        thread.failed.connect(lambda message: self.on_failed(message, thread))
+        thread.finished.connect(lambda: self.on_finished(thread))
+        thread.finished.connect(thread.deleteLater)
         self.thread = thread
         thread.start()
 
-    def on_failed(self, message: str) -> None:
+    def on_failed(self, message: str, failed_thread=None) -> None:
+        if failed_thread is not None and self.thread is not failed_thread:
+            return
         for row in range(self.view.table.rowCount()):
             if self.table_controller.row_item(row, self.table_controller.columns.STATUS).text() == "🔎 Suche":
                 self.table_controller.set_status(row, "❌ Fehler")
@@ -174,7 +182,9 @@ class MovieRenamerResolveCoordinator(MovieRenamerResolveSearchMixin):
         if not self.is_automatic:
             QMessageBox.warning(self.owner, "Metadaten-Suche fehlgeschlagen", message)
 
-    def on_finished(self) -> None:
+    def on_finished(self, finished_thread=None) -> None:
+        if finished_thread is not None and self.thread is not finished_thread:
+            return
         self.view.set_busy(False)
         self.thread = None
         self.is_automatic = False

@@ -97,19 +97,18 @@ class TimestampCandidateValidator:
             frame_rate=repaired_info.frame_rate or before.frame_rate,
             tolerance_s=1.0,
         )
-        if not packet_result.ok:
+        if not packet_result.ok or not packet_result.available:
             all_messages.extend(message for message in packet_result.messages if message not in all_messages)
-        elif packet_result.available:
+            if not packet_result.available:
+                all_messages.append("Paket-/Hashnachweis fehlt; automatische Reparaturübernahme gesperrt.")
+        else:
             self._runtime.log(
                 "✅ Paketprüfung: Stream-Paketanzahl und SHA-256-Nutzdaten pro Stream unverändert.",
                 "info",
             )
-        else:
-            for message in packet_result.messages:
-                self._runtime.log(f"⚠️ {message}", "warn")
 
         return CandidateValidation(
-            ok=bool(ok and guard.ok and packet_result.ok),
+            ok=bool(ok and guard.ok and packet_result.ok and packet_result.available),
             repaired_info=repaired_info,
             verify_result=verify_result,
             messages=all_messages,

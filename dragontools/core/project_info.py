@@ -29,12 +29,12 @@ class ProjectStatistics:
 # Wird bei Dokumentations-/Release-Pflege aktualisiert und dient nur als
 # Fallback, wenn ein Frozen-Build keine .py-Quellen enthält.
 RELEASE_STATISTICS = ProjectStatistics(
-    python_files=986,
-    total_lines=150125,
-    code_lines=126908,
-    test_package_files=233,
-    test_files=229,
-    static_tests=1736,
+    python_files=1064,
+    total_lines=165934,
+    code_lines=140321,
+    test_package_files=281,
+    test_files=276,
+    static_tests=2037,
     dynamic=False,
 )
 
@@ -56,6 +56,9 @@ def _source_files(root: Path) -> list[Path]:
     # werden ausschließlich seine gepflegten Python-Quellen und Tests, nicht
     # etwaige lokale build-/dist-Artefakte.
     generator = root / "dragon_hdr10plus_generator"
+    generator_entry = generator / "hdrplusgenerator_entry.py"
+    if generator_entry.is_file():
+        files.append(generator_entry)
     for relative in ("src", "tests"):
         folder = generator / relative
         if folder.is_dir():
@@ -63,6 +66,12 @@ def _source_files(root: Path) -> list[Path]:
                 p for p in folder.rglob("*.py")
                 if "__pycache__" not in p.parts
             )
+
+    # Gepflegte optionale Produktivbausteine (z. B. ComfyUI-Nodes und
+    # Snapshot-Helfer) gehören ebenfalls zum dokumentierten Quellumfang.
+    extras = root / "extras"
+    if extras.is_dir():
+        files.extend(p for p in extras.rglob("*.py") if "__pycache__" not in p.parts)
     return sorted(set(files))
 
 
@@ -139,6 +148,10 @@ def build_about_html(root: str | Path | None = None) -> str:
         "<b>Video &amp; HDR</b><br>"
         "H.264 · H.265/HEVC · AV1 · NVENC · QSV · AMF · CPU/x265 · SVT-AV1<br>"
         "Dolby Vision · HDR10+ · HLG · SDR · RPU-Prüfung · Auto-Crop · IMAX · Downscale und optionales SDR→HDR-Enhancement<br><br>"
+        "<b>Untertitel &amp; Batch-Steuerung</b><br>"
+        "Untertitel automatisch neben Videos finden · Deutsch/Englisch · frei editierbare Spurtitel<br>"
+        "Zehn Schnellschalter in einer Zeile inklusive PGS/Text → SRT, NFO und Trickplay<br>"
+        "Worker-Anzahl 1–8 während eines Laufs ändern · laufende Dateien fertig verarbeiten<br><br>"
         "<b>Projektumfang (DragonTools + Dragon HDR10+ Generator)</b><br>"
         f"{_fmt_int(stats.python_files)} Python-Dateien/Programme · "
         f"{_fmt_int(stats.total_lines)} Gesamtzeilen · "

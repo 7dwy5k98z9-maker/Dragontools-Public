@@ -51,6 +51,7 @@ class ConverterThread(QThread):
     progress = pyqtSignal(int)
     file_progress = pyqtSignal(str, int, object)
     file_result = pyqtSignal(str, str, str)  # (input_path, output_path, status)
+    encode_stage_complete = pyqtSignal(str, str)  # HEVC fertig; schwere DV/HDR-Nachbearbeitung folgt
     log_line = pyqtSignal(str)
     worker_event = pyqtSignal(object)
     dv_crop_decision_requested = pyqtSignal(object)
@@ -216,6 +217,9 @@ class ConverterThread(QThread):
 
     def emit_file_result(self, input_path: str, output_path: str, status: str) -> None:
         self._services.result.emit_file_result(input_path, output_path, status)
+
+    def emit_encode_stage_complete(self, input_path: str, output_path: str) -> None:
+        self.encode_stage_complete.emit(str(input_path), str(output_path))
 
     # ==================================================================
     # Hoch-Level-Orchestrierung convert_file()

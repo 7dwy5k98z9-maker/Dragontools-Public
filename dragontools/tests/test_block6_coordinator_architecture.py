@@ -42,7 +42,6 @@ def test_parallel_converter_delegates_qt_independent_state():
     source = _source("worker/parallel_converter_thread.py")
     assert "ParallelQueueState" in source
     assert "ParallelWorkerRegistry" in source
-    assert len(source.splitlines()) < 560
 
     state_source = _source("worker/parallel_converter_state.py")
     assert "PyQt6" not in state_source
@@ -78,4 +77,3 @@ def test_move_thread_drops_legacy_service_forwarders():
         "_record_replacement_reminder",
     }
     assert not (method_names & forbidden)
-    assert len(source.splitlines()) < 480

@@ -10,13 +10,13 @@ def _module_paths(package: str, names: str) -> tuple[Path, ...]:
 REFACTOR_SMOKE_MODULES = (
     *_module_paths(
         "core",
-        "models file_override_normalization media_analyzer_metadata media_analyzer_result "
+        "models file_override_normalization media_analyzer_metadata media_analyzer_result media_duration output_timestamps "
         "move_file_service move_preparation move_conflict_transactions move_journal_adapter move_transfer_executor "
         "media_library_path_mappings media_library_series_paths online_metadata_tmdb_resolver "
         "online_metadata_tmdb_suggestions online_metadata_tmdb_transport online_metadata_tvdb_candidates "
         "release_validation_smoke_modules update_check windows_restart_policy "
-        "settings_backup_common settings_backup_crypto settings_backup_export settings_backup_restore "
-        "settings_watch watch_folder quality_target sdr_hdr_enhancement "
+        "settings_backup_common settings_backup_limits settings_backup_crypto settings_backup_export settings_backup_restore "
+        "settings_watch watch_folder quality_target sdr_hdr_enhancement renamer_metadata_browser "
         "job_journal_storage job_journal_resume rules_preview_common rules_preview_audio "
         "rules_preview_subtitles rules_preview_video media_library_item_sql media_library_media_info_mapper "
         "media_library_sqlite media_library_schema media_library_migrations media_library_series_lookup "
@@ -60,7 +60,7 @@ REFACTOR_SMOKE_MODULES = (
         "dv_remux_output dv_remux_job dv_remux_thread "
         "merge_common merge_analysis merge_plan merge_executor merge_thread "
         "parallel_converter_queue parallel_converter_control parallel_converter_lifecycle "
-        "duration_repair_policy duration_repair_archive duration_repair_orchestrator "
+        "duration_repair_policy duration_repair_archive duration_repair_orchestrator timestamp_diagnostics "
         "hdrplus_helper_services hdrplus_helper_compat "
         "log_dispatch postprocess_async postprocess_runner postprocess_config postprocess_models postprocess_metadata "
         "trickplay_models trickplay_ffmpeg trickplay_commit trickplay_concurrency trickplay_paths "

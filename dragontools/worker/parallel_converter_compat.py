@@ -54,6 +54,10 @@ class ParallelConverterCompatibilityMixin:
         return self._queue_state.postprocessing_inputs
 
     @property
+    def _dv_postprocessing_inputs(self):
+        return self._queue_state.dv_postprocessing_inputs
+
+    @property
     def _display_index_by_path(self):
         return self._queue_state.display_index_by_path
 

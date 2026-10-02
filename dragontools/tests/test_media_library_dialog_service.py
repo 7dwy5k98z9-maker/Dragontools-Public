@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from contextlib import closing
 import sqlite3
 
 from dragontools.core.media_library_types import LibraryStats, PathMapping
@@ -129,7 +130,7 @@ def test_search_csv_export_ignores_gui_500_row_limit(tmp_path):
         )
         for index in range(525)
     ]
-    with sqlite3.connect(db_path) as conn:
+    with closing(sqlite3.connect(db_path)) as conn, conn:
         conn.executemany(
             """
             INSERT INTO media_items(title, path, parent_path, filename, created_at, updated_at)

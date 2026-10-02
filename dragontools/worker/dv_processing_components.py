@@ -51,8 +51,8 @@ def build_dv_processing_components(
                 pass
 
     audio_mux = DVAudioMuxService(
-        ffmpeg_path=tools.ffmpeg,
-        ffprobe_path=tools.ffprobe,
+        ffmpeg_path=getattr(tools, "ffmpeg", "ffmpeg"),
+        ffprobe_path=getattr(tools, "ffprobe", "ffprobe"),
         mp4box_muxer=None,
         log=detail_log,
     )
@@ -77,16 +77,18 @@ def build_dv_processing_components(
             str(getattr(tools, "hdr10plus_generator", "HDRPlusGenerator.exe")),
             worker=worker,
             log=log,
+            ffmpeg_path=getattr(tools, "ffmpeg", "ffmpeg"),
+            ffprobe_path=getattr(tools, "ffprobe", "ffprobe"),
         ),
         level5_editor=DVLevel5Editor(dovi_tool_path=tools.dovi_tool, log=detail_log),
         subtitle_service=SubtitleSidecarService(
-            ffmpeg_path=tools.ffmpeg,
+            ffmpeg_path=getattr(tools, "ffmpeg", "ffmpeg"),
             subtitle_rules=subtitle_rules,
             log=log,
             worker=worker,
         ),
         subtitle_mux_service=DVSubtitleMuxService(
-            ffmpeg_path=tools.ffmpeg,
+            ffmpeg_path=getattr(tools, "ffmpeg", "ffmpeg"),
             subtitle_rules=subtitle_rules,
             log=log,
         ),

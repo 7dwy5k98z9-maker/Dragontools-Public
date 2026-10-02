@@ -4,11 +4,15 @@ from __future__ import annotations
 
 import json
 import shutil
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Callable
 
+from .tool_process_lifecycle import TimeoutMode
 from .tool_runner import ToolRunResult, run_tool
+
+
+DEFAULT_ANALYZE_INACTIVITY_TIMEOUT_S = 600
 
 
 @dataclass(frozen=True, slots=True)
@@ -21,11 +25,14 @@ class HDR10PlusGeneratorResult:
     message: str = ""
     frames: int | None = None
     scenes: int | None = None
+    frame_count_source: str = ""
+    frame_count_reliability: str = ""
     transfer: str = ""
     input: str = ""
     output: str = ""
     aborted: bool = False
     timed_out: bool = False
+    diagnostic_output_preserved: bool = False
     payload: dict[str, Any] = field(default_factory=dict)
 
 
@@ -59,8 +66,12 @@ class HDR10PlusGeneratorClient:
         worker=None,
         log: Callable[[str, str], None] | None = None,
         run_tool_fn: Callable[..., ToolRunResult] = run_tool,
+        ffmpeg_path: str | Path | None = None,
+        ffprobe_path: str | Path | None = None,
     ) -> None:
         self.executable = str(executable or "")
+        self.ffmpeg_path = str(ffmpeg_path or "").strip()
+        self.ffprobe_path = str(ffprobe_path or "").strip()
         self._worker = worker
         self._log = log
         self._run_tool = run_tool_fn
@@ -69,7 +80,7 @@ class HDR10PlusGeneratorClient:
         return [self.executable, "--version"]
 
     def build_analyze_command(self, input_path: str | Path, output_path: str | Path) -> list[str]:
-        return [
+        command = [
             self.executable,
             "analyze",
             "--input",
@@ -77,6 +88,14 @@ class HDR10PlusGeneratorClient:
             "--output",
             str(output_path),
         ]
+        # DragonTools passes its resolved tool paths explicitly. Standalone use
+        # remains portable because the generator CLI falls back to PATH when
+        # these optional arguments are omitted.
+        if self.ffmpeg_path:
+            command.extend(["--ffmpeg", self.ffmpeg_path])
+        if self.ffprobe_path:
+            command.extend(["--ffprobe", self.ffprobe_path])
+        return command
 
     def probe_version(self, *, timeout_s: int | float = 15) -> HDR10PlusGeneratorResult:
         return self._invoke(self.build_version_command(), timeout_s=timeout_s, label="HDR10+ Generator Version")
@@ -86,7 +105,7 @@ class HDR10PlusGeneratorClient:
         input_path: str | Path,
         output_path: str | Path,
         *,
-        timeout_s: int | float | None = None,
+        timeout_s: int | float | None = DEFAULT_ANALYZE_INACTIVITY_TIMEOUT_S,
     ) -> HDR10PlusGeneratorResult:
         output = Path(output_path)
         output.unlink(missing_ok=True)
@@ -95,20 +114,26 @@ class HDR10PlusGeneratorClient:
             timeout_s=timeout_s,
             label="HDR10+ Generator Analyse",
             activity_file=output,
+            timeout_mode="inactivity",
         )
         if not result.success:
+            payload, _error = self._read_output_payload(output)
+            if payload is not None:
+                if callable(self._log):
+                    self._log(
+                        "⚠️ HDR10+-Generator meldete einen Fehler, hat aber eine gültige JSON erzeugt; "
+                        "sie bleibt als untrusted Diagnoseartefakt erhalten.",
+                        "warn",
+                    )
+                return replace(result, diagnostic_output_preserved=True)
             output.unlink(missing_ok=True)
             return result
         if not output.is_file() or output.stat().st_size <= 0:
             return self._failed_from(result, "OUTPUT_MISSING", "Generator meldet Erfolg, aber hdr10plus.json fehlt oder ist leer.")
-        try:
-            payload = json.loads(output.read_text(encoding="utf-8"))
-        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        payload, parse_error = self._read_output_payload(output)
+        if payload is None:
             output.unlink(missing_ok=True)
-            return self._failed_from(result, "OUTPUT_INVALID_JSON", f"Erzeugte HDR10+-Datei ist kein gültiges JSON: {exc}")
-        if not isinstance(payload, dict):
-            output.unlink(missing_ok=True)
-            return self._failed_from(result, "OUTPUT_INVALID_JSON", "Erzeugte HDR10+-Datei muss ein JSON-Objekt enthalten.")
+            return self._failed_from(result, "OUTPUT_INVALID_JSON", parse_error)
         return result
 
     def _invoke(
@@ -118,6 +143,7 @@ class HDR10PlusGeneratorClient:
         timeout_s: int | float | None,
         label: str,
         activity_file: Path | None = None,
+        timeout_mode: TimeoutMode = "absolute",
     ) -> HDR10PlusGeneratorResult:
         if not generator_executable_available(self.executable):
             return HDR10PlusGeneratorResult(
@@ -135,6 +161,8 @@ class HDR10PlusGeneratorClient:
             log=self._log,
             abort_on_request=True,
             activity_file=str(activity_file) if activity_file is not None else None,
+            timeout_mode=timeout_mode,
+            stderr_line=self._progress_line if label == "HDR10+ Generator Analyse" else None,
         )
         if tool_result.aborted:
             return HDR10PlusGeneratorResult(
@@ -172,11 +200,25 @@ class HDR10PlusGeneratorClient:
             message=message,
             frames=self._int_or_none(payload.get("frames")),
             scenes=self._int_or_none(payload.get("scenes")),
+            frame_count_source=str(payload.get("frame_count_source") or ("analysis_actual" if payload.get("frames") is not None else "")),
+            frame_count_reliability=str(payload.get("frame_count_reliability") or ("reliable" if payload.get("frames") is not None else "")),
             transfer=str(payload.get("transfer") or ""),
             input=str(payload.get("input") or ""),
             output=str(payload.get("output") or ""),
             payload=payload,
         )
+
+
+    def _progress_line(self, line: str) -> None:
+        text = str(line or "").strip()
+        if not text:
+            return
+        if text.startswith("HDR10+ scan:"):
+            if callable(self._log):
+                self._log(f"🧠 {text}", "info")
+            return
+        if callable(self._log):
+            self._log(f"HDR10+ Generator: {text}", "info")
 
     @staticmethod
     def _parse_stdout(stdout: str) -> tuple[dict[str, Any], str]:
@@ -201,6 +243,18 @@ class HDR10PlusGeneratorClient:
             return None
 
     @staticmethod
+    def _read_output_payload(output: Path) -> tuple[dict[str, Any] | None, str]:
+        try:
+            if not output.is_file() or output.stat().st_size <= 0:
+                return None, "Erzeugte HDR10+-Datei fehlt oder ist leer."
+            payload = json.loads(output.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+            return None, f"Erzeugte HDR10+-Datei ist kein gültiges JSON: {exc}"
+        if not isinstance(payload, dict):
+            return None, "Erzeugte HDR10+-Datei muss ein JSON-Objekt enthalten."
+        return payload, ""
+
+    @staticmethod
     def _failed_from(result: HDR10PlusGeneratorResult, error: str, message: str) -> HDR10PlusGeneratorResult:
         return HDR10PlusGeneratorResult(
             False,
@@ -211,11 +265,13 @@ class HDR10PlusGeneratorClient:
             message=message,
             aborted=result.aborted,
             timed_out=result.timed_out,
+            diagnostic_output_preserved=result.diagnostic_output_preserved,
             payload=result.payload,
         )
 
 
 __all__ = [
+    "DEFAULT_ANALYZE_INACTIVITY_TIMEOUT_S",
     "HDR10PlusGeneratorClient",
     "HDR10PlusGeneratorResult",
     "generator_executable_available",

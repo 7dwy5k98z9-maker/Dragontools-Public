@@ -54,3 +54,13 @@ dist/
 .idea/
 Thumbs.db
 .DS_Store
+
+# Local tool installations, working data and source snapshots
+/ComfyUI_windows_portable/
+/HDRTVDM/
+/work/
+/DragonTools_Source_*.zip
+
+
+# Generated PyInstaller specifications
+/*.spec

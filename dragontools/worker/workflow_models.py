@@ -106,6 +106,9 @@ class PipelineExecutionResult:
     effective_crop: str | None = None
     effective_crop_known: bool = False
     externalized_subtitle_stream_indices: tuple[int, ...] = ()
+    failure_archive_path: str = ""
+    failure_artifact_paths: tuple[str, ...] = ()
+    preserve_failed_output: bool = False
 
     @classmethod
     def succeeded(

@@ -19,6 +19,8 @@ class ConversionRunFinalizerMixin:
         move_ok: int = 0,
         move_errors: int = 0,
     ) -> None:
+        if self._ui.shut_cb.isChecked() or getattr(finished_thread, "abort_requested", False):
+            self._state.watch_intake_blocked = True
         try:
             if self._state.summary_written:
                 return
@@ -194,9 +196,12 @@ class ConversionRunFinalizerMixin:
                 move_errors=move_errors,
             )
             dialog = RunSummaryDialog(summary, parent=self._parent_widget)
-            dialog.exec()
-            if dialog.action() == RunSummaryDialog.ACTION_REQUEUE_FAILED:
-                return dialog.failed_inputs()
+            try:
+                dialog.exec()
+                if dialog.action() == RunSummaryDialog.ACTION_REQUEUE_FAILED:
+                    return dialog.failed_inputs()
+            finally:
+                dialog.deleteLater()
         except Exception:
             self._log("Abschlussdialog konnte nicht angezeigt werden.", "warn")
             self._log(traceback.format_exc(), "error")

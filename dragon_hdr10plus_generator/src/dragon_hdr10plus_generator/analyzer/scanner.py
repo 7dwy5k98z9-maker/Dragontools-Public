@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from array import array
 import math
+import queue
 import subprocess
 import sys
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -35,7 +38,10 @@ class FrameStatistics:
     p9998_nits: float
     p9999_nits: float
     below_100_nits_percent: float
-    histogram: tuple[float, ...]
+    # Compact uint32 bin counts. ``histogram_distance`` normalizes both
+    # inputs itself, therefore per-frame Python float tuples are unnecessary.
+    # This removes the dominant O(frame_count * bins) Python-object overhead.
+    histogram: tuple[float, ...] | array
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,15 +61,28 @@ def _pq_eotf_array(code: np.ndarray) -> np.ndarray:
     )
 
 
+class FFmpegInactivityTimeoutError(RuntimeError):
+    """FFmpeg stopped producing decoded frames for too long."""
+
+
 def _scaled_dimensions(probe: VideoProbe, analysis_width: int) -> tuple[int, int]:
-    source_w = max(2, int(probe.width or 1920))
-    source_h = max(2, int(probe.height or 1080))
+    if probe.width is None or probe.height is None or probe.width <= 0 or probe.height <= 0:
+        raise ValueError("PROBE_DIMENSIONS_MISSING")
+    source_w = max(2, int(probe.width))
+    source_h = max(2, int(probe.height))
     width = max(64, min(source_w, int(analysis_width)))
     width -= width % 2
     height = max(2, round(source_h * width / source_w))
     height -= height % 2
     return width, height
 
+
+
+def _format_duration(seconds: float) -> str:
+    value = max(0, int(round(float(seconds))))
+    hours, remainder = divmod(value, 3600)
+    minutes, secs = divmod(remainder, 60)
+    return f"{hours:02d}:{minutes:02d}:{secs:02d}"
 
 def _read_exact(stream, size: int) -> bytes:
     chunks: list[bytes] = []
@@ -77,12 +96,98 @@ def _read_exact(stream, size: int) -> bytes:
     return b"".join(chunks)
 
 
-def _histogram(values: np.ndarray, bins: int) -> tuple[float, ...]:
+def _put_until_stopped(target: queue.Queue, item, stop: threading.Event) -> bool:
+    while not stop.is_set():
+        try:
+            target.put(item, timeout=0.1)
+            return True
+        except queue.Full:
+            continue
+    return False
+
+
+def _start_frame_reader(stream, frame_bytes: int, stop: threading.Event):
+    frame_queue: queue.Queue[tuple[str, object]] = queue.Queue(maxsize=2)
+
+    def _reader() -> None:
+        try:
+            while not stop.is_set():
+                raw = _read_exact(stream, frame_bytes)
+                if not raw:
+                    _put_until_stopped(frame_queue, ("eof", b""), stop)
+                    return
+                if not _put_until_stopped(frame_queue, ("frame", raw), stop):
+                    return
+                if len(raw) != frame_bytes:
+                    _put_until_stopped(frame_queue, ("eof", b""), stop)
+                    return
+        except (OSError, ValueError) as exc:
+            _put_until_stopped(frame_queue, ("error", exc), stop)
+
+    thread = threading.Thread(target=_reader, name="hdr10plus-frame-reader", daemon=True)
+    thread.start()
+    return frame_queue, thread
+
+
+def _start_stderr_reader(stream, stop: threading.Event, *, limit: int = 256 * 1024):
+    chunks: list[bytes] = []
+    size = 0
+
+    def _reader() -> None:
+        nonlocal size
+        try:
+            while not stop.is_set():
+                chunk = stream.read(65536)
+                if not chunk:
+                    return
+                chunks.append(chunk)
+                size += len(chunk)
+                while size > limit and chunks:
+                    removed = chunks.pop(0)
+                    size -= len(removed)
+        except (OSError, ValueError):
+            return
+
+    thread = threading.Thread(target=_reader, name="hdr10plus-stderr-reader", daemon=True)
+    thread.start()
+
+    def _text() -> str:
+        return b"".join(chunks).decode("utf-8", errors="replace").strip()
+
+    return thread, _text
+
+
+def _histogram(values: np.ndarray, bins: int) -> array:
     # Histogram in PQ code domain is much more stable for scene-cut detection
     # than a linear-nits histogram dominated by the dark end of HDR pictures.
+    # Store raw uint32 bin counts instead of a tuple of Python floats. The
+    # distance function normalizes both histograms, so the mathematical result
+    # is identical while feature-length scans need far less RAM.
     hist, _ = np.histogram(values, bins=max(16, int(bins)), range=(0.0, 1.0))
-    total = float(hist.sum()) or 1.0
-    return tuple((hist.astype(np.float64) / total).tolist())
+    return array("I", (int(value) for value in hist))
+
+
+def _progress_message(
+    *,
+    current: int,
+    expected: int,
+    reliability: str,
+    fps: float,
+    elapsed: float,
+) -> str:
+    if expected > 0 and current <= expected:
+        pct = min(100.0, current * 100.0 / expected)
+        remaining = max(0, expected - current)
+        eta_s = remaining / fps if fps > 0 else 0.0
+        reliability_key = str(reliability or "")
+        suffix = " (geschätzt)" if reliability_key == "estimated" else (" (Metadaten)" if reliability_key == "reported" else "")
+        return (
+            f"HDR10+ scan: {current}/{expected} frames ({pct:.1f}%{suffix}) | "
+            f"{fps:.1f} fps | elapsed {_format_duration(elapsed)} | "
+            f"ETA {_format_duration(eta_s)}{suffix}"
+        )
+    note = " | Gesamtschätzung überschritten" if expected > 0 and current > expected else ""
+    return f"HDR10+ scan: {current} frames | {fps:.1f} fps | elapsed {_format_duration(elapsed)}{note}"
 
 
 def scan_pq_video(
@@ -93,6 +198,7 @@ def scan_pq_video(
     analysis_width: int = 256,
     histogram_bins: int = 64,
     progress_interval_s: float = 2.0,
+    inactivity_timeout_s: int | float | None = 300,
 ) -> ScanResult:
     """Decode every presentation frame to a small PQ RGB analysis surface.
 
@@ -131,17 +237,42 @@ def scan_pq_video(
         raise RuntimeError("FFMPEG_PIPE_FAILED")
 
     results: list[FrameStatistics] = []
-    last_progress = time.monotonic()
-    expected = probe.frames or 0
+    scan_started = time.monotonic()
+    last_progress = scan_started
+    last_frame_activity = last_progress
+    expected = (probe.frames or 0) if str(getattr(probe, "frame_count_reliability", "unknown") or "unknown") != "unknown" else 0
+    stop = threading.Event()
+    frame_queue, frame_thread = _start_frame_reader(proc.stdout, frame_bytes, stop)
+    stderr_thread, stderr_text = _start_stderr_reader(proc.stderr, stop)
     try:
         while True:
-            raw = _read_exact(proc.stdout, frame_bytes)
-            if not raw:
+            try:
+                kind, payload = frame_queue.get(timeout=0.25)
+            except queue.Empty:
+                if (
+                    inactivity_timeout_s is not None
+                    and time.monotonic() - last_frame_activity >= max(0.1, float(inactivity_timeout_s))
+                ):
+                    raise FFmpegInactivityTimeoutError(
+                        f"FFMPEG_INACTIVITY_TIMEOUT after {inactivity_timeout_s}s"
+                    )
+                if proc.poll() is not None and not frame_thread.is_alive():
+                    break
+                continue
+
+            if kind == "eof":
                 break
+            if kind == "error":
+                raise RuntimeError(f"FFMPEG_PIPE_READ_FAILED: {payload}")
+
+            raw = payload
+            if not isinstance(raw, (bytes, bytearray)):
+                raise RuntimeError("FFMPEG_PIPE_PROTOCOL_ERROR")
             if len(raw) != frame_bytes:
                 raise RuntimeError(
                     f"TRUNCATED_RAW_FRAME: expected {frame_bytes} bytes, got {len(raw)}"
                 )
+            last_frame_activity = time.monotonic()
 
             planes = np.frombuffer(raw, dtype="<u2", count=pixels * 3).reshape(3, pixels)
             # gbrp16le plane order is G, B, R. RGB code values are normalized PQ.
@@ -182,29 +313,56 @@ def scan_pq_video(
             now = time.monotonic()
             if now - last_progress >= max(0.25, float(progress_interval_s)):
                 current = len(results)
-                if expected > 0:
-                    pct = min(100.0, current * 100.0 / expected)
-                    print(f"HDR10+ scan: {current}/{expected} frames ({pct:.1f}%)", file=sys.stderr, flush=True)
-                else:
-                    print(f"HDR10+ scan: {current} frames", file=sys.stderr, flush=True)
+                elapsed = max(0.001, now - scan_started)
+                fps = current / elapsed
+                print(
+                    _progress_message(
+                        current=current,
+                        expected=expected,
+                        reliability=str(getattr(probe, "frame_count_reliability", "unknown") or "unknown"),
+                        fps=fps,
+                        elapsed=elapsed,
+                    ),
+                    file=sys.stderr,
+                    flush=True,
+                )
                 last_progress = now
 
-        stderr = proc.stderr.read().decode("utf-8", errors="replace").strip()
-        rc = proc.wait()
+        try:
+            rc = proc.wait(
+                timeout=None
+                if inactivity_timeout_s is None
+                else max(0.1, float(inactivity_timeout_s))
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise FFmpegInactivityTimeoutError(
+                f"FFMPEG_INACTIVITY_TIMEOUT after {inactivity_timeout_s}s while waiting for exit"
+            ) from exc
+        stderr_thread.join(timeout=2.0)
         if rc != 0:
-            raise RuntimeError(stderr or f"ffmpeg rc={rc}")
+            raise RuntimeError(stderr_text() or f"ffmpeg rc={rc}")
     except Exception:
+        stop.set()
         if proc.poll() is None:
             proc.kill()
         try:
             proc.wait(timeout=2)
-        except Exception:
+        except (subprocess.TimeoutExpired, OSError):
             pass
         raise
+    finally:
+        stop.set()
+        for stream in (proc.stdout, proc.stderr):
+            try:
+                stream.close()
+            except (OSError, ValueError):
+                pass
+        frame_thread.join(timeout=1.0)
+        stderr_thread.join(timeout=1.0)
 
     if not results:
         raise RuntimeError("NO_DECODED_FRAMES")
     return ScanResult(tuple(results), width, height)
 
 
-__all__ = ["FrameStatistics", "ScanResult", "scan_pq_video"]
+__all__ = ["FFmpegInactivityTimeoutError", "FrameStatistics", "ScanResult", "_progress_message", "scan_pq_video"]

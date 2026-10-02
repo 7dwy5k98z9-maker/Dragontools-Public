@@ -1,0 +1,119 @@
+{
+  "core/batch_preflight_storage.py": {
+    "function:filesystem_preflight": 26
+  },
+  "core/bitmap_subtitle_ocr.py": {
+    "function:finalize_ocr_report": 32
+  },
+  "core/job_journal_resume.py": {
+    "function:build_resume_plan": 34
+  },
+  "core/logger_messages.py": {
+    "function:DragonLoggerMessageMixin._format_encoder_details": 32
+  },
+  "core/media_library_fix_queue.py": {
+    "function:_discover_stream_issues": 34
+  },
+  "core/media_library_jellyfin_items.py": {
+    "function:build_jellyfin_item": 42
+  },
+  "core/media_library_movie_paths.py": {
+    "function:find_movie_root": 26
+  },
+  "core/media_library_nfo_store.py": {
+    "function:_replace_nfo_issues": 26
+  },
+  "core/media_library_search_fields.py": {
+    "function:_enrich_video": 29
+  },
+  "core/media_library_series_paths.py": {
+    "function:find_series_root": 31
+  },
+  "core/move_journal_resume.py": {
+    "function:build_move_resume_plan": 30
+  },
+  "core/movie_renamer_candidate_mapping.py": {
+    "function:_candidate_from_result": 27,
+    "function:_series_candidate_fields": 35
+  },
+  "core/movie_renamer_parsing.py": {
+    "function:parse_series_release_name": 31
+  },
+  "core/online_metadata_tvdb_helpers.py": {
+    "function:_tvdb_localized_title": 31
+  },
+  "core/replace_journal.py": {
+    "function:recover_active_replace_journals": 32
+  },
+  "core/tool_diagnostics_extended.py": {
+    "function:run_extended_system_test": 32
+  },
+  "core/whisper_runtime.py": {
+    "function:build_whisper_diagnostic": 29
+  },
+  "gui/conversion_diagnostics.py": {
+    "function:ConversionDiagnosticsService.format_snapshot": 36
+  },
+  "gui/drop_path_extractor.py": {
+    "function:_extract_paths_from_mime_data": 34
+  },
+  "gui/media_info_text_builder.py": {
+    "function:_subtitle_preview_lines": 28
+  },
+  "gui/preflight_metadata_apply.py": {
+    "function:apply_metadata_result": 48
+  },
+  "worker/av1_metadata_pipeline.py": {
+    "function:AV1DolbyVisionPipeline.execute": 29
+  },
+  "worker/cleanup_service.py": {
+    "function:CleanupService.cleanup_temp_artifacts": 26
+  },
+  "worker/comfyui_video_worker.py": {
+    "function:ComfyUIHDRVideoService.render": 29
+  },
+  "worker/converter_progress_parser.py": {
+    "function:read_progress": 33
+  },
+  "worker/duration_repair_validation.py": {
+    "function:validate_timestamp_repair": 35
+  },
+  "worker/duration_timestamp_service.py": {
+    "function:TimestampRepairService.repair_video_timestamps": 27
+  },
+  "worker/duration_timing_mapping.py": {
+    "function:apply_mediainfo_timing": 28
+  },
+  "worker/dv_remux_job.py": {
+    "function:DVRemuxJobRunner.run": 28
+  },
+  "worker/encode_plan_service.py": {
+    "function:EncodePlanService.prepare_encode_plan": 48
+  },
+  "worker/hdrplus_mux_service.py": {
+    "function:HDRPlusMuxService.mux_mp4": 28
+  },
+  "worker/media_stream_metadata_guard.py": {
+    "function:edit_queued_track": 26
+  },
+  "worker/output_verification_archive.py": {
+    "function:_rpu_geometry_diagnostics": 31,
+    "function:write_verification_archive_csv": 41,
+    "function:write_verification_archive_report": 36
+  },
+  "worker/subtitle_movtext_backup.py": {
+    "function:export_mov_text_backup": 30
+  },
+  "worker/workflow_geometry_validation.py": {
+    "function:check_dv_rpu_alignment": 32
+  },
+  "worker/workflow_services.py": {
+    "function:WorkflowServices.process": 31
+  },
+  "rules/renamer_rules.py": {
+    "function:migrate_renamer_rules": 35
+  },
+  "rules/subtitle_rule_config.py": {
+    "function:migrate_subtitle_rules": 32
+  }
+}

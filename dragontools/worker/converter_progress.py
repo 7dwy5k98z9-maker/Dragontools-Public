@@ -35,6 +35,21 @@ class ConverterProgressHelper:
     def run_capture(self, cmd, *, timeout_s: int | None = None, label: str = "Tool-Prozess") -> tuple[int, str, str]:
         return self._executor.run_capture(cmd, timeout_s=timeout_s, label=label)
 
+    def take_output_frame_count(self, path, *, process_rc: int | None = None) -> int | None:
+        counts = getattr(self.worker, "_progress_frame_counts", None)
+        completed = getattr(self.worker, "_progress_end_seen", None)
+        key = str(path)
+        progress_end_seen = bool(completed.pop(key, False)) if isinstance(completed, dict) else False
+        if process_rc != 0 or not progress_end_seen or not isinstance(counts, dict):
+            if isinstance(counts, dict):
+                counts.pop(key, None)
+            return None
+        try:
+            value = int(counts.pop(key, 0) or 0)
+        except (TypeError, ValueError):
+            return None
+        return value if value > 0 else None
+
     def run_p(self, cmd, path, dur_ms, *, timeout_s: int | None | object = _DEFAULT_TIMEOUT, label: str = "FFmpeg-Encode") -> int:
         effective_timeout = get_timeout("encoder_general") if timeout_s is _DEFAULT_TIMEOUT else timeout_s
         return self._executor.run_progress(

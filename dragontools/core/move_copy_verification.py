@@ -1,51 +1,54 @@
 # -*- coding: utf-8 -*-
-"""Cheap post-copy integrity checks for destructive cross-volume moves."""
+"""Bounded-memory full-content checks for destructive cross-volume moves."""
 from __future__ import annotations
 
 from pathlib import Path
+import os
 
 _SAMPLE_BYTES = 1024 * 1024
 
 
-def _read_sample(path: Path, offset: int, length: int) -> bytes:
-    with path.open("rb") as handle:
-        handle.seek(offset)
-        return handle.read(length)
+def verify_staged_path_copy(source: Path, staged: Path) -> None:
+    """Verify directory contents and symlink targets without following links."""
+    if source.is_symlink():
+        if not staged.is_symlink() or os.readlink(source) != os.readlink(staged):
+            raise OSError(f"Symlink-Kopie stimmt nicht überein: {source}")
+    elif source.is_dir():
+        if staged.is_symlink() or not staged.is_dir():
+            raise OSError(f"Ordner-Kopie fehlt: {staged}")
+        originals = {p.name: p for p in source.iterdir()}
+        copies = {p.name: p for p in staged.iterdir()}
+        if originals.keys() != copies.keys():
+            raise OSError(f"Ordner-Kopie ist unvollständig: {staged}")
+        for name, path in originals.items():
+            verify_staged_path_copy(path, copies[name])
+    else:
+        if staged.is_symlink():
+            raise OSError(f"Unerwarteter Symlink in Kopie: {staged}")
+        verify_staged_file_copy(source, staged)
 
 
 def verify_staged_file_copy(source: str | Path, staged: str | Path) -> None:
-    """Verify size and representative byte ranges before the source is deleted.
-
-    A full second read of multi-gigabyte media would double move I/O.  DragonTools
-    therefore compares the complete content for small files and first/middle/last
-    1 MiB for larger files.  Any mismatch aborts the transaction before commit.
-    """
+    """Compare every byte before source deletion, with bounded memory."""
     src = Path(source)
     dst = Path(staged)
-    source_size = src.stat().st_size
+    source_before = src.stat()
+    source_size = source_before.st_size
     staged_size = dst.stat().st_size
     if staged_size != source_size:
         raise OSError(
             f"Größenprüfung fehlgeschlagen: Quelle={source_size} Byte, Kopie={staged_size} Byte"
         )
-    if source_size == 0:
-        return
-
-    if source_size <= _SAMPLE_BYTES * 3:
-        offsets = (0,)
-        sample_size = source_size
-    else:
-        sample_size = _SAMPLE_BYTES
-        offsets = (
-            0,
-            max(0, (source_size // 2) - (sample_size // 2)),
-            max(0, source_size - sample_size),
-        )
-
-    for offset in dict.fromkeys(offsets):
-        length = min(sample_size, source_size - offset)
-        if _read_sample(src, offset, length) != _read_sample(dst, offset, length):
-            raise OSError(
-                "Integritätsprüfung der Kopie fehlgeschlagen "
-                f"(Abweichung bei Byte-Offset {offset})."
-            )
+    offset = 0
+    with src.open('rb') as left, dst.open('rb') as right:
+        while True:
+            chunk = left.read(_SAMPLE_BYTES)
+            if chunk != right.read(_SAMPLE_BYTES):
+                raise OSError(f"Integritätsprüfung der Kopie fehlgeschlagen (Byte-Offset {offset}).")
+            if not chunk:
+                break
+            offset += len(chunk)
+    source_after = src.stat()
+    if (offset != source_size or source_after.st_size != source_size
+            or source_after.st_mtime_ns != source_before.st_mtime_ns):
+        raise OSError("Quelle wurde während der Integritätsprüfung verändert.")

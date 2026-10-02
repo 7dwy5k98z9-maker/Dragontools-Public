@@ -34,13 +34,15 @@ class DurationRepairRuntime:
     run_tool_fn: RunToolFn
     replace_fn: ReplaceFn = os.replace
 
-    def run_tool(self, cmd: list[str], *, label: str) -> ToolRunResult:
+    def run_tool(self, cmd: list[str], *, label: str, stdout_file=None) -> ToolRunResult:
+        output_options = {"stdout_file": stdout_file} if stdout_file is not None else {}
         return self.run_tool_fn(
             cmd,
             label=label,
             timeout_s=get_timeout("duration_repair"),
             worker=self.worker,
             log=self.log,
+            **output_options,
         )
 
     def replace_file(self, source: Path, destination: Path) -> None:

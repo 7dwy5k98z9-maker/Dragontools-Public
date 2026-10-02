@@ -21,6 +21,29 @@ def _parse_speed(value: str) -> float | None:
         return None
 
 
+def _record_output_frame_count(worker, path, value: str) -> int | None:
+    try:
+        frame_count = int(value)
+    except (TypeError, ValueError):
+        return None
+    if frame_count <= 0:
+        return None
+    counts = getattr(worker, "_progress_frame_counts", None)
+    if not isinstance(counts, dict):
+        counts = {}
+        setattr(worker, "_progress_frame_counts", counts)
+    counts[str(path)] = frame_count
+    return frame_count
+
+
+def _mark_progress_end(worker, path) -> None:
+    completed = getattr(worker, "_progress_end_seen", None)
+    if not isinstance(completed, dict):
+        completed = {}
+        setattr(worker, "_progress_end_seen", completed)
+    completed[str(path)] = True
+
+
 def read_progress(worker, proc, path, dur_ms: int | None, total_frames: int | None = None, on_activity=None) -> None:
     last_pct = 0
     last_out_ms = 0
@@ -29,8 +52,6 @@ def read_progress(worker, proc, path, dur_ms: int | None, total_frames: int | No
 
     for raw in proc.stdout:
         worker.wait_if_paused()
-        if proc.poll() is not None:
-            break
         control = getattr(worker, "_control_state", None)
         abort_requested = control.abort_requested if control is not None else getattr(worker, "abort_requested", False)
         abort_type = control.abort_type if control is not None else getattr(worker, "abort_type", None)
@@ -61,12 +82,12 @@ def read_progress(worker, proc, path, dur_ms: int | None, total_frames: int | No
                 last_out_ms = out_time
             if out_time and dur_ms:
                 pct = int(max(0, min(100, (out_time / dur_ms) * 100)))
-        elif key == "frame" and total_frames:
-            try:
-                pct = int(max(0, min(100, int(value) / total_frames * 100)))
-            except ValueError:
-                pass
+        elif key == "frame":
+            frame_count = _record_output_frame_count(worker, path, value)
+            if frame_count is not None and total_frames:
+                pct = int(max(0, min(100, frame_count / total_frames * 100)))
         elif key == "progress" and value == "end":
+            _mark_progress_end(worker, path)
             worker.emit_file_progress(path, 100, 0.0)
             break
 

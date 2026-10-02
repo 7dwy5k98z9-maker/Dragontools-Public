@@ -105,6 +105,12 @@ class MovieRenamerView(MovieRenamerViewStateMixin):
         title.setStyleSheet("font-weight:bold;font-size:15px;")
         title_row.addWidget(title, 1)
 
+        self.metadata_browser_btn = QPushButton("🌐 Metadaten-Browser")
+        self.metadata_browser_btn.setToolTip(
+            "TMDB/TheTVDB ohne vorher importierte Datei durchsuchen und Dateien explizit Filmen/Episoden zuordnen"
+        )
+        title_row.addWidget(self.metadata_browser_btn)
+
         self.columns_btn = QPushButton("⚙ Spalten")
         self.columns_btn.setToolTip("Spalten ein-/ausblenden und Standardansicht wiederherstellen")
         title_row.addWidget(self.columns_btn)
@@ -135,6 +141,8 @@ class MovieRenamerView(MovieRenamerViewStateMixin):
         self.edit_search_btn = QPushButton("✏️ Suchbegriff")
         self.edit_season_btn = QPushButton("🗓 Staffel ändern")
         self.edit_episode_btn = QPushButton("🔢 Episode ändern")
+        self.edit_year_btn = QPushButton("📅 Jahr ändern")
+        self.edit_year_btn.setToolTip("Erscheinungsjahr des Films oder Startjahr der Serie für die Suche ändern")
         self.accept_selected_btn = QPushButton("✅ Auswahl akzeptieren")
         self.accept_safe_btn = QPushButton("✅ Sichere akzeptieren")
         self.reject_selected_btn = QPushButton("🚫 Auswahl ablehnen")
@@ -142,20 +150,18 @@ class MovieRenamerView(MovieRenamerViewStateMixin):
         self.remove_btn = QPushButton("➖ Entfernen")
         self.clear_btn = QPushButton("🗑 Alle")
 
-        # 15 Aktionen werden gleichmäßig als 3 × 5 Werkzeugfelder verteilt.
+        # 16 Aktionen mit gleichmäßiger Breite; Korrekturen in einer Reihe.
         toolbar_rows = (
-            (self.add_files_btn, self.add_folder_btn, self.resolve_btn,
-             self.manual_series_search_btn, self.manual_movie_search_btn),
-            (self.show_all_candidates_btn, self.edit_search_btn, self.edit_season_btn,
-             self.edit_episode_btn, self.accept_selected_btn),
-            (self.accept_safe_btn, self.reject_selected_btn, self.rename_btn,
-             self.remove_btn, self.clear_btn),
+            (self.add_files_btn, self.add_folder_btn, self.remove_btn, self.clear_btn),
+            (self.resolve_btn, self.manual_series_search_btn, self.manual_movie_search_btn, self.show_all_candidates_btn),
+            (self.edit_search_btn, self.edit_season_btn, self.edit_episode_btn, self.edit_year_btn),
+            (self.accept_selected_btn, self.accept_safe_btn, self.reject_selected_btn, self.rename_btn),
         )
         for row_index, buttons in enumerate(toolbar_rows):
             for column_index, button in enumerate(buttons):
                 button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
                 toolbar.addWidget(button, row_index, column_index)
-        for column_index in range(5):
+        for column_index in range(4):
             toolbar.setColumnStretch(column_index, 1)
         root.addLayout(toolbar)
 
@@ -217,4 +223,3 @@ class MovieRenamerView(MovieRenamerViewStateMixin):
             QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred
         )
         root.addWidget(self.status_lbl)
-

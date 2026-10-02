@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+from contextlib import closing
 import sys
 import threading
 import time
@@ -50,7 +51,7 @@ def _insert_episode(
 
 def test_future_media_library_schema_is_rejected_without_rewrite(tmp_path: Path) -> None:
     db = tmp_path / "future.sqlite3"
-    with sqlite3.connect(db) as conn:
+    with closing(sqlite3.connect(db)) as conn, conn:
         conn.execute("CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL)")
         conn.execute("INSERT INTO meta(key, value) VALUES('schema_version', '999')")
         conn.execute("CREATE TABLE future_only_marker(value TEXT)")
@@ -59,7 +60,7 @@ def test_future_media_library_schema_is_rejected_without_rewrite(tmp_path: Path)
     with pytest.raises(UnsupportedMediaLibrarySchemaError, match="Schema 999"):
         initialize_database(db)
 
-    with sqlite3.connect(db) as conn:
+    with closing(sqlite3.connect(db)) as conn, conn:
         version = conn.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()[0]
         marker = conn.execute("SELECT value FROM future_only_marker").fetchone()[0]
         media_items = conn.execute(
@@ -76,7 +77,7 @@ def test_episode_replacement_does_not_cross_series_release_year(tmp_path: Path) 
     old_2024 = tmp_path / "Anime" / "Ranma 1-2 (2024)" / "Staffel 01" / "Ranma 1-2 - S01E01.mkv"
     new_2024 = tmp_path / "Neu" / "Ranma 1-2 (2024)" / "Staffel 01" / "Ranma 1-2 - S01E01.mkv"
 
-    with sqlite3.connect(db) as conn:
+    with closing(sqlite3.connect(db)) as conn, conn:
         conn.row_factory = sqlite3.Row
         _insert_episode(conn, path=old_1989, series_title="Ranma 1-2", year=1989)
         _insert_episode(conn, path=old_2024, series_title="Ranma 1-2", year=2024)
@@ -104,7 +105,7 @@ def test_episode_replacement_without_year_does_not_cross_different_series_roots(
     db = initialize_database(tmp_path / "library.sqlite3")
     old_path = tmp_path / "AnimeA" / "Testserie" / "Staffel 01" / "Testserie - S01E01.mkv"
     new_path = tmp_path / "AnimeB" / "Testserie" / "Staffel 01" / "Testserie - S01E01.mkv"
-    with sqlite3.connect(db) as conn:
+    with closing(sqlite3.connect(db)) as conn, conn:
         conn.row_factory = sqlite3.Row
         conn.execute(
             """

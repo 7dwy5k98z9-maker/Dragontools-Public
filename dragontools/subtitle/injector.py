@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from ..core.output_timestamps import build_output_timestamp_args
 from typing import Callable
 
 from ..core.timeout_settings import get_timeout
@@ -24,6 +25,7 @@ def inject_with_mkvmerge(
     mkvmerge: str = "mkvmerge",
     worker=None,
     overwrite: bool = False,
+    title: str = "Deutsch",
 ) -> bool:
     cmd = [
         mkvmerge,
@@ -33,7 +35,7 @@ def inject_with_mkvmerge(
         "--language",
         f"0:{language}",
         "--track-name",
-        "0:",
+        f"0:{title}",
     ]
     if forced:
         cmd += ["--forced-track", "0:yes"]
@@ -132,6 +134,7 @@ def inject_with_ffmpeg(
     forced: bool = False,
     ffprobe: str | None = None,
     existing_subtitle_count: int | None = None,
+    title: str = "Deutsch",
 ) -> bool:
     output = Path(output_path)
     if output.exists() and not overwrite:
@@ -198,8 +201,13 @@ def inject_with_ffmpeg(
     cmd += [
         f"-metadata:s:s:{new_subtitle_index}",
         f"language={language}",
+        f"-metadata:s:s:{new_subtitle_index}",
+        f"title={title}",
+        f"-metadata:s:s:{new_subtitle_index}",
+        f"handler_name={title}",
         f"-disposition:s:{new_subtitle_index}",
         "forced" if forced else "0",
+        *build_output_timestamp_args(output_path),
         output_path,
     ]
     try:
@@ -217,4 +225,3 @@ def inject_with_ffmpeg(
     except Exception as exc:
         _log_tool_error(logger, Path(ffmpeg).name, None, exc=exc)
         return False
-

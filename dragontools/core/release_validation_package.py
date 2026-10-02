@@ -1,12 +1,11 @@
 from __future__ import annotations
 import ast
-import re
 from pathlib import Path
-from typing import Iterable
 
-from .release_packaging import find_forbidden_release_artifacts
+from .release_packaging import find_forbidden_release_artifacts, iter_public_source_files
 from .release_validation_common import APP_VERSION, ReleaseCheck, _load_json
 from .release_validation_smoke_modules import REFACTOR_SMOKE_MODULES
+from .release_validation_privacy import _iter_release_text_files, _scan_private_markers
 
 def _load_release_manifest(root: Path) -> tuple[dict, ReleaseCheck]:
     path = root / "release_manifest.json"
@@ -45,6 +44,11 @@ def _load_release_manifest(root: Path) -> tuple[dict, ReleaseCheck]:
 
 _PACKAGE_DIRS = ("core", "gui", "worker", "rules", "subtitle", "config")
 _SMOKE_MODULES = (
+    Path("core/codec_utils.py"),
+    Path("worker/encoder_args.py"),
+    Path("core/encoder_profile_override.py"),
+    Path("worker/hdr10plus_workflow_policy.py"),
+    Path("worker/workflow_override_summary.py"),
     *REFACTOR_SMOKE_MODULES,
     Path("core") / "settings.py", Path("core") / "settings_storage.py", Path("core") / "settings_notifications.py", Path("core") / "conversion_notifications.py", Path("core") / "version.py",
     Path("core") / "settings_access.py", Path("core") / "secret_settings.py",
@@ -90,6 +94,7 @@ _SMOKE_MODULES = (
     Path("core") / "move_conflicts.py",
     Path("core") / "move_source_probe.py",
     Path("core") / "watch_folder.py",
+    Path("core") / "pgs_display_set.py",
     Path("core") / "movie_renamer.py",
     Path("core") / "movie_renamer_models.py", Path("core") / "movie_renamer_parsing.py",
     Path("core") / "movie_renamer_candidates.py", Path("core") / "movie_renamer_episode_refresh.py",
@@ -126,6 +131,7 @@ _SMOKE_MODULES = (
     Path("core") / "release_validation_common.py",
     Path("core") / "release_validation_environment.py",
     Path("core") / "release_validation_package.py",
+    Path("core") / "release_validation_privacy.py",
     Path("core") / "release_packaging.py",
     Path("gui") / "main_window.py",
     Path("gui") / "main_window_tabs.py",
@@ -310,24 +316,6 @@ def _check_python_package_smoke(root: Path, title: str = "Python-Paket-Smoke-Tes
     )
 
 
-def _iter_release_text_files(root: Path) -> Iterable[Path]:
-    candidates = [
-        root / "help.html",
-        root / "build_v9.bat",
-        root / "build_v9_angepasst.bat",
-        root / f"DragonToolsV{APP_VERSION}.spec",
-        root / "DragonToolsV9.spec",
-    ]
-    history = root / "Aenderungshistorie"
-    if history.exists():
-        candidates.extend(sorted(history.glob("*.txt")))
-        candidates.extend(sorted(history.glob("*.json")))
-    for path in candidates:
-        if path.exists() and path.is_file():
-            yield path
-
-
-
 def _check_forbidden_release_artifacts(root: Path) -> ReleaseCheck:
     findings = find_forbidden_release_artifacts(root)
     if not findings:
@@ -346,48 +334,6 @@ def _check_forbidden_release_artifacts(root: Path) -> ReleaseCheck:
         f"{len(findings)} verbotene Bytecode-/Cache-Artefakte gefunden: {preview}",
     )
 
-_PRIVATE_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
-    ("lokaler Benutzerpfad", re.compile(r"C:\\Users\\[^\\\r\n]+", re.IGNORECASE)),
-    ("persönlicher Name", re.compile(r"\bMarkus\b|\bMarku\b", re.IGNORECASE)),
-    ("Arbeitsordner-Pfad", re.compile("Arbeitsordner " + "codex", re.IGNORECASE)),
-    ("Netzwerk-Medienpfad", re.compile(r"\\medien" + "speicher", re.IGNORECASE)),
-    ("temporärer Codex-Pfad", re.compile(r"AppData\\Local\\Temp\\codex-", re.IGNORECASE)),
-    ("möglicher API-Key", re.compile(r"(api[_-]?key|read[_-]?access[_-]?token)\s*[:=]\s*['\"][^'\"\s]{8,}", re.IGNORECASE)),
-)
-
-
-def _scan_private_markers(root: Path) -> list[ReleaseCheck]:
-    findings: list[ReleaseCheck] = []
-    for path in _iter_release_text_files(root):
-        try:
-            text = path.read_text(encoding="utf-8", errors="replace")
-        except Exception as exc:
-            try:
-                rel = path.relative_to(root)
-            except (OSError, ValueError):
-                rel = path
-            findings.append(
-                ReleaseCheck(
-                    "warn",
-                    "Datenschutz: Datei nicht lesbar",
-                    f"{rel} konnte nicht geprüft werden: {exc}",
-                )
-            )
-            continue
-        for label, pattern in _PRIVATE_PATTERNS:
-            match = pattern.search(text)
-            if match:
-                findings.append(
-                    ReleaseCheck(
-                        "warn",
-                        f"Datenschutz: {label}",
-                        f"{path.relative_to(root)} enthält '{match.group(0)[:80]}'",
-                    )
-                )
-                break
-    if not findings:
-        findings.append(ReleaseCheck("ok", "Datenschutz-/Release-Check", "Keine offensichtlichen privaten Marker in Release-Textdateien gefunden."))
-    return findings
 
 
 def _find_dist_dir(root: Path, dist_root: Path | None = None) -> Path | None:

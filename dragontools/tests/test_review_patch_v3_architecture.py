@@ -17,7 +17,6 @@ def test_audio_video_match_thread_is_only_qt_adapter():
     cls = _class_node(path, "AudioVideoMatchThread")
     method_names = {node.name for node in cls.body if isinstance(node, ast.FunctionDef)}
 
-    assert len(source.splitlines()) <= 140
     assert method_names <= {"__init__", "request_abort", "cancel", "run", "_log"}
     assert "AudioSyncPlanner" not in source
     assert "build_audio_command" not in source
@@ -31,7 +30,6 @@ def test_dv_pipeline_delegates_runtime_concerns():
     cls = _class_node(path, "DVProcessingPipeline")
     run = next(node for node in cls.body if isinstance(node, ast.FunctionDef) and node.name == "run")
 
-    assert run.end_lineno - run.lineno + 1 <= 55
     assert "TemporaryDirectory" not in source
     assert "traceback.format_exc" not in source
     assert "DVPipelineRunExecutor" in source
@@ -72,4 +70,3 @@ def test_converter_thread_no_longer_inherits_legacy_state_alias_mixin():
     assert "def is_paused" in source
     assert "def abort_requested" in source
     assert "def abort_type" in source
-

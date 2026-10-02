@@ -10,8 +10,10 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import queue
 import subprocess
 import tempfile
+import threading
 import time
 from pathlib import Path
 from typing import Any, BinaryIO
@@ -26,6 +28,8 @@ except Exception:  # pragma: no cover - only absent outside ComfyUI
     def _check_interrupt() -> None:
         return None
 
+
+_PROCESS_INACTIVITY_TIMEOUT_S = 600.0
 
 _HDR_RGB_TO_YUV = (
     "zscale=matrixin=gbr:matrix=bt2020nc:"
@@ -166,6 +170,8 @@ class DragonHDRTVDMVideoConvert:
 
         decoder = None
         encoder = None
+        frame_reader = None
+        encoder_writer = None
         decoder_err = tempfile.TemporaryFile(mode="w+b")
         encoder_err = tempfile.TemporaryFile(mode="w+b")
         frames = 0
@@ -180,18 +186,19 @@ class DragonHDRTVDMVideoConvert:
                 stderr=decoder_err,
                 **_no_window_kwargs(),
             )
-            assert decoder.stdout is not None
+            if decoder.stdout is None:
+                raise RuntimeError("FFmpeg decoder stdout is unavailable")
+            frame_reader = _PPMFrameReader(decoder, timeout_s=_PROCESS_INACTIVITY_TIMEOUT_S)
             batch: list[np.ndarray] = []
             while True:
-                _check_interrupt()
-                frame = _read_ppm_frame(decoder.stdout)
+                frame = frame_reader.read()
                 if frame is None:
                     break
                 batch.append(frame)
                 if len(batch) < max(1, int(batch_size)):
                     continue
-                encoder, count = _process_batch(
-                    model, batch, encoder, encoder_err,
+                encoder, encoder_writer, count = _process_batch(
+                    model, batch, encoder, encoder_writer, encoder_err,
                     ffmpeg_path=ffmpeg_path, output=output,
                     encode_args=encode_args, hdr_args=hdr_args,
                     fps_num=fps_num, fps_den=fps_den,
@@ -200,24 +207,27 @@ class DragonHDRTVDMVideoConvert:
                 batch.clear()
                 _write_manifest(manifest, success=False, state="running", frames=frames, expected_frames=expected_frames)
             if batch:
-                encoder, count = _process_batch(
-                    model, batch, encoder, encoder_err,
+                encoder, encoder_writer, count = _process_batch(
+                    model, batch, encoder, encoder_writer, encoder_err,
                     ffmpeg_path=ffmpeg_path, output=output,
                     encode_args=encode_args, hdr_args=hdr_args,
                     fps_num=fps_num, fps_den=fps_den,
                 )
                 frames += count
                 batch.clear()
-            if decoder.wait() != 0:
+            decoder_rc = _wait_process(decoder, "FFmpeg decoder", timeout_s=30.0)
+            if decoder_rc != 0:
                 raise RuntimeError("FFmpeg decoder failed: " + _stderr_text(decoder_err))
             if int(expected_frames) > 0 and frames != int(expected_frames):
                 raise RuntimeError(
                     f"Frame count mismatch: source metadata={int(expected_frames)}, HDRTVDM output={frames}"
                 )
-            if encoder is None or encoder.stdin is None:
+            if encoder is None or encoder_writer is None:
                 raise RuntimeError("No video frames were decoded")
-            encoder.stdin.close()
-            if encoder.wait() != 0:
+            encoder_writer.close()
+            encoder_writer = None
+            encoder_rc = _wait_process(encoder, "FFmpeg HDR encoder", timeout_s=_PROCESS_INACTIVITY_TIMEOUT_S)
+            if encoder_rc != 0:
                 raise RuntimeError("FFmpeg HDR encoder failed: " + _stderr_text(encoder_err))
             if not output.is_file() or output.stat().st_size <= 0:
                 raise RuntimeError("FFmpeg HDR encoder produced no output file")
@@ -231,6 +241,8 @@ class DragonHDRTVDMVideoConvert:
             )
             return str(output), str(manifest)
         except BaseException as exc:
+            if encoder_writer is not None:
+                encoder_writer.abort()
             _terminate(decoder)
             _terminate(encoder)
             try:
@@ -244,6 +256,12 @@ class DragonHDRTVDMVideoConvert:
             )
             raise
         finally:
+            if frame_reader is not None:
+                frame_reader.close()
+            if encoder_writer is not None:
+                encoder_writer.abort()
+            _close_process_streams(decoder)
+            _close_process_streams(encoder)
             decoder_err.close()
             encoder_err.close()
 
@@ -339,7 +357,7 @@ def _encoder_command(
 
 
 def _process_batch(
-    model: dict[str, Any], batch: list[np.ndarray], encoder, encoder_err,
+    model: dict[str, Any], batch: list[np.ndarray], encoder, encoder_writer, encoder_err,
     *, ffmpeg_path: str, output: Path, encode_args: list[str], hdr_args: list[str],
     fps_num: int, fps_den: int,
 ):
@@ -357,12 +375,142 @@ def _process_batch(
         )
     if encoder.stdin is None:
         raise RuntimeError("FFmpeg HDR encoder stdin is unavailable")
+    if encoder_writer is None:
+        encoder_writer = _ProcessStdinWriter(encoder, timeout_s=_PROCESS_INACTIVITY_TIMEOUT_S)
     for frame in converted.numpy():
         rgb16 = np.round(np.clip(frame, 0.0, 1.0) * 65535.0).astype("<u2", copy=False)
-        encoder.stdin.write(rgb16.tobytes(order="C"))
+        encoder_writer.write(rgb16.tobytes(order="C"))
     if encoder.poll() not in (None, 0):
         raise RuntimeError("FFmpeg HDR encoder terminated early: " + _stderr_text(encoder_err))
-    return encoder, len(batch)
+    return encoder, encoder_writer, len(batch)
+
+
+class _PPMFrameReader:
+    def __init__(self, process, *, timeout_s: float) -> None:
+        self.process = process
+        self.timeout_s = max(1.0, float(timeout_s))
+        self._queue: queue.Queue[tuple[str, object]] = queue.Queue(maxsize=2)
+        self._stop = threading.Event()
+        self._last_activity = time.monotonic()
+        self._thread = threading.Thread(target=self._run, name="DragonHDRTVDM-PPMReader", daemon=True)
+        self._thread.start()
+
+    def _put(self, item: tuple[str, object]) -> None:
+        while not self._stop.is_set():
+            try:
+                self._queue.put(item, timeout=0.25)
+                return
+            except queue.Full:
+                continue
+
+    def _run(self) -> None:
+        stream = self.process.stdout
+        try:
+            if stream is None:
+                raise RuntimeError("FFmpeg decoder stdout is unavailable")
+            while not self._stop.is_set():
+                frame = _read_ppm_frame(stream)
+                if frame is None:
+                    self._put(("eof", None))
+                    return
+                self._put(("frame", frame))
+        except BaseException as exc:
+            self._put(("error", exc))
+        finally:
+            _close_stream(stream)
+
+    def read(self) -> np.ndarray | None:
+        while True:
+            _check_interrupt()
+            try:
+                kind, value = self._queue.get(timeout=0.25)
+            except queue.Empty:
+                if time.monotonic() - self._last_activity >= self.timeout_s:
+                    _terminate(self.process)
+                    raise TimeoutError(f"FFmpeg decoder produced no frame for {self.timeout_s:.0f}s")
+                continue
+            self._last_activity = time.monotonic()
+            if kind == "frame":
+                return value  # type: ignore[return-value]
+            if kind == "eof":
+                return None
+            if kind == "error":
+                raise value  # type: ignore[misc]
+            raise RuntimeError(f"Unknown frame-reader event: {kind}")
+
+    def close(self) -> None:
+        self._stop.set()
+        if self._thread.is_alive():
+            _close_stream(getattr(self.process, "stdout", None))
+            self._thread.join(timeout=2.0)
+
+
+class _ProcessStdinWriter:
+    def __init__(self, process, *, timeout_s: float) -> None:
+        if process.stdin is None:
+            raise RuntimeError("Process stdin is unavailable")
+        self.process = process
+        self.stream = process.stdin
+        self.timeout_s = max(1.0, float(timeout_s))
+        self._queue: queue.Queue[tuple[bytes | None, threading.Event, list[BaseException]]] = queue.Queue(maxsize=2)
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._run, name="DragonHDRTVDM-EncoderWriter", daemon=True)
+        self._thread.start()
+
+    def _run(self) -> None:
+        while not self._stop.is_set():
+            try:
+                data, done, errors = self._queue.get(timeout=0.25)
+            except queue.Empty:
+                continue
+            try:
+                if data is None:
+                    return
+                self.stream.write(data)
+            except BaseException as exc:
+                errors.append(exc)
+            finally:
+                done.set()
+
+    def write(self, data: bytes) -> None:
+        done = threading.Event()
+        errors: list[BaseException] = []
+        started = time.monotonic()
+        while True:
+            _check_interrupt()
+            try:
+                self._queue.put((data, done, errors), timeout=0.25)
+                break
+            except queue.Full:
+                if time.monotonic() - started >= self.timeout_s:
+                    _terminate(self.process)
+                    raise TimeoutError(f"FFmpeg encoder stdin blocked for {self.timeout_s:.0f}s")
+        while not done.wait(0.25):
+            _check_interrupt()
+            if self.process.poll() is not None:
+                raise RuntimeError("FFmpeg HDR encoder terminated while writing a frame")
+            if time.monotonic() - started >= self.timeout_s:
+                _terminate(self.process)
+                raise TimeoutError(f"FFmpeg encoder stdin blocked for {self.timeout_s:.0f}s")
+        if errors:
+            raise errors[0]
+
+    def close(self) -> None:
+        if self._stop.is_set():
+            return
+        done = threading.Event()
+        errors: list[BaseException] = []
+        self._queue.put((None, done, errors))
+        done.wait(timeout=2.0)
+        self._stop.set()
+        _close_stream(self.stream)
+        self._thread.join(timeout=2.0)
+
+    def abort(self) -> None:
+        self._stop.set()
+        _close_stream(self.stream)
+        if self._thread.is_alive():
+            self._thread.join(timeout=2.0)
 
 
 def _read_ppm_frame(stream: BinaryIO) -> np.ndarray | None:
@@ -431,17 +579,47 @@ def _stderr_text(file_obj) -> str:
         return ""
 
 
-def _terminate(process) -> None:
-    if process is None or process.poll() is not None:
+def _close_stream(stream) -> None:
+    if stream is None:
         return
     try:
-        process.terminate()
-        process.wait(timeout=3)
-    except Exception:
+        stream.close()
+    except (OSError, ValueError):
+        pass
+
+
+def _close_process_streams(process) -> None:
+    if process is None:
+        return
+    for name in ("stdin", "stdout", "stderr"):
+        _close_stream(getattr(process, name, None))
+
+
+def _wait_process(process, label: str, *, timeout_s: float) -> int:
+    try:
+        return int(process.wait(timeout=max(1.0, float(timeout_s))))
+    except subprocess.TimeoutExpired as exc:
+        _terminate(process)
+        raise TimeoutError(f"{label} did not exit within {timeout_s:.0f}s") from exc
+
+
+def _terminate(process) -> None:
+    if process is None:
+        return
+    if process.poll() is None:
         try:
-            process.kill()
+            process.terminate()
+            process.wait(timeout=3)
         except Exception:
-            pass
+            try:
+                process.kill()
+            except Exception:
+                pass
+            try:
+                process.wait(timeout=3)
+            except Exception:
+                pass
+    _close_process_streams(process)
 
 
 def _no_window_kwargs() -> dict[str, Any]:

@@ -204,6 +204,34 @@ class _SubtitleTab(QWidget):
         ))
         row_ass.addStretch()
         sidecar_l.addLayout(row_ass)
+
+        self.pgs_to_srt = QCheckBox("PGS/SUP zusätzlich per OCR zu SRT konvertieren")
+        self.pgs_to_srt.setChecked(bool(self._data.get("pgs_to_srt_enabled", False)))
+        row_pgs_ocr = QHBoxLayout(); row_pgs_ocr.addWidget(self.pgs_to_srt)
+        row_pgs_ocr.addWidget(InfoButton(
+            "Versucht ausgewählte PGS/SUP-Untertitel zusätzlich per FFmpeg + Tesseract als SRT zu erzeugen.\n\n"
+            "Die OCR ist Best-Effort: Fehler beim Lesen beschädigter PGS-Pakete, beim Rendern oder in "
+            "Tesseract erzeugen nur eine Warnung. Die Videodatei wird deswegen nicht abgebrochen. "
+            "Die originale PGS-Spur bleibt unabhängig davon erhalten."
+        ))
+        row_pgs_ocr.addStretch(); sidecar_l.addLayout(row_pgs_ocr)
+
+        pgs_storage_row = QHBoxLayout()
+        pgs_storage_row.addWidget(QLabel("Original-PGS zur Sicherheit:"))
+        self.pgs_original_storage = QComboBox()
+        self.pgs_original_storage.addItem("Im MKV behalten (MP4: Sidecar)", "internal_mkv")
+        self.pgs_original_storage.addItem("Immer als Sidecar (.sup) ausgeben", "sidecar")
+        pgs_value = str(self._data.get("pgs_original_storage", "internal_mkv") or "internal_mkv")
+        pgs_idx = self.pgs_original_storage.findData(pgs_value)
+        self.pgs_original_storage.setCurrentIndex(pgs_idx if pgs_idx >= 0 else 0)
+        pgs_storage_row.addWidget(self.pgs_original_storage)
+        pgs_storage_row.addWidget(InfoButton(
+            "Steuert nur die unveränderte Original-PGS-Spur. Bei 'Im MKV behalten' bleibt sie bei MKV intern; "
+            "bei MP4 wird sie technisch bedingt als .sup-Sidecar gespeichert. 'Immer als Sidecar' exportiert "
+            "sie auch neben einer MKV-Datei. Diese Einstellung ist unabhängig von PGS→SRT."
+        ))
+        pgs_storage_row.addStretch(); sidecar_l.addLayout(pgs_storage_row)
+
         v.addWidget(sidecar_grp)
         scroll.setWidget(inner)
         outer.addWidget(scroll)
@@ -248,6 +276,8 @@ class _SubtitleTab(QWidget):
             "mp4_sidecars_enabled": self.mp4_sidecars.isChecked(),
             "additional_sidecars_enabled": self.additional_sidecars.isChecked(),
             "text_to_srt_sidecar_enabled": self.text_to_srt_sidecar.isChecked(),
+            "pgs_to_srt_enabled": self.pgs_to_srt.isChecked(),
+            "pgs_original_storage": self.pgs_original_storage.currentData() or "internal_mkv",
         }
 
 

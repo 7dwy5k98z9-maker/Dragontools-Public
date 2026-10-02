@@ -21,6 +21,7 @@ from ..core.path_syntax import path_compare_key
 from .movie_renamer_candidate_combo import WideCandidateComboBox
 from .movie_renamer_table_search import MovieRenamerTableSearchMixin
 from .movie_renamer_series_override_state import MovieRenamerSeriesOverrideStateMixin
+from .movie_renamer_year_edit import MovieRenamerYearStateMixin
 
 
 class RenamerColumns:
@@ -38,7 +39,7 @@ class RenamerColumns:
     HINTS = 11
 
 
-class MovieRenamerTableController(MovieRenamerSeriesOverrideStateMixin, MovieRenamerTableSearchMixin):
+class MovieRenamerTableController(MovieRenamerYearStateMixin, MovieRenamerSeriesOverrideStateMixin, MovieRenamerTableSearchMixin):
     def __init__(self, table) -> None:
         self.table = table
         self.columns = RenamerColumns
@@ -170,7 +171,8 @@ class MovieRenamerTableController(MovieRenamerSeriesOverrideStateMixin, MovieRen
     @staticmethod
     def proposal_query_text(proposal: RenameProposal) -> str:
         if isinstance(proposal, SeriesRenameProposal):
-            return f"S{proposal.parsed.season:02d}E{proposal.parsed.episode:02d}"
+            episodes = tuple(getattr(proposal.parsed, "episodes", ()) or (proposal.parsed.episode,))
+            return f"S{proposal.parsed.season:02d}" + "".join(f"E{number:02d}" for number in episodes)
         return proposal.parsed.query_title
 
     @staticmethod

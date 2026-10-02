@@ -25,6 +25,7 @@ from .duration_timing_analyzer import MediaTimingAnalyzer
 from .duration_timestamp_service import TimestampRepairService
 from .tool_runner import ToolRunResult, run_tool
 from .workflow_engine import WorkflowVerifyResult
+from .timestamp_diagnostics import log_timestamp_diagnostics
 
 
 class DurationRepairService:
@@ -110,6 +111,12 @@ class DurationRepairService:
     ) -> DurationRepairOutcome:
         if not self.can_repair(output_path=output_path, container=container, verify_result=initial_result):
             return DurationRepairOutcome(verify_result=initial_result)
+        log_timestamp_diagnostics(
+            source_path=source_path, output_path=output_path,
+            expected_s=expected_duration_ms / 1000.0 if expected_duration_ms else None,
+            actual_s=initial_result.duration_s, container=container,
+            ffprobe_path=self._runtime.ffprobe_path, log=self._runtime.log,
+        )
         return self._orchestrator.repair(
             output_path=str(output_path),
             base_dir=base_dir,

@@ -206,3 +206,27 @@ def test_patch_j_ui_and_tool_configuration_are_exposed() -> None:
     assert 'categories.add("ocr")' in controller
     assert "BitmapSubtitleOcrReviewDialog" in controller
     assert "def tesseract" in tools
+
+
+def test_pgs_render_uses_preroll_instead_of_hard_midpoint_seek(monkeypatch, tmp_path: Path) -> None:
+    issue = _issue(tmp_path)
+    service = BitmapSubtitleOcrService(settings=_Settings(), tools=_Tools())
+    target = tmp_path / "cue.png"
+    calls = []
+
+    def fake_run(cmd, **_kwargs):
+        calls.append(list(cmd))
+        target.write_bytes(b"x" * 200)
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr("dragontools.worker.bitmap_subtitle_ocr_service.run_analysis_tool", fake_run)
+    assert service._render_subtitle_image(issue, BitmapSubtitlePacket(10.0, 14.0), target, "ffmpeg") is True
+    cmd = calls[0]
+    ss_positions = [idx for idx, value in enumerate(cmd) if value == "-ss"]
+    assert len(ss_positions) == 2
+    input_seek = float(cmd[ss_positions[0] + 1])
+    local_seek = float(cmd[ss_positions[1] + 1])
+    assert input_seek < 10.0
+    assert 0.0 < local_seek <= 3.0
+    assert "+discardcorrupt" in cmd
+    assert "ignore_err" in cmd

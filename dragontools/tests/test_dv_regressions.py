@@ -489,8 +489,8 @@ def _make_dv_stage_test_context(tmp_path, *, profile=8, has_hdrplus=True, transf
     rpu_inputs = []
 
     class RpuService:
-        def extract_rpu(self, _run, *, input_hevc, output_rpu):
-            rpu_inputs.append(input_hevc)
+        def extract_rpu(self, _run, *, output_rpu, input_hevc=None, input_path=None, mode=None, **_kwargs):
+            rpu_inputs.append((input_path if input_path is not None else input_hevc, str(mode) if mode is not None else None))
             output_rpu.write_bytes(b"rpu")
             return True
 
@@ -514,94 +514,98 @@ def _make_dv_stage_test_context(tmp_path, *, profile=8, has_hdrplus=True, transf
     return stages, DVPipelineState(request=request, files=files), temp_state, logs, rpu_inputs
 
 
-def test_dv_p8_hdr10_basis_laeuft_wie_altstand_durch_mode2(tmp_path):
+def test_dv_p8_profilnormalisierung_erzeugt_keinen_p8_arbeitsstream_mehr(tmp_path):
     stages, state, temp_state, logs, _ = _make_dv_stage_test_context(tmp_path)
-    calls = []
 
     class Runner:
-        def run(self, cmd, **kwargs):
-            calls.append((list(cmd), kwargs))
-            state.files.p8_hevc.write_bytes(b"converted-p8")
-            return 0
+        def run(self, *_args, **_kwargs):
+            raise AssertionError("STEP 2 darf keinen dovi_tool-convert-Aufruf mehr starten")
 
     assert stages._convert_profile_to_81(state, Runner()) is True
-    assert state.profile_hevc == state.files.p8_hevc
-    assert calls == [
-        (
-            [
-                "dovi_tool", "-m", "2", "convert",
-                "--discard", str(state.files.src_hevc),
-                "-o", str(state.files.p8_hevc),
-            ],
-            {
-                "timeout": calls[0][1]["timeout"],
-                "label": "STEP 2/7 DV-Profilkonvertierung",
-            },
-        )
-    ]
+    assert state.profile_hevc is None
+    assert not state.files.p8_hevc.exists()
     assert temp_state.failure_reason == ""
-    assert any("dovi_tool -m 2" in msg for _, msg in logs)
+    assert any("dovi_tool -m 2" in msg and "kein p8.hevc" in msg for _, msg in logs)
 
 
-def test_dv_p8_pq_bt2020_ohne_hdr10plus_flag_wird_trotzdem_mode2_normalisiert(tmp_path):
-    stages, state, _temp_state, _logs, _ = _make_dv_stage_test_context(
+def test_dv_p8_ohne_hdr10plus_normalisiert_rpu_direkt_aus_mkv(tmp_path):
+    stages, state, _temp_state, _logs, rpu_inputs = _make_dv_stage_test_context(
         tmp_path,
         profile=8,
         has_hdrplus=False,
         transfer="PQ",
         primaries="BT.2020",
     )
-    calls = []
-
-    class Runner:
-        def run(self, cmd, **kwargs):
-            calls.append(list(cmd))
-            state.files.p8_hevc.write_bytes(b"converted-p8")
-            return 0
-
-    assert stages._convert_profile_to_81(state, Runner()) is True
-    assert calls[0][1:4] == ["-m", "2", "convert"]
-    assert state.profile_hevc == state.files.p8_hevc
-
-
-def test_dv_p8_rpu_extraktion_verwendet_mode2_output(tmp_path):
-    stages, state, _temp_state, _logs, rpu_inputs = _make_dv_stage_test_context(tmp_path)
-    state.files.p8_hevc.write_bytes(b"converted-p8")
-    state.profile_hevc = state.files.p8_hevc
 
     class Runner:
         def adapter(self, **_kwargs):
             return lambda *_args, **_kw: 0
 
+    assert stages._convert_profile_to_81(state, Runner()) is True
     assert stages._extract_rpu(state, Runner()) is True
-    assert rpu_inputs == [state.files.p8_hevc]
+    assert rpu_inputs == [("in.mkv", "2")]
+    assert state.profile_hevc is None
 
-def test_dv_unknown_metadata_fallback_nicht_fuer_p7_oder_hlg_p8(tmp_path):
-    for profile, has_hdrplus, transfer, primaries in (
-        (7, True, "PQ", "BT.2020"),
-        (8, False, "HLG", "BT.2020"),
-    ):
-        stages, state, temp_state, _logs, _ = _make_dv_stage_test_context(
-            tmp_path / f"case_{profile}_{transfer}",
-            profile=profile,
-            has_hdrplus=has_hdrplus,
-            transfer=transfer,
-            primaries=primaries,
+
+def test_dv_p5_rpu_wird_direkt_aus_mkv_mit_mode3_auf_p81_normalisiert(tmp_path):
+    stages, state, _temp_state, logs, rpu_inputs = _make_dv_stage_test_context(
+        tmp_path,
+        profile=5,
+        has_hdrplus=False,
+        transfer="PQ",
+        primaries="BT.2020",
+    )
+
+    class Runner:
+        def adapter(self, **_kwargs):
+            return lambda *_args, **_kw: 0
+
+    assert stages._convert_profile_to_81(state, Runner()) is True
+    assert stages._extract_rpu(state, Runner()) is True
+    assert rpu_inputs == [("in.mkv", "3")]
+    assert state.profile_hevc is None
+    assert any("dovi_tool -m 3" in msg for _, msg in logs)
+
+
+def test_dv_p7_und_p8_rpu_extraktion_nutzt_mkv_und_mode2(tmp_path):
+    for profile in (7, 8):
+        stages, state, _temp_state, _logs, rpu_inputs = _make_dv_stage_test_context(
+            tmp_path / f"p{profile}", profile=profile, has_hdrplus=False
         )
 
         class Runner:
-            def run(self, *_args, **_kwargs):
-                temp_state.record_failure(
-                    reason="convert failed",
-                    stage="STEP 2/7 DV-Profilkonvertierung",
-                    tool="dovi_tool.exe",
-                    command="dovi_tool -m 2 convert",
-                    output="Error: CM v4.0 - Unknown metadata block found: Level 253, length 2",
-                )
-                return 1
+            def adapter(self, **_kwargs):
+                return lambda *_args, **_kw: 0
 
-        assert stages._convert_profile_to_81(state, Runner()) is False
-        assert state.profile_hevc is None
+        assert stages._extract_rpu(state, Runner()) is True
+        assert rpu_inputs == [("in.mkv", "2")]
+
+
+def test_dv_unbekannter_cmv4_block_wird_jetzt_beim_extract_rpu_gemeldet(tmp_path):
+    stages, state, temp_state, _logs, _ = _make_dv_stage_test_context(
+        tmp_path, profile=8, has_hdrplus=False
+    )
+
+    class FailingRpuService:
+        def extract_rpu(self, _run, **_kwargs):
+            temp_state.record_failure(
+                reason="extract failed",
+                stage="STEP 3/7 RPU-Extraktion",
+                tool="dovi_tool.exe",
+                command='dovi_tool -m 2 extract-rpu -i "in.mkv"',
+                output="Error: CM v4.0 - Unknown metadata block found: Level 253, length 2",
+            )
+            return False
+
+    stages._rpu_service = FailingRpuService()
+
+    class Runner:
+        def adapter(self, **_kwargs):
+            return lambda *_args, **_kw: 1
+
+    assert stages._convert_profile_to_81(state, Runner()) is True
+    assert stages._extract_rpu(state, Runner()) is False
+    assert state.profile_hevc is None
 
 
 def test_dv_command_runner_kennzeichnet_unbekannten_cmv4_block_als_toolinkompatibilitaet(monkeypatch):

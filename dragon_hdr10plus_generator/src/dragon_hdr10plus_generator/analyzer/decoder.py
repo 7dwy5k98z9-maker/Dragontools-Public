@@ -18,8 +18,12 @@ class VideoProbe:
     height: int | None = None
     fps: float | None = None
     codec: str = ""
+    profile: str = ""
     color_space: str = ""
     color_range: str = ""
+    duration_s: float | None = None
+    frame_count_source: str = "unknown"
+    frame_count_reliability: str = "unknown"
 
 
 def _int_or_none(value: object) -> int | None:
@@ -39,25 +43,46 @@ def _float_rate(value: object) -> float | None:
         return None
 
 
-def probe_video(path: str | Path, *, ffprobe: str = "ffprobe") -> VideoProbe:
+class ProbeToolNotFoundError(FileNotFoundError):
+    """ffprobe executable is missing while the media input itself exists."""
+
+
+class ProbeTimeoutError(RuntimeError):
+    """ffprobe did not complete within the configured deadline."""
+
+
+def probe_video(
+    path: str | Path,
+    *,
+    ffprobe: str = "ffprobe",
+    timeout_s: int | float | None = 30,
+) -> VideoProbe:
     source = Path(path)
     if not source.is_file():
         raise FileNotFoundError(source)
     cmd = [
         ffprobe, "-v", "error", "-select_streams", "v:0",
-        "-count_frames", "-show_entries",
-        "stream=codec_name,width,height,color_transfer,color_primaries,color_space,color_range,pix_fmt,bits_per_raw_sample,nb_read_frames,nb_frames,avg_frame_rate,r_frame_rate",
+        "-show_entries",
+        "stream=codec_name,profile,width,height,color_transfer,color_primaries,color_space,color_range,pix_fmt,bits_per_raw_sample,nb_frames,avg_frame_rate,r_frame_rate:format=duration",
         "-of", "json", str(source),
     ]
-    completed = subprocess.run(
-        cmd,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        stdin=subprocess.DEVNULL,
-        check=False,
-    )
+    try:
+        completed = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            stdin=subprocess.DEVNULL,
+            check=False,
+            timeout=None if timeout_s is None else max(0.1, float(timeout_s)),
+        )
+    except FileNotFoundError as exc:
+        raise ProbeToolNotFoundError(ffprobe) from exc
+    except subprocess.TimeoutExpired as exc:
+        raise ProbeTimeoutError(
+            f"ffprobe timeout after {timeout_s}s for {source}"
+        ) from exc
     if completed.returncode != 0:
         raise RuntimeError(completed.stderr.strip() or f"ffprobe rc={completed.returncode}")
     payload = json.loads(completed.stdout or "{}")
@@ -66,8 +91,21 @@ def probe_video(path: str | Path, *, ffprobe: str = "ffprobe") -> VideoProbe:
         raise RuntimeError("NO_VIDEO_STREAM")
     stream = streams[0]
     raw_depth = _int_or_none(stream.get("bits_per_raw_sample"))
-    frames = _int_or_none(stream.get("nb_read_frames")) or _int_or_none(stream.get("nb_frames"))
     fps = _float_rate(stream.get("avg_frame_rate")) or _float_rate(stream.get("r_frame_rate"))
+    duration_s = None
+    try:
+        raw_duration = (payload.get("format") or {}).get("duration")
+        if raw_duration not in (None, "", "N/A"):
+            duration_s = float(raw_duration)
+    except (TypeError, ValueError):
+        duration_s = None
+    frames = _int_or_none(stream.get("nb_frames"))
+    frame_count_source = "stream_nb_frames" if frames is not None and frames > 0 else "unknown"
+    frame_count_reliability = "reported" if frames is not None and frames > 0 else "unknown"
+    if frames is None and duration_s is not None and duration_s > 0 and fps is not None and fps > 0:
+        frames = max(1, int(round(duration_s * fps)))
+        frame_count_source = "duration_x_fps"
+        frame_count_reliability = "estimated"
     return VideoProbe(
         transfer=str(stream.get("color_transfer") or ""),
         primaries=str(stream.get("color_primaries") or ""),
@@ -78,9 +116,13 @@ def probe_video(path: str | Path, *, ffprobe: str = "ffprobe") -> VideoProbe:
         height=_int_or_none(stream.get("height")),
         fps=fps,
         codec=str(stream.get("codec_name") or ""),
+        profile=str(stream.get("profile") or ""),
         color_space=str(stream.get("color_space") or ""),
         color_range=str(stream.get("color_range") or ""),
+        duration_s=duration_s,
+        frame_count_source=frame_count_source,
+        frame_count_reliability=frame_count_reliability,
     )
 
 
-__all__ = ["VideoProbe", "probe_video"]
+__all__ = ["ProbeTimeoutError", "ProbeToolNotFoundError", "VideoProbe", "probe_video"]

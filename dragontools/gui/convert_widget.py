@@ -217,6 +217,7 @@ class ConvertWidget(ConvertWidgetWatchMixin, ConvertWidgetQueueActionsMixin, QWi
 
     # Conversion/move delegates -----------------------------------------------
     def _start(self):
+        self._state.watch_intake_blocked = False
         self._controller.start_convert()
 
     def _start_dv_remux(self):

@@ -7,6 +7,7 @@ from pathlib import Path
 
 from ..core.codec_utils import normalize_target_codec
 from ..core.path_syntax import user_path_name
+from ..core.output_timestamps import build_output_timestamp_args
 
 from .encoder_args import _vid_args
 from .comfyui_video_worker import ComfyUIHDRVideoService
@@ -116,6 +117,7 @@ class StandardPipelineRunner:
         preset = request.preset or self._preset
         encoder_options = dict(request.encoder_options or self._encoder_options)
         output_args = ["-map_metadata", "0"] + _clear_reencoded_video_stat_tags()
+        output_args += build_output_timestamp_args(request.container)
         enhancement_hdr = bool(encoder_options.get("_sdr_hdr_applied", False))
         hdr10_args = hdr10_output_args(request.media_info, codec, force_hdr=enhancement_hdr)
         if hdr10_args:

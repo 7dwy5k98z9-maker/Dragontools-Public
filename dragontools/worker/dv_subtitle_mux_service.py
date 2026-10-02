@@ -10,6 +10,7 @@ from ..rules.subtitle_rules import (
     build_mp4_subtitle_storage_plan,
     compute_subtitle_plan,
     mp4_sidecars_enabled,
+    pgs_original_storage,
 )
 
 
@@ -44,6 +45,7 @@ class DVMuxSubtitleTrack:
     language: str
     title: str
     forced: bool
+    source_direct: bool = False
 
 
 class DVSubtitleMuxService:
@@ -91,6 +93,12 @@ class DVSubtitleMuxService:
                 "Spur wird intern im MKV erhalten.",
                 "info",
             )
+
+        if pgs_original_storage(self._subtitle_rules) == "sidecar":
+            selected = [
+                stream for stream in selected
+                if str(getattr(stream, "codec", "") or "").lower() not in {"hdmv_pgs_subtitle", "pgs"}
+            ]
 
         jobs: list[DVSubtitleJob] = []
         seen: set[int] = set()
@@ -244,22 +252,27 @@ class DVSubtitleMuxService:
         )
         tracks: list[DVMuxSubtitleTrack] = []
         for idx, job in enumerate(jobs):
+            if job.codec in {"hdmv_pgs_subtitle", "pgs"}:
+                # Preserve PGS bit-for-bit from the source. Do not route it through
+                # FFmpeg's raw SUP muxer: malformed-but-muxable packets can make
+                # that intermediate extraction fail ("Not enough data"), even
+                # though mkvmerge can keep the original track in the final MKV.
+                tracks.append(
+                    DVMuxSubtitleTrack(
+                        path=Path(input_path), stream_index=job.stream_index, codec=job.codec,
+                        language=job.language, title=job.title, forced=job.forced, source_direct=True,
+                    )
+                )
+                self._log(
+                    f"  💬 PGS Sub #{job.stream_index}: Originalspur wird direkt aus der Quelle in MKV übernommen.",
+                    "info",
+                )
+                continue
             output = tmp_dir / f"subtitle_{idx}{job.ext}"
             cmd = [
-                self._ffmpeg_path,
-                "-y",
-                "-nostdin",
-                "-loglevel",
-                "error",
-                "-i",
-                input_path,
-                "-map",
-                f"0:{job.stream_index}",
-                *job.codec_args,
-                "-vn",
-                "-an",
-                "-dn",
-                str(output),
+                self._ffmpeg_path, "-y", "-nostdin", "-loglevel", "error",
+                "-i", input_path, "-map", f"0:{job.stream_index}", *job.codec_args,
+                "-vn", "-an", "-dn", str(output),
             ]
             rc = run_fn(cmd)
             if rc != 0 or not output.exists() or output.stat().st_size <= 0:
@@ -270,12 +283,8 @@ class DVSubtitleMuxService:
                 return False, tracks
             tracks.append(
                 DVMuxSubtitleTrack(
-                    path=output,
-                    stream_index=job.stream_index,
-                    codec=job.codec,
-                    language=job.language,
-                    title=job.title,
-                    forced=job.forced,
+                    path=output, stream_index=job.stream_index, codec=job.codec,
+                    language=job.language, title=job.title, forced=job.forced,
                 )
             )
         return True, tracks

@@ -288,14 +288,53 @@ def build_target_filename(title: str, year: int | None, suffix: str) -> str:
 
 
 def build_series_target_filename(series: str, season: int, episode: int, episode_title: str, suffix: str) -> str:
-    # Ein offizieller Serientitel darf auf einen Punkt enden (z. B. "Magilumiere Inc.").
-    # Der Punkt liegt im fertigen Dateinamen vor " - SxxExx" und ist damit unter Windows
-    # kein verbotener abschließender Punkt des Dateinamens.
+    return build_series_multi_target_filename(
+        series, season, (episode,), (episode_title,), suffix, title_mode="all"
+    )
+
+
+def build_series_multi_target_filename(
+    series: str,
+    season: int,
+    episodes,
+    episode_titles,
+    suffix: str,
+    *,
+    title_mode: str = "all",
+) -> str:
+    """Build ``S01E01E02...`` names for one-to-four episode mappings.
+
+    The helper is deliberately usable outside the metadata browser so explicit
+    mappings and normal candidate application share one filename contract.
+    """
+    numbers = tuple(int(value) for value in episodes)
+    if not numbers:
+        raise ValueError("Mindestens eine Episode ist erforderlich.")
+    if any(value <= 0 for value in numbers):
+        raise ValueError("Episodennummern müssen größer als 0 sein.")
+    if len(numbers) > 4:
+        raise ValueError("Mehr als vier Episoden pro Datei werden nicht unterstützt.")
+    if numbers != tuple(range(numbers[0], numbers[0] + len(numbers))):
+        raise ValueError("Mehrfachfolgen müssen aufeinanderfolgende Episoden verwenden.")
+
     safe_series = sanitize_filename_part(series, fallback="Serie", preserve_trailing_period=True)
-    ep = f"S{int(season):02d}E{int(episode):02d}"
-    normalized_title, _is_fallback = normalize_episode_metadata_title(episode_title, episode)
-    title = sanitize_filename_part(normalized_title, fallback=default_episode_title(episode))
-    base = f"{safe_series} - {ep}"
+    ep_code = f"S{int(season):02d}" + "".join(f"E{value:02d}" for value in numbers)
+    raw_titles = list(episode_titles or ())
+    normalized: list[str] = []
+    for idx, episode in enumerate(numbers):
+        raw = raw_titles[idx] if idx < len(raw_titles) else ""
+        title, _fallback = normalize_episode_metadata_title(raw, episode)
+        normalized.append(sanitize_filename_part(title, fallback=default_episode_title(episode)))
+
+    mode = str(title_mode or "all").strip().lower()
+    if mode == "none":
+        title = ""
+    elif mode == "first":
+        title = normalized[0] if normalized else ""
+    else:
+        title = " + ".join(value for value in normalized if value)
+
+    base = f"{safe_series} - {ep_code}"
     if title:
         base += f" - {title}"
     clean_suffix = suffix if suffix.startswith(".") else f".{suffix}" if suffix else ""

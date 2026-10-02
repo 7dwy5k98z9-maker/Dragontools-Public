@@ -576,7 +576,7 @@ def test_unusable_library_series_hit_still_runs_online_year_lookup(monkeypatch):
             "source": "database",
             "unusable_reason": (
                 r"Mediathek-Treffer ist aktuell nicht erreichbar (Bereich Filme): "
-                r"\\MediaServer\video\Filme\Robin Hood | Grund: liegt nicht unter den aktuell eingestellten Speicherpfaden"
+                r"\\<SERVER>\video\Filme\Robin Hood | Grund: liegt nicht unter den aktuell eingestellten Speicherpfaden"
             ),
             "suggested_series_name": "Robin Hood",
         },

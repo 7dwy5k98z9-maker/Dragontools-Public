@@ -27,6 +27,7 @@ class MovieRenamerSeriesOverrideStateMixin:
         meta["season_override"] = season_value
         meta["season_missing"] = False
         self.row_item(row, self.columns.ACCEPT).setData(Qt.ItemDataRole.UserRole, meta)
+        self.invalidate_row_proposal(row)
 
         parsed = parse_series_release_name(self.row_path(row))
         if parsed is not None:
@@ -61,6 +62,7 @@ class MovieRenamerSeriesOverrideStateMixin:
         meta = self.row_meta(row)
         meta["episode_override"] = episode_value
         self.row_item(row, self.columns.ACCEPT).setData(Qt.ItemDataRole.UserRole, meta)
+        self.invalidate_row_proposal(row)
 
         parsed = parse_series_release_name(self.row_path(row))
         if parsed is not None:

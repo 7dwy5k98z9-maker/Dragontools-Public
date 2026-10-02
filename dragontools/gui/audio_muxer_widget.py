@@ -2,7 +2,7 @@
 """
 Created on Thu Apr 16 01:49:23 2026
 
-@author: Dragon Developer
+@author: DragonTools Team
 """
 
 from __future__ import annotations

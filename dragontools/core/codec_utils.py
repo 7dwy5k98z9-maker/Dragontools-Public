@@ -46,6 +46,20 @@ def normalize_target_codec(value: object, *, strict: bool = True) -> str:
     return normalized
 
 
+
+def encoder_10bit_filter_pixel_format(encoder: str | dict | None) -> str:
+    """Return the 10-bit pixel format that should flow through FFmpeg filters.
+
+    Software encoders consume planar 10-bit directly. Hardware encoders keep
+    P010 so the filter graph can hand frames to NVENC/QSV/AMF without an
+    avoidable planar<->semiplanar round-trip.
+    """
+    if isinstance(encoder, dict):
+        encoder_key = str(encoder.get("encoder", "cpu") or "cpu").strip().lower()
+    else:
+        encoder_key = str(encoder or "cpu").strip().lower()
+    return "yuv420p10le" if encoder_key in {"cpu", "libx265", "libsvtav1"} else "p010le"
+
 def value_or_default(value, default):
     """Use a default only for ``None``; valid false-y values such as 0 stay intact."""
     return default if value is None else value

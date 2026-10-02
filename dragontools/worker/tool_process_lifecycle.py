@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 import subprocess
 import time
+import threading
 from dataclasses import dataclass
 from typing import Callable, Literal
 
@@ -131,11 +132,16 @@ def close_process_streams(proc) -> None:
         stream = getattr(proc, name, None)
         if stream is None:
             continue
-        try:
-            if not stream.closed:
-                stream.close()
-        except (OSError, ValueError):
-            pass
+        def close_owned_stream(owned=stream):
+            try:
+                owned.close()
+            except (OSError, ValueError):
+                pass
+        # TextIO.close can wait on a reader's lock while a surviving process
+        # holds its pipe open. Keep ownership, but never block the caller forever.
+        closer = threading.Thread(target=close_owned_stream, daemon=True)
+        closer.start()
+        closer.join(timeout=0.1)
 
 
 @dataclass
@@ -251,6 +257,11 @@ class ProcessLifecycle:
         return 124
 
     def finish(self, returncode: int | None) -> None:
+        if self.proc is not None and self.proc.poll() is None:
+            dispatch_log(self.log, f"{self.label}: Abschluss ohne bestätigtes Prozessende; Prozess bleibt registriert.", "error")
+            mark_activity(f"{self.label}: Prozessende unbestätigt", file_path=self.file_path,
+                          command=self.command, extra={"returncode": returncode, "pid": self.proc.pid})
+            return
         if self.proc is not None:
             clear_current_process(self.worker, self.lock, self.proc)
         mark_activity(

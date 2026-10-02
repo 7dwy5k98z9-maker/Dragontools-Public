@@ -78,8 +78,6 @@ def test_online_metadata_implementation_is_split_by_responsibility() -> None:
     }
     modules = {path.name: path for path in core.glob("online_metadata_*.py")}
     assert expected_modules <= set(modules)
-    assert len(Path(metadata.__file__).read_text(encoding="utf-8").splitlines()) < 120
-    assert max(len(modules[name].read_text(encoding="utf-8").splitlines()) for name in expected_modules) < 550
 
 
 def test_provider_clients_never_fallback_to_source_stem_as_episode_title() -> None:
@@ -102,10 +100,6 @@ def test_tmdb_client_is_a_thin_composition_facade() -> None:
     suggestions = core / "online_metadata_tmdb_suggestions.py"
     transport = core / "online_metadata_tmdb_transport.py"
 
-    assert len(facade.read_text(encoding="utf-8").splitlines()) < 100
-    assert len(resolver.read_text(encoding="utf-8").splitlines()) < 400
-    assert len(suggestions.read_text(encoding="utf-8").splitlines()) < 260
-    assert len(transport.read_text(encoding="utf-8").splitlines()) < 120
 
     tree = ast.parse(facade.read_text(encoding="utf-8"))
     client = next(

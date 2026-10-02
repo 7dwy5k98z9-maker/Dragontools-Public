@@ -1174,7 +1174,7 @@ def test_series_root_unusable_match_keeps_database_area_when_default_base_differ
     current_tv = tmp_path / "current" / "TV"
     current_anime.mkdir(parents=True)
     current_tv.mkdir(parents=True)
-    db_series_root = r"\\MediaServer\video\Serien\TV\Watson (2025)"
+    db_series_root = r"\\<SERVER>\video\Serien\TV\Watson (2025)"
 
     with _db_connection(db_path) as conn:
         conn.execute(
@@ -1188,7 +1188,7 @@ def test_series_root_unusable_match_keeps_database_area_when_default_base_differ
                 "Watson",
                 None,
                 db_series_root,
-                r"\\MediaServer\video\Serien\TV",
+                r"\\<SERVER>\video\Serien\TV",
                 "Watson (2025)",
                 "watson",
             ),
@@ -1640,17 +1640,17 @@ def test_search_finds_duplicate_active_sxxexx_and_cleanup_removes_inactive(tmp_p
 def test_tv_and_anime_path_mappings_use_the_same_unc_normalization() -> None:
     tv = apply_path_mappings(
         "/TVSerien/American Dad! (2005)",
-        [PathMapping("TV", "/TVSerien", "//MediaServer/video/Serien/TV")],
+        [PathMapping("TV", "/TVSerien", "//<SERVER>/video/Serien/TV")],
     )
     anime = apply_path_mappings(
         "/Anime/Test Anime (2026)",
-        [PathMapping("Anime", "/Anime", r"\\MediaServer\video\Serien\Anime")],
+        [PathMapping("Anime", "/Anime", r"\\<SERVER>\video\Serien\Anime")],
     )
 
-    assert tv == r"\\MediaServer\video\Serien\TV\American Dad! (2005)"
-    assert anime == r"\\MediaServer\video\Serien\Anime\Test Anime (2026)"
-    assert path_compare_key(tv).startswith(path_compare_key(r"\\MediaServer\video\Serien\TV"))
-    assert path_compare_key(anime).startswith(path_compare_key(r"\\MediaServer\video\Serien\Anime"))
+    assert tv == r"\\<SERVER>\video\Serien\TV\American Dad! (2005)"
+    assert anime == r"\\<SERVER>\video\Serien\Anime\Test Anime (2026)"
+    assert path_compare_key(tv).startswith(path_compare_key(r"\\<SERVER>\video\Serien\TV"))
+    assert path_compare_key(anime).startswith(path_compare_key(r"\\<SERVER>\video\Serien\Anime"))
 
 
 def test_backup_database_names_are_collision_safe(tmp_path: Path) -> None:
@@ -2558,7 +2558,7 @@ def test_nfo_lightscan_dotted_series_folder_stays_unreachable_not_missing(tmp_pa
 def test_database_schema_migrates_minimal_legacy_tables_before_creating_indexes(tmp_path: Path) -> None:
     """Indexes must never reference columns before legacy migrations add them."""
     db_path = tmp_path / "very-old.sqlite3"
-    with sqlite3.connect(db_path) as conn:
+    with closing(sqlite3.connect(db_path)) as conn, conn:
         conn.execute("CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL)")
         conn.execute("INSERT INTO meta(key, value) VALUES('schema_version', '1')")
         conn.execute(

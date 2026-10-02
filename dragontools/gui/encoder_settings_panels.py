@@ -48,9 +48,13 @@ class EncoderSettingsPanelMixin:
     def detect_encoders(self):
             return None
 
-    def _active_encoder(self) -> str:
+    def active_encoder(self) -> str:
             raw = self.enc_key()
             return self._resolve_best_encoder() if raw == "auto" else raw
+
+    def _active_encoder(self) -> str:
+            # Backward-compatible internal alias; collaborators use the public API.
+            return self.active_encoder()
 
     def connect_encoder_settings_signals(self) -> None:
             widgets = self._ui.widgets

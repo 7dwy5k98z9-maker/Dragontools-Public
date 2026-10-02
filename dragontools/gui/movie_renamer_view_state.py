@@ -81,6 +81,7 @@ class MovieRenamerViewStateMixin:
         return (
             self.add_files_btn,
             self.add_folder_btn,
+            self.metadata_browser_btn,
             self.resolve_btn,
             self.manual_series_search_btn,
             self.manual_movie_search_btn,
@@ -88,6 +89,7 @@ class MovieRenamerViewStateMixin:
             self.edit_search_btn,
             self.edit_season_btn,
             self.edit_episode_btn,
+            self.edit_year_btn,
             self.accept_selected_btn,
             self.accept_safe_btn,
             self.reject_selected_btn,
@@ -111,12 +113,14 @@ class MovieRenamerViewStateMixin:
         return (
             self.add_files_btn,
             self.add_folder_btn,
+            self.metadata_browser_btn,
             self.manual_series_search_btn,
             self.manual_movie_search_btn,
             self.show_all_candidates_btn,
             self.edit_search_btn,
             self.edit_season_btn,
             self.edit_episode_btn,
+            self.edit_year_btn,
             self.remove_btn,
             self.clear_btn,
         )

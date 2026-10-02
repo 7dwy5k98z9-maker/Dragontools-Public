@@ -137,6 +137,9 @@ def _check_build_environment(root: Path) -> ReleaseCheck:
         "--collect-all faster_whisper",
         "--collect-all ctranslate2",
         "--copy-metadata faster-whisper",
+        "--smoke-test",
+        "waitforexit(90000)",
+        "finalen frozen-runtime-smoke",
     )
     missing_tokens = [token for token in required_build_tokens if token not in build_text]
     if missing_tokens:
@@ -228,6 +231,12 @@ def _check_test_environment(root: Path) -> ReleaseCheck:
             "Testumgebung",
             "pytest.ini legt PyQt6 nicht explizit als qt_api fest.",
         )
+    if (root / "dragon_hdr10plus_generator").exists() and "dragon_hdr10plus_generator/tests" not in ini_text:
+        return ReleaseCheck(
+            "error",
+            "Testumgebung",
+            "pytest.ini bindet die vorhandene Standalone-HDR10+-Generator-Suite nicht in den Standardlauf ein.",
+        )
     missing_markers = [
         marker
         for marker in ("media_integration", "dv_hdr_integration")
@@ -242,7 +251,7 @@ def _check_test_environment(root: Path) -> ReleaseCheck:
     return ReleaseCheck(
         "ok",
         "Testumgebung",
-        "Runtime-Abhängigkeiten, pytest, pytest-qt, PyQt6 sowie Media-/DV-HDR-Integrationstest-Marker sind reproduzierbar deklariert.",
+        "Runtime-Abhängigkeiten, pytest, pytest-qt, PyQt6, die Standalone-Generator-Suite sowie Media-/DV-HDR-Integrationstest-Marker sind reproduzierbar deklariert.",
     )
 
 
@@ -264,6 +273,12 @@ def _check_ci_workflow(root: Path) -> ReleaseCheck:
         "DRAGONTOOLS_REQUIRE_DV_HDR_INTEGRATION",
         "self-hosted",
         "dragontools-media",
+        "pyinstaller-smoke",
+        "DragonToolsSmoke.exe",
+        "--smoke-test",
+        "hdrtvdm-bridge",
+        "test_patch_ai_hdrtvdm_bridge_optional.py",
+        "refs/tags/v",
     )
     missing = [token for token in required_tokens if token not in text]
     if missing:
@@ -275,7 +290,7 @@ def _check_ci_workflow(root: Path) -> ReleaseCheck:
     return ReleaseCheck(
         "ok",
         "CI-Workflow",
-        "Linux-/Windows-CI erzwingt Qt und Ruff-F821/E9 mit explizitem pip-Cache-Vertrag; reale DV/HDR-Tests laufen strikt auf dem gelabelten self-hosted Windows-Runner.",
+        "Linux-/Windows-CI erzwingt Qt und Ruff-F821/E9; zusätzlich laufen ein echter PyInstaller-Haupt-EXE-Smoke und HDRTVDM-CPU-Lifecycle-Test. Reale DV/HDR-Roundtrips sind bei Release-Tags bzw. manuell ein striktes self-hosted Gate.",
     )
 
 

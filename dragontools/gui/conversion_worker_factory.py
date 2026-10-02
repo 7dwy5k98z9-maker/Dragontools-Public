@@ -77,6 +77,8 @@ class ConversionConfigBuilder:
             "mp4_sidecars_enabled": True,
             "additional_sidecars_enabled": False,
             "text_to_srt_sidecar_enabled": False,
+            "pgs_to_srt_enabled": False,
+            "pgs_original_storage": "internal_mkv",
         }
         return load_subtitle_rules(default=fallback, reporter=self._log)
 
@@ -150,22 +152,18 @@ class ConversionWorkerFactory:
         parallel_jobs: int = 1,
     ):
         config = self._config_builder.build_converter_config(encoder_options=encoder_options)
-        if int(parallel_jobs) > 1:
-            parallel_cls = self._parallel_converter_cls
-            if parallel_cls is None:
-                from ..worker.parallel_converter_thread import ParallelConverterThread
-                parallel_cls = ParallelConverterThread
-            return parallel_cls(
-                files,
-                config,
-                parallel_jobs=int(parallel_jobs),
-                parent=self._qt_parent,
-            )
-        converter_cls = self._converter_cls
-        if converter_cls is None:
-            from ..worker.converter_thread import ConverterThread
-            converter_cls = ConverterThread
-        return converter_cls(files, config, parent=self._qt_parent)
+        # Even a one-file / one-worker run owns a coordinator so files added
+        # later can use a live increase without replacing the current worker.
+        parallel_cls = self._parallel_converter_cls
+        if parallel_cls is None:
+            from ..worker.parallel_converter_thread import ParallelConverterThread
+            parallel_cls = ParallelConverterThread
+        return parallel_cls(
+            files,
+            config,
+            parallel_jobs=int(parallel_jobs),
+            parent=self._qt_parent,
+        )
 
     def create_dv_remux(self, files: list[str]):
         dv_remux_cls = self._dv_remux_cls

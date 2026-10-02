@@ -55,7 +55,7 @@ def test_hdrtvdm_bridge_cpu_mock_roundtrip_writes_uint16_tiff(tmp_path: Path):
     assert frame.shape == (8, 12, 3)
 
 
-def test_hdrtvdm_streaming_video_node_roundtrip_without_frame_dump(tmp_path: Path):
+def test_hdrtvdm_streaming_video_node_roundtrip_without_frame_dump(tmp_path: Path, recwarn):
     import json
     import shutil
     import subprocess
@@ -116,6 +116,11 @@ def test_hdrtvdm_streaming_video_node_roundtrip_without_frame_dump(tmp_path: Pat
         stream = json.loads(probe.stdout)["streams"][0]
         assert stream["color_transfer"] == "smpte2084"
         assert stream["color_primaries"] == "bt2020"
+
+    import gc
+    gc.collect()
+    resource_warnings = [warning for warning in recwarn if issubclass(warning.category, ResourceWarning)]
+    assert resource_warnings == []
 
 
 def test_hdrtvdm_streaming_node_rejects_expected_frame_mismatch(tmp_path: Path):

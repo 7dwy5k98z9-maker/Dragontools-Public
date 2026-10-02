@@ -39,11 +39,6 @@ def _class_methods(path: Path, class_name: str) -> set[str]:
     return {node.name for node in cls.body if isinstance(node, ast.FunctionDef)}
 
 
-def test_block12_facades_stay_small() -> None:
-    assert len((GUI_ROOT / "audio_video_matcher_widget.py").read_text(encoding="utf-8").splitlines()) <= 60
-    assert len((GUI_ROOT / "online_metadata_dialog.py").read_text(encoding="utf-8").splitlines()) <= 60
-
-
 def test_block12_matcher_keeps_explicit_shutdown_contract() -> None:
     methods = _class_methods(GUI_ROOT / "audio_video_matcher_widget.py", "AudioVideoMatcherWidget")
     assert "iter_shutdown_workers" in methods

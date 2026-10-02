@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from .codec_utils import encoder_10bit_filter_pixel_format
 from .media_metadata import normalize_video_codec
 from .type_utils import _safe_bool
 
@@ -87,10 +88,14 @@ def source_is_supported_sdr_bt709(media_info) -> tuple[bool, str]:
     return True, "SDR BT.709 eindeutig erkannt."
 
 
-def build_sdr_to_hdr_filters(config: SdrHdrEnhancementConfig) -> tuple[str, ...]:
+def build_sdr_to_hdr_filters(
+    config: SdrHdrEnhancementConfig,
+    encoder: str | dict | None = "nvenc",
+) -> tuple[str, ...]:
     contrast = f"{config.contrast_recovery:.2f}"
+    pixel_format = encoder_10bit_filter_pixel_format(encoder)
     inverse = (
-        "libplacebo=format=p010le"
+        f"libplacebo=format={pixel_format}"
         ":colorspace=bt2020nc"
         ":color_primaries=bt2020"
         ":color_trc=smpte2084"
@@ -186,5 +191,5 @@ def decide_sdr_hdr_enhancement(
         True,
         True,
         "SDR BT.709 wird per FFmpeg/libplacebo Range Expansion nach BT.2020/PQ erweitert.",
-        build_sdr_to_hdr_filters(config),
+        build_sdr_to_hdr_filters(config, encoder_options),
     )

@@ -47,7 +47,7 @@ def test_new_sidecar_flags_are_migrated_and_gate_non_mp4_exports():
         "text_to_srt_sidecar_enabled": "1",
     })
 
-    assert rules["_schema_version"] == 6
+    assert rules["_schema_version"] == 7
     assert rules["additional_sidecars_enabled"] is True
     assert text_to_srt_sidecar_enabled(rules) is True
     assert any_sidecar_export_enabled({}, container="mkv") is False

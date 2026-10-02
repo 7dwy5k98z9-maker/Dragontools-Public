@@ -102,6 +102,17 @@ class DVPipelineDiagnosticCompatibilityMixin:
     @last_effective_crop.setter
     def last_effective_crop(self, value) -> None:
         self._diagnostics.effective_crop = value
+    @property
+    def last_failure_archive_path(self) -> str:
+        return self._diagnostics.failure_archive_path
+
+    @property
+    def last_failure_artifact_paths(self):
+        return self._diagnostics.failure_artifact_paths
+
+    @property
+    def last_preserve_failed_output(self) -> bool:
+        return self._diagnostics.preserve_failed_output
 
 
 __all__ = ["DVPipelineDiagnosticCompatibilityMixin"]

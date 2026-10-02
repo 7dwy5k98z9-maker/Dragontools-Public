@@ -124,10 +124,14 @@ class ConvertWidgetOverrideDialogHelper(ConvertOverrideGroupBuilderMixin):
         v.addWidget(bb)
 
         dialog_alive = {"value": True}
+        track_analysis = {"ok": False}
 
-        def _finish_dialog_load(audio_streams, subtitle_streams, warning_text=None):
+        def _finish_dialog_load(audio_streams, subtitle_streams, warning_text=None, *, analysis_ok=True):
             if not dialog_alive["value"]:
                 return
+            track_analysis["ok"] = bool(analysis_ok)
+            ac.setEnabled(analysis_ok)
+            bc.setEnabled(analysis_ok)
             _build_audio_rows(
                 apl, audio_streams, audio_track_map, old_audio_action, audio_rows
             )
@@ -158,7 +162,10 @@ class ConvertWidgetOverrideDialogHelper(ConvertOverrideGroupBuilderMixin):
                 "warn",
             )
             ow.log_message(error_text, "error")
-            _finish_dialog_load([], [], "Mediendaten konnten nicht geladen werden.")
+            _finish_dialog_load(
+                [], [], "Mediendaten konnten nicht geladen werden. Bestehende Spureinstellungen bleiben je Datei unverändert.",
+                analysis_ok=False,
+            )
 
         loader = _OverrideAnalyzeThread(path, ow.tools, dlg)
         dlg._override_loader = loader
@@ -167,33 +174,36 @@ class ConvertWidgetOverrideDialogHelper(ConvertOverrideGroupBuilderMixin):
         def _cleanup_loader():
             if getattr(dlg, "_override_loader", None) is loader:
                 dlg._override_loader = None
-            loader.deleteLater()
 
         loader.finished.connect(_cleanup_loader)
         dlg.finished.connect(lambda *_: dialog_alive.__setitem__("value", False))
         QTimer.singleShot(0, loader.start)
 
-        if dlg.exec() != QDialog.DialogCode.Accepted:
-            return
+        try:
+            if dlg.exec() != QDialog.DialogCode.Accepted:
+                return
 
-        controls = {
-            "processing_combo": processing_combo,
-            "encoder_override": encoder_override_controls,
-            "audio_mode_combo": ac,
-            "subtitle_mode_combo": bc,
-            "audio_rows": audio_rows,
-            "subtitle_rows": subtitle_rows,
-            "drc_mode_combo": drc_mode_combo,
-            "drc_scale_spin": drc_scale_spin,
-            "loudnorm_mode_combo": loudnorm_mode_combo,
-            "loudnorm_i_spin": loudnorm_i_spin,
-            "imax_cb": imax_cb,
-            "dv_combo": dv_combo,
-            "hdrplus_combo": hdp_combo,
-            "sdr_hdr_combo": sdr_hdr_combo,
-            "hdrgen_combo": hdrgen_combo,
-        }
-        self._persist_override_result(selected_paths, state, ov, controls)
+            controls = {
+                "track_analysis_ok": track_analysis["ok"],
+                "processing_combo": processing_combo,
+                "encoder_override": encoder_override_controls,
+                "audio_mode_combo": ac,
+                "subtitle_mode_combo": bc,
+                "audio_rows": audio_rows,
+                "subtitle_rows": subtitle_rows,
+                "drc_mode_combo": drc_mode_combo,
+                "drc_scale_spin": drc_scale_spin,
+                "loudnorm_mode_combo": loudnorm_mode_combo,
+                "loudnorm_i_spin": loudnorm_i_spin,
+                "imax_cb": imax_cb,
+                "dv_combo": dv_combo,
+                "hdrplus_combo": hdp_combo,
+                "sdr_hdr_combo": sdr_hdr_combo,
+                "hdrgen_combo": hdrgen_combo,
+            }
+            self._persist_override_result(selected_paths, state, ov, controls)
+        finally:
+            dlg.deleteLater()
 
     def _persist_override_result(self, paths: list[str], state, ov: dict, controls: dict) -> None:
         """Übernimmt validierte Dialogwerte in den Datei-Override-Zustand."""
@@ -285,7 +295,10 @@ class ConvertWidgetOverrideDialogHelper(ConvertOverrideGroupBuilderMixin):
         rejected: list[str] = []
         applied: list[str] = []
         for path in paths:
-            target_override = merge_dialog_override(state.file_overrides.get(path), ov)
+            target_override = merge_dialog_override(
+                state.file_overrides.get(path), ov,
+                preserve_tracks=not controls.get("track_analysis_ok", False),
+            )
             if thread and hasattr(thread, "update_override") and not thread.update_override(path, target_override):
                 rejected.append(path)
                 continue
@@ -294,7 +307,7 @@ class ConvertWidgetOverrideDialogHelper(ConvertOverrideGroupBuilderMixin):
             ow.update_queue_label(path)
             applied.append(path)
         if applied:
-            ow._log(f"Datei-Einstellungen angewendet: {len(applied)} Datei(en)", "info")
+            ow.log_message(f"Datei-Einstellungen angewendet: {len(applied)} Datei(en)", "info")
         if rejected:
             preview = "\n".join(f"• {Path(path).name}" for path in rejected[:8])
             more = f"\n… und {len(rejected) - 8} weitere" if len(rejected) > 8 else ""

@@ -53,3 +53,38 @@ def test_paginate_blocks_splits_long_sections_without_losing_order():
     flattened = [block for page in pages for block in page]
     assert flattened == [block.rstrip() for block in blocks]
     assert all(page for page in pages)
+
+
+def test_json_changelog_rejects_non_object_sections(tmp_path):
+    from dragontools.core.changelog import load_changelog
+
+    path = tmp_path / "CHANGELOG.json"
+    path.write_text(
+        json.dumps(
+            {
+                "format_version": 1,
+                "title": "Dragon Tools",
+                "sections": ["Dieser Eintrag wäre früher still verschwunden."],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    try:
+        load_changelog(path)
+    except ValueError as exc:
+        assert "muss ein JSON-Objekt sein" in str(exc)
+    else:  # pragma: no cover - fail-closed contract guard
+        raise AssertionError("Non-object changelog sections must be rejected")
+
+
+def test_repository_changelog_exposes_latest_patch_entries_through_real_loader():
+    from dragontools.core.changelog import load_changelog
+
+    root = __import__("pathlib").Path(__file__).parents[2]
+    doc = load_changelog(root / "Aenderungshistorie" / "CHANGELOG.json")
+    assert doc.sections[0].title == "Überblick"
+    history = "\n".join(block for section in doc.sections for block in section.blocks)
+    for feature in ("Release-Schema-Validierung", "Metadaten", "Doppelstarts", "HDR10+", "Watchfolder-Abbruch"):
+        assert feature in history

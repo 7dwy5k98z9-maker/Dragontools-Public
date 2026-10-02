@@ -3,12 +3,40 @@
 from __future__ import annotations
 
 import logging
+from copy import deepcopy
 from typing import Any, Iterable
 
 from .settings_app import APP_NAME, APP_ORG
 from .type_utils import _safe_bool, _safe_float, _safe_int
 
 _LOG = logging.getLogger(__name__)
+
+
+class SettingsSnapshot:
+    """Read-only QSettings-compatible values, safe to pass into a worker."""
+
+    def __init__(self, settings):
+        self._values = {key: deepcopy(settings.value(key)) for key in settings.allKeys()}
+
+    def value(self, key, default=None, *, type=None):
+        value = deepcopy(self._values.get(key, default))
+        if type is bool:
+            return _safe_bool(value, bool(default))
+        return type(value) if type is not None and value is not None else value
+
+    def contains(self, key):
+        return key in self._values
+
+    def allKeys(self):
+        return list(self._values)
+
+
+def worker_settings_snapshot(settings=None):
+    """Capture settings at the composition boundary, not in processing code."""
+    source = settings if settings is not None else app_qsettings()
+    if source is None:
+        raise RuntimeError("Worker-Einstellungen konnten nicht geladen werden.")
+    return SettingsSnapshot(source)
 
 SET_KEY_UI_SECTION_PREFIX = "ui/sections"
 
@@ -111,6 +139,8 @@ __all__ = [
     "SET_KEY_UI_SECTION_PREFIX",
     "ui_section_expanded_key",
     "app_qsettings",
+    "SettingsSnapshot",
+    "worker_settings_snapshot",
     "settings_value",
     "settings_bool",
     "settings_int",

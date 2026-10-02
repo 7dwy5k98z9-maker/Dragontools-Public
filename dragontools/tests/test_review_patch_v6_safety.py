@@ -19,7 +19,7 @@ def test_process_lifecycle_register_does_not_reenter_converter_process_lock(monk
         paused=False,
     )
     worker = SimpleNamespace(_control_state=state)
-    proc = SimpleNamespace(pid=12345)
+    proc = SimpleNamespace(pid=12345, poll=lambda: 0)
     lifecycle = ProcessLifecycle(["tool"], "Test", 10, worker=worker)
 
     thread = threading.Thread(target=lambda: lifecycle.register(proc), daemon=True)

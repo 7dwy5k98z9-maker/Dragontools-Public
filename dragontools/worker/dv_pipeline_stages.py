@@ -94,6 +94,7 @@ class DVPipelineStages:
         assert_nonempty_file: Callable[[Path, str], bool],
         clear_burn_sub_tmp: Callable[[], None],
         crop_decision: Callable[[dict], str] | None = None,
+        encode_complete: Callable[[DVPipelineState], None] | None = None,
     ) -> None:
         # Diese Alias-Felder bleiben für bestehende interne Diagnose-/Testschnittstellen
         # erhalten. Fachlogik darf sie nur über die Service-Verdrahtung verwenden.
@@ -117,6 +118,7 @@ class DVPipelineStages:
         self._assert_nonempty_file = assert_nonempty_file
         self._clear_burn_sub_tmp = clear_burn_sub_tmp
         self._crop_decision = crop_decision
+        self._encode_complete = encode_complete
 
     def _initialize_run_state(self, state: DVPipelineState) -> None:
         request = state.request
@@ -143,36 +145,70 @@ class DVPipelineStages:
                 "info",
             )
 
+
+    def _preserve_dynamic_metadata_failure(self, state: DVPipelineState, *, stage: str) -> None:
+        request = state.request
+        if not bool(getattr(request, "generate_hdr10plus", False)):
+            return
+        if state.failure_archive_path:
+            return
+        json_path = getattr(state.files, "hdr10plus_json", None)
+        try:
+            has_json = bool(json_path and json_path.exists() and json_path.stat().st_size > 0)
+        except OSError:
+            has_json = False
+        if not has_json:
+            return
+        recovery = self._failure_recovery
+        preserve = getattr(recovery, "preserve_dynamic_metadata_failure", None)
+        if not callable(preserve):
+            # Fail-safe for legacy/test compositions: protect the output path if a
+            # generated JSON exists but no archive service is wired.
+            state.preserve_failed_output = True
+            return
+        reason = str(getattr(self._temp_state, "failure_reason", "") or stage)
+        archive_path, artifacts = preserve(state=state, reason=reason, stage=stage)
+        state.failure_archive_path = str(archive_path or "")
+        state.failure_artifact_paths = list(artifacts or ())
+        state.preserve_failed_output = archive_path is None
+
+
+    def _failure_result(self, state: DVPipelineState, stage_label: str) -> DVPipelineResult:
+        if not self._temp_state.failure_reason:
+            self._temp_state.record_failure(reason=f"{stage_label} fehlgeschlagen", stage=stage_label)
+        elif not self._temp_state.failure_stage:
+            self._temp_state.failure_stage = stage_label
+        return DVPipelineResult(
+            False,
+            tuple(state.sidecar_paths),
+            self._temp_state.failure_reason,
+            self._temp_state.failure_stage or stage_label,
+            failure_archive_path=str(state.failure_archive_path or ""),
+            failure_artifact_paths=tuple(state.failure_artifact_paths or ()),
+            preserve_failed_output=bool(state.preserve_failed_output),
+        )
+
     def run(self, state: DVPipelineState, runner: DVCommandRunner) -> DVPipelineResult:
         """Orchestriert die Stufen; jede Stufe darf den Ablauf sauber abbrechen."""
         request = state.request
         self._initialize_run_state(state)
 
         stages = (
-            ("STEP 1/7 HEVC-Extraktion", self._extract_source_hevc),
-            ("STEP 2/7 DV-Profilkonvertierung", self._convert_profile_to_81),
+            ("Untertitel-Aufbereitung (vor Video-Encoding)", self._prepare_subtitles),
+            ("STEP 1/7 DV-Quellmetadaten", self._extract_source_hevc),
+            ("STEP 2/7 RPU-Profilnormalisierung", self._convert_profile_to_81),
             ("STEP 3/7 RPU-Extraktion", self._extract_rpu),
             ("DV-Crop-Abgleich", self._reconcile_crop_from_rpu),
             ("STEP 4/7 Video-Encoding", self._encode_video),
             ("STEP 5/7 RPU-Crop / Level-5", self._resolve_rpu_crop),
             ("STEP 6/7 Dynamische Metadaten", self._inject_dynamic_metadata),
             ("Audio-Aufbereitung", self._prepare_audio),
-            ("Untertitel-Aufbereitung", self._prepare_subtitles),
             ("STEP 7/7 Final-Mux", self._mux_final_output),
         )
         for stage_label, stage in stages:
             if stage(state, runner):
                 continue
-            if not self._temp_state.failure_reason:
-                self._temp_state.record_failure(reason=f"{stage_label} fehlgeschlagen", stage=stage_label)
-            elif not self._temp_state.failure_stage:
-                self._temp_state.failure_stage = stage_label
-            return DVPipelineResult(
-                False,
-                tuple(state.sidecar_paths),
-                self._temp_state.failure_reason,
-                self._temp_state.failure_stage or stage_label,
-            )
+            return self._failure_result(state, stage_label)
 
         target_container = str(getattr(request, "container", "mp4") or "mp4").lower()
         if any_sidecar_export_enabled(getattr(self, "_subtitle_rules", {}), container=target_container):
@@ -221,6 +257,9 @@ class DVPipelineStages:
             final_rpu_level5_offsets=tuple(state.final_rpu_level5_offsets or ()),
             final_rpu_level5_dynamic=bool(state.final_rpu_level5_dynamic),
             final_rpu_message=str(state.final_rpu_message or ""),
+            failure_archive_path=str(state.failure_archive_path or ""),
+            failure_artifact_paths=tuple(state.failure_artifact_paths or ()),
+            preserve_failed_output=bool(state.preserve_failed_output),
         )
 
     # Dünne Kompatibilitäts-Delegationen. Keine eigene Fachlogik ergänzen.
@@ -237,7 +276,32 @@ class DVPipelineStages:
         return _video_service(self).reconcile_crop_from_rpu(state, runner)
 
     def _encode_video(self, state: DVPipelineState, runner: DVCommandRunner) -> bool:
-        return _video_service(self).encode_video(state, runner)
+        video = _video_service(self)
+        ok = video.encode_video(state, runner)
+        if ok:
+            state.video_encode_completed = True
+            parity_guard = getattr(video, "ensure_frame_parity_or_recover", None)
+            if callable(parity_guard):
+                ok = parity_guard(
+                    state,
+                    runner,
+                    probe_rpu_frame_count=self._probe_rpu_frame_count,
+                )
+
+        # Text subtitle burn-in temp files must survive the optional direct-source
+        # retry above, but are no longer needed once STEP 4 including recovery is
+        # final.  Cleanup is deliberately before the encode-slot handoff.
+        cleanup = getattr(video, "cleanup_burn_sub", None)
+        request = getattr(state, "request", None)
+        if callable(cleanup) and request is not None:
+            cleanup(request)
+
+        if ok and not state.encode_slot_released and callable(self._encode_complete):
+            overlap_ready = self._encode_complete(state)
+            state.encode_slot_released = True
+            if overlap_ready is False:
+                return False
+        return ok
 
     def _cleanup_burn_sub(self, request) -> None:
         _video_service(self).cleanup_burn_sub(request)
@@ -261,12 +325,18 @@ class DVPipelineStages:
         return _metadata_service(self).mux_plain_mp4_without_dv(state, runner)
 
     def _inject_dynamic_metadata(self, state: DVPipelineState, runner: DVCommandRunner) -> bool:
-        return _metadata_service(self).inject_dynamic_metadata(
+        ok = _metadata_service(self).inject_dynamic_metadata(
             state,
             runner,
             validate_rpu_frame_parity=self._validate_rpu_frame_parity,
             verify_injected_rpu=self._verify_injected_rpu,
         )
+        if not ok:
+            self._preserve_dynamic_metadata_failure(
+                state,
+                stage=str(getattr(self._temp_state, "failure_stage", "") or "STEP 6/7 Dynamische Metadaten"),
+            )
+        return ok
 
     def _validate_rpu_frame_parity(
         self,
@@ -274,11 +344,13 @@ class DVPipelineStages:
         *,
         rpu_path: Path,
         hevc_path: Path,
+        frame_evidence=None,
     ) -> bool:
         return _metadata_service(self).validate_rpu_frame_parity(
             runner,
             rpu_path=rpu_path,
             hevc_path=hevc_path,
+            frame_evidence=frame_evidence,
             probe_rpu_frame_count=self._probe_rpu_frame_count,
             probe_hevc_frame_count=self._probe_hevc_frame_count,
         )
@@ -315,11 +387,17 @@ class DVPipelineStages:
         return _mux_service(self).prepare_subtitles(state, runner)
 
     def _mux_final_output(self, state: DVPipelineState, runner: DVCommandRunner) -> bool:
-        return _mux_service(self).mux_final_output(
+        ok = _mux_service(self).mux_final_output(
             state,
             runner,
             verify_final_mux_metadata=self._verify_final_mux_metadata,
         )
+        if not ok:
+            self._preserve_dynamic_metadata_failure(
+                state,
+                stage=str(getattr(self._temp_state, "failure_stage", "") or "STEP 7/7 Final-Mux/Metadatenprüfung"),
+            )
+        return ok
 
     def _verify_final_mux_metadata(self, state: DVPipelineState, runner: DVCommandRunner) -> bool:
         return _mux_service(self).verify_final_mux_metadata(

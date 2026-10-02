@@ -9,15 +9,18 @@ from __future__ import annotations
 
 import tempfile
 import traceback
-from dataclasses import dataclass, field
+import shutil
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Callable
 
 from ..core.models import TargetCodec
 from ..core.process_runner import subprocess_no_window_kwargs as _no_window_kwargs
 from .dv_command_runner import DVCommandRunner
+from .dv_failure_recovery import preserve_completed_dv_work
 from .dv_pipeline_context import DVPipelineResult, DVPipelineState, DVRunRequest, DVWorkFiles
 from .dv_runtime_models import DVEncoderConfig, DVTempState
+from .encoder_args import encoder_10bit_filter_pixel_format
 
 LogFn = Callable[[str, str], None]
 VerboseFn = Callable[[str], None]
@@ -41,6 +44,9 @@ class DVPipelineDiagnostics:
     failure_stage: str = ""
     tool_output: str = ""
     effective_crop: str | None = None
+    failure_archive_path: str = ""
+    failure_artifact_paths: tuple[str, ...] = ()
+    preserve_failed_output: bool = False
 
     def reset(self, temp_state: DVTempState) -> None:
         temp_state.reset_diagnostics()
@@ -60,6 +66,9 @@ class DVPipelineDiagnostics:
         self.failure_stage = ""
         self.tool_output = ""
         self.effective_crop = None
+        self.failure_archive_path = ""
+        self.failure_artifact_paths = ()
+        self.preserve_failed_output = False
 
     def fail_preflight(
         self,
@@ -93,6 +102,9 @@ class DVPipelineDiagnostics:
         self.final_rpu_level5_offsets = tuple(getattr(result, "final_rpu_level5_offsets", ()) or ())
         self.final_rpu_level5_dynamic = bool(getattr(result, "final_rpu_level5_dynamic", False))
         self.final_rpu_message = str(getattr(result, "final_rpu_message", "") or "")
+        self.failure_archive_path = str(getattr(result, "failure_archive_path", "") or "")
+        self.failure_artifact_paths = tuple(getattr(result, "failure_artifact_paths", ()) or ())
+        self.preserve_failed_output = bool(getattr(result, "preserve_failed_output", False))
         if not result.success:
             self.failure_reason = result.failure_reason or temp_state.failure_reason
             self.failure_stage = result.failure_stage or temp_state.failure_stage
@@ -212,9 +224,10 @@ class DVPreflightService:
             return False, reason, "DV Profile 5 Preflight"
 
         self._verbose_log("[DV] DV5-Remux-Fallback wird NICHT verwendet.")
+        pixel_format = encoder_10bit_filter_pixel_format(encoder_config.options)
         self._verbose_log(
             "[DV] libplacebo konvertiert ICtCp-Base-Layer direkt zu "
-            "HDR10 (BT.2020nc / PQ / p010le / TV-Range)."
+            f"HDR10 (BT.2020nc / PQ / {pixel_format} / TV-Range)."
         )
         self._verbose_log("[DV] RPU wird nach dem Encoding wie bei DV8 re-injiziert.")
         return True, "", ""
@@ -239,8 +252,10 @@ class DVPipelineRunExecutor:
     def execute(self, request: DVRunRequest) -> tuple[DVPipelineResult, DVPipelineState]:
         temp_parent = Path(request.output_path).parent
         temp_parent.mkdir(parents=True, exist_ok=True)
-        with tempfile.TemporaryDirectory(prefix="dragontools_dv_", dir=temp_parent) as tmp:
-            state = DVPipelineState(request=request, files=DVWorkFiles.create(Path(tmp)))
+        tmp_path = Path(tempfile.mkdtemp(prefix="dragontools_dv_", dir=temp_parent))
+        preserve_temp = False
+        try:
+            state = DVPipelineState(request=request, files=DVWorkFiles.create(tmp_path))
             runner = DVCommandRunner(
                 log=self._log,
                 verbose_log=self._verbose_log,
@@ -248,8 +263,36 @@ class DVPipelineRunExecutor:
                 temp_state=self._temp_state,
                 worker=self._worker,
             )
-            result = self._stages_factory().run(state, runner)
+            try:
+                result = self._stages_factory().run(state, runner)
+            except Exception as exc:
+                self._verbose_log(traceback.format_exc())
+                self._temp_state.record_failure(reason=str(exc), stage="DV-Pipeline-Ausnahme")
+                result = DVPipelineResult(False, failure_reason=str(exc), failure_stage="DV-Pipeline-Ausnahme")
+            # Protect the workspace even if recovery itself raises unexpectedly.
+            preserve_temp = bool(state.video_encode_completed and not result.success)
+            result = preserve_completed_dv_work(state, result, log=self._log)
+            preserve_temp = bool(getattr(result, "preserve_failed_output", False))
+            if preserve_temp and tmp_path.exists():
+                artifacts = tuple(dict.fromkeys((
+                    *(getattr(result, "failure_artifact_paths", ()) or ()),
+                    str(tmp_path),
+                )))
+                result = replace(result, failure_artifact_paths=artifacts)
+                self._log(
+                    f"⚠️ [DV] Temporärer Diagnosebestand bleibt wegen unvollständiger "
+                    f"Archivierung erhalten: {tmp_path}",
+                    "warn",
+                )
             return result, state
+        finally:
+            if not preserve_temp:
+                try:
+                    shutil.rmtree(tmp_path)
+                except FileNotFoundError:
+                    pass
+                except OSError as exc:
+                    self._log(f"⚠️ DV-Tempordner konnte nicht vollständig gelöscht werden: {tmp_path} – {exc}", "warn")
 
 
 __all__ = [

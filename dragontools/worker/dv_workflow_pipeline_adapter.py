@@ -78,4 +78,7 @@ class DVPipelineExecutorAdapter:
             command=self._temp_state.last_command,
             effective_crop=getattr(self._pipeline, "last_effective_crop", None),
             effective_crop_known=hasattr(self._pipeline, "last_effective_crop"),
+            failure_archive_path=str(getattr(self._pipeline, "last_failure_archive_path", "") or ""),
+            failure_artifact_paths=tuple(getattr(self._pipeline, "last_failure_artifact_paths", ()) or ()),
+            preserve_failed_output=bool(getattr(self._pipeline, "last_preserve_failed_output", False)),
         )

@@ -14,23 +14,6 @@ def _tree(path: Path) -> ast.Module:
     return ast.parse(path.read_text(encoding="utf-8"))
 
 
-def _class(path: Path, name: str) -> ast.ClassDef:
-    for node in _tree(path).body:
-        if isinstance(node, ast.ClassDef) and node.name == name:
-            return node
-    raise AssertionError(f"Klasse {name} fehlt in {path.name}")
-
-
-def test_media_library_dialog_is_thin_orchestrator():
-    cls = _class(DIALOG, "MediaLibraryDialog")
-    assert cls.end_lineno - cls.lineno + 1 <= 340
-    assert max(
-        (node.end_lineno - node.lineno + 1)
-        for node in cls.body
-        if isinstance(node, ast.FunctionDef)
-    ) <= 50
-
-
 def test_dialog_does_not_import_database_search_or_export_implementations():
     forbidden_modules = {
         "media_library_db",

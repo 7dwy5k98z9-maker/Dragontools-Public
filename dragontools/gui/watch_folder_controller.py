@@ -22,15 +22,25 @@ class _WatchScanThread(QThread):
     completed = pyqtSignal(object)
     failed = pyqtSignal(str)
 
-    def __init__(self, scanner: WatchFolderScanner, rules, parent=None) -> None:
+    def __init__(
+        self,
+        scanner: WatchFolderScanner,
+        rules,
+        *,
+        stable_seconds_override: int | None = None,
+        parent=None,
+    ) -> None:
         super().__init__(parent)
         self._scanner = scanner
         self._rules = list(rules)
+        self._stable_seconds_override = stable_seconds_override
 
     def run(self) -> None:
         try:
             self.completed.emit(self._scanner.scan(
-                self._rules, should_stop=self.isInterruptionRequested
+                self._rules,
+                should_stop=self.isInterruptionRequested,
+                stable_seconds_override=self._stable_seconds_override,
             ))
         except Exception as exc:
             _LOG.exception("Watch-Folder-Scan fehlgeschlagen")
@@ -48,6 +58,8 @@ class WatchFolderController(QObject):
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._start_scan)
         self._thread: _WatchScanThread | None = None
+        self._stopped = False
+        self._manual_scan_requested = False
         self._rules = []
         self._pending: dict[str, WatchFolderCandidate] = {}
         self._scanner = WatchFolderScanner(
@@ -57,6 +69,8 @@ class WatchFolderController(QObject):
         self.refresh_settings(initial=True)
 
     def refresh_settings(self, *, initial: bool = False) -> None:
+        if self._stopped:
+            return
         self._rules = load_watch_rules(self._settings)
         self._scanner.set_stable_seconds(watch_stable_seconds(self._settings))
         interval_ms = watch_scan_interval(self._settings) * 1000
@@ -70,6 +84,8 @@ class WatchFolderController(QObject):
             self._timer.stop()
 
     def stop(self, *, timeout_ms: int = 8000) -> bool:
+        # Queued signals and singleShot callbacks survive timer.stop().
+        self._stopped = True
         self._timer.stop()
         thread = self._thread
         if thread is not None and thread.isRunning():
@@ -80,29 +96,77 @@ class WatchFolderController(QObject):
         self._persist_state()
         return True
 
-    def _start_scan(self) -> None:
-        if not watch_enabled(self._settings) or not self._rules:
+    def scan_now(self) -> bool:
+        """Run an explicit Watch-Folder scan, independent of the global auto-scan toggle.
+
+        A user-triggered scan intentionally skips the observation waiting period. The
+        processed-signature state and queue de-duplication remain active, so only
+        unprocessed/currently changed sources can reach the converter intake.
+        """
+        if self._stopped:
+            return False
+        self._rules = load_watch_rules(self._settings)
+        self._scanner.set_stable_seconds(watch_stable_seconds(self._settings))
+        if not any(rule.enabled for rule in self._rules):
+            self._status("Watch-Folder: keine aktivierte Regel zum Durchsuchen vorhanden.")
+            return False
+        if self._thread is not None and self._thread.isRunning():
+            self._manual_scan_requested = True
+            self._status("Watch-Folder: laufender Scan wird beendet; manueller Scan folgt direkt danach.")
+            return True
+        self._start_scan(manual=True)
+        return True
+
+    def _start_scan(self, *, manual: bool = False) -> None:
+        if self._stopped:
+            return
+        if not self._rules:
+            return
+        if not manual and not watch_enabled(self._settings):
             return
         if self._thread is not None and self._thread.isRunning():
+            if manual:
+                self._manual_scan_requested = True
             return
-        thread = _WatchScanThread(self._scanner, self._rules, self)
+        thread = _WatchScanThread(
+            self._scanner,
+            self._rules,
+            stable_seconds_override=0 if manual else None,
+            parent=self,
+        )
         self._thread = thread
-        thread.completed.connect(self._handle_candidates)
+        thread.completed.connect(
+            lambda candidates, is_manual=manual: self._handle_candidates(
+                candidates, manual=is_manual
+            )
+        )
         thread.failed.connect(self._handle_failure)
-        thread.finished.connect(self._thread_finished)
+        thread.finished.connect(lambda t=thread: self._thread_finished(t))
+        if manual:
+            self._status("Watch-Folder: manuelle Suche läuft …")
         thread.start()
 
-    def _thread_finished(self) -> None:
-        thread = self._thread
-        if thread is not None:
+    def _thread_finished(self, finished_thread: _WatchScanThread | None = None) -> None:
+        # Bind cleanup to the thread that actually emitted ``finished``. A fast
+        # previous scan may finish after a newer scan has already been assigned
+        # to ``self._thread``; deleting ``self._thread`` in that case can destroy
+        # the new running QThread and crash a frozen/PyInstaller executable.
+        thread = finished_thread or self.sender()
+        if isinstance(thread, QThread):
             thread.deleteLater()
-        self._thread = None
+        if thread is self._thread:
+            self._thread = None
+        if self._manual_scan_requested and not self._stopped:
+            self._manual_scan_requested = False
+            QTimer.singleShot(0, self.scan_now)
 
     def _handle_failure(self, message: str) -> None:
         _LOG.warning("Watch-Folder-Scan fehlgeschlagen: %s", message)
         self._status(f"Watch-Folder-Scan fehlgeschlagen: {message}")
 
-    def _handle_candidates(self, candidates_obj) -> None:
+    def _handle_candidates(self, candidates_obj, *, manual: bool = False) -> None:
+        if self._stopped:
+            return
         candidates = [c for c in list(candidates_obj or []) if isinstance(c, WatchFolderCandidate)]
         candidates = [
             candidate
@@ -110,10 +174,17 @@ class WatchFolderController(QObject):
             if not self._candidate_conflicts_with_pending(candidate)
         ]
         if not candidates:
+            if manual:
+                self._status("Watch-Folder: keine neuen Dateien gefunden.")
             return
         grouped: dict[tuple[str, str, bool], list[WatchFolderCandidate]] = defaultdict(list)
         for candidate in candidates:
-            grouped[(candidate.codec, candidate.profile_key, candidate.auto_start)].append(candidate)
+            # Ein manueller Scan soll fehlende Dateien in die bestehende Queue
+            # aufnehmen, aber im Leerlauf keinen neuen Lauf überraschend starten.
+            # Bei einem bereits laufenden Worker werden die Dateien über den
+            # bestehenden Live-Queue-Pfad trotzdem sofort nachgereicht.
+            auto_start = False if manual else candidate.auto_start
+            grouped[(candidate.codec, candidate.profile_key, auto_start)].append(candidate)
 
         queued = 0
         for (codec, profile_key, auto_start), group in grouped.items():
@@ -142,10 +213,13 @@ class WatchFolderController(QObject):
                         self._pending.pop(key, None)
 
         if queued:
+            prefix = "Watch-Folder manuell" if manual else "Watch-Folder"
             self._status(
-                f"Watch-Folder: {queued} Datei(en) an die Queue übergeben; "
+                f"{prefix}: {queued} Datei(en) an die Queue übergeben; "
                 "als verarbeitet markiert werden sie erst nach erfolgreichem Abschluss."
             )
+        elif manual:
+            self._status("Watch-Folder: keine neuen Dateien außerhalb der bestehenden Queue gefunden.")
 
     def _candidate_conflicts_with_pending(self, candidate: WatchFolderCandidate) -> bool:
         """Defer a changed source while its previous signature is still running.

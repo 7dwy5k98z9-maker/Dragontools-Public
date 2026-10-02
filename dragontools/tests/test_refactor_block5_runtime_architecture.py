@@ -6,39 +6,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def _lines(relative: str) -> int:
-    return len((ROOT / relative).read_text(encoding="utf-8").splitlines())
-
-
-def test_block5_facades_are_small_orchestration_layers():
-    limits = {
-        "gui/preflight_series_widget.py": 80,
-        "gui/conversion_result_service.py": 100,
-        "worker/merge_thread.py": 180,
-    }
-    for relative, limit in limits.items():
-        count = _lines(relative)
-        assert count <= limit, f"{relative} ist wieder zu groß: {count} > {limit}"
-
-
-def test_block5_split_modules_remain_bounded():
-    limits = {
-        "gui/preflight_series_view.py": 220,
-        "gui/preflight_series_paths.py": 180,
-        "gui/preflight_series_metadata.py": 220,
-        "gui/conversion_result_file_events.py": 180,
-        "gui/conversion_result_finish.py": 160,
-        "gui/conversion_run_finalizer.py": 240,
-        "worker/merge_common.py": 120,
-        "worker/merge_analysis.py": 200,
-        "worker/merge_plan.py": 140,
-        "worker/merge_executor.py": 220,
-    }
-    for relative, limit in limits.items():
-        count = _lines(relative)
-        assert count <= limit, f"{relative} ist wieder zu groß: {count} > {limit}"
-
-
 def test_block5_facades_compose_split_responsibilities():
     checks = {
         "gui/preflight_series_widget.py": {

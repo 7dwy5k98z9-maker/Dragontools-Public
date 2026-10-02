@@ -26,6 +26,8 @@ from .subtitle_storage import (
     ass_to_srt_sidecar_enabled,
     build_mp4_subtitle_storage_plan,
     mp4_sidecars_enabled,
+    pgs_original_storage,
+    pgs_to_srt_enabled,
     text_to_srt_sidecar_enabled,
 )
 
@@ -100,5 +102,7 @@ __all__ = [
     "compute_subtitle_plan",
     "migrate_subtitle_rules",
     "mp4_sidecars_enabled",
+    "pgs_original_storage",
+    "pgs_to_srt_enabled",
     "text_to_srt_sidecar_enabled",
 ]

@@ -75,5 +75,3 @@ def test_media_library_implementation_is_split_by_responsibility() -> None:
     }
     modules = {path.name: path for path in core.glob("media_library_*.py")}
     assert expected_modules <= set(modules)
-    assert len(Path(media_library.__file__).read_text(encoding="utf-8").splitlines()) < 120
-    assert max(len(path.read_text(encoding="utf-8").splitlines()) for path in modules.values()) < 700

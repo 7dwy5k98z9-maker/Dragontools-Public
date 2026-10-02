@@ -5,9 +5,15 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from pathlib import Path
 
-from .movie_renamer import RenameProposal, SeriesRenameProposal, build_series_target_filename, build_target_filename
+from .movie_renamer import (
+    RenameProposal,
+    SeriesRenameProposal,
+    build_series_multi_target_filename,
+    build_target_filename,
+)
 from .path_syntax import path_compare_key
 from ..rules.renamer_rules import manual_review_below, minimum_candidate_score
+from .renamer_year_safety import apply_year_review
 
 _GENERATED_WARNINGS = {
     "Zieldatei existiert bereits.",
@@ -28,7 +34,7 @@ class CandidateDecision:
 
 
 def base_candidate_warnings(warnings: tuple[str, ...]) -> tuple[str, ...]:
-    return tuple(item for item in warnings if item not in _GENERATED_WARNINGS)
+    return tuple(item for item in warnings if item not in _GENERATED_WARNINGS and not item.startswith("Provider-Jahr "))
 
 
 def apply_candidate_decision(proposal: RenameProposal, candidate_index: int, source_path: Path) -> CandidateDecision:
@@ -41,6 +47,7 @@ def apply_candidate_decision(proposal: RenameProposal, candidate_index: int, sou
     target_path = source_path.with_name(target_name)
     target_exists = target_path.exists() and path_compare_key(target_path) != path_compare_key(source_path)
     status = _status_for(proposal, selected.score, target_exists, warnings)
+    status = apply_year_review(status, warnings, proposal.parsed.year, selected.year)
     updated = replace(
         proposal,
         selected=selected,
@@ -64,8 +71,15 @@ def apply_candidate_decision(proposal: RenameProposal, candidate_index: int, sou
 
 def _target_name_and_year(proposal, selected):
     if isinstance(proposal, SeriesRenameProposal):
-        target_name = build_series_target_filename(
-            selected.series, selected.season, selected.episode, selected.episode_title, proposal.parsed.suffix,
+        episodes = tuple(getattr(selected, "episodes", ()) or (selected.episode,))
+        titles = tuple(getattr(selected, "episode_titles", ()) or ((selected.episode_title,) if selected.episode_title else ()))
+        target_name = build_series_multi_target_filename(
+            selected.series,
+            selected.season,
+            episodes,
+            titles,
+            proposal.parsed.suffix,
+            title_mode=str(getattr(selected, "title_mode", "all") or "all"),
         )
         return target_name, selected.year or proposal.parsed.year
     return build_target_filename(selected.title, selected.year or proposal.parsed.year, proposal.parsed.suffix), selected.year or proposal.parsed.year

@@ -58,6 +58,7 @@ def test_forbidden_release_path_handles_windows_and_posix_paths():
 
     assert is_forbidden_release_path(r"dragontools\\core\\__pycache__\\x.pyc")
     assert is_forbidden_release_path("dragontools/core/x.pyo")
+    assert is_forbidden_release_path("dragon_hdr10plus_generator/HDRPlusGenerator.spec")
     assert not is_forbidden_release_path("dragontools/core/x.py")
 
 
@@ -94,7 +95,6 @@ def test_source_release_zip_excludes_local_and_external_trees(tmp_path):
         "dist",
         "third_party",
         "ComfyUI_windows_portable",
-        "dragon_hdr10plus_generator",
         "HDRTVDM",
         "Projekt",
         "git release",
@@ -103,6 +103,9 @@ def test_source_release_zip_excludes_local_and_external_trees(tmp_path):
         folder = root / name
         folder.mkdir()
         (folder / "private.bin").write_bytes(b"not for source releases")
+    generator = root / "dragon_hdr10plus_generator" / "src" / "dragon_hdr10plus_generator"
+    generator.mkdir(parents=True)
+    (generator / "cli.py").write_text("VALUE = 1\n", encoding="utf-8")
 
     target = tmp_path / "release.zip"
     create_source_release_zip(root, target)
@@ -110,7 +113,9 @@ def test_source_release_zip_excludes_local_and_external_trees(tmp_path):
     with zipfile.ZipFile(target) as archive:
         names = archive.namelist()
 
-    assert names == ["DragonToolsV9.py"]
+    assert "DragonToolsV9.py" in names
+    assert "dragon_hdr10plus_generator/src/dragon_hdr10plus_generator/cli.py" in names
+    assert not any(name.startswith(("third_party/", "dist/", "build/", "HDRTVDM/")) for name in names)
 
 
 def test_clean_forbidden_release_artifacts_removes_bytecode_and_caches(tmp_path):
@@ -158,3 +163,64 @@ def test_release_artifact_checks_ignore_excluded_local_environments(tmp_path):
 
     assert not source_cache.exists()
     assert venv_bytecode.read_bytes() == b"environment bytecode"
+
+
+def test_release_artifact_scan_flags_generated_spec_in_source_tree(tmp_path):
+    from dragontools.core.release_packaging import find_forbidden_release_artifacts
+
+    spec = tmp_path / "dragon_hdr10plus_generator" / "HDRPlusGenerator.spec"
+    spec.parent.mkdir(parents=True)
+    spec.write_text("# generated", encoding="utf-8")
+
+    assert spec.relative_to(tmp_path) in find_forbidden_release_artifacts(tmp_path)
+
+
+def test_real_project_public_inventory_excludes_private_snapshot_and_review_artifacts():
+    from dragontools.core.release_packaging import iter_public_source_files
+
+    root = Path(__file__).resolve().parents[2]
+    names = {path.relative_to(root).as_posix() for path in iter_public_source_files(root)}
+    assert "dragon_hdr10plus_generator/src/dragon_hdr10plus_generator/cli.py" in names
+    assert "dragontools/core/release_packaging.py" in names
+    assert "SNAPSHOT_CONTENTS.json" not in names
+    assert "SNAPSHOT_README.md" not in names
+    assert "PATCH_ABSCHLUSS_9.8.5.md" not in names
+    assert not any(name.endswith(".diff") for name in names)
+    assert not any(name.startswith("reviews/") for name in names)
+
+
+def test_public_source_zip_omits_private_snapshot_artifacts(tmp_path):
+    from dragontools.core.release_packaging import create_source_release_zip
+
+    root = Path(__file__).resolve().parents[2]
+    target = tmp_path / "public-source.zip"
+    create_source_release_zip(root, target)
+    with zipfile.ZipFile(target) as archive:
+        names = set(archive.namelist())
+    assert "SNAPSHOT_CONTENTS.json" not in names
+    assert "PATCH_ABSCHLUSS_9.8.5.md" not in names
+    assert "dragon_hdr10plus_generator/build.bat" in names
+
+
+def test_privacy_scan_uses_same_public_inventory_as_source_packager():
+    from dragontools.core.release_validation_package import _iter_release_text_files
+
+    root = Path(__file__).resolve().parents[2]
+    names = {path.relative_to(root).as_posix() for path in _iter_release_text_files(root)}
+    assert "PATCH.md" in names
+    assert "help.html" in names
+    assert "dragon_hdr10plus_generator/build.bat" in names
+    assert "PATCH_ABSCHLUSS_9.8.5.md" not in names
+    assert "SNAPSHOT_README.md" not in names
+
+
+
+def test_public_sanitizer_normalizes_both_private_unc_spellings():
+    from dragontools.core.release_packaging import sanitize_public_text
+
+    server = "medien" + "speicher"; payload = rf"forward=//{server}/video/Serien\nbackslash=\\{server}\video\Serien"
+    sanitized = sanitize_public_text(payload)
+
+    assert server not in sanitized.casefold()
+    assert r"\\<SERVER>" in sanitized
+    assert "//<SERVER>" in sanitized

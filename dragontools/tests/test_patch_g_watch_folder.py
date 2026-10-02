@@ -64,6 +64,19 @@ def test_scanner_waits_until_file_signature_is_stable(tmp_path: Path) -> None:
     assert [entry.path for entry in ready] == [str(source.resolve())]
 
 
+def test_manual_scan_can_override_stability_wait_without_marking_processed(tmp_path: Path) -> None:
+    source = tmp_path / "manual.mkv"
+    source.write_bytes(b"ready")
+    scanner = WatchFolderScanner(stable_seconds=60)
+    rule = _rule(tmp_path)
+
+    ready = scanner.scan([rule], now=0, stable_seconds_override=0)
+    assert [entry.path for entry in ready] == [str(source.resolve())]
+    # A manual discovery is not an acknowledgement. Until conversion reports
+    # success, the same source must remain eligible for retry.
+    assert len(scanner.scan([rule], now=61)) == 1
+
+
 def test_signature_change_restarts_stability_window(tmp_path: Path) -> None:
     source = tmp_path / "episode.mkv"
     source.write_bytes(b"a")
@@ -137,10 +150,20 @@ def test_patch_g_is_wired_into_settings_main_window_and_converter() -> None:
     main_window = (root / "gui/main_window.py").read_text(encoding="utf-8")
     converter = (root / "gui/convert_widget.py").read_text(encoding="utf-8")
     watch_intake = (root / "gui/convert_widget_watch_intake.py").read_text(encoding="utf-8")
+    watch_controller = (root / "gui/watch_folder_controller.py").read_text(encoding="utf-8")
+    watch_bridge = (root / "gui/watch_folder_main_window_bridge.py").read_text(encoding="utf-8")
+    layout = (root / "gui/convert_widget_layout_runtime.py").read_text(encoding="utf-8")
+    composition = (root / "gui/convert_widget_composition.py").read_text(encoding="utf-8")
     assert '"watch_folders"' in settings_dialog
     assert "start_watch_folder_controller(self)" in main_window
     assert "ConvertWidgetWatchMixin" in converter
     assert "enqueue_watch_folder_files" in watch_intake
+    assert "def scan_now" in watch_controller
+    assert "stable_seconds_override=0 if manual else None" in watch_controller
+    assert "auto_start = False if manual else candidate.auto_start" in watch_controller
+    assert "def scan_watch_folders_now" in watch_bridge
+    assert "Watchfolder durchsuchen" in layout
+    assert "watch_scan_btn.clicked.connect(owner._scan_watch_folders_now)" in composition
 
 
 def test_live_workers_support_atomic_watch_override_add() -> None:
@@ -149,3 +172,36 @@ def test_live_workers_support_atomic_watch_override_add() -> None:
     parallel = (root / "worker/parallel_converter_queue.py").read_text(encoding="utf-8")
     assert "def add_file_with_override" in single
     assert "def add_file_with_override" in parallel
+
+
+def test_recursive_watchfolder_prunes_dragontools_managed_directories(tmp_path):
+    root = tmp_path / "WatchRoot"
+    normal = root / "Serien" / "Episode.mkv"
+    managed = [
+        root / "Archiv" / "bundle" / "failed.mkv",
+        root / "Fehler" / "crop" / "failed.mkv",
+        root / "__temp_overwrite__" / "working.mkv",
+        root / "__temp_dv_remux__" / "working.mkv",
+        root / "dragontools_dv_abc123" / "working.mkv",
+        root / "Archiv" / ".Film.partial" / "staged.mkv",
+    ]
+    normal.parent.mkdir(parents=True)
+    normal.write_bytes(b"ok")
+    for path in managed:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"managed")
+
+    scanner = WatchFolderScanner(stable_seconds=0)
+    found = scanner.scan([_rule(root)])
+    assert [Path(item.path).name for item in found] == ["Episode.mkv"]
+
+
+def test_managed_name_is_allowed_when_it_is_the_configured_watchroot(tmp_path):
+    root = tmp_path / "Archiv"
+    root.mkdir()
+    direct = root / "direct.mkv"
+    direct.write_bytes(b"video")
+
+    scanner = WatchFolderScanner(stable_seconds=0)
+    found = scanner.scan([_rule(root)])
+    assert any(Path(item.path).name == "direct.mkv" for item in found)

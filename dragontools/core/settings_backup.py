@@ -21,13 +21,14 @@ from .settings_backup_common import (
     settings_to_dict,
     iter_backup_files as _iter_backup_files,
 )
+from .settings_backup_limits import BackupArchiveLimitError
 from .settings_backup_export import export_backup, inspect_backup
 from .settings_backup_restore import restore_backup
 
 __all__ = [
     "BACKUP_FORMAT", "BACKUP_FORMAT_VERSION", "SECRET_MODE_ENCRYPTED",
     "SECRET_MODE_EXCLUDED", "SECRET_MODE_LEGACY_PLAINTEXT", "SECRETS_ENTRY",
-    "BackupEncryptionUnavailable", "BackupPasswordRequired", "InvalidBackupPassword",
+    "BackupEncryptionUnavailable", "BackupPasswordRequired", "InvalidBackupPassword", "BackupArchiveLimitError",
     "dragon_documents_dir", "default_backup_dir", "default_backup_path",
     "settings_to_dict", "inspect_backup", "export_backup", "restore_backup",
 ]

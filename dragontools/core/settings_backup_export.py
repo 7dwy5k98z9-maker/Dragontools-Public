@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+import tempfile
 import zipfile
 from datetime import datetime
 from pathlib import Path
@@ -21,11 +23,15 @@ from .settings_backup_common import (
     read_manifest,
 )
 from .settings_backup_crypto import encrypt_sensitive_settings
+from .settings_backup_limits import validate_backup_archive, validate_backup_path_size
 
 
 def inspect_backup(archive_path: str | Path) -> dict[str, Any]:
     """Liest nur Metadaten und verrät, ob beim Restore ein Passwort nötig ist."""
-    with zipfile.ZipFile(Path(archive_path), "r") as zf:
+    archive = Path(archive_path)
+    validate_backup_path_size(archive)
+    with zipfile.ZipFile(archive, "r") as zf:
+        validate_backup_archive(zf)
         manifest = read_manifest(zf)
         secret_info = manifest.get("secrets") or {}
         mode = str(secret_info.get("mode") or SECRET_MODE_LEGACY_PLAINTEXT)
@@ -71,11 +77,23 @@ def export_backup(
         "created_at": datetime.now().isoformat(timespec="seconds"),
         "secrets": secret_manifest,
     }
-    with zipfile.ZipFile(target, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-        zf.writestr("manifest.json", json.dumps(manifest, indent=2, ensure_ascii=False))
-        zf.writestr("settings.json", json.dumps(normal_settings, indent=2, ensure_ascii=False))
-        if encrypted_payload is not None:
-            zf.writestr(SECRETS_ENTRY, encrypted_payload)
-        for path, arcname in iter_backup_files(root):
-            zf.write(path, arcname)
+    # Same-directory staging preserves an existing backup until ZIP close and
+    # durable flush have both succeeded (including disk-full failures).
+    with tempfile.NamedTemporaryFile(dir=target.parent, prefix=target.name + '.',
+                                     suffix='.tmp', delete=False) as handle:
+        staged = Path(handle.name)
+    try:
+        with zipfile.ZipFile(staged, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr("manifest.json", json.dumps(manifest, indent=2, ensure_ascii=False))
+            zf.writestr("settings.json", json.dumps(normal_settings, indent=2, ensure_ascii=False))
+            if encrypted_payload is not None:
+                zf.writestr(SECRETS_ENTRY, encrypted_payload)
+            for path, arcname in iter_backup_files(root):
+                if path.resolve() not in {target.resolve(), staged.resolve()}:
+                    zf.write(path, arcname)
+        with staged.open('r+b') as handle:
+            os.fsync(handle.fileno())
+        os.replace(staged, target)
+    finally:
+        staged.unlink(missing_ok=True)
     return target

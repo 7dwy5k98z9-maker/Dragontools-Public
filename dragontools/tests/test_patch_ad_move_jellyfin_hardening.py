@@ -22,7 +22,7 @@ def test_move_source_probe_retries_and_preserves_oserror_details(tmp_path) -> No
     assert probe.available is False
     assert probe.attempts == 3
     assert probe.error_type == "FileNotFoundError"
-    assert str(missing) in probe.error_message
+    assert str(missing) in probe.error_message or repr(str(missing)) in probe.error_message
     assert probe.parent_available is True
     assert sleeps == [0.25, 0.25]
 

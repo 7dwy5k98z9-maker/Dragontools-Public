@@ -1,5 +1,7 @@
 @echo off
 setlocal EnableExtensions
+set "BACKUP_CREATED="
+set "LEGACY_BACKUP_CREATED="
 set "PYTHONUTF8=1"
 set "PYTHONIOENCODING=utf-8"
 
@@ -51,6 +53,7 @@ echo [INFO] Erkannte App-Version: %APP_VERSION%
 set "BUILD_NAME=DragonToolsV%APP_VERSION%"
 set "DIST_ROOT=dist\%BUILD_NAME%"
 set "DATA_ROOT=%DIST_ROOT%\Daten"
+set "BACKUP_DIST_ROOT=%DIST_ROOT%.__previous__"
 
 echo [INFO] Baue %BUILD_NAME%
 
@@ -141,27 +144,40 @@ REM Wir loeschen erst hier: Alle erforderlichen Eingaben, Tools und Python-Abhae
 REM wurden oben bereits fail-fast geprueft, sodass ein vorhandener funktionierender Build
 REM nicht unnoetig verloren geht.
 set "LEGACY_DIST_ROOT=dist\DragonToolsV9"
+set "LEGACY_BACKUP_DIST_ROOT=%LEGACY_DIST_ROOT%.__previous__"
+set "LEGACY_BACKUP_CREATED="
 
+if exist "%LEGACY_BACKUP_DIST_ROOT%" (
+  echo [FEHLER] Legacy-Sicherung aus vorherigem Build vorhanden: %LEGACY_BACKUP_DIST_ROOT%
+  goto :BUILD_FAILED
+)
+
+if exist "%BACKUP_DIST_ROOT%" (
+  echo [FEHLER] Build-Sicherung aus vorherigem Lauf vorhanden: %BACKUP_DIST_ROOT%
+  goto :BUILD_FAILED
+)
 if exist "%DIST_ROOT%" (
-  echo [INFO] Alter Build wird vor der Source-Pruefung entfernt: %DIST_ROOT%
-  rmdir /S /Q "%DIST_ROOT%"
-  if exist "%DIST_ROOT%" (
-    echo [FEHLER] Alter Build-Ordner konnte nicht entfernt werden: %DIST_ROOT%
+  echo [INFO] Vorhandener funktionierender Build wird bis zum erfolgreichen Abschluss gesichert: %BACKUP_DIST_ROOT%
+  move /Y "%DIST_ROOT%" "%BACKUP_DIST_ROOT%" >nul
+  if errorlevel 1 (
+    echo [FEHLER] Vorhandener Build konnte nicht gesichert werden: %DIST_ROOT%
     echo [HINWEIS] Schliesse ggf. eine laufende DragonTools-EXE oder Prozesse, die Dateien im dist-Ordner verwenden.
     goto :BUILD_FAILED
   )
+  set "BACKUP_CREATED=1"
 )
 
 REM release_validation akzeptiert neben DragonToolsV<APP_VERSION> aus Kompatibilitaetsgruenden
 REM auch dist\DragonToolsV9. Auch dieser Ordner kann sonst als veralteter Build erkannt werden.
 if exist "%LEGACY_DIST_ROOT%" (
-  echo [INFO] Alter Legacy-Build wird vor der Source-Pruefung entfernt: %LEGACY_DIST_ROOT%
-  rmdir /S /Q "%LEGACY_DIST_ROOT%"
-  if exist "%LEGACY_DIST_ROOT%" (
-    echo [FEHLER] Alter Legacy-Build-Ordner konnte nicht entfernt werden: %LEGACY_DIST_ROOT%
+  echo [INFO] Legacy-Build wird bis zum erfolgreichen Abschluss gesichert: %LEGACY_DIST_ROOT%
+  move /Y "%LEGACY_DIST_ROOT%" "%LEGACY_BACKUP_DIST_ROOT%" >nul
+  if errorlevel 1 (
+    echo [FEHLER] Legacy-Build-Ordner konnte nicht gesichert werden: %LEGACY_DIST_ROOT%
     echo [HINWEIS] Schliesse ggf. eine laufende DragonTools-EXE oder Prozesse, die Dateien im dist-Ordner verwenden.
     goto :BUILD_FAILED
   )
+  set "LEGACY_BACKUP_CREATED=1"
 )
 
 REM Alte Test-/Bytecode-Artefakte beseitigen, danach ausschliesslich den aktuellen
@@ -282,8 +298,20 @@ if errorlevel 1 (
   goto :BUILD_FAILED
 )
 
+REM Der entscheidende Smoke laeuft gegen EXAKT die finale Release-EXE und
+REM initialisiert eine echte QApplication. Damit werden insbesondere fehlende
+REM Qt-Platform-Plugins und Frozen-Importprobleme erkannt.
+echo [INFO] Starte finalen Frozen-Runtime-Smoke mit 90s Timeout: %DIST_ROOT%\%BUILD_NAME%.exe --smoke-test
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$p = Start-Process -FilePath '%DIST_ROOT%\%BUILD_NAME%.exe' -ArgumentList '--smoke-test' -WindowStyle Hidden -PassThru; if (-not $p.WaitForExit(90000)) { try { $p.Kill($true) } catch {}; Write-Error 'DragonTools Frozen-Smoke Timeout nach 90s.'; exit 124 }; exit $p.ExitCode"
+if errorlevel 1 (
+  echo [FEHLER] Die finale DragonTools-EXE besteht den Frozen-Runtime-Smoke nicht oder hat das 90s-Zeitlimit ueberschritten.
+  goto :BUILD_FAILED
+)
+
+if exist "%BACKUP_DIST_ROOT%" rmdir /S /Q "%BACKUP_DIST_ROOT%"
+if defined LEGACY_BACKUP_CREATED if exist "%LEGACY_BACKUP_DIST_ROOT%" rmdir /S /Q "%LEGACY_BACKUP_DIST_ROOT%"
 echo.
-echo [OK] %BUILD_NAME% wurde erfolgreich gebaut und validiert.
+echo [OK] %BUILD_NAME% wurde erfolgreich gebaut, validiert und gestartet.
 echo [OK] Ausgabe: %DIST_ROOT%
 goto :BUILD_SUCCESS
 
@@ -297,6 +325,16 @@ echo ============================================================
 goto :BUILD_FINISH
 
 :BUILD_FAILED
+if defined LEGACY_BACKUP_CREATED (
+  move /Y "%LEGACY_BACKUP_DIST_ROOT%" "%LEGACY_DIST_ROOT%" >nul
+  if errorlevel 1 echo [WARNUNG] Legacy-Build bleibt gesichert unter: %LEGACY_BACKUP_DIST_ROOT%
+)
+REM Ein fehlgeschlagener Releasebuild darf den letzten funktionierenden Build nicht zerstoeren.
+if defined BACKUP_CREATED if exist "%BACKUP_DIST_ROOT%" (
+  if exist "%DIST_ROOT%" rmdir /S /Q "%DIST_ROOT%"
+  move /Y "%BACKUP_DIST_ROOT%" "%DIST_ROOT%" >nul
+  if errorlevel 1 echo [WARNUNG] Vorheriger Build konnte nicht automatisch wiederhergestellt werden: %BACKUP_DIST_ROOT%
+)
 set "BUILD_RC=1"
 echo.
 echo ============================================================

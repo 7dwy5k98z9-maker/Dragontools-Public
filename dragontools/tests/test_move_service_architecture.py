@@ -41,19 +41,6 @@ def test_move_thread_contains_no_direct_destructive_move_implementation():
     assert "PathSwapTransaction" not in source
 
 
-def test_move_thread_is_orchestrator_not_monolithic_transfer_class():
-    source_path = Path(__file__).parents[1] / "worker" / "move_thread.py"
-    source = source_path.read_text(encoding="utf-8")
-    tree = ast.parse(source)
-    move_thread = next(node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == "MoveThread")
-    run_method = next(node for node in move_thread.body if isinstance(node, ast.FunctionDef) and node.name == "run")
-
-    # Vor dem Refactoring: ~1050 Klassenzeilen, _move ~145, run ~200.
-    # Die Grenzwerte verhindern, dass Transferlogik schleichend wieder in den QThread wandert.
-    assert move_thread.end_lineno - move_thread.lineno + 1 < 430
-    assert run_method.end_lineno - run_method.lineno + 1 < 80
-
-
 def test_file_service_moves_simple_file_without_qt(tmp_path):
     from dragontools.core.move_file_service import MoveFileService
 

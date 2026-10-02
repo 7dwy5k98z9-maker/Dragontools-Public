@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from ..core.audio_titles import build_audio_title
+from ..core.output_timestamps import build_output_timestamp_args
 from ..rules.audio_plan import (
     audio_filter_chain,
     audio_input_args_for_plan,
@@ -223,7 +224,7 @@ class MP4RemuxPlanner:
         ]
         if self.faststart:
             command += ["-movflags", "+faststart"]
-        command += [str(staging)]
+        command += [*build_output_timestamp_args("mp4"), str(staging)]
         return MP4RemuxPlan(
             source=source,
             destination=destination,

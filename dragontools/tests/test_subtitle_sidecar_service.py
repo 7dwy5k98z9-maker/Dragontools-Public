@@ -498,3 +498,40 @@ def test_abort_happens_before_unsupported_codec_is_reported():
 
     assert result.aborted is True
     assert result.failures == ()
+
+
+def test_pgs_mkvextract_fallback_maps_ffprobe_subtitle_ordinal_to_mkv_track(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+    from dragontools.worker.subtitle_sidecar_service import SubtitleSidecarService
+
+    source = tmp_path / "Movie.mkv"
+    source.write_bytes(b"mkv")
+    target = tmp_path / "Movie.de.sup"
+    stream = SimpleNamespace(index=5, codec="hdmv_pgs_subtitle")
+    worker = SimpleNamespace(
+        tools=SimpleNamespace(ffprobe="ffprobe", mkvmerge="mkvmerge", mkvextract="mkvextract")
+    )
+    service = SubtitleSidecarService(
+        ffmpeg_path="ffmpeg", subtitle_rules={}, log=lambda *_args, **_kwargs: None, worker=worker
+    )
+    calls = []
+
+    def fake_run(cmd, **_kwargs):
+        calls.append(list(cmd))
+        if cmd[0] == "ffprobe":
+            return SimpleNamespace(ok=True, stdout='{"streams":[{"index":2},{"index":5}]}', returncode=0)
+        if cmd[0] == "mkvmerge":
+            return SimpleNamespace(
+                ok=True,
+                stdout='{"tracks":[{"id":0,"type":"video"},{"id":3,"type":"subtitles"},{"id":7,"type":"subtitles"}]}',
+                returncode=0,
+            )
+        if cmd[0] == "mkvextract":
+            target.write_bytes(b"pgs-data")
+            return SimpleNamespace(ok=True, returncode=0, aborted=False, timed_out=False, stdout="", stderr="")
+        raise AssertionError(cmd)
+
+    monkeypatch.setattr("dragontools.worker.subtitle_sidecar_service.run_tool", fake_run)
+    assert service._try_mkvextract_pgs_fallback(str(source), stream, target) is True
+    assert calls[-1][-1] == f"7:{target}"
+    assert target.read_bytes() == b"pgs-data"

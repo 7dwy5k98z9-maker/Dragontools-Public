@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QApplication, QFileDialog, QMessageBox
+from PyQt6.QtWidgets import QApplication, QDialog, QFileDialog, QMessageBox
 
 from ..core.movie_renamer import rename_movie_file
 from ..core.path_syntax import VIDEO_EXTENSIONS, is_video_file, path_compare_key
@@ -13,9 +13,10 @@ from .drop_path_extractor import _iter_video_files_in_folder
 from .jellyfin_refresh_dispatch import dispatch_after_rename
 from .movie_renamer_search_actions import MovieRenamerSearchActionsMixin
 from .movie_renamer_season_prompt import MovieRenamerSeasonPromptMixin
+from .movie_renamer_year_edit import MovieRenamerYearPromptMixin
 
 
-class MovieRenamerActionController(MovieRenamerSeasonPromptMixin, MovieRenamerSearchActionsMixin):
+class MovieRenamerActionController(MovieRenamerYearPromptMixin, MovieRenamerSeasonPromptMixin, MovieRenamerSearchActionsMixin):
     def __init__(self, owner, view, table_controller, resolver) -> None:
         self.owner = owner
         self.view = view
@@ -71,6 +72,60 @@ class MovieRenamerActionController(MovieRenamerSeasonPromptMixin, MovieRenamerSe
         folder = QFileDialog.getExistingDirectory(self.owner, "Ordner auswählen")
         if folder:
             self.add_paths([folder])
+
+
+    def open_metadata_browser(self) -> None:
+        """Open provider-first metadata mapping and import explicit proposals."""
+        from ..core.renamer_metadata_browser import build_explicit_rename_proposal
+        from .movie_renamer_metadata_browser import MovieRenamerMetadataBrowserDialog
+
+        try:
+            dialog = MovieRenamerMetadataBrowserDialog(self.owner.settings, self.owner)
+        except Exception as exc:
+            QMessageBox.warning(
+                self.owner,
+                "Metadaten-Browser",
+                f"Metadaten-Browser konnte nicht geöffnet werden.\n\n{exc}",
+            )
+            return
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        mappings = list(dialog.mappings)
+        if not mappings:
+            return
+
+        paths = [str(mapping.source_path) for mapping in mappings]
+        # A stale automatic/manual resolve job must never overwrite an explicit
+        # provider/episode mapping after the browser closes.
+        self.resolver.invalidate_paths(paths)
+
+        imported = 0
+        failed: list[str] = []
+        for mapping in mappings:
+            try:
+                proposal = build_explicit_rename_proposal(mapping)
+            except Exception as exc:
+                failed.append(f"{Path(mapping.source_path).name}: {exc}")
+                continue
+            row = self.table_controller.find_row_by_path(mapping.source_path)
+            if row is None:
+                row = self.table_controller.add_row(Path(mapping.source_path))
+            self.table_controller.on_proposal_ready(row, proposal)
+            self.table_controller.set_row_accepted(row, True)
+            self.table_controller.set_status(
+                row, "⚠️ Konflikt" if proposal.target_exists else "✅ explizit"
+            )
+            imported += 1
+
+        message = f"{imported} explizite Metadaten-Zuordnung(en) in den Renamer übernommen."
+        if failed:
+            message += f" {len(failed)} Zuordnung(en) konnten nicht übernommen werden."
+            QMessageBox.warning(
+                self.owner,
+                "Metadaten-Browser",
+                message + "\n\n" + "\n".join(failed[:10]),
+            )
+        self.view.status_lbl.setText(message)
 
     def accept_selected(self) -> None:
         rows = self.table_controller.selected_rows()
@@ -131,7 +186,7 @@ class MovieRenamerActionController(MovieRenamerSeasonPromptMixin, MovieRenamerSe
             "Umbenennung ausführen",
             f"{len(rows)} Datei(en) werden im aktuellen Ordner umbenannt.\n\nFortfahren?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes,
         )
         if reply != QMessageBox.StandardButton.Yes:
             return

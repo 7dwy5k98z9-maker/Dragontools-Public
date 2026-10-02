@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Callable
 
 from ..core.timeout_settings import get_timeout
+from ..core.output_timestamps import build_output_timestamp_args
 from .iso_disc_inspector import ISODiscInspector, quote_concat_path
 from .iso_makemkv_service import tool_exists
 from .iso_models import ISOExtractionResult, ISOUserAbortError
@@ -115,6 +116,7 @@ class ISOFFmpegFallbackService:
                     "-i", str(src), "-map", "0", "-c", "copy", "-map_metadata", "0", str(output),
                 ]
 
+            cmd[-1:-1] = build_output_timestamp_args(output)
             runner = run_ffmpeg or self.run
             rc, lines = runner(cmd, progress_path=path)
             if rc != 0:

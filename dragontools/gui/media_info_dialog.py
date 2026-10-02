@@ -22,8 +22,17 @@ from PyQt6.QtWidgets import (
 
 from ..core.media_analyzer import analyze_media
 from ..core.settings_app import APP_NAME, APP_ORG
-from ..core.settings_conversion import SET_KEY_PRESERVE_DV, SET_KEY_PRESERVE_HDRPLUS, SET_KEY_AV1_PRESERVE_DV, SET_KEY_AV1_PRESERVE_HDRPLUS
-from ..core.settings_access import settings_bool
+from ..core.settings_conversion import (
+    DEFAULT_OUTPUT_CONTAINER_DV,
+    DEFAULT_OUTPUT_CONTAINER_STANDARD,
+    SET_KEY_AV1_PRESERVE_DV,
+    SET_KEY_AV1_PRESERVE_HDRPLUS,
+    SET_KEY_OUTPUT_CONTAINER_DV,
+    SET_KEY_OUTPUT_CONTAINER_STANDARD,
+    SET_KEY_PRESERVE_DV,
+    SET_KEY_PRESERVE_HDRPLUS,
+)
+from ..core.settings_access import settings_bool, settings_text
 from ..core.mediainfo_details import (
     MediaInfoDisplayDetails,
     build_mediainfo_display_details,
@@ -47,6 +56,8 @@ class _MediaInfoLoadThread(QThread):
         codec: str,
         global_preserve_dv: bool,
         global_preserve_hdrplus: bool,
+        standard_container: str,
+        dv_container: str,
         parent=None,
     ) -> None:
         super().__init__(parent)
@@ -57,6 +68,8 @@ class _MediaInfoLoadThread(QThread):
         self.codec = codec
         self.global_preserve_dv = bool(global_preserve_dv)
         self.global_preserve_hdrplus = bool(global_preserve_hdrplus)
+        self.standard_container = str(standard_container or DEFAULT_OUTPUT_CONTAINER_STANDARD)
+        self.dv_container = str(dv_container or DEFAULT_OUTPUT_CONTAINER_DV)
 
     def run(self) -> None:
         try:
@@ -70,6 +83,8 @@ class _MediaInfoLoadThread(QThread):
                 codec=self.codec,
                 global_preserve_dv=self.global_preserve_dv,
                 global_preserve_hdrplus=self.global_preserve_hdrplus,
+                standard_container=self.standard_container,
+                dv_container=self.dv_container,
             )
             details = build_mediainfo_display_details(self.file_path, media_info=mi)
         except Exception as exc:
@@ -167,6 +182,18 @@ class MediaInfoDialog(QDialog):
             codec=self.codec,
             global_preserve_dv=settings_bool(settings, dv_key, True),
             global_preserve_hdrplus=settings_bool(settings, hdr_key, True),
+            standard_container=settings_text(
+                settings,
+                SET_KEY_OUTPUT_CONTAINER_STANDARD,
+                DEFAULT_OUTPUT_CONTAINER_STANDARD,
+                allowed=("mkv", "mp4"),
+            ),
+            dv_container=settings_text(
+                settings,
+                SET_KEY_OUTPUT_CONTAINER_DV,
+                DEFAULT_OUTPUT_CONTAINER_DV,
+                allowed=("mkv", "mp4"),
+            ),
             parent=app,
         )
         self._load_thread.loaded.connect(self._on_info_loaded)

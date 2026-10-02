@@ -57,6 +57,8 @@ curves. Tone mapping remains display-side.
 ```text
 --ffmpeg <path>
 --ffprobe <path>
+
+Both options accept absolute executable paths (including spaces/Unicode). If omitted, the standalone generator falls back to `ffmpeg` / `ffprobe` from `PATH`. DragonTools passes its resolved bundled/configured paths explicitly.
 --analysis-width 256
 --scene-threshold 0.32
 --min-scene-frames 6
@@ -67,7 +69,7 @@ of analysis time and memory bandwidth. Temporal sampling is never reduced.
 
 ## Requirements
 
-- Python 3.11+
+- Python 3.12+
 - NumPy 2.x
 - FFmpeg + ffprobe
 

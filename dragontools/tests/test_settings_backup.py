@@ -306,3 +306,118 @@ def test_restore_backup_rolls_back_settings_and_files_on_error(tmp_path):
 
     assert target.values == {"normal/key": "old-value", "keep": "yes"}
     assert (restore_root / "rules" / "audio_rules.json").read_text(encoding="utf-8") == '{"old": true}'
+
+
+
+def test_future_backup_format_is_rejected_without_mutating_settings(tmp_path):
+    import json
+    import zipfile
+
+    import pytest
+
+    from dragontools.core.settings_backup import inspect_backup, restore_backup
+
+    archive = tmp_path / "future-backup.zip"
+    with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("manifest.json", json.dumps({
+            "format": "DragonToolsBackup",
+            "format_version": 999,
+            "app_version": "99.0",
+        }))
+        zf.writestr("settings.json", json.dumps({"normal/key": "future"}))
+
+    target = FakeSettings({"keep": "current"})
+    with pytest.raises(ValueError, match="neuer als"):
+        inspect_backup(archive)
+    with pytest.raises(ValueError, match="neuer als"):
+        restore_backup(archive, settings=target, documents_dir=tmp_path / "restore")
+    assert target.values == {"keep": "current"}
+
+
+def test_backup_member_limit_is_enforced_before_restore_mutates_settings(tmp_path, monkeypatch):
+    import json
+    import zipfile
+
+    import pytest
+
+    from dragontools.core import settings_backup_limits as limits
+    from dragontools.core.settings_backup import BackupArchiveLimitError, restore_backup
+
+    archive = tmp_path / "too-many-members.zip"
+    with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("manifest.json", json.dumps({
+            "format": "DragonToolsBackup", "format_version": 2, "app_version": "9.8.7",
+            "secrets": {"mode": "excluded"},
+        }))
+        zf.writestr("settings.json", "{}")
+        zf.writestr("files/rules/a.json", "{}")
+        zf.writestr("files/rules/b.json", "{}")
+
+    monkeypatch.setattr(limits, "MAX_BACKUP_MEMBERS", 3)
+    target = FakeSettings({"keep": "current"})
+    with pytest.raises(BackupArchiveLimitError, match="zu viele ZIP-Einträge"):
+        restore_backup(archive, settings=target, documents_dir=tmp_path / "restore")
+    assert target.values == {"keep": "current"}
+
+
+def test_backup_member_size_and_compression_ratio_are_bounded(tmp_path, monkeypatch):
+    import json
+    import zipfile
+
+    import pytest
+
+    from dragontools.core import settings_backup_limits as limits
+    from dragontools.core.settings_backup import BackupArchiveLimitError, inspect_backup
+
+    oversized = tmp_path / "oversized.zip"
+    with zipfile.ZipFile(oversized, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("manifest.json", json.dumps({
+            "format": "DragonToolsBackup", "format_version": 2, "app_version": "9.8.7",
+            "secrets": {"mode": "excluded"},
+        }))
+        zf.writestr("settings.json", "x" * 128)
+    monkeypatch.setattr(limits, "MAX_BACKUP_MEMBER_BYTES", 64)
+    with pytest.raises(BackupArchiveLimitError, match="zu groß"):
+        inspect_backup(oversized)
+
+    ratio = tmp_path / "ratio.zip"
+    with zipfile.ZipFile(ratio, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("manifest.json", json.dumps({
+            "format": "DragonToolsBackup", "format_version": 2, "app_version": "9.8.7",
+            "secrets": {"mode": "excluded"},
+        }))
+        zf.writestr("settings.json", "A" * 4096)
+    monkeypatch.setattr(limits, "MAX_BACKUP_MEMBER_BYTES", 64 * 1024 * 1024)
+    monkeypatch.setattr(limits, "COMPRESSION_RATIO_CHECK_MIN_BYTES", 1)
+    monkeypatch.setattr(limits, "MAX_BACKUP_COMPRESSION_RATIO", 2.0)
+    with pytest.raises(BackupArchiveLimitError, match="Kompressionsverhältnis"):
+        inspect_backup(ratio)
+
+
+def test_unknown_scrypt_profile_is_rejected_before_key_derivation(monkeypatch):
+    import base64
+    import json
+
+    import pytest
+
+    from dragontools.core import settings_backup_crypto as crypto
+
+    payload = json.dumps({
+        "format": "DragonToolsEncryptedSecrets",
+        "version": 1,
+        "cipher": "AES-256-GCM",
+        "kdf": "scrypt",
+        "n": 2**20,
+        "r": 32,
+        "p": 16,
+        "salt_b64": base64.b64encode(b"s" * 16).decode("ascii"),
+        "nonce_b64": base64.b64encode(b"n" * 12).decode("ascii"),
+        "ciphertext_b64": base64.b64encode(b"ciphertext").decode("ascii"),
+    }).encode("utf-8")
+
+    def must_not_derive(*_args, **_kwargs):
+        raise AssertionError("expensive KDF must not run for unsupported parameters")
+
+    monkeypatch.setattr(crypto, "_derive_key", must_not_derive)
+    with pytest.raises(ValueError, match="KDF-Parameter"):
+        crypto.decrypt_sensitive_settings(payload, "valid-password")

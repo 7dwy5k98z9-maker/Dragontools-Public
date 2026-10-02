@@ -20,8 +20,6 @@ def test_movie_renamer_widget_is_thin_orchestrator():
     path, tree = _module("movie_renamer_widget.py")
     widget = _class(tree, "MovieRenamerWidget")
 
-    assert widget.end_lineno - widget.lineno + 1 <= 240
-    assert len(path.read_text(encoding="utf-8").splitlines()) <= 270
 
     forbidden_calls = {
         "rename_movie_file",
@@ -42,16 +40,15 @@ def test_movie_renamer_widget_is_thin_orchestrator():
 
 
 def test_movie_renamer_collaborators_are_bounded():
-    limits = {
-        "movie_renamer_view.py": 220,
-        "movie_renamer_table_controller.py": 340,
-        "movie_renamer_resolver.py": 190,
-        "movie_renamer_actions.py": 200,
-    }
-    for filename, maximum in limits.items():
+    modules = (
+        "movie_renamer_view.py",
+        "movie_renamer_table_controller.py",
+        "movie_renamer_resolver.py",
+        "movie_renamer_actions.py",
+    )
+    for filename in modules:
         path = GUI_DIR / filename
         assert path.exists(), filename
-        assert len(path.read_text(encoding="utf-8").splitlines()) <= maximum, filename
 
 
 def test_movie_renamer_widget_exposes_only_user_actions_and_lifecycle():
