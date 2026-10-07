@@ -9,6 +9,7 @@ Move.
 from __future__ import annotations
 
 from pathlib import Path
+from copy import deepcopy
 
 from ..core.move_file_service import MoveFileService
 from ..core.move_journal import MoveJournalWriteError
@@ -50,9 +51,9 @@ class MoveResultCommitMixin:
     def _planned_target_for(self, path: str):
         lock = self._attr("_planned_targets_lock", None)
         if lock is None:
-            return self._attr("planned_targets", {}).get(path)
+            return deepcopy(self._attr("planned_targets", {}).get(path))
         with lock:
-            return self.planned_targets.get(path)
+            return deepcopy(self.planned_targets.get(path))
 
     def _router(self) -> MoveRouter:
         return MoveRouter(
@@ -78,6 +79,7 @@ class MoveResultCommitMixin:
             record_media_library_move=self._record_media_library_move,
             append_move_report=self._append_move_report,
             log=self._log,
+            planned_target_for=self._planned_target_for,
         )
 
     def _record_media_library_move(self, source_path: str, move_result: dict | None) -> None:

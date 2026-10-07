@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+from copy import deepcopy
+
 from dataclasses import dataclass, field
 
 
@@ -13,11 +15,11 @@ class EncoderOverrideApplyResult:
 def apply_encoder_override(owner, paths: list[str], encoder_value: dict | None) -> EncoderOverrideApplyResult:
     result = EncoderOverrideApplyResult()
     for path in paths:
-        override = dict(owner._state.file_overrides.get(path) or {})
+        override = deepcopy(owner._state.file_overrides.get(path) or {})
         if encoder_value is None:
             override.pop("encoder_override", None)
         else:
-            override["encoder_override"] = dict(encoder_value)
+            override["encoder_override"] = deepcopy(encoder_value)
 
         thread = owner._state.thread
         if thread and hasattr(thread, "update_override") and not thread.update_override(path, override):
@@ -25,6 +27,9 @@ def apply_encoder_override(owner, paths: list[str], encoder_value: dict | None) 
             continue
 
         owner._state.file_overrides[path] = override
+        controller = getattr(owner, "_controller", None)
+        if controller is not None and hasattr(controller, "persist_file_override"):
+            controller.persist_file_override(path, override)
         getattr(owner._state, "preflight_rows_by_path", {}).pop(path, None)
         owner.update_queue_label(path)
         result.applied += 1

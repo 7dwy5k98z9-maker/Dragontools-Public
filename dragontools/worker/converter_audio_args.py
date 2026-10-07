@@ -1,7 +1,12 @@
 from __future__ import annotations
 
-from ..core.audio_titles import build_audio_title
-from ..rules.audio_plan import audio_filter_chain, audio_input_args_for_plan, compute_audio_track_plan
+from .audio_metadata_args import audio_metadata_args
+from ..rules.audio_plan import (
+    audio_filter_chain,
+    audio_input_args_for_plan,
+    compute_audio_track_plan,
+    output_default_for_decision,
+)
 
 
 def build_audio_args(worker, mi, ov, container) -> list[str]:
@@ -43,10 +48,4 @@ def build_audio_input_args(mi, ov, container) -> list[str]:
 
 
 def _append_audio_metadata(args: list[str], decision, chosen, out_idx: int) -> None:
-    title_codec = decision.target_codec if decision.needs_transcode else chosen.codec
-    title_channels = decision.target_channels if decision.needs_transcode else getattr(chosen, "channels", None)
-    title_bitrate = decision.target_bitrate if decision.needs_transcode else getattr(chosen, "bitrate", None)
-    title = build_audio_title(language=getattr(chosen, "language", None), codec=title_codec, channels=title_channels, bitrate_bps=title_bitrate)
-    if getattr(chosen, "language", None):
-        args += [f"-metadata:s:a:{out_idx}", f"language={chosen.language.lower()}"]
-    args += [f"-metadata:s:a:{out_idx}", f"title={title}"]
+    args.extend(audio_metadata_args(decision))

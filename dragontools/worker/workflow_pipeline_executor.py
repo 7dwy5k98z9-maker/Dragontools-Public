@@ -35,8 +35,12 @@ class WorkflowPipelineExecutor:
 
         try:
             pipeline = Pipeline(request.pipeline)
-        except ValueError:
-            pipeline = Pipeline.STANDARD
+        except (ValueError, TypeError):
+            return PipelineExecutionResult(
+                success=False,
+                failure_stage="Pipeline-Auswahl",
+                failure_reason=f"Unbekannte Pipeline: {request.pipeline!r}.",
+            )
 
         if pipeline == Pipeline.DV:
             return self._dv_pipeline.execute(request)
@@ -65,8 +69,21 @@ class WorkflowPipelineExecutor:
                 sidecar_paths=result.sidecar_paths,
                 failure_stage="HDR10+-Postprozess",
                 failure_reason="HDR10+-Postprozess ist nicht verdrahtet.",
+                preserve_failed_output=True,
             )
-        return postprocess(request, sidecar_paths=result.sidecar_paths)
+        try:
+            return postprocess(request, sidecar_paths=result.sidecar_paths)
+        except Exception as exc:
+            # The base encode/remux has already succeeded.  An unexpected
+            # metadata post-step exception must fail closed without destroying
+            # that usable candidate during generic workflow cleanup.
+            return PipelineExecutionResult(
+                success=False,
+                sidecar_paths=result.sidecar_paths,
+                failure_stage="HDR10+-Postprozess",
+                failure_reason=f"HDR10+-Postprozess unerwartet fehlgeschlagen: {exc}",
+                preserve_failed_output=True,
+            )
 
     def _execute_strip(self, request: PipelineExecutionRequest) -> PipelineExecutionResult:
         ok = bool(
@@ -86,10 +103,14 @@ class WorkflowPipelineExecutor:
                 sidecar_paths=sidecars,
                 externalized_subtitle_stream_indices=externalized,
             )
+        owner = getattr(self._strip_runner, "__self__", None)
+        preserve = bool(getattr(owner, "last_preserve_failed_output", False))
         return PipelineExecutionResult(
             success=False,
-            failure_reason=self._temp_state.failure_reason,
-            failure_stage=self._temp_state.failure_stage or "Strip-Only",
+            sidecar_paths=tuple(getattr(owner, "last_sidecar_paths", ()) or ()),
+            preserve_failed_output=preserve,
+            failure_reason=getattr(owner, "last_failure_reason", "") or self._temp_state.failure_reason,
+            failure_stage="Untertitel-Export" if preserve else (self._temp_state.failure_stage or "Strip-Only"),
             tool_output=self._temp_state.stderr,
             tool=self._temp_state.last_tool,
             command=self._temp_state.last_command,

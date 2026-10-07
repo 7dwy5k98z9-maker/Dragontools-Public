@@ -8,8 +8,9 @@ from types import SimpleNamespace
 
 from ..core.error_report import write_conversion_error_report
 from ..core.models import normalize_override_dict
+from .worker_contracts import file_override_for_path as _file_override_for_path
+from .converter_optional_runtime import configure_optional_file_runtime
 from .source_visual_check import source_visual_settings_from_qsettings
-
 
 class ConverterFileExecutor:
     """Führt genau eine Queue-Datei über den bereits verdrahteten Workflow aus."""
@@ -27,7 +28,9 @@ class ConverterFileExecutor:
         try:
             worker.emit_file_result(input_path, input_path, "⏳")
             worker.emit_file_progress(input_path, 0)
-            override = normalize_override_dict(worker._job_state.file_overrides.get(input_path))
+            override = normalize_override_dict(_file_override_for_path(worker._job_state.file_overrides, input_path))
+            # Live additions may select an optional backend after run startup.
+            configure_optional_file_runtime(worker, getattr(worker._services, "tools", None), override)
             if not self._check_source_visual_quality(input_path, override):
                 return False
             return worker._services.workflow_runner.run(input_path, override)
@@ -49,7 +52,7 @@ class ConverterFileExecutor:
                         replace_original=worker._job_state.overwrite_original,
                         strip_only=worker._job_state.strip_only,
                         file_override=normalize_override_dict(
-                            worker._job_state.file_overrides.get(input_path)
+                            _file_override_for_path(worker._job_state.file_overrides, input_path)
                         ),
                     ),
                     reason="Unbehandelte Ausnahme im Converter-Worker.",

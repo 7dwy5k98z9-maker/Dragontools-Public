@@ -28,6 +28,7 @@ from ..core.settings_media_library import (
     SET_KEY_MEDIA_LIBRARY_LANGUAGE_MODEL,
     SET_KEY_MEDIA_LIBRARY_LANGUAGE_SAMPLE_SECONDS,
 )
+from ..core.media_duration import positive_seconds
 from ..core.track_titles import build_track_title, track_title_is_generic
 
 
@@ -147,6 +148,7 @@ class MediaStreamLanguageService:
                     break
                 wav = Path(tmp) / f"sample_{sample_no}.wav"
                 if not self._extract_audio_sample(issue.path, issue.stream_index, start, wav):
+                    evidence.append(LanguageEvidence("", 0.0, f"audio-{sample_no}"))
                     continue
                 item = detector.detect_file(str(wav))
                 evidence.append(LanguageEvidence(item.language, item.probability, f"audio-{sample_no}"))
@@ -224,12 +226,18 @@ class MediaStreamLanguageService:
             return 0.0
         try:
             data = json.loads(result.stdout or "{}")
-            return max(0.0, float((data.get("format") or {}).get("duration") or 0.0))
+            fmt = data.get("format") if isinstance(data, dict) else None
+            return (positive_seconds(fmt.get("duration")) or 0.0) if isinstance(fmt, dict) else 0.0
         except (TypeError, ValueError, json.JSONDecodeError):
             return 0.0
 
     def _abort_requested(self) -> bool:
-        return bool(self.worker is not None and getattr(self.worker, "abort_requested", False))
+        if self.worker is None:
+            return False
+        state = getattr(self.worker, "_control_state", None)
+        requested = bool(getattr(state, "abort_requested", False)) if state is not None else bool(getattr(self.worker, "abort_requested", False))
+        abort_type = getattr(state, "abort_type", None) if state is not None else getattr(self.worker, "abort_type", None)
+        return bool(requested and abort_type == "sofort")
 
     def _setting_int(self, key: str, default: int, *, minimum: int, maximum: int) -> int:
         try:

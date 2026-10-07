@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-import subprocess
+import math
 from pathlib import Path
 from typing import Callable
 
@@ -15,8 +15,11 @@ except Exception:  # pragma: no cover - optional build dependency
 from .audio_video_match_models import AudioVideoMatcherSettings, FrameSignature, MatchPoint
 from .audio_video_match_utils import _clamp
 from .process_runner import subprocess_no_window_kwargs
+from .analysis_process import run_owned_analysis
+from .audio_video_sampling_plan import sampling_windows
 
 RunBytesFn = Callable[[list[str], int | float | None], bytes]
+FRAME_WINDOW_BYTE_BUDGET = 32 * 1024 * 1024
 
 def opencv_available() -> bool:
     return _cv2 is not None and _np is not None
@@ -29,14 +32,11 @@ def image_analysis_backend_label() -> str:
     return "FFmpeg/dHash-Fallback"
 
 def _default_run_bytes(cmd: list[str], timeout_s: int | float | None) -> bytes:
-    result = subprocess.run(
+    result = run_owned_analysis(
         cmd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        stdin=subprocess.DEVNULL,
         timeout=timeout_s,
-        check=False,
-        **subprocess_no_window_kwargs(),
+        no_window_kwargs=subprocess_no_window_kwargs(),
+        text=False,
     )
     if result.returncode != 0:
         detail = (result.stderr or b"").decode("utf-8", errors="replace").strip()
@@ -66,11 +66,27 @@ class FrameExtractor:
     ) -> list[FrameSignature]:
         width = int(self.settings.analysis_width)
         height = int(self.settings.analysis_height)
-        fps_value = max(0.5, float(fps or self.settings.coarse_fps))
-        duration = max(0.20, float(duration_s))
+        fps_value = float(self.settings.coarse_fps if fps is None else fps)
         start = max(0.0, float(start_s))
+        frame_size = width * height
+        signatures: list[FrameSignature] = []
+        for first, window_start, part_duration, limit in sampling_windows(
+                start_s, duration_s, fps_value, width, height, FRAME_WINDOW_BYTE_BUDGET):
+            raw = self._read_window(path, window_start, part_duration, fps_value, width, height, limit)
+            frame_count = len(raw) // frame_size
+            if frame_count > limit or len(raw) % frame_size:
+                raise RuntimeError("Bildanalyse lieferte eine unvollständige oder zu große Frame-Ausgabe.")
+            if not frame_count:
+                break
+            for idx in range(frame_count):
+                frame = raw[idx * frame_size:(idx + 1) * frame_size]
+                time_s = start + (first + idx) / fps_value
+                signatures.append(_signature_from_gray_frame(frame, width, height, time_s))
+        return signatures
+
+    def _read_window(self, path, start, duration, fps_value, width, height, limit):
         vf = (
-            f"fps={fps_value:.3f},"
+            f"fps={fps_value:.12g},"
             f"scale={width}:{height}:force_original_aspect_ratio=decrease,"
             f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,"
             "format=gray"
@@ -82,11 +98,11 @@ class FrameExtractor:
             "-loglevel",
             "error",
             "-ss",
-            f"{start:.3f}",
+            f"{start:.9f}",
             "-i",
             path,
             "-t",
-            f"{duration:.3f}",
+            f"{duration:.9f}",
             "-map",
             "0:v:0",
             "-an",
@@ -94,24 +110,13 @@ class FrameExtractor:
             "-dn",
             "-vf",
             vf,
+            "-frames:v",
+            str(limit),
             "-f",
             "rawvideo",
             "pipe:1",
         ]
-        timeout = max(20.0, duration * 8.0)
-        raw = self._run_bytes(cmd, timeout)
-        frame_size = width * height
-        signatures: list[FrameSignature] = []
-        if frame_size <= 0:
-            return signatures
-        frame_count = len(raw) // frame_size
-        for idx in range(frame_count):
-            frame = raw[idx * frame_size:(idx + 1) * frame_size]
-            if len(frame) != frame_size:
-                continue
-            time_s = start + idx / fps_value
-            signatures.append(_signature_from_gray_frame(frame, width, height, time_s))
-        return signatures
+        return self._run_bytes(cmd, max(20.0, duration * 8.0))
 
 
 def _content_box(frame: bytes, width: int, height: int) -> tuple[int, int, int, int]:
@@ -325,7 +330,8 @@ class FrameMatcher:
             search_window_s=1.25,
             fps=self.settings.refine_fps,
         )
-        best = refined or coarse
+        best = max((candidate for candidate in (coarse, refined) if candidate is not None),
+                   key=lambda candidate: candidate.similarity)
         if best.similarity < self.settings.min_similarity:
             return None
         return best

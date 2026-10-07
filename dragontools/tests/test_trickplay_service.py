@@ -54,9 +54,9 @@ def test_trickplay_existing_root_allows_missing_sprite_variant(tmp_path, monkeyp
     settings = TrickplaySettings(enabled=True, only_missing=True, width=640)
     (tmp_path / "Film.trickplay" / "320 - 10x10").mkdir(parents=True)
 
-    def fake_run(self, _cmd):
+    def fake_run(self, cmd):
         out = trickplay_sprite_dir_for_video(video, settings)
-        partial = video.with_name(f"{video.stem}.trickplay.__partial__") / out.name
+        partial = Path(cmd[-1]).parent
         partial.mkdir(parents=True, exist_ok=True)
         (partial / "0.jpg").write_bytes(b"jpg")
         return True
@@ -78,8 +78,8 @@ def test_trickplay_existing_root_can_be_backed_up(tmp_path, monkeypatch):
     (existing / "0.jpg").write_bytes(b"old")
     settings = TrickplaySettings(enabled=True, conflict_mode="backup")
 
-    def fake_run(self, _cmd):
-        partial = video.with_name("Film.trickplay.__partial__") / "320 - 10x10"
+    def fake_run(self, cmd):
+        partial = Path(cmd[-1]).parent
         partial.mkdir(parents=True, exist_ok=True)
         (partial / "0.jpg").write_bytes(b"new")
         return True
@@ -108,7 +108,7 @@ def test_trickplay_can_read_source_but_write_for_output_video(tmp_path, monkeypa
 
     def fake_run(self, cmd):
         seen_cmds.append(list(cmd))
-        partial = output.with_name("Fertig.trickplay.__partial__") / "320 - 10x10"
+        partial = Path(cmd[-1]).parent
         partial.mkdir(parents=True, exist_ok=True)
         (partial / "0.jpg").write_bytes(b"jpg")
         return True
@@ -134,8 +134,8 @@ def test_trickplay_logs_hardware_mode(tmp_path, monkeypatch):
     settings = TrickplaySettings(enabled=True, hwaccel="cuda")
     messages: list[str] = []
 
-    def fake_run(self, _cmd):
-        partial = video.with_name("Film.trickplay.__partial__") / trickplay_sprite_dir_for_video(video, settings).name
+    def fake_run(self, cmd):
+        partial = Path(cmd[-1]).parent
         partial.mkdir(parents=True, exist_ok=True)
         (partial / "0.jpg").write_bytes(b"jpg")
         return True
@@ -161,12 +161,12 @@ def test_trickplay_logs_cpu_fallback_mode(tmp_path, monkeypatch):
     calls = 0
     messages: list[str] = []
 
-    def fake_run(self, _cmd):
+    def fake_run(self, cmd):
         nonlocal calls
         calls += 1
         if calls <= 2:
             return False
-        partial = video.with_name("Film.trickplay.__partial__") / trickplay_sprite_dir_for_video(video, settings).name
+        partial = Path(cmd[-1]).parent
         partial.mkdir(parents=True, exist_ok=True)
         (partial / "0.jpg").write_bytes(b"jpg")
         return True
@@ -196,7 +196,7 @@ def test_trickplay_uses_cuda_download_retry_before_cpu_fallback(tmp_path, monkey
         calls.append(list(cmd))
         if len(calls) == 1:
             return False
-        partial = video.with_name("Film.trickplay.__partial__") / trickplay_sprite_dir_for_video(video, settings).name
+        partial = Path(cmd[-1]).parent
         partial.mkdir(parents=True, exist_ok=True)
         (partial / "0.jpg").write_bytes(b"jpg")
         return True
@@ -222,13 +222,13 @@ def test_trickplay_overwrite_commit_failure_restores_previous_root(tmp_path, mon
     (existing / "0.jpg").write_bytes(b"old")
     settings = TrickplaySettings(enabled=True, conflict_mode="overwrite")
 
-    def fake_run(self, _cmd):
-        partial = tmp_path / "Film.trickplay.__partial__" / "320 - 10x10"
+    def fake_run(self, cmd):
+        partial = Path(cmd[-1]).parent
         partial.mkdir(parents=True, exist_ok=True)
         (partial / "0.jpg").write_bytes(b"new")
         return True
 
-    real_replace = move_transaction.os.replace
+    real_replace = move_transaction.os.rename
 
     def fail_partial_commit(src, dst):
         if ".__partial__" in str(src) and str(dst).endswith("Film.trickplay"):
@@ -236,13 +236,13 @@ def test_trickplay_overwrite_commit_failure_restores_previous_root(tmp_path, mon
         return real_replace(src, dst)
 
     monkeypatch.setattr(TrickplayGenerator, "_run", fake_run)
-    monkeypatch.setattr(move_transaction.os, "replace", fail_partial_commit)
+    monkeypatch.setattr(move_transaction.os, "rename", fail_partial_commit)
     messages: list[str] = []
     generator = TrickplayGenerator(ffmpeg_path="ffmpeg", log=messages.append)
 
     assert generator.generate(video, settings) is None
     assert (existing / "0.jpg").read_bytes() == b"old"
-    assert not (tmp_path / "Film.trickplay.__partial__").exists()
+    assert not list(tmp_path.glob("Film.trickplay.__partial__*"))
     assert not list(tmp_path.glob("Film.trickplay.bak*"))
     assert any("wiederhergestellt" in msg for msg in messages)
 
@@ -258,13 +258,13 @@ def test_trickplay_rollback_failure_keeps_old_backup(tmp_path, monkeypatch):
     (existing / "0.jpg").write_bytes(b"old")
     settings = TrickplaySettings(enabled=True, conflict_mode="overwrite")
 
-    def fake_run(self, _cmd):
-        partial = tmp_path / "Film.trickplay.__partial__" / "320 - 10x10"
+    def fake_run(self, cmd):
+        partial = Path(cmd[-1]).parent
         partial.mkdir(parents=True, exist_ok=True)
         (partial / "0.jpg").write_bytes(b"new")
         return True
 
-    real_replace = move_transaction.os.replace
+    real_replace = move_transaction.os.rename
     calls = 0
 
     def fail_commit_and_rollback(src, dst):
@@ -275,7 +275,7 @@ def test_trickplay_rollback_failure_keeps_old_backup(tmp_path, monkeypatch):
         return real_replace(src, dst)
 
     monkeypatch.setattr(TrickplayGenerator, "_run", fake_run)
-    monkeypatch.setattr(move_transaction.os, "replace", fail_commit_and_rollback)
+    monkeypatch.setattr(move_transaction.os, "rename", fail_commit_and_rollback)
     messages: list[str] = []
     generator = TrickplayGenerator(ffmpeg_path="ffmpeg", log=messages.append)
 
@@ -297,8 +297,8 @@ def test_trickplay_overwrite_keeps_backup_if_cleanup_fails(tmp_path, monkeypatch
     (existing / "0.jpg").write_bytes(b"old")
     settings = TrickplaySettings(enabled=True, conflict_mode="overwrite")
 
-    def fake_run(self, _cmd):
-        partial = tmp_path / "Film.trickplay.__partial__" / "320 - 10x10"
+    def fake_run(self, cmd):
+        partial = Path(cmd[-1]).parent
         partial.mkdir(parents=True, exist_ok=True)
         (partial / "0.jpg").write_bytes(b"new")
         return True

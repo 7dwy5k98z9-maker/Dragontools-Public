@@ -13,8 +13,10 @@ Die fachlichen Verantwortlichkeiten sind auf kleine Komponenten verteilt:
 Diese Klasse besitzt nur Qt-Signale, Initialzustand und den Run-Rahmen.
 """
 from __future__ import annotations
+from ..core.journal_runtime import journal_activity
 
 import os  # Legacy test/diagnostic hook: move_thread.os.replace
+from copy import deepcopy
 import threading
 import traceback
 from pathlib import Path
@@ -73,7 +75,7 @@ class MoveThread(
         self.filme_path = filme_path
         self._shutdown_getter = shutdown_getter
         self.shutdown_after = shutdown_after
-        self.planned_targets = dict(planned_targets or {})
+        self.planned_targets = deepcopy(planned_targets or {})
         self._planned_targets_lock = threading.Lock()
         self.all_video_files = list(all_video_files or dateipfade or [])
         self.conflict_mode = (
@@ -84,7 +86,7 @@ class MoveThread(
         self.episode_replacement_mode = normalize_episode_replacement_mode(
             episode_replacement_mode
         )
-        self._sidecar_outputs_by_video: dict[str, list[str]] = dict(
+        self._sidecar_outputs_by_video: dict[str, list[str]] = deepcopy(
             sidecar_outputs_by_video or {}
         )
         self._companion_resume_sources: dict[str, str] = dict(
@@ -124,25 +126,26 @@ class MoveThread(
             self._logger.move_header(len(self.dateipfade))
 
         try:
-            files, total_bytes = collect_move_files(self.dateipfade)
-            if not files:
-                self.progress.emit(100)
-                return
+            with journal_activity():
+                files, total_bytes = collect_move_files(self.dateipfade)
+                if not files:
+                    self.progress.emit(100)
+                    return
 
-            self._start_move_journal(files)
-            batch = self._execute_move_batch(files, total_bytes)
-            moved_any = batch.moved_any
-            self.ok_count = batch.ok_count
-            self.error_count = batch.error_count
+                self._start_move_journal(files)
+                batch = self._execute_move_batch(files, total_bytes)
+                moved_any = batch.moved_any
+                self.ok_count = batch.ok_count
+                self.error_count = batch.error_count
 
-            if self.abort_requested:
-                self._log("Verschieben abgebrochen.", "warn")
-            else:
-                self.progress.emit(100)
-            self.move_eta.emit(-1.0)
+                if self.abort_requested:
+                    self._log("Verschieben abgebrochen.", "warn")
+                else:
+                    self.progress.emit(100)
+                self.move_eta.emit(-1.0)
 
-            if not self.abort_requested and moved_any:
-                did_shut = self._handle_optional_shutdown()
+                if not self.abort_requested and moved_any:
+                    did_shut = self._handle_optional_shutdown()
         except Exception:
             moved_any = moved_any or bool(self._moved_log)
             # Bewusste QThread-Grenze: unerwartete Fehler duerfen nicht still

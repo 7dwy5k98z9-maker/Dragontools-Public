@@ -26,7 +26,7 @@ def reconstruct_local_path_from_url_string(raw_url: str) -> str:
         if len(path) >= 3 and path[0] == "\\" and path[2] == ":":
             path = path[1:]
         return path
-    return unquote((parsed.netloc or "") + path)
+    return ("//" + parsed.netloc + path) if parsed.netloc else path
 
 
 def extract_candidate_paths_from_text(text: str) -> list[str]:
@@ -49,19 +49,10 @@ def extract_candidate_paths_from_text(text: str) -> list[str]:
 
 
 def decode_windows_filename_payload(data: bytes, *, utf16: bool) -> list[str]:
-    decoded_variants: list[str] = []
     try:
-        decoded = data.decode("utf-16-le", errors="ignore") if utf16 else data.decode(errors="ignore")
-        decoded_variants.append(decoded.replace("\x00", "\n"))
-    except Exception:
-        logging.getLogger(__name__).debug("Unterdrückte Best-Effort-Ausnahme in decode_windows_filename_payload.", exc_info=True)
-    if utf16:
-        try:
-            decoded_variants.append(data.decode(errors="ignore").replace("\x00", "\n"))
-        except Exception:
-            logging.getLogger(__name__).debug("Unterdrückte Best-Effort-Ausnahme in decode_windows_filename_payload.", exc_info=True)
-
-    paths: list[str] = []
-    for decoded in decoded_variants:
-        paths.extend(extract_candidate_paths_from_text(decoded))
-    return paths
+        encoding = "utf-16-le" if utf16 else ("mbcs" if os.name == "nt" else "utf-8")
+        decoded = data.decode(encoding)
+    except UnicodeError:
+        logging.getLogger(__name__).debug("Ungültige Dateinamencodierung beim Drag & Drop.", exc_info=True)
+        return []
+    return extract_candidate_paths_from_text(decoded)

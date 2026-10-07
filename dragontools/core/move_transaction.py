@@ -7,13 +7,18 @@ zu muessen.
 """
 from __future__ import annotations
 
+import ctypes
+import errno
 import os
 import shutil
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
+from copy import deepcopy
 from .move_copy_verification import verify_staged_path_copy
+from .transaction_identity import (object_identity, same_object, path_receipt,
+    receipt_matches, renamed_receipt_matches)
 
 
 class PathTransactionRollbackError(OSError):
@@ -45,9 +50,89 @@ def unique_staging_path(destination: str | Path, *, attempts: int = 1000) -> Pat
     for _ in range(max(1, int(attempts))):
         token = uuid.uuid4().hex[:10]
         candidate = dst.with_name(f"{dst.name}.__dragontools_partial__{token}")
-        if not candidate.exists():
+        if not candidate.exists() and not candidate.is_symlink():
             return candidate
     raise RuntimeError(f"Kein freier Transaktionspfad gefunden fuer {dst.name}")
+
+
+
+
+def publish_staged_no_replace(staging: str | Path, destination: str | Path) -> None:
+    """Publish a fully staged sibling without overwriting a late destination.
+
+    This is the commit primitive for moves that were planned against an absent
+    destination.  A target that appears after conflict planning must never be
+    silently replaced.  Windows ``os.rename`` already has no-replace semantics;
+    Linux uses ``renameat2(RENAME_NOREPLACE)`` when available.  For regular files
+    on other POSIX systems a hardlink provides the same atomic exclusion.
+    """
+    stage = Path(staging)
+    dst = Path(destination)
+    if not (stage.exists() or stage.is_symlink()):
+        raise FileNotFoundError(f"Staging-Pfad fehlt: {stage}")
+    if dst.exists() or dst.is_symlink():
+        raise FileExistsError(f"Move-Ziel wurde zwischenzeitlich belegt: {dst}")
+
+    if os.name == "nt":
+        # On Windows os.rename() fails when dst already exists.
+        os.rename(str(stage), str(dst))
+        return
+
+    if os.name == "posix" and hasattr(ctypes, "CDLL"):
+        try:
+            libc = ctypes.CDLL(None, use_errno=True)
+            renameat2 = getattr(libc, "renameat2")
+        except (OSError, AttributeError):
+            renameat2 = None
+        if renameat2 is not None:
+            AT_FDCWD = -100
+            RENAME_NOREPLACE = 1
+            renameat2.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint]
+            renameat2.restype = ctypes.c_int
+            rc = renameat2(
+                AT_FDCWD, os.fsencode(stage), AT_FDCWD, os.fsencode(dst), RENAME_NOREPLACE
+            )
+            if rc == 0:
+                return
+            err = ctypes.get_errno()
+            if err not in {errno.ENOSYS, errno.EINVAL, errno.ENOTSUP, getattr(errno, "EOPNOTSUPP", errno.ENOTSUP)}:
+                if err == errno.EEXIST:
+                    raise FileExistsError(err, os.strerror(err), str(dst))
+                raise OSError(err, os.strerror(err), str(dst))
+
+    # Portable POSIX fallback for files: hardlink creation is atomic and fails
+    # with EEXIST instead of replacing a concurrently created target.
+    if not stage.is_dir() or stage.is_symlink():
+        os.link(str(stage), str(dst), follow_symlinks=False)
+        remove_path(stage)
+        return
+
+    # Directory fallback for platforms without renameat2.  The project runtime
+    # is Windows, where the branch above is atomic.  Keep the fallback fail-closed
+    # for all ordinary late-conflict cases.
+    if dst.exists() or dst.is_symlink():
+        raise FileExistsError(f"Move-Ziel wurde zwischenzeitlich belegt: {dst}")
+    os.rename(str(stage), str(dst))
+
+def copy_file_to_staging(source, staging, *, follow_symlinks=False):
+    src, stage = Path(source), Path(staging)
+    if src.is_symlink() and not follow_symlinks:
+        stage.symlink_to(os.readlink(src), target_is_directory=src.is_dir())
+        return str(stage)
+    identity = None
+    try:
+        with open(src, 'rb') as left, open(stage, 'xb') as right:
+            identity = object_identity(stage)
+            shutil.copyfileobj(left, right, 1024 * 1024)
+            right.flush()
+            os.fsync(right.fileno())
+        shutil.copystat(src, stage, follow_symlinks=False)
+        return str(stage)
+    except Exception:
+        # Exclusive creation owns only this inode; collisions never grant cleanup.
+        if same_object(stage, identity):
+            remove_path(stage)
+        raise
 
 
 def copy_path_to_staging(source: str | Path, staging: str | Path) -> None:
@@ -55,10 +140,18 @@ def copy_path_to_staging(source: str | Path, staging: str | Path) -> None:
     src = Path(source)
     stage = Path(staging)
     if src.is_dir() and not src.is_symlink():
-        shutil.copytree(src, stage, copy_function=shutil.copy2, symlinks=True)
+        stage.mkdir()
+        identity = object_identity(stage)
+        try:
+            shutil.copytree(src, stage, copy_function=copy_file_to_staging,
+                symlinks=True, dirs_exist_ok=True)
+        except Exception:
+            if same_object(stage, identity):
+                remove_path(stage)
+            raise
     else:
         stage.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(src, stage, follow_symlinks=False)
+        copy_file_to_staging(src, stage, follow_symlinks=False)
 
 
 @dataclass
@@ -83,6 +176,9 @@ class PathSwapTransaction:
     preserve_staging_on_rollback: bool = False
     backup_created: bool = False
     committed: bool = False
+    replace_existing_destination: bool = True
+    expected_destination_receipt: dict | None = None
+    expected_staging_receipt: dict | None = None
 
     def __post_init__(self) -> None:
         self.source = Path(self.source)
@@ -90,15 +186,27 @@ class PathSwapTransaction:
         self.backup_path = Path(self.backup_path)
         if self.staging_path is not None:
             self.staging_path = Path(self.staging_path)
+        self._destination_receipt = path_receipt(self.destination) if self.destination.exists() or self.destination.is_symlink() else None
+        self._staging_receipt = path_receipt(self.staging_path) if self.staging_path is not None and self.staging_path.exists() else None
+        if self.expected_destination_receipt is not None:
+            self._destination_receipt = deepcopy(self.expected_destination_receipt)
+        if self.expected_staging_receipt is not None:
+            self._staging_receipt = deepcopy(self.expected_staging_receipt)
+        self._backup_receipt = None
+        self.installed_receipt = None
 
     def stage(self) -> Path:
         if self.staging_path is None:
             self.staging_path = unique_staging_path(self.destination)
-        if self.staging_path.exists():
+        if self.staging_path.exists() or self.staging_path.is_symlink():
             raise FileExistsError(f"Staging-Pfad existiert bereits: {self.staging_path}")
+        source_receipt = path_receipt(self.source)
         try:
             copy_path_to_staging(self.source, self.staging_path)
+            self._staging_receipt = path_receipt(self.staging_path)
             verify_staged_path_copy(self.source, self.staging_path)
+            if not receipt_matches(self.source, source_receipt):
+                raise OSError('Quelle wurde während des Kopierens ausgetauscht.')
         except (OSError, shutil.Error):
             self.cleanup_staging(best_effort=True)
             raise
@@ -112,19 +220,29 @@ class PathSwapTransaction:
         stage = self.staging_path
         if stage is None or not stage.exists():
             raise FileNotFoundError("Transaktions-Staging fehlt; stage() muss vor commit() erfolgreich sein.")
+        if not receipt_matches(stage, self._staging_receipt):
+            raise OSError('Transaktions-Staging wurde nach der Prüfung verändert.')
 
         if self.destination.exists() or self.destination.is_symlink():
+            if not self.replace_existing_destination or not receipt_matches(self.destination, self._destination_receipt):
+                raise FileExistsError(
+                    f"Move-Ziel wurde zwischenzeitlich belegt: {self.destination}"
+                )
             if self.backup_path.exists() or self.backup_path.is_symlink():
                 raise FileExistsError(f"Backup-Pfad existiert bereits: {self.backup_path}")
-            os.replace(str(self.destination), str(self.backup_path))
+            publish_staged_no_replace(self.destination, self.backup_path)
             self.backup_created = True
+            self._backup_receipt = path_receipt(self.backup_path)
 
         try:
+            if self.backup_created and not renamed_receipt_matches(self.backup_path, self._destination_receipt):
+                raise OSError('Ziel wurde während der Backup-Übergabe verändert; Staging bleibt erhalten.')
             if self.backup_created and on_backup is not None:
                 on_backup(self.destination, self.backup_path)
-            os.replace(str(stage), str(self.destination))
+            publish_staged_no_replace(stage, self.destination)
             self.committed = True
             self.staging_path = None
+            self.installed_receipt = path_receipt(self.destination)
         except Exception as operation_error:
             # Diese breite Grenze ist absichtlich: auch ein Programmier-/Callback-
             # Fehler nach dem Backup darf den Altbestand nicht unter falschem Namen
@@ -159,12 +277,16 @@ class PathSwapTransaction:
             raise FileExistsError(
                 f"Rollback nicht moeglich: Ziel existiert bereits: {self.destination}"
             )
-        os.replace(str(self.backup_path), str(self.destination))
+        if not receipt_matches(self.backup_path, self._backup_receipt):
+            raise OSError('Transaktions-Backup wurde verändert; bleibt erhalten.')
+        publish_staged_no_replace(self.backup_path, self.destination)
         self.backup_created = False
 
     def cleanup_staging(self, *, best_effort: bool = False) -> None:
         stage = self.staging_path
         if stage is None or not (stage.exists() or stage.is_symlink()):
+            return
+        if not renamed_receipt_matches(stage, self._staging_receipt):
             return
         try:
             remove_path(stage)
@@ -178,5 +300,7 @@ class PathSwapTransaction:
         if not self.backup_created:
             return
         if self.backup_path.exists() or self.backup_path.is_symlink():
+            if not receipt_matches(self.backup_path, self._backup_receipt):
+                raise OSError('Transaktions-Backup wurde verändert; bleibt erhalten.')
             remove_path(self.backup_path)
         self.backup_created = False

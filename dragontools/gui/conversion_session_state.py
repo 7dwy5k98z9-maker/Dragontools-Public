@@ -94,6 +94,9 @@ class ConversionSessionState:
         self.job_journal = None
         """Aktives Job-Journal des aktuellen Laufs (oder None)."""
 
+        self.restored_job_journal_path: str = ""
+        """Durables Vorgänger-Journal einer geladenen Restqueue bis zum erfolgreichen Neustart."""
+
         self.job_journal_current_path: str | None = None
         """Zuletzt im Journal als laufend markierte Datei."""
 
@@ -102,6 +105,9 @@ class ConversionSessionState:
 
         self.summary_written: bool = False
         """Schutz-Flag – verhindert doppeltes Schreiben der Run-Zusammenfassung."""
+
+        self.finalization_in_progress: bool = False
+        """Reentrancy-Guard für genau einen terminalen Run-Finalizer."""
 
         self.start_reserved: bool = False
         """Synchroner Start-Lock gegen Doppelstarts vor ``QThread.isRunning()``.
@@ -190,6 +196,7 @@ class ConversionSessionState:
         self.job_journal_current_paths.clear()
         self.total_files = file_count
         self.summary_written = False
+        self.finalization_in_progress = False
         self.last_total_pct = 0
         self.incremental_move_active = False
         self.retired_move_threads.clear()
@@ -223,7 +230,9 @@ class ConversionSessionState:
         self.job_journal = None
         self.job_journal_current_path = None
         self.job_journal_current_paths.clear()
-        self.summary_written = False
+        self.restored_job_journal_path = ""
+        # A clear callback can run while the finalizer owns this guard.
+        self.summary_written = self.finalization_in_progress
         self.start_reserved = False
         self.thread = None
         self.move_thread = None

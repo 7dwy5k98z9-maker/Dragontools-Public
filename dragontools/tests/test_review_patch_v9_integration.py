@@ -35,9 +35,10 @@ def test_async_postprocess_announces_pending_before_immediate_completion():
     coordinator.worker = None
     coordinator._service_factory = Service
     coordinator._executor = ImmediateExecutor()
-    coordinator._futures = []
-    coordinator._lock = threading.Lock()
-    coordinator._shutdown = False
+    from dragontools.worker.postprocess_lifecycle import PostprocessLifecycle
+    coordinator._lifecycle = PostprocessLifecycle()
+    coordinator._futures = coordinator._lifecycle.futures
+    coordinator._lock = coordinator._lifecycle.condition
 
     assert coordinator.submit(
         input_path="source.mkv",
@@ -106,12 +107,13 @@ def test_gui_late_pending_cannot_resurrect_completed_input():
 
 def test_parallel_late_pending_cannot_resurrect_terminal_input():
     from dragontools.worker.parallel_child_result_coordinator import ParallelChildResultCoordinator
+    from dragontools.worker.parallel_converter_state import ParallelQueueState
+    from dragontools.core.path_syntax import path_compare_key
 
-    queue = SimpleNamespace(
-        postprocessing_inputs=set(),
-        terminal_inputs={"episode.mkv"},
-        file_progress_pct={},
-    )
+    child = object()
+    queue = ParallelQueueState(["episode.mkv"])
+    queue.terminal_inputs.add("episode.mkv")
+    queue.assigned[path_compare_key("episode.mkv")] = child
     registry = SimpleNamespace(active_workers=set(), postprocessing_workers=set(), sync_child_maps=lambda *_args: None)
     coordinator = ParallelChildResultCoordinator(
         registry=registry,
@@ -120,7 +122,7 @@ def test_parallel_late_pending_cannot_resurrect_terminal_input():
     )
     forwarded = []
     coordinator.on_file_result(
-        object(),
+        child,
         "episode.mkv",
         "episode.mkv",
         "🧩",
@@ -339,6 +341,8 @@ def test_recovery_promotes_video_pending_to_companion_resume_when_sidecars_exist
         },
         "sidecar_outputs_by_video": {str(source): [str(sidecar)]},
     }
+    from dragontools.core.transaction_identity import path_receipt
+    data["files"][str(source)]["commit_proof"] = {"destination": path_receipt(dest)}
     result = recover_interrupted_backups(data)
     row = data["files"][str(source)]
     assert result["completed"] == 0

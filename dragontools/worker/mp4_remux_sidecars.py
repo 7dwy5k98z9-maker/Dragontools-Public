@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from copy import deepcopy
 from typing import Callable
 
 from ..core.sidecar_journal import SidecarJournal
@@ -21,7 +22,7 @@ class MP4RemuxSidecarService:
         worker=None,
     ) -> None:
         self.ffmpeg_path = ffmpeg_path
-        self.subtitle_rules = dict(subtitle_rules or {})
+        self.subtitle_rules = deepcopy(subtitle_rules or {})
         self._log = log
         self._abort_check = abort_check
         self._worker = worker

@@ -76,8 +76,10 @@ class ConvertWidget(ConvertWidgetWatchMixin, ConvertWidgetQueueActionsMixin, QWi
         sidecar_outputs_by_video: dict | None = None,
         target_paths: dict | None = None,
         conflict_mode: str | None = None,
+        episode_replacement_mode: str | None = None,
         journal_path: str | None = None,
         companion_resume_sources: dict | None = None,
+        file_overrides: dict[str, dict] | None = None,
     ) -> dict[str, int]:
         return self._recovery_service.restore_job_files(
             paths,
@@ -86,8 +88,10 @@ class ConvertWidget(ConvertWidgetWatchMixin, ConvertWidgetQueueActionsMixin, QWi
             sidecar_outputs_by_video=sidecar_outputs_by_video,
             target_paths=target_paths,
             conflict_mode=conflict_mode,
+            episode_replacement_mode=episode_replacement_mode,
             journal_path=journal_path,
             companion_resume_sources=companion_resume_sources,
+            file_overrides=file_overrides,
         )
     def _refresh_enc_panel(self):
         self._enc_settings.refresh_enc_panel()
@@ -240,7 +244,11 @@ class ConvertWidget(ConvertWidgetWatchMixin, ConvertWidgetQueueActionsMixin, QWi
 
     def iter_shutdown_workers(self) -> tuple:
         """Öffentliche Lifecycle-Schnittstelle für den MainWindow-Shutdown."""
-        return self._controller.workers_for_shutdown()
+        workers = list(self._controller.workers_for_shutdown())
+        source_visual = getattr(self, "_source_visual_check_thread", None)
+        if source_visual is not None and source_visual not in workers:
+            workers.append(source_visual)
+        return tuple(workers)
 
     def running_job_diagnostics(self) -> str:
         return self._controller.running_job_diagnostics()

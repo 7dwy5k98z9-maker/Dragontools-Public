@@ -13,6 +13,7 @@ from contextlib import ExitStack
 import csv
 import io
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -20,6 +21,7 @@ from typing import Iterable
 
 from .lang_codes import canonical_lang, lang_iso_tag
 from .language_detection import detect_text_language
+from .exclusive_text import write_exclusive_text
 
 
 BITMAP_SUBTITLE_CODECS = frozenset({
@@ -81,7 +83,7 @@ def parse_tesseract_tsv(tsv_text: str) -> tuple[str, float]:
             confidence = float(row.get("conf") or -1)
         except (TypeError, ValueError):
             confidence = -1.0
-        if confidence < 0:
+        if not math.isfinite(confidence) or not 0 <= confidence <= 100:
             continue
         key = (
             str(row.get("page_num") or "0"),
@@ -101,8 +103,9 @@ def parse_tesseract_tsv(tsv_text: str) -> tuple[str, float]:
 def normalize_packets(packets: Iterable[BitmapSubtitlePacket]) -> list[BitmapSubtitlePacket]:
     result: list[BitmapSubtitlePacket] = []
     for packet in sorted(packets, key=lambda item: (item.start_s, item.end_s)):
-        start = max(0.0, float(packet.start_s))
-        end = max(start + 0.05, float(packet.end_s))
+        start, end = float(packet.start_s), float(packet.end_s)
+        if not math.isfinite(start) or not math.isfinite(end) or start < 0 or end <= start:
+            raise ValueError("Ungültige Untertitelzeitspanne.")
         if result and abs(result[-1].start_s - start) < 0.01 and abs(result[-1].end_s - end) < 0.01:
             continue
         result.append(BitmapSubtitlePacket(start, end))
@@ -144,6 +147,7 @@ def merge_adjacent_duplicate_cues(cues: Iterable[BitmapOcrCue], *, max_gap_s: fl
 def serialize_srt(cues: Iterable[BitmapOcrCue]) -> str:
     blocks: list[str] = []
     for number, cue in enumerate(cues, start=1):
+        normalize_packets([BitmapSubtitlePacket(cue.start_s, cue.end_s)])
         text = _normalized_text(cue.text)
         if not text:
             continue
@@ -163,8 +167,12 @@ def write_pending_draft(
     forced: bool,
     cues: Iterable[BitmapOcrCue],
     min_confidence: float,
+    expected_source_signature=None,
 ) -> BitmapOcrDraft:
     media = Path(media_path)
+    signature = source_signature(media)
+    if expected_source_signature and tuple(expected_source_signature) != signature:
+        raise ValueError("OCR-Quelldatei wurde während der Verarbeitung verändert.")
     normalized = merge_adjacent_duplicate_cues(cues)
     if not normalized:
         raise RuntimeError("OCR hat keinen verwertbaren Untertiteltext erzeugt.")
@@ -190,6 +198,7 @@ def write_pending_draft(
     payload = {
         "schema": 1,
         "media_path": str(media),
+        "source_signature": signature,
         "stream_ordinal": max(1, int(stream_ordinal)),
         "stream_index": stream_index,
         "codec": str(codec or ""),
@@ -245,17 +254,12 @@ def load_ocr_report(report_path: str | Path) -> dict:
     return data
 
 
-def finalize_ocr_report(
-    report_path: str | Path,
-    edited_texts: Iterable[str],
-    *,
-    expected_media: str | Path | None = None,
-    expected_report: dict | None = None,
-) -> Path:
-    """Promote a reviewed pending draft to a collision-safe SRT sidecar."""
-    report = load_ocr_report(report_path)
-    if expected_report is not None and report != expected_report:
-        raise ValueError("OCR-Bericht wurde während der Prüfung verändert. Bitte neu öffnen.")
+def source_signature(media):
+    stat = Path(media).stat()
+    return (stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns)
+
+
+def _validate_report_ownership(report_path, report, expected_media):
     report_file = Path(report_path).absolute()
     media = Path(str(report.get("media_path") or "")).absolute()
     ordinal = int(report.get("stream_ordinal") or 0)
@@ -270,23 +274,50 @@ def finalize_ocr_report(
     for candidate in (media, report_file, draft):
         if any(p.is_symlink() or p.is_junction() for p in (candidate, *candidate.parents)):
             raise ValueError("Verknüpfungen sind für OCR-Dateizugriffe nicht erlaubt.")
+    if tuple(report.get("source_signature") or ()) != source_signature(media):
+        raise ValueError("OCR-Quelldatei wurde verändert oder der Entwurf besitzt keinen Quellnachweis. Bitte OCR neu erzeugen.")
+    return media, draft
+
+
+def _reviewed_cues(report, edited_texts):
     cues_raw = list(report.get("cues") or [])
     texts = list(edited_texts)
     if len(texts) != len(cues_raw):
         raise ValueError("Die Anzahl bearbeiteter OCR-Zeilen passt nicht zum Bericht.")
     cues: list[BitmapOcrCue] = []
     for number, (raw, text) in enumerate(zip(cues_raw, texts), start=1):
+        if not isinstance(raw, dict):
+            raise ValueError("Ungültiger OCR-Cue im Bericht.")
+        confidence = float(raw.get("confidence") or 0.0)
+        if not math.isfinite(confidence) or not 0 <= confidence <= 1:
+            raise ValueError("Ungültige OCR-Konfidenz im Bericht.")
         cues.append(BitmapOcrCue(
             index=number,
             start_s=float(raw.get("start_s") or 0.0),
             end_s=float(raw.get("end_s") or 0.0),
             text=_normalized_text(text),
-            confidence=float(raw.get("confidence") or 0.0),
+            confidence=confidence,
             uncertain=bool(raw.get("uncertain")),
         ))
     cues = [item for item in cues if item.text]
     if not cues:
         raise ValueError("Der geprüfte OCR-Entwurf enthält keinen Untertiteltext.")
+    return cues
+
+
+def finalize_ocr_report(
+    report_path: str | Path,
+    edited_texts: Iterable[str],
+    *,
+    expected_media: str | Path | None = None,
+    expected_report: dict | None = None,
+) -> Path:
+    """Promote a validated, source-bound review without overwriting a sidecar."""
+    report = load_ocr_report(report_path)
+    if expected_report is not None and report != expected_report:
+        raise ValueError("OCR-Bericht wurde während der Prüfung verändert. Bitte neu öffnen.")
+    media, draft = _validate_report_ownership(report_path, report, expected_media)
+    content = serialize_srt(_reviewed_cues(report, edited_texts))
 
     language = canonical_lang(str(report.get("detected_language") or "")) or "und"
     language = lang_iso_tag(language)
@@ -296,8 +327,7 @@ def finalize_ocr_report(
     for _attempt in range(1000):
         final_path = _next_sidecar_path(media, language=language, forced=forced)
         try:
-            with final_path.open("x", encoding="utf-8", newline="\n") as output:
-                output.write(serialize_srt(cues))
+            write_exclusive_text(final_path, content)
             break
         except FileExistsError:
             continue

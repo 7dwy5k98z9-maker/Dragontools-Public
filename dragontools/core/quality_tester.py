@@ -5,6 +5,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .codec_utils import normalize_target_codec
+from .audio_video_match_utils import parse_timecode
+from .quality_extra_args import split_quality_extra_args
 
 
 @dataclass(slots=True)
@@ -158,22 +160,7 @@ def seconds_to_label(seconds: float) -> str:
 
 
 def parse_time_value(text: str, duration_s: float | None = None) -> float:
-    value = str(text or "").strip()
-    if not value:
-        return 0.0
-    if value.endswith("%"):
-        pct = _safe_float(value[:-1], 0.0)
-        return max(0.0, (duration_s or 0.0) * pct / 100.0)
-    parts = value.split(":")
-    if len(parts) == 3:
-        return (
-            _safe_float(parts[0]) * 3600.0
-            + _safe_float(parts[1]) * 60.0
-            + _safe_float(parts[2])
-        )
-    if len(parts) == 2:
-        return _safe_float(parts[0]) * 60.0 + _safe_float(parts[1])
-    return _safe_float(value)
+    return parse_timecode(text, duration_s=duration_s)
 
 
 def parse_quality_segments(
@@ -196,8 +183,8 @@ def parse_quality_segments(
         start = parse_time_value(start_txt, duration_s)
         dur = max(1.0, parse_time_value(dur_txt, duration_s))
         if duration_s > 0:
-            start = min(max(0.0, start), max(0.0, duration_s - 1.0))
-            dur = min(dur, max(1.0, duration_s - start))
+            start = min(max(0.0, start), max(0.0, duration_s - min(1.0, duration_s)))
+            dur = min(dur, duration_s - start)
         label = f"{idx:02d}_{seconds_to_label(start)}_{int(round(dur))}s"
         segments.append(QualitySegment(start, dur, label))
     return segments
@@ -221,12 +208,15 @@ def automatic_quality_segments(
             for idx in range(1, count + 1)
         ]
 
-    usable_end = max(1.0, duration_s - segment_duration_s)
+    segment_duration_s = min(segment_duration_s, duration_s)
+    usable_end = max(0.0, duration_s - segment_duration_s)
+    if usable_end == 0:
+        count = 1
     step = usable_end / float(count + 1)
     segments: list[QualitySegment] = []
     for idx in range(1, count + 1):
         start = min(usable_end, max(0.0, step * idx))
-        dur = min(segment_duration_s, max(1.0, duration_s - start))
+        dur = min(segment_duration_s, duration_s - start)
         segments.append(
             QualitySegment(
                 start_s=start,
@@ -246,16 +236,8 @@ def quality_output_name(input_path: str, run: QualityTestRun, segment: QualitySe
 
 
 def parse_extra_args(text: str) -> list[str]:
-    """Kleine Shell-ähnliche Zerlegung für zusätzliche FFmpeg-Argumente."""
-    import shlex
-
-    raw = str(text or "").strip()
-    if not raw:
-        return []
-    try:
-        return shlex.split(raw, posix=False)
-    except Exception:
-        return raw.split()
+    """Compatibility boundary for additional direct-subprocess arguments."""
+    return split_quality_extra_args(text)
 
 
 def quality_run_from_dict(data: dict) -> QualityTestRun:

@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 SET_KEY_NFO_ENABLED = "postprocess/nfo/enabled"
+SET_KEY_NFO_TIMING = "postprocess/nfo/timing"
 SET_KEY_NFO_ONLY_UNAMBIGUOUS = "postprocess/nfo/only_unambiguous"
 SET_KEY_NFO_FILEINFO_ENABLED = "postprocess/nfo/fileinfo_enabled"
 SET_KEY_NFO_MOVIE_TARGET_NAME = "postprocess/nfo/movie_target_name"
 SET_KEY_NFO_CONFLICT_MODE = "postprocess/nfo/conflict_mode"
 DEFAULT_NFO_ENABLED = False
+# ``enabled`` is kept as a compatibility/quick-toggle gate.  The actual timing
+# is stored separately so an existing installation can switch NFO creation off
+# temporarily without losing whether it should run during or after conversion.
+DEFAULT_NFO_TIMING = "after"
 DEFAULT_NFO_ONLY_UNAMBIGUOUS = True
 DEFAULT_NFO_FILEINFO_ENABLED = True
 DEFAULT_NFO_MOVIE_TARGET_NAME = "movie.nfo"

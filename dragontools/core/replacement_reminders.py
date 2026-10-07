@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import os
+import tempfile
+from .file_update_lock import file_update_lock
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterable
@@ -29,17 +31,23 @@ def _id_prefix(dt: datetime | None = None) -> str:
     return (dt or _now()).strftime("#%Y%m%d-%H%M%S")
 
 
-def _load(path: Path) -> list[dict[str, Any]]:
+def _load(path: Path, *, strict=False) -> list[dict[str, Any]]:
     if not path.exists():
         return []
     try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+        raw = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError):
+        if strict:
+            raise
         return []
     if isinstance(raw, dict):
-        raw = raw.get("reminders", [])
+        raw = raw.get("reminders")
     if not isinstance(raw, list):
+        if strict:
+            raise ValueError('Ungültige Erinnerungsdatei; vorhandene Daten bleiben erhalten.')
         return []
+    if strict and any(not isinstance(item, dict) or not str(item.get('id') or '').startswith('#') for item in raw):
+        raise ValueError('Ungültiger Erinnerungseintrag; vorhandene Daten bleiben erhalten.')
     reminders = [dict(item) for item in raw if isinstance(item, dict)]
     return [item for item in reminders if str(item.get("id") or "").startswith("#")]
 
@@ -51,9 +59,16 @@ def _save(path: Path, reminders: Iterable[dict[str, Any]]) -> None:
         "updated_at": _timestamp(),
         "reminders": list(reminders),
     }
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-    os.replace(tmp, path)
+    fd, name = tempfile.mkstemp(prefix='.' + path.name + '.', suffix='.tmp', dir=path.parent)
+    tmp = Path(name)
+    try:
+        with os.fdopen(fd, 'w', encoding='utf-8') as handle:
+            json.dump(data, handle, ensure_ascii=False, indent=2)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp, path)
+    finally:
+        tmp.unlink(missing_ok=True)
 
 
 def list_replacement_reminders(path: str | Path | None = None) -> list[dict[str, Any]]:
@@ -90,7 +105,13 @@ def add_replacement_reminder(
     now: datetime | None = None,
 ) -> dict[str, Any]:
     target = Path(path) if path is not None else default_replacement_reminder_path()
-    reminders = _load(target)
+    with file_update_lock(target):
+        return _add_locked(target, series_name=series_name, season=season, episode=episode,
+            episode_label=episode_label, old_paths=old_paths, new_path=new_path, reason=reason, now=now)
+
+
+def _add_locked(target, *, series_name, season, episode, episode_label, old_paths, new_path, reason, now):
+    reminders = _load(target, strict=True)
     old_path_list = [str(p) for p in old_paths if str(p or "")]
     new_path_text = str(new_path or "")
     reason_text = str(reason or "").strip() or "Automatische SxxExx-Ersetzung"
@@ -127,12 +148,13 @@ def dismiss_replacement_reminders(ids: Iterable[str], path: str | Path | None = 
     remove = {str(value) for value in ids if str(value or "")}
     if not remove:
         return 0
-    reminders = _load(target)
-    kept = [item for item in reminders if str(item.get("id") or "") not in remove]
-    removed = len(reminders) - len(kept)
-    if removed:
-        _save(target, kept)
-    return removed
+    with file_update_lock(target):
+        reminders = _load(target, strict=True)
+        kept = [item for item in reminders if str(item.get("id") or "") not in remove]
+        removed = len(reminders) - len(kept)
+        if removed:
+            _save(target, kept)
+        return removed
 
 
 def has_replacement_reminders(path: str | Path | None = None) -> bool:

@@ -2,6 +2,8 @@
 """Recovery-/Resume-Orchestrierung des MainWindow."""
 from __future__ import annotations
 
+from .dialog_ownership import exec_owned_dialog
+
 import logging
 
 from PyQt6.QtWidgets import QMessageBox
@@ -65,7 +67,7 @@ class MainWindowRecoveryMixin:
                 return
 
             dlg = MoveResumeDialog(data, self)
-            dlg.exec()
+            exec_owned_dialog(dlg)
             action = dlg.action()
             if action == MoveResumeDialog.ACTION_LOAD:
                 plan = dlg.resume_plan()
@@ -126,6 +128,7 @@ class MainWindowRecoveryMixin:
     ) -> None:
         try:
             from ..core.job_journal import archive_active_job_journal, read_active_job_journal
+            from ..core.job_journal_storage import job_journal_owned_by_process
             from .job_resume_dialog import JobResumeDialog
 
             data = read_active_job_journal()
@@ -137,16 +140,21 @@ class MainWindowRecoveryMixin:
                         "Es ist aktuell keine offene Restqueue vorhanden.",
                     )
                 return
+            if job_journal_owned_by_process(data):
+                if show_empty_message:
+                    QMessageBox.information(
+                        self,
+                        "Job-Wiederaufnahme",
+                        "Das gefundene Job-Journal gehört zur aktuell laufenden "
+                        "Konvertierung und kann deshalb nicht geladen oder archiviert werden.",
+                    )
+                return
             dlg = JobResumeDialog(data, self)
-            dlg.exec()
+            exec_owned_dialog(dlg)
             action = dlg.action()
             if action == JobResumeDialog.ACTION_LOAD:
                 plan = dlg.resume_plan()
                 result = self._restore_job_resume_plan(plan)
-                archive_active_job_journal(
-                    status="restored_to_queue",
-                    journal_path=data.get("_journal_path"),
-                )
                 QMessageBox.information(
                     self,
                     "Job-Wiederaufnahme vorbereitet",
@@ -223,7 +231,11 @@ class MainWindowRecoveryMixin:
             )
             return {"added": 0, "missing": 0, "duplicate": 0, "invalid": len(files)}
 
-        result = widget.restore_job_files(files)
+        result = widget.restore_job_files(
+            files,
+            file_overrides=plan.get("file_overrides") or {},
+            journal_path=str(plan.get("journal_path") or ""),
+        )
         mode = str(plan.get("mode") or "")
         hint = "Konvertierung"
         if mode == "dv_remux":

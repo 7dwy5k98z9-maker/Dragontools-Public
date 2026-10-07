@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Protocol
 
-from ..core.secret_settings import read_secret, write_secret
+from ..core.secret_settings import read_secret, read_secret_state, write_secret
+from ..core.settings_access import save_settings_transaction
 from ..core.settings_metadata import DEFAULT_METADATA_CACHE_DAYS, DEFAULT_METADATA_CACHE_ENABLED, DEFAULT_METADATA_FALLBACK_LANGUAGE, DEFAULT_METADATA_LANGUAGE, DEFAULT_METADATA_MOVIE_PROVIDER, DEFAULT_METADATA_MOVIE_PREFERRED_PROVIDER, DEFAULT_METADATA_SERIES_PROVIDER, DEFAULT_METADATA_SERIES_PREFERRED_PROVIDER, SET_KEY_METADATA_CACHE_DAYS, SET_KEY_METADATA_CACHE_ENABLED, SET_KEY_METADATA_FALLBACK_LANGUAGE, SET_KEY_METADATA_LANGUAGE, SET_KEY_METADATA_MOVIE_PROVIDER, SET_KEY_METADATA_MOVIE_PREFERRED_PROVIDER, SET_KEY_METADATA_SERIES_PROVIDER, SET_KEY_METADATA_SERIES_PREFERRED_PROVIDER, SET_KEY_METADATA_TMDB_API_KEY, SET_KEY_METADATA_TMDB_ENABLED, SET_KEY_METADATA_TMDB_READ_TOKEN, SET_KEY_METADATA_TVDB_API_KEY, SET_KEY_METADATA_TVDB_BEARER_TOKEN, SET_KEY_METADATA_TVDB_ENABLED, SET_KEY_METADATA_TVDB_PIN
 
 
@@ -31,9 +32,11 @@ class OnlineMetadataSettingsState:
     fallback_language: str = DEFAULT_METADATA_FALLBACK_LANGUAGE
     cache_enabled: bool = DEFAULT_METADATA_CACHE_ENABLED
     cache_days: int = DEFAULT_METADATA_CACHE_DAYS
+    loaded_bearer_token: str | None = field(default=None, repr=False, compare=False)
 
 
 def load_online_metadata_settings(settings: SettingsStore) -> OnlineMetadataSettingsState:
+    bearer = read_secret(settings, SET_KEY_METADATA_TVDB_BEARER_TOKEN)
     return OnlineMetadataSettingsState(
         movie_provider=settings.value(
             SET_KEY_METADATA_MOVIE_PROVIDER, DEFAULT_METADATA_MOVIE_PROVIDER, type=str
@@ -57,7 +60,8 @@ def load_online_metadata_settings(settings: SettingsStore) -> OnlineMetadataSett
         tvdb_enabled=settings.value(SET_KEY_METADATA_TVDB_ENABLED, False, type=bool),
         tvdb_api_key=read_secret(settings, SET_KEY_METADATA_TVDB_API_KEY),
         tvdb_pin=read_secret(settings, SET_KEY_METADATA_TVDB_PIN),
-        tvdb_bearer_token=read_secret(settings, SET_KEY_METADATA_TVDB_BEARER_TOKEN),
+        tvdb_bearer_token=bearer,
+        loaded_bearer_token=bearer,
         language=settings.value(SET_KEY_METADATA_LANGUAGE, DEFAULT_METADATA_LANGUAGE, type=str),
         fallback_language=settings.value(
             SET_KEY_METADATA_FALLBACK_LANGUAGE, DEFAULT_METADATA_FALLBACK_LANGUAGE, type=str
@@ -87,11 +91,29 @@ def save_online_metadata_settings(
         (SET_KEY_METADATA_CACHE_ENABLED, state.cache_enabled),
         (SET_KEY_METADATA_CACHE_DAYS, state.cache_days),
     )
-    for key, value in values:
-        settings.setValue(key, value)
-    write_secret(settings, SET_KEY_METADATA_TMDB_READ_TOKEN, state.tmdb_read_token)
-    write_secret(settings, SET_KEY_METADATA_TMDB_API_KEY, state.tmdb_api_key)
-    write_secret(settings, SET_KEY_METADATA_TVDB_API_KEY, state.tvdb_api_key)
-    write_secret(settings, SET_KEY_METADATA_TVDB_PIN, state.tvdb_pin)
-    write_secret(settings, SET_KEY_METADATA_TVDB_BEARER_TOKEN, state.tvdb_bearer_token)
-    settings.sync()
+    secret_values = (
+        (SET_KEY_METADATA_TMDB_READ_TOKEN, state.tmdb_read_token),
+        (SET_KEY_METADATA_TMDB_API_KEY, state.tmdb_api_key),
+        (SET_KEY_METADATA_TVDB_API_KEY, state.tvdb_api_key),
+        (SET_KEY_METADATA_TVDB_PIN, state.tvdb_pin),
+        (SET_KEY_METADATA_TVDB_BEARER_TOKEN, state.tvdb_bearer_token),
+    )
+
+    def _write() -> bool:
+        for key, value in values:
+            settings.setValue(key, value)
+        for key, value in secret_values:
+            if (key == SET_KEY_METADATA_TVDB_BEARER_TOKEN
+                    and state.loaded_bearer_token is not None
+                    and value == state.loaded_bearer_token):
+                continue
+            existing = read_secret_state(settings, key)
+            # If DPAPI cannot decrypt an existing secret, the empty value in
+            # the controls is only a fallback, not user intent. Preserve the
+            # opaque blob unless a concrete replacement was entered.
+            if existing.protected and not existing.readable and not str(value or "").strip():
+                continue
+            write_secret(settings, key, value)
+        return True
+
+    save_settings_transaction(settings, (_write,))

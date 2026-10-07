@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import re
+import math
 from pathlib import Path
 from typing import Callable
 
 from ..core.formatting import format_binary_size
+from .iso_models import FFMPEG_FALLBACK_TITLE_ID
 
 LogFn = Callable[[str, str], None]
 
@@ -25,12 +27,14 @@ def parse_duration_to_seconds(value: str) -> int:
     try:
         if len(parts) == 3:
             hours, minutes, seconds = parts
-            return int(hours) * 3600 + int(minutes) * 60 + int(seconds)
-        if len(parts) == 2:
+            total = int(hours) * 3600 + int(minutes) * 60 + float(seconds)
+        elif len(parts) == 2:
             minutes, seconds = parts
-            return int(minutes) * 60 + int(seconds)
-        return int(float(text))
-    except (TypeError, ValueError):
+            total = int(minutes) * 60 + float(seconds)
+        else:
+            total = float(text)
+        return int(total) if math.isfinite(total) and total >= 0 else 0
+    except (TypeError, ValueError, OverflowError):
         return 0
 
 
@@ -54,7 +58,7 @@ def parse_size_to_bytes(value: str) -> int:
     }.get(unit, 1)
     try:
         return int(float(number) * factor)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return 0
 
 
@@ -223,7 +227,7 @@ class ISODiscInspector:
         )
         return [
             {
-                "id": 0,
+                "id": FFMPEG_FALLBACK_TITLE_ID,
                 "duration": 0,
                 "size": int(candidate.get("size") or 0),
                 "name": f"FFmpeg-Fallback: {candidate['label']}",

@@ -21,6 +21,8 @@ from ..core.windows_restart_policy import (
     user_initiated_shutdown_allowed,
 )
 from .application_shutdown import collect_shutdown_workers
+from .application_worker_sources import application_worker_sources
+from .shutdown_worker_state import worker_is_running
 
 
 class WindowsRestartGuard(QObject):
@@ -32,6 +34,7 @@ class WindowsRestartGuard(QObject):
         self._block_reason = ""
         self._last_notice_at = 0.0
         self._snoozed_until = 0.0
+        self._notice_generation = 0
         self._timer = QTimer(self)
         self._timer.setInterval(max(1000, int(poll_ms)))
         self._timer.timeout.connect(self.refresh)
@@ -65,6 +68,7 @@ class WindowsRestartGuard(QObject):
         self._set_block_reason(decision.block_reason)
 
     def release(self) -> None:
+        self._notice_generation += 1
         if os.name != "nt" or not self._block_reason:
             self._block_reason = ""
             return
@@ -90,7 +94,7 @@ class WindowsRestartGuard(QObject):
             return
         if decision.action == ACTION_ASK:
             answer = self._ask_user(decision)
-            if answer == ACTION_ALLOW:
+            if answer == ACTION_ALLOW and not self._active_worker_names():
                 self._snoozed_until = 0.0
                 self.release()
                 return
@@ -116,17 +120,11 @@ class WindowsRestartGuard(QObject):
             self._show_block_notice(decision)
 
     def _active_worker_names(self) -> tuple[str, ...]:
-        widgets = getattr(self._window, "_tab_widgets", {}) or {}
-        values = widgets.values() if hasattr(widgets, "values") else widgets
-        names: list[str] = []
-        for worker in collect_shutdown_workers(values):
-            try:
-                if not bool(worker.isRunning()):
-                    continue
-            except Exception:
-                continue
-            names.append(_worker_display_name(worker))
-        return tuple(names)
+        return tuple(
+            _worker_display_name(worker)
+            for worker in collect_shutdown_workers(application_worker_sources(self._window))
+            if worker_is_running(worker)
+        )
 
     def _shutdown_after_enabled(self) -> bool:
         widgets = getattr(self._window, "_tab_widgets", {}) or {}
@@ -192,7 +190,11 @@ class WindowsRestartGuard(QObject):
             return
         self._last_notice_at = now
 
+        generation = self._notice_generation
+
         def _show() -> None:
+            if generation != self._notice_generation:
+                return
             QMessageBox.information(self._window, decision.title, decision.message)
 
         QTimer.singleShot(0, _show)
@@ -233,6 +235,9 @@ def _worker_display_name(worker: Any) -> str:
 
 
 def install_windows_restart_guard(window: Any) -> WindowsRestartGuard:
+    existing = getattr(window, "_windows_restart_guard", None)
+    if isinstance(existing, WindowsRestartGuard):
+        return existing
     guard = WindowsRestartGuard(window)
     setattr(window, "_windows_restart_guard", guard)
     return guard

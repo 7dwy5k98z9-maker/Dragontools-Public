@@ -1,3 +1,4 @@
+from dragontools.tests.subtitle_command_fixtures import subtitle_command_validation
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -53,8 +54,10 @@ def test_metadata_applied_to_new_track(tmp_path, backend):
 
     def run(cmd, **kwargs):
         commands.append(cmd)
-        output.write_bytes(b"muxed")
-        return SimpleNamespace(ok=True)
+        # Injection is transactional: the tool writes to a unique staging
+        # path which is committed to ``output`` only after validation.
+        Path(cmd[cmd.index("-o") + 1] if "-o" in cmd else cmd[-1]).write_bytes(b"muxed")
+        return SimpleNamespace(ok=True, returncode=0)
 
     with patch.object(injector, "run_tool", side_effect=run):
         if backend == "mkvmerge":

@@ -240,11 +240,9 @@ class MainWindowMenuMixin:
             ("F9",              self._check_tools),
             ("F11",             self._open_legacy_changelog),
             ("F12",             self._open_changelog),
-            ("Ctrl+Q",          self.close),
             ("Ctrl+W",          self._close_current_tab),
             ("Ctrl+Shift+T",    self._reopen_last_tab),
             ("Ctrl+Shift+A",    self._reopen_all_tabs),
-            ("Ctrl+R",          self._reset_defaults),
             ("Delete",          self._delete_selected_file),
         ]
         for key, slot in shortcuts:

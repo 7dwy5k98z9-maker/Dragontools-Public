@@ -17,6 +17,8 @@ Oder direkt über den Dialog:
 """
 from __future__ import annotations
 
+from .dialog_ownership import exec_owned_dialog
+
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QListWidget,
     QListWidgetItem, QPushButton, QLabel, QDialogButtonBox,
@@ -129,6 +131,15 @@ class ProfileManagerDialog(QDialog):
                     f"{exc}",
                 )
                 return
+            except OSError as exc:
+                QMessageBox.critical(
+                    self,
+                    "Profil nicht gelöscht",
+                    "Die Profil-Datei konnte nicht sicher gespeichert werden. "
+                    "Das Profil bleibt unverändert.\n\n"
+                    f"{exc}",
+                )
+                return
             self._pm_widget.log_message(f"🗑 Profil '{display}' gelöscht.")
             append_audit_event("Profil gelöscht", f"{display} | Schlüssel: {key}")
             self._refresh()
@@ -160,4 +171,4 @@ def open_profile_manager(tabs: QTabWidget, parent=None) -> None:
 
     cur = tabs.currentWidget()
     pm_widget = cur if hasattr(cur, "profile_manager") else tabs_with_pm[0]
-    ProfileManagerDialog(pm_widget, parent=parent).exec()
+    exec_owned_dialog(ProfileManagerDialog(pm_widget, parent=parent))

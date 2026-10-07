@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import math
 from fractions import Fraction
 
 
@@ -29,15 +30,15 @@ GERMAN_KEYS = ("de", "ger", "deu", "german", "deutsch")
 
 
 def is_german(language: str | None, title: str | None = "") -> bool:
-    language = (language or "").strip().lower()
-    title = (title or "").strip().lower()
+    language = str(language or "").strip().lower()
+    title = str(title or "").strip().lower()
     if language:
         if language in GERMAN_KEYS:
             return True
         for sep in ("-", "_", "."):
             if language.startswith(f"de{sep}"):
                 return True
-    if title:
+    if title and language in {"", "und", "unk", "unknown", "undefined", "n/a"}:
         title_tokens = {tok for tok in re.split(r"[^a-z0-9]+", title) if tok}
         if {"german", "deutsch", "deu", "ger"} & title_tokens:
             return True
@@ -47,7 +48,8 @@ def is_german(language: str | None, title: str | None = "") -> bool:
 def _normalize_lang(lang: str | None, title: str | None = "") -> str:
     if is_german(lang, title):
         return "de"
-    return (lang or "und").lower()
+    text = str(lang or "und").strip().lower()
+    return text or "und"
 
 
 def normalize_video_codec(codec: str | None) -> str:
@@ -70,7 +72,13 @@ def _track_value(track: dict, *keys: str) -> object | None:
 
 
 def _parse_mediainfo_bit_depth(track: dict) -> int | None:
-    value = _track_value(track, "BitDepth", "Bit_depth")
+    value = _track_value(
+        track,
+        "BitDepth",
+        "Bit_depth",
+        "BitDepth/String",
+        "BitDepth_String",
+    )
     if value is None:
         return None
     match = re.search(r"(\d+)", str(value))
@@ -102,15 +110,16 @@ def _parse_seconds_value(value: object | None) -> float | None:
         seconds = float(str(value).strip().replace(",", "."))
     except (TypeError, ValueError):
         return None
-    return seconds if seconds > 0 else None
+    return seconds if math.isfinite(seconds) and seconds > 0 else None
 
 
 def _parse_mediainfo_duration_s(value: object | None) -> float | None:
     seconds = _parse_seconds_value(value)
     if seconds is None:
         return None
-    # MediaInfo JSON liefert Duration meistens in Millisekunden.
-    return seconds / 1000.0 if seconds > 10000 else seconds
+    # Structured MediaInfo JSON Duration is seconds, regardless of magnitude.
+    # Milliseconds belong to text/custom Inform output, not this contract.
+    return seconds
 
 
 def _parse_frame_rate_fraction(value: object | None) -> Fraction | None:
@@ -152,11 +161,49 @@ def _frame_rate_mode_label(*values: object | None) -> str | None:
         if not raw:
             continue
         low = raw.lower()
+        if low in {"n/a", "unknown", "none", "null"}:
+            continue
         if "constant" in low or low == "cfr":
             return "CFR"
         if "variable" in low or low == "vfr":
             return "VFR"
         return raw
+    return None
+
+
+def infer_ffprobe_frame_rate_mode(
+    avg_frame_rate: object | None,
+    real_frame_rate: object | None,
+) -> str | None:
+    """Best-effort CFR/VFR fallback from ffprobe rate fields.
+
+    Equality is strong CFR evidence. Unequal ``avg_frame_rate``/``r_frame_rate``
+    is *not* sufficient VFR evidence: interlacing and codec/container timing can
+    produce different values for perfectly constant-rate content. Invalid,
+    missing or unequal rates therefore remain unknown rather than inventing VFR.
+    """
+    avg = _parse_frame_rate_fraction(avg_frame_rate)
+    real = _parse_frame_rate_fraction(real_frame_rate)
+    if avg is None or real is None:
+        return None
+    return "CFR" if avg == real else None
+
+
+def clean_metadata_text(value: object | None) -> str | None:
+    """Normalize probe text while treating common placeholders as missing."""
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text or text.casefold() in {"n/a", "unknown", "none", "null"}:
+        return None
+    return text
+
+
+def first_metadata_text(*values: object | None) -> str | None:
+    for value in values:
+        text = clean_metadata_text(value)
+        if text is not None:
+            return text
     return None
 
 
@@ -208,7 +255,7 @@ def parse_bit_depth(mi_track: dict, fp_stream: dict) -> int | None:
                 return bd
         except (TypeError, ValueError):
             pass
-    pf = (fp_stream.get("pix_fmt") or "").lower()
+    pf = str(fp_stream.get("pix_fmt") or "").lower()
     if "p12" in pf or "12le" in pf or "12be" in pf:
         return 12
     if "p10" in pf or "10le" in pf or "10be" in pf:

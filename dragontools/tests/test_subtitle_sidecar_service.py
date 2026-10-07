@@ -2,6 +2,8 @@
 """Tests fuer SubtitleSidecarService und Hilfsfunktionen."""
 from __future__ import annotations
 
+from dragontools.tests.subtitle_command_fixtures import subtitle_command_validation
+
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -125,12 +127,13 @@ class TestSidecarFilename:
 # SubtitleSidecarService
 # ---------------------------------------------------------------------------
 
-def _make_sub(index, codec, language, forced=False):
+def _make_sub(index, codec, language, forced=False, default=False):
     sub = MagicMock()
     sub.index = index
     sub.codec = codec
     sub.language = language
     sub.forced = forced
+    sub.default = default
     return sub
 
 
@@ -192,7 +195,7 @@ class TestSubtitleSidecarService:
         assert result.complete is True
         assert result.exported_paths == ()
 
-    def test_erfolgreich_exportierte_subs_in_liste(self):
+    def test_erfolgreich_exportierte_subs_in_liste(self, tmp_path):
         """Erfolgreich erzeugte Dateien erscheinen in der Rueckgabe."""
         from dragontools.worker.subtitle_sidecar_service import SubtitleSidecarService
 
@@ -203,20 +206,17 @@ class TestSubtitleSidecarService:
         plan = MagicMock()
         plan.external_streams = [sub]
 
-        fake_path = "/dst/Film_sub_deu_forced_3.srt"
+        def fake_run(cmd, **_kwargs):
+            Path(cmd[-1]).write_text("ok", encoding="utf-8")
+            return MagicMock(returncode=0, stderr="")
 
         with (
             patch("dragontools.worker.subtitle_sidecar_service.compute_subtitle_plan", return_value=plan),
-            patch("dragontools.worker.subtitle_sidecar_service.run_tool") as mock_run,
-            patch("dragontools.worker.subtitle_sidecar_service.Path.exists", side_effect=[False, True]),
-            patch("dragontools.worker.subtitle_sidecar_service.Path.is_symlink", return_value=False),
-            patch("dragontools.worker.subtitle_sidecar_service.Path.stat") as mock_stat,
+            patch("dragontools.worker.subtitle_sidecar_service.run_tool", side_effect=fake_run),
         ):
-            mock_run.return_value = MagicMock(returncode=0)
-            mock_stat.return_value = MagicMock(st_size=1024)
             result = svc.export_sidecars_result(
                 input_path="/src/input.mkv",
-                output_base="/dst/Film",
+                output_base=tmp_path / "Film",
                 media_info=mi,
             )
 
@@ -376,8 +376,12 @@ def test_ass_sidecar_can_also_export_srt_variant(tmp_path):
     assert result.complete is True
     assert result.expected_count == 2
     assert [Path(path).name for path in result.exported_paths] == ["Film.de.ass", "Film.de.srt"]
-    assert commands[0][-2:] == ["ass", str(tmp_path / "Film.de.ass")]
-    assert commands[1][-2:] == ["srt", str(tmp_path / "Film.de.srt")]
+    assert commands[0][-2] == "ass"
+    assert Path(commands[0][-1]).suffix == ".ass"
+    assert ".dragontools-" in Path(commands[0][-1]).name
+    assert commands[1][-2] == "srt"
+    assert Path(commands[1][-1]).suffix == ".srt"
+    assert ".dragontools-" in Path(commands[1][-1]).name
 
 
 def test_mkv_text_to_srt_exports_only_srt_variant(tmp_path):

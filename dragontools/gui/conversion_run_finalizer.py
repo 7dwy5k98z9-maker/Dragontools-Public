@@ -2,10 +2,27 @@
 """Run-Zusammenfassung, Journalabschluss und Shutdown-Nachlauf."""
 from __future__ import annotations
 
+import logging
 import time
 import traceback
 
 from ..core.run_summary import build_run_summary
+from .conversion_run_reporting import RunCompletionReport, report_completion, notify_completion, notify_finalization_error
+
+
+_LOG = logging.getLogger(__name__)
+
+
+def _safe_log(callback, message: str, level: str) -> None:
+    """Best-effort diagnostic logging that cannot break terminal cleanup."""
+    try:
+        callback(message, level)
+    except Exception as exc:
+        _LOG.error(
+            "DragonTools-Logger ist während der Run-Finalisierung ausgefallen: %s",
+            exc,
+            exc_info=True,
+        )
 
 
 class ConversionRunFinalizerMixin:
@@ -19,75 +36,59 @@ class ConversionRunFinalizerMixin:
         move_ok: int = 0,
         move_errors: int = 0,
     ) -> None:
-        if self._ui.shut_cb.isChecked() or getattr(finished_thread, "abort_requested", False):
-            self._state.watch_intake_blocked = True
+        if self._state.summary_written or bool(getattr(self._state, "finalization_in_progress", False)):
+            return
+        self._state.finalization_in_progress = True
+        report = RunCompletionReport()
+        log = lambda message, level: _safe_log(self._log, message, level)
         try:
-            if self._state.summary_written:
-                return
-            self._state.summary_written = True
-            total_move_log = list(getattr(self._state, "move_report_log", []) or [])
-            total_move_log.extend(move_log or [])
-            total_move_ok = int(getattr(self._state, "move_ok_count", 0) or 0) + int(
-                move_ok or 0
-            )
-            total_move_errors = int(
-                getattr(self._state, "move_error_count", 0) or 0
-            ) + int(move_errors or 0)
-
-            self.log_run_summary(
-                finished_thread,
-                total_move_log,
-                total_move_ok,
-                total_move_errors,
-            )
-            shutdown_requested = bool(self._ui.shut_cb.isChecked())
-            retry_files: list[str] = []
-            if shutdown_requested and not did_shutdown:
-                self._log(
-                    "ℹ️ Abschlussbericht wird wegen aktiviertem Herunterfahren nicht geöffnet.",
-                    "info",
-                )
-            elif not shutdown_requested:
-                self._show_replacement_reminders()
-                retry_files = self._show_run_summary_dialog(
-                    finished_thread,
-                    move_ok=total_move_ok,
-                    move_errors=total_move_errors,
-                )
-
+            report.shutdown_requested = bool(self._ui.shut_cb.isChecked())
             aborted = bool(getattr(finished_thread, "abort_requested", False))
-            self._finish_job_journal(
-                finished_thread,
-                status="aborted" if aborted else "completed",
-            )
-            notifications = getattr(self, "_notifications", None)
-            if notifications is not None and not retry_files:
-                notifications.on_run_finished(
-                    self._build_run_summary(
-                        finished_thread,
-                        move_ok=total_move_ok,
-                        move_errors=total_move_errors,
-                    ),
-                    aborted=aborted,
-                )
-            self._clear()
-            if retry_files and self._requeue_files:
-                self._requeue_files(retry_files)
-                self._log(
-                    f"{len(retry_files)} Fehlerdatei(en) erneut in die Queue gelegt.",
-                    "warn",
-                )
-            if retry_files:
-                return
-            if shutdown_requested and not did_shutdown:
+            if report.shutdown_requested or aborted:
+                self._state.watch_intake_blocked = True
+            self._archive_restored_journal()
+            report.move_log = list(getattr(self._state, "move_report_log", []) or []) + list(move_log or [])
+            report.move_ok = int(getattr(self._state, "move_ok_count", 0) or 0) + int(move_ok or 0)
+            report.move_errors = int(getattr(self._state, "move_error_count", 0) or 0) + int(move_errors or 0)
+            report_completion(report, finished_thread, did_shutdown=did_shutdown,
+                log_summary=self.log_run_summary, show_reminders=self._show_replacement_reminders,
+                show_summary=self._show_run_summary_dialog, log=log)
+            notify_completion(getattr(self, "_notifications", None), finished_thread,
+                report, build_summary=self._build_run_summary, log=log)
+        except Exception:
+            notify_finalization_error(getattr(self, "_notifications", None), traceback.format_exc(), log=log)
+        finally:
+            try:
+                self._finish_job_journal(finished_thread,
+                    status="aborted" if getattr(finished_thread, "abort_requested", False) else "completed")
+            finally:
+                try:
+                    self._clear()
+                except Exception as exc:
+                    log(f"⚠️ Run-Aufräumen fehlgeschlagen: {exc}", "warn")
+                self._state.summary_written = True
+        try:
+            if report.retry_files:
+                if self._requeue_files:
+                    self._requeue_files(report.retry_files)
+                    log(f"{len(report.retry_files)} Fehlerdatei(en) erneut in die Queue gelegt.", "warn")
+            elif report.shutdown_requested and not did_shutdown:
                 self._confirm_shutdown()
         except Exception:
-            details = traceback.format_exc()
-            notifications = getattr(self, "_notifications", None)
-            if notifications is not None:
-                notifications.on_internal_error("Dragon Tools Abschlussfehler", details)
-            self._log("❌ Unbehandelte Ausnahme in finalize_run()", "error")
-            self._log(details, "error")
+            notify_finalization_error(getattr(self, "_notifications", None), traceback.format_exc(), log=log)
+        finally:
+            self._state.finalization_in_progress = False
+
+    def _archive_restored_journal(self) -> None:
+        restored = str(getattr(self._state, "restored_job_journal_path", "") or "")
+        if not restored:
+            return
+        try:
+            from ..core.job_journal import archive_job_journal_path
+            archive_job_journal_path(restored, status="resumed_by_run")
+            self._state.restored_job_journal_path = ""
+        except Exception as exc:
+            _safe_log(self._log, f"⚠️ Vorgänger-Job-Journal konnte nicht archiviert werden: {exc}", "warn")
 
     def _show_replacement_reminders(self) -> None:
         try:
@@ -162,7 +163,7 @@ class ConversionRunFinalizerMixin:
         try:
             journal.finish_run(status=status)
         except Exception as exc:
-            self._log(f"⚠️ Job-Journal konnte nicht finalisiert werden: {exc}", "warn")
+            _safe_log(self._log, f"⚠️ Job-Journal konnte nicht finalisiert werden: {exc}", "warn")
         self._state.job_journal = None
         self._state.job_journal_current_path = None
         self._state.job_journal_current_paths.clear()

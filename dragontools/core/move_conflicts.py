@@ -8,7 +8,8 @@ from .path_syntax import VIDEO_EXTENSIONS
 
 
 VIDEO_SUFFIXES = {ext.casefold() for ext in VIDEO_EXTENSIONS}
-EPISODE_REPLACEMENT_ARTIFACT_SUFFIXES = {".nfo", ".trickplay"}
+SUBTITLE_ARTIFACT_SUFFIXES = {".srt", ".ass", ".ssa", ".sup", ".sub", ".idx", ".vtt"}
+EPISODE_REPLACEMENT_ARTIFACT_SUFFIXES = {".nfo", ".trickplay", *SUBTITLE_ARTIFACT_SUFFIXES}
 
 
 @dataclass(frozen=True)
@@ -128,14 +129,13 @@ def find_episode_replacement_artifacts(
     dst_p: Path,
     video_conflicts: list[Path],
 ) -> list[Path]:
-    """Findet veraltete NFO-/Trickplay-Artefakte derselben Episode.
+    """Findet veraltete Companion-Artefakte derselben Episode.
 
     Bei einer SxxExx-Ersetzung kann sich der Episodentitel und damit der Stem
-    ändern. Deshalb reicht ein exakter Dateiname nicht aus. Es werden sowohl
-    Begleiter der tatsächlich gefundenen Altvideos als auch weitere eindeutig
-    nach SxxExx zuordenbare ``.nfo``-Dateien und ``.trickplay``-Ordner im selben
-    Staffelordner erfasst. Andere Episoden und andere Sidecar-Typen bleiben
-    unangetastet.
+    ändern. Deshalb reicht ein exakter Dateiname nicht aus. Erfasst werden NFO,
+    Trickplay und die unterstützten Subtitle-Sidecars, sofern sie eindeutig zum
+    Altvideo-Stem oder zur gleichen SxxExx-Identität gehören. Neue, bereits
+    vorgestagte Companions werden später über ``protected_paths`` ausgeschlossen.
     """
     dst_p = Path(dst_p)
     identity = episode_identity_for_path(dst_p)
@@ -155,7 +155,8 @@ def find_episode_replacement_artifacts(
             continue
         is_nfo = candidate.is_file() and suffix == ".nfo"
         is_trickplay = candidate.is_dir() and suffix == ".trickplay"
-        if not (is_nfo or is_trickplay):
+        is_subtitle = candidate.is_file() and suffix in SUBTITLE_ARTIFACT_SUFFIXES
+        if not (is_nfo or is_trickplay or is_subtitle):
             continue
 
         same_old_stem = candidate.stem.casefold() in old_stems
@@ -207,6 +208,9 @@ def find_target_conflicts(dst_p: Path, src_p: Path | None = None) -> list[Path]:
             add(candidate)
 
         for candidate in find_episode_identity_conflicts(dst_p, src_p):
+            add(candidate)
+        from .movie_identity import find_movie_identity_conflicts
+        for candidate in find_movie_identity_conflicts(dst_p,src_p):
             add(candidate)
     except OSError:
         return conflicts

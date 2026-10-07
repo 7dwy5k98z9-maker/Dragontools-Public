@@ -14,25 +14,45 @@ from .media_metadata import (
     _parse_mediainfo_duration_s,
     _parse_seconds_value,
     build_pix_fmt_from_mediainfo,
+    first_metadata_text,
+    infer_ffprobe_frame_rate_mode,
     normalize_video_codec,
     parse_bit_depth,
 )
+from .media_track_pairing import pair_media_tracks
 from .models import VideoStream
-from .media_analyzer_io import _mi_bitrate, _mi_stream_index
+from .media_analyzer_io import _ffmpeg_stream_index, _mi_bitrate, _warn_untrusted_stream_index
 from .type_utils import _safe_int
 
 _log = logging.getLogger(__name__)
 
 
-def _stream_index(mi_track: dict, fp_stream: dict, fallback_index: int) -> int:
-    idx = _safe_int(fp_stream.get("index"), None) if fp_stream else _mi_stream_index(mi_track, fallback_index)
-    if idx is None:
-        idx = _mi_stream_index(mi_track, fallback_index)
-    return int(idx)
+def _stream_index(fp_stream: dict, fallback_index: int, warnings: list[str]) -> int:
+    idx = _ffmpeg_stream_index(fp_stream, fallback_index)
+    if idx < 0:
+        _warn_untrusted_stream_index(
+            warnings,
+            stream_type="Video",
+            ordinal=fallback_index,
+        )
+    return idx
+
+
+def _first_positive_int(*values: object | None) -> int:
+    for value in values:
+        parsed = _safe_int(value, None)
+        if parsed is not None and parsed > 0:
+            return int(parsed)
+    return 0
 
 
 def _video_bitrate(mi_track: dict, fp_stream: dict, duration_s: float | None) -> int | None:
-    reported = _safe_int(fp_stream.get("bit_rate"), 0) or (_mi_bitrate(mi_track) or 0) or None
+    fp_reported = _safe_int(fp_stream.get("bit_rate"), None)
+    mi_reported = _mi_bitrate(mi_track)
+    reported = next(
+        (value for value in (fp_reported, mi_reported) if value is not None and value > 0),
+        None,
+    )
     stream_size = _safe_int(mi_track.get("StreamSize"), 0)
     derived = (
         int(round((stream_size * 8.0) / duration_s))
@@ -110,35 +130,36 @@ def _build_video_streams(
 ) -> list[VideoStream]:
     del mi_json
     video_streams: list[VideoStream] = []
-    for i in range(max(len(mi_videos), len(fp_videos))):
-        mi_v = mi_videos[i] if i < len(mi_videos) else {}
-        fp_v = fp_videos[i] if i < len(fp_videos) else {}
+    for i, (mi_v, fp_v) in enumerate(pair_media_tracks(mi_videos, fp_videos, analysis_warnings)):
 
-        idx = _stream_index(mi_v, fp_v, i)
-        codec = fp_v.get("codec_name") or mi_v.get("Format") or ""
-        width = _safe_int(mi_v.get("Width") or fp_v.get("width"), 0)
-        height = _safe_int(mi_v.get("Height") or fp_v.get("height"), 0)
-        pix_fmt = build_pix_fmt_from_mediainfo(mi_v) or fp_v.get("pix_fmt") or None
+        idx = _stream_index(fp_v, i, analysis_warnings)
+        codec = first_metadata_text(fp_v.get("codec_name"), mi_v.get("Format")) or ""
+        width = _first_positive_int(mi_v.get("Width"), fp_v.get("width"))
+        height = _first_positive_int(mi_v.get("Height"), fp_v.get("height"))
+        pix_fmt = build_pix_fmt_from_mediainfo(mi_v) or first_metadata_text(fp_v.get("pix_fmt"))
         bit_depth = parse_bit_depth(mi_v, fp_v)
 
-        color_space = mi_v.get("colour_space") or mi_v.get("ColorSpace") or fp_v.get("color_space")
-        color_transfer = (
-            mi_v.get("transfer_characteristics")
-            or mi_v.get("TransferCharacteristics")
-            or fp_v.get("color_transfer")
+        color_space = first_metadata_text(
+            mi_v.get("colour_space"), mi_v.get("ColorSpace"), fp_v.get("color_space")
         )
-        color_primaries = (
-            mi_v.get("colour_primaries")
-            or mi_v.get("colour_primaries_Source")
-            or mi_v.get("ColorPrimaries")
-            or fp_v.get("color_primaries")
+        color_transfer = first_metadata_text(
+            mi_v.get("transfer_characteristics"),
+            mi_v.get("TransferCharacteristics"),
+            fp_v.get("color_transfer"),
+        )
+        color_primaries = first_metadata_text(
+            mi_v.get("colour_primaries"),
+            mi_v.get("colour_primaries_Source"),
+            mi_v.get("ColorPrimaries"),
+            fp_v.get("color_primaries"),
         )
         duration_s = _parse_mediainfo_duration_s(mi_v.get("Duration")) or _parse_seconds_value(fp_v.get("duration"))
-        frame_count = (
-            _safe_int(mi_v.get("FrameCount"), None)
-            or _safe_int(fp_v.get("nb_read_frames"), None)
-            or _safe_int(fp_v.get("nb_frames"), None)
+        frame_count_value = _first_positive_int(
+            mi_v.get("FrameCount"),
+            fp_v.get("nb_read_frames"),
+            fp_v.get("nb_frames"),
         )
+        frame_count = frame_count_value or None
         frame_rate = _frame_rate_label(
             mi_v.get("FrameRate"),
             fp_v.get("avg_frame_rate"),
@@ -147,7 +168,7 @@ def _build_video_streams(
         frame_rate_mode = _frame_rate_mode_label(
             mi_v.get("FrameRate_Mode"),
             mi_v.get("FrameRate_Mode/String"),
-        )
+        ) or infer_ffprobe_frame_rate_mode(fp_v.get("avg_frame_rate"), fp_v.get("r_frame_rate"))
         bitrate = _video_bitrate(mi_v, fp_v, duration_s)
         hdr_format, has_hdr10plus, has_dolby_vision = _hdr_state(
             mi_v,
@@ -181,7 +202,7 @@ def _build_video_streams(
                 hdr_format=hdr_format,
                 has_hdr10plus=has_hdr10plus,
                 has_dolby_vision=has_dolby_vision,
-                profile=fp_v.get("profile") or mi_v.get("Format_Profile"),
+                profile=first_metadata_text(fp_v.get("profile"), mi_v.get("Format_Profile")),
                 pix_fmt=pix_fmt,
                 bit_depth=bit_depth,
                 color_space=color_space,

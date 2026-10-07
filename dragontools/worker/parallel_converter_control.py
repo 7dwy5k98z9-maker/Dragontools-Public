@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 from ..core.parallel_settings import clamp_parallel_jobs
+from .parallel_child_controls import apply_child_control
+from .parallel_queue_coordination import coordinated_change
+from .parallel_file_control import individually_paused_workers
 
 class ParallelConverterControlMixin:
     """Pause, abort and per-child runtime controls."""
 
+    @coordinated_change
     def set_parallel_jobs(self, jobs: int) -> int:
         """Change the encode limit on the coordinator's Qt thread.
 
@@ -24,28 +28,31 @@ class ParallelConverterControlMixin:
         self._emit_aggregate_progress()
         return self.parallel_jobs
 
+    @coordinated_change
     def pause(self) -> None:
         self._paused = True
-        for worker in self._workers:
-            if worker.isRunning():
-                worker.pause()
+        apply_child_control(self._workers, "pause", log=self._logger)
 
+    @coordinated_change
     def resume(self) -> None:
         self._paused = False
-        for worker in self._workers:
-            if worker.isRunning():
-                worker.resume()
+        paused_children = individually_paused_workers(getattr(self, "_queue_state", None))
+        apply_child_control([child for child in self._workers if child not in paused_children], "resume", log=self._logger)
         if self._running and not self.abort_requested:
             self._start_pending_workers()
 
+    @coordinated_change
     def request_abort(self, mode: str = "sofort") -> None:
         self.abort_requested = True
         self.abort_type = mode
+        state = getattr(self, "_queue_state", None)
+        apply_child_control(individually_paused_workers(state), "resume", log=self._logger)
+        if state is not None:
+            state.individually_paused.clear()
         if self._paused:
             self.resume()
-        for worker in self._workers:
-            if worker.isRunning():
-                worker.request_abort(mode)
+        apply_child_control(self._workers, "request_abort", mode, log=self._logger)
+        self._finish_if_done()
 
     def is_current(self, path: str) -> bool:
         # A DV child remains logically current while metadata injection/final mux
@@ -69,15 +76,28 @@ class ParallelConverterControlMixin:
                 return True
         return False
 
+    @coordinated_change
     def clear_abort_request(self) -> bool:
         if not self.abort_requested or self.abort_type != "nach_datei":
             return False
         self.abort_requested = False
         self.abort_type = None
         for worker in self._workers:
-            if getattr(worker, "abort_type", None) == "nach_datei":
+            if getattr(worker, "abort_type", None) != "nach_datei":
+                continue
+            clear_child_abort = getattr(worker, "clear_abort_request", None)
+            if callable(clear_child_abort):
+                clear_child_abort()
+                continue
+            # Compatibility fallback for simple/legacy workers that expose
+            # mutable abort attributes instead of the ConverterThread API.
+            try:
                 worker.abort_requested = False
                 worker.abort_type = None
+            except (AttributeError, RuntimeError, TypeError):
+                self._logger.warn(
+                    "⚠️ Abbruchstatus eines Child-Workers konnte nicht zurückgenommen werden."
+                )
         self._logger.info("↩️ Abbruch nach Datei zurückgenommen.")
         if self._running:
             self._start_pending_workers()

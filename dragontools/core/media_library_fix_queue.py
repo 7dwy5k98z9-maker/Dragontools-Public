@@ -8,6 +8,7 @@ from typing import Iterable
 from .media_library_db import _connect, initialize_database_once
 from .media_library_sidecars import _nfo_status_for_path, _trickplay_status_for_path
 from .media_library_types import _now
+from .path_syntax import path_compare_key
 
 
 ACTION_GENERATE_NFO = "generate_nfo"
@@ -388,6 +389,7 @@ def refresh_sidecar_statuses(db_path: str | Path, media_path: str | Path) -> boo
     """Refresh NFO/trickplay status without re-analysing the video stream."""
     db = initialize_database_once(db_path)
     path = str(Path(media_path))
+    path_key = path_compare_key(str(media_path))
     nfo_status = _nfo_status_for_path(path)
     trickplay_status = _trickplay_status_for_path(path)
     with closing(_connect(db)) as conn, conn:
@@ -395,9 +397,9 @@ def refresh_sidecar_statuses(db_path: str | Path, media_path: str | Path) -> boo
             """
             UPDATE media_items
                SET nfo_status=?, trickplay_status=?, updated_at=?
-             WHERE path=?
+             WHERE path=? OR (path_key<>'' AND path_key=?)
             """,
-            (nfo_status, trickplay_status, _now(), path),
+            (nfo_status, trickplay_status, _now(), path, path_key),
         )
         if cursor.rowcount:
             conn.execute(

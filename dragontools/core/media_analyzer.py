@@ -74,12 +74,13 @@ def inspect_dynamic_hdr_with_mediainfo(
 def _analysis_payloads(
     path: str,
     tools: ToolPaths,
+    *, run_process=None,
 ) -> tuple[dict, dict, str, list[str]]:
     warnings: list[str] = []
-    media_info_json, media_info_warnings, media_info_found = _run_mediainfo_json(path, tools)
+    media_info_json, media_info_warnings, media_info_found = _run_mediainfo_json(path, tools, **({"run_process": run_process} if run_process is not None else {}))
     warnings.extend(media_info_warnings)
 
-    ffprobe_json, ffprobe_warnings = _run_ffprobe_json(path, tools)
+    ffprobe_json, ffprobe_warnings = _run_ffprobe_json(path, tools, **({"run_process": run_process} if run_process is not None else {}))
     warnings.extend(ffprobe_warnings)
     if media_info_found and media_info_json:
         source = "MediaInfo.exe + ffprobe" if ffprobe_json else "MediaInfo.exe"
@@ -95,9 +96,9 @@ def _analysis_payloads(
     return media_info_json, ffprobe_json, source, warnings
 
 
-def analyze_media(path: str, tools: ToolPaths | None = None) -> MediaInfo:
+def analyze_media(path: str, tools: ToolPaths | None = None, *, run_process=None) -> MediaInfo:
     resolved_tools = tools or get_tool_paths()
-    mi_json, fp_json, analysis_source, warnings = _analysis_payloads(path, resolved_tools)
+    mi_json, fp_json, analysis_source, warnings = _analysis_payloads(path, resolved_tools, **({"run_process": run_process} if run_process is not None else {}))
 
     mi_general = _mi_general_track(mi_json)
     mi_videos = _mi_video_tracks(mi_json)
@@ -109,12 +110,13 @@ def analyze_media(path: str, tools: ToolPaths | None = None) -> MediaInfo:
 
     video_streams = _build_video_streams(mi_videos, fp_videos, mi_json, warnings)
     frame_hdr_fallback = apply_hdr10plus_frame_fallback(
-        path, resolved_tools, video_streams, warnings
+        path, resolved_tools, video_streams, warnings,
+        **({"run_process": run_process} if run_process is not None else {}),
     )
     if frame_hdr_fallback:
         analysis_source += " + ffprobe-Frame-HDR"
-    audio_streams = _build_audio_streams(mi_audios, fp_audios)
-    subtitle_streams = _build_subtitle_streams(mi_texts, fp_subtitles)
+    audio_streams = _build_audio_streams(mi_audios, fp_audios, warnings)
+    subtitle_streams = _build_subtitle_streams(mi_texts, fp_subtitles, warnings)
     metadata = collect_video_metadata(
         video_streams, mi_videos, fp_videos, analysis_warnings=warnings
     )

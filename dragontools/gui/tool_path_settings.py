@@ -33,6 +33,7 @@ from PyQt6.QtCore import QSettings
 
 from ..core.tool_paths import ToolPathSettingsProvider
 from ..core.settings_app import APP_ORG, APP_NAME
+from ..core.settings_access import settings_text
 from ..core.settings_storage import TOOL_KEYS
 
 
@@ -51,11 +52,17 @@ class QtToolPathSettingsProvider(ToolPathSettingsProvider):
         s = QSettings(APP_ORG, APP_NAME)
         dirs: list[Path] = []
         for _tool, (_use_key, dir_key) in TOOL_KEYS.items():
-            dir_val = s.value(dir_key, "", type=str)
-            if dir_val and dir_val.strip():
-                p = Path(dir_val.strip())
-                if p.exists():
-                    dirs.append(p)
+            dir_val = settings_text(s, dir_key, "")
+            if dir_val:
+                try:
+                    p = Path(dir_val)
+                    if p.exists():
+                        dirs.append(p)
+                except (OSError, ValueError):
+                    logging.getLogger(__name__).warning(
+                        "Ungültiger Tool-Pfad in den Einstellungen ignoriert: %s",
+                        dir_key,
+                    )
         return dirs
 
     def find_in_settings(self, tool_key: str, *exe_names: str) -> str | None:
@@ -68,10 +75,17 @@ class QtToolPathSettingsProvider(ToolPathSettingsProvider):
             return None
         _, dir_key = TOOL_KEYS[tool_key]
         s = QSettings(APP_ORG, APP_NAME)
-        dir_val = s.value(dir_key, "", type=str)
-        if not dir_val or not dir_val.strip():
+        dir_val = settings_text(s, dir_key, "")
+        if not dir_val:
             return None
-        tool_dir = Path(dir_val.strip())
+        try:
+            tool_dir = Path(dir_val)
+        except (TypeError, ValueError):
+            logging.getLogger(__name__).warning(
+                "Ungültiger Tool-Pfad in den Einstellungen ignoriert: %s",
+                dir_key,
+            )
+            return None
         for name in exe_names:
             p = tool_dir / name
             if p.is_file():

@@ -3,6 +3,8 @@ from __future__ import annotations
 import traceback
 from pathlib import Path
 
+from .utility_worker_start import owned_utility_start, restore_utility_start, connect_owned_signal, utility_workers, start_utility_worker
+
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QWidget,
@@ -190,6 +192,7 @@ class MP4RemuxWidget(QWidget):
         if self.faststart_cb is not None:
             self.faststart_cb.setEnabled(not running)
 
+    @owned_utility_start("_worker")
     def _start(self) -> None:
         try:
             if self.file_list is None:
@@ -225,22 +228,25 @@ class MP4RemuxWidget(QWidget):
                 faststart=bool(self.faststart_cb and self.faststart_cb.isChecked()),
                 parent=self,
             )
-            self._worker.log_line.connect(self._append_log)
-            self._worker.progress.connect(self._on_progress)
-            self._worker.file_progress.connect(self._on_file_progress)
-            self._worker.file_result.connect(self._on_file_result)
-            self._worker.finished.connect(self._on_finished)
+            connect_owned_signal(self, "_worker", self._worker, self._worker.log_line, self._append_log)
+            connect_owned_signal(self, "_worker", self._worker, self._worker.progress, self._on_progress)
+            connect_owned_signal(self, "_worker", self._worker, self._worker.file_progress, self._on_file_progress)
+            connect_owned_signal(self, "_worker", self._worker, self._worker.file_result, self._on_file_result)
+            connect_owned_signal(self, "_worker", self._worker, self._worker.finished, self._on_finished)
 
             self._set_running(True)
             self._append_log(f"▶ Starte MP4-Remux für {len(files)} Datei(en) …")
-            self._worker.start()
+            start_utility_worker(self, self._worker)
         except Exception:
             self._append_log("❌ Unbehandelte Ausnahme in _start()")
             self._append_log(traceback.format_exc())
-            self._set_running(False)
+            restore_utility_start(self, "_worker")
+
+    def set_utility_running(self, running: bool) -> None:
+        self._set_running(running)
 
     def iter_shutdown_workers(self) -> tuple:
-        return (self._worker,) if self._worker is not None else ()
+        return utility_workers(self, "_worker")
 
     def _abort(self) -> None:
         if self._worker is not None:

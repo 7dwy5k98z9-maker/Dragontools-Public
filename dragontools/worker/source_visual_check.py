@@ -22,12 +22,14 @@ from .source_visual_settings import source_visual_settings_from_qsettings
 class SourceVisualCheckService:
     """Orchestrates source visual sampling and corruption heuristics."""
 
-    def __init__(self, *, ffmpeg_path: str, ffprobe_path: str) -> None:
+    def __init__(self, *, ffmpeg_path: str, ffprobe_path: str, worker=None, abort_on_request=True) -> None:
         self.ffmpeg_path = str(ffmpeg_path or "")
         self.ffprobe_path = str(ffprobe_path or "")
         self._sampler = SourceVisualSampler(
             ffmpeg_path=self.ffmpeg_path,
             ffprobe_path=self.ffprobe_path,
+            worker=worker,
+            abort_on_request=abort_on_request,
         )
 
     def check(self, path: str | Path, settings: SourceVisualCheckSettings) -> SourceVisualCheckResult:
@@ -61,6 +63,9 @@ class SourceVisualCheckService:
             )
             for percent in self._probe_percents(settings)
         ]
+        # A short clip may clamp every percentage to the same decode window.
+        # Count that physical window once rather than manufacturing min_hits.
+        probe_specs = list({start: (percent, start) for percent, start in probe_specs}.values())
         probes = self._probe_segments(video, probe_specs, settings)
         suspicious = sum(1 for probe in probes if probe.suspicious)
         suspicious_percent = (suspicious / len(probes) * 100.0) if probes else 0.0
@@ -162,6 +167,9 @@ class SourceVisualCheckService:
         size = max(1, min(int(batch_size or 1), 8))
         results: list[bytes] = []
         for offset in range(0, len(start_points), size):
+            if self._sampler.abort_requested:
+                results.extend(b"" for _ in start_points[offset:])
+                break
             group = start_points[offset:offset + size]
             batch = self._read_probe_frame_group(path, group, settings)
             if batch is None or len(batch) != len(group):

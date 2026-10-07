@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import sys
+import zipfile
 from pathlib import Path
+from xml.etree import ElementTree as ET
+import re
 
 from .config_migration import current_schema_version
 from .release_packaging import find_forbidden_release_artifacts
@@ -26,7 +29,7 @@ from .release_validation_package import (
 )
 
 
-def validate_source_release(root: Path, *, dist_root: Path | None = None) -> list[ReleaseCheck]:
+def validate_source_release(root: Path, *, dist_root: Path | None = None, check_pdf_privacy: bool = True) -> list[ReleaseCheck]:
     root = Path(root).resolve()
     if dist_root is not None:
         dist_root = Path(dist_root).resolve()
@@ -43,12 +46,68 @@ def validate_source_release(root: Path, *, dist_root: Path | None = None) -> lis
         _check_python_package_smoke(root),
         _check_source_artifacts_without_self_import_false_positive(root),
     ])
+    if not package_only:
+        checks.append(_check_release_version_references(root))
     checks.extend(_declared_environment_checks(root, manifest, manifest_valid))
     checks.append(_check_opencv_dependency())
     checks.extend(validate_dist_bundle(root, dist_root=dist_root, profile=profile))
-    checks.extend(_scan_private_markers(root))
+    checks.extend(_scan_private_markers(root, check_pdf_privacy=check_pdf_privacy))
     return checks
 
+
+
+def _check_release_version_references(root: Path) -> ReleaseCheck:
+    """Verify active release documents advertise the central APP_VERSION."""
+    checks = (
+        (root / "README.md", lambda text: text.splitlines() and APP_VERSION in text.splitlines()[0]),
+        (root / "PATCH.md", lambda text: text.splitlines() and APP_VERSION in text.splitlines()[0]),
+        (root / "help.html", lambda text: APP_VERSION in text[:12000]),
+        (root / "Aenderungshistorie" / "CHANGELOG.json", lambda text: APP_VERSION in text[:20000]),
+    )
+    info = root / "Info.txt"
+    failures: list[str] = []
+    for path, predicate in checks:
+        if not path.is_file():
+            failures.append(f"fehlt: {path.name}")
+            continue
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError as exc:
+            failures.append(f"unlesbar: {path.name} ({exc})")
+            continue
+        if not predicate(text):
+            failures.append(f"{path.name} nennt nicht die aktive Version {APP_VERSION} im Release-Kopf")
+    if info.is_file():
+        text = info.read_text(encoding="utf-8", errors="replace")
+        first = text.splitlines()[0] if text.splitlines() else ""
+        if APP_VERSION not in first:
+            failures.append(f"Info.txt nennt nicht die aktive Version {APP_VERSION} in der ersten Zeile")
+
+    docx = root / "DragonToolsV9_Dokumentation.docx"
+    if docx.is_file():
+        try:
+            with zipfile.ZipFile(docx) as archive:
+                core = ET.fromstring(archive.read("docProps/core.xml"))
+            version = core.findtext("{http://schemas.openxmlformats.org/package/2006/metadata/core-properties}version")
+            if (version or "").strip() != APP_VERSION:
+                failures.append(
+                    f"DragonToolsV9_Dokumentation.docx enthält cp:version {version!r} statt {APP_VERSION!r}"
+                )
+            for node in core:
+                if node.tag.rsplit('}', 1)[-1] not in {'title', 'subject', 'description', 'keywords'}:
+                    continue
+                versions = re.findall(r"\bV([0-9]+(?:\.[0-9]+){1,3})\b", node.text or '')
+                if any(value != APP_VERSION for value in versions):
+                    failures.append(f"DOCX-Metadaten {node.tag.rsplit('}', 1)[-1]} nennen eine veraltete aktive Version.")
+        except (OSError, KeyError, zipfile.BadZipFile, ET.ParseError) as exc:
+            failures.append(f"DOCX-Metadaten nicht prüfbar: {exc}")
+    if failures:
+        return ReleaseCheck("error", "Versionskonsistenz Dokumentation", "; ".join(failures))
+    return ReleaseCheck(
+        "ok",
+        "Versionskonsistenz Dokumentation",
+        f"README, PATCH, Help, Changelog und optionale Build-Hinweise referenzieren APP_VERSION {APP_VERSION}.",
+    )
 
 def _check_source_artifacts_without_self_import_false_positive(root: Path) -> ReleaseCheck:
     """Keep direct in-process validation useful without weakening release gates.

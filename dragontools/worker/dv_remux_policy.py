@@ -47,6 +47,11 @@ def decide_dv_remux(
       * non-DV/unknown profiles: fail closed / skip.
     """
     target = str(container or "mp4").strip().lower()
+    if target not in {"mp4", "mkv"}:
+        return DVRemuxDecision(
+            "skip", normalize_dv_profile_major(media_info), None,
+            f"Container {target or "<leer>"!r} wird vom DV-Remux nicht unterstützt.",
+        )
     profile = normalize_dv_profile_major(media_info)
     has_dv = bool(
         getattr(media_info, "has_dv", False)

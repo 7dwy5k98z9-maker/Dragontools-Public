@@ -20,6 +20,9 @@ def build_dv_audio_jobs(
     filter_builder: AudioFilterBuilder,
 ) -> list[dict]:
     """Translate the central audio plan into intermediate remux jobs."""
+    from ..rules.audio_plan import output_default_for_decision
+    from .audio_metadata_args import audio_output_forced
+
     container = str(getattr(worker, "container", "mp4") or "mp4").lower()
     plan = plan_builder(
         audio_streams=media_info.audio_streams,
@@ -43,6 +46,10 @@ def build_dv_audio_jobs(
                 bitrate_bps=decision.target_bitrate,
             ),
         }
+        if hasattr(chosen, "default"):
+            common["default"] = output_default_for_decision(decision)
+        if hasattr(chosen, "forced"):
+            common["forced"] = audio_output_forced(decision)
         if decision.needs_transcode:
             bitrate_k = max(
                 1,
@@ -57,7 +64,8 @@ def build_dv_audio_jobs(
                 {
                     **common,
                     "mode": "transcode",
-                            "bitrate_k": bitrate_k,
+                    "channels": decision.target_channels,
+                    "bitrate_k": bitrate_k,
                     "filter_chain": filter_builder(decision),
                     "drc_scale": decision.drc_scale,
                 }

@@ -36,7 +36,7 @@ def clear_user_initiated_shutdown() -> None:
 
 
 def user_initiated_shutdown_allowed() -> bool:
-    return time.monotonic() <= _USER_SHUTDOWN_ALLOWED_UNTIL
+    return _USER_SHUTDOWN_ALLOWED_UNTIL > 0 and time.monotonic() <= _USER_SHUTDOWN_ALLOWED_UNTIL
 
 
 def decide_windows_restart_request(

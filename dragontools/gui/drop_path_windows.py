@@ -5,22 +5,42 @@ from ..core.path_syntax import normalize_user_path
 
 def extract_itemidlist_bytes(data: bytes, offset: int) -> bytes:
     """Eine vollständige ITEMIDLIST (PIDL) aus einer CIDA-Payload lesen."""
+    if not isinstance(offset, int) or offset < 0 or offset + 2 > len(data):
+        return b""
     result = bytearray()
     pos = offset
     while pos + 2 <= len(data):
         cb = int.from_bytes(data[pos : pos + 2], "little")
         if cb == 0:
             result.extend(b"\x00\x00")
-            break
-        if pos + cb > len(data):
-            break
+            return bytes(result)
+        if cb < 2 or pos + cb > len(data):
+            return b""
         result.extend(data[pos : pos + cb])
         pos += cb
-    return bytes(result)
+    return b""  # Never pass an unterminated partial list to native code.
+
+
+def _cida_pidls(data):
+    """Validate all offsets and complete lists before loading any Shell API."""
+    if len(data) < 12:
+        return []
+    count = int.from_bytes(data[:4], "little")
+    header_size = 4 + (count + 1) * 4
+    if count == 0 or header_size > len(data):
+        return []
+    offsets = [int.from_bytes(data[4 + i * 4:8 + i * 4], "little") for i in range(count + 1)]
+    if any(offset < header_size or offset + 2 > len(data) for offset in offsets):
+        return []
+    lists = [extract_itemidlist_bytes(data, offset) for offset in offsets]
+    return lists if all(lists) else []
 
 
 def resolve_shell_idlist_to_paths(data: bytes, log_fn=None, *, debug: bool = False) -> list[str]:
     """Windows CIDA/PIDL via Shell API zu lokalen Pfaden auflösen."""
+    pidls = _cida_pidls(data)
+    if not pidls:
+        return []
     import ctypes
 
     shell32 = ctypes.windll.shell32
@@ -31,20 +51,10 @@ def resolve_shell_idlist_to_paths(data: bytes, log_fn=None, *, debug: bool = Fal
     shell32.SHGetPathFromIDListW.restype = ctypes.c_bool
     shell32.SHGetPathFromIDListW.argtypes = [ctypes.c_void_p, ctypes.c_wchar_p]
 
-    cidl = int.from_bytes(data[0:4], "little")
-    if cidl == 0 or len(data) < 4 + (cidl + 1) * 4:
-        return []
-    offsets = [int.from_bytes(data[4 + i * 4 : 8 + i * 4], "little") for i in range(cidl + 1)]
-    parent_pidl_bytes = extract_itemidlist_bytes(data, offsets[0])
-    if not parent_pidl_bytes:
-        return []
-
+    parent_pidl_bytes = pidls[0]
     paths: list[str] = []
     max_path_buf = 32767
-    for i in range(1, cidl + 1):
-        item_pidl_bytes = extract_itemidlist_bytes(data, offsets[i])
-        if not item_pidl_bytes:
-            continue
+    for i, item_pidl_bytes in enumerate(pidls[1:], start=1):
         parent_buf = ctypes.create_string_buffer(parent_pidl_bytes)
         item_buf = ctypes.create_string_buffer(item_pidl_bytes)
         combined = shell32.ILCombine(parent_buf, item_buf)

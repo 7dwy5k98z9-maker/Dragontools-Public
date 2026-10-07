@@ -18,7 +18,11 @@ class MoveRequestDialogHandler:
         self._parent = parent
 
     def on_move_req(self, rid: str, payload: dict) -> None:
+            move_thread = payload.get('_request_worker') or self._state.move_thread
             """Slot für move_thread.request_user – dispatcht nach Anfrage-Typ."""
+            if self._state.move_thread is not move_thread:
+                self._answer(move_thread, rid, {'abort': True})
+                return
             try:
                 req_type = payload.get("type", "")
                 if req_type == "choose_series_base_or_folder":
@@ -32,17 +36,18 @@ class MoveRequestDialogHandler:
                 elif req_type == "confirm_episode_replacement":
                     self.handle_episode_replacement(rid, payload)
                 else:
-                    self._state.move_thread.provide_decision(rid, {"abort": True})
+                    self._answer(move_thread, rid, {"abort": True})
             except Exception:
                 self._log("\u274c Unbehandelte Ausnahme in on_move_req()", "error")
                 self._log(traceback.format_exc(), "error")
                 try:
                     if self._state.move_thread:
-                        self._state.move_thread.provide_decision(rid, {"abort": True})
+                        self._answer(move_thread, rid, {"abort": True})
                 except Exception:
                     logging.getLogger(__name__).debug("Unterdrückte Best-Effort-Ausnahme in on_move_req.", exc_info=True)
 
     def film_destination_dialog(self, rid: str, payload: dict) -> None:
+            move_thread = payload.get('_request_worker') or self._state.move_thread
             stem         = payload.get("stem", "Film")
             similar_files = payload.get("similar_files", [])
 
@@ -110,7 +115,7 @@ class MoveRequestDialogHandler:
             layout.addWidget(buttons)
 
             if dlg.exec() != QDialog.DialogCode.Accepted:
-                self._state.move_thread.provide_decision(rid, {"abort": True})
+                self._answer(move_thread, rid, {"abort": True})
                 return
 
             mode             = "series" if rb_series.isChecked() else "single"
@@ -122,7 +127,7 @@ class MoveRequestDialogHandler:
                 "relative_subpath": relative_subpath,
             }
 
-            if similar_list and mode == "series":
+            if similar_list and mode == "series" and self._state.move_thread is move_thread:
                 filme_path = payload.get("filme_path", "")
                 for index in range(similar_list.count()):
                     item = similar_list.item(index)
@@ -146,12 +151,13 @@ class MoveRequestDialogHandler:
                             if self._state.move_thread and self._state.move_thread.isRunning():
                                 self._state.move_thread.add_planned_target(file_path, planned_target)
 
-            self._state.move_thread.provide_decision(rid, response)
+            self._answer(move_thread, rid, response)
 
     def handle_series_base_or_folder(self, rid: str, payload: dict) -> None:
+            move_thread = payload.get('_request_worker') or self._state.move_thread
             bases = [base for base in (payload.get("bases") or []) if base]
             if not bases:
-                self._state.move_thread.provide_decision(rid, {"abort": True})
+                self._answer(move_thread, rid, {"abort": True})
                 return
             label, ok = QInputDialog.getItem(
                 self._parent,
@@ -161,15 +167,16 @@ class MoveRequestDialogHandler:
                 editable=False,
             )
             if not ok:
-                self._state.move_thread.provide_decision(rid, {"abort": True})
+                self._answer(move_thread, rid, {"abort": True})
                 return
             base = next(base for base in bases if base["label"] == label)
-            self._state.move_thread.provide_decision(
+            self._answer(move_thread, 
                 rid,
                 {"base_path": base["path"], "folder_name": payload.get("series_name", "")},
             )
 
     def handle_series_folder(self, rid: str, payload: dict) -> None:
+            move_thread = payload.get('_request_worker') or self._state.move_thread
             candidates = payload.get("candidates", [])
             label, ok = QInputDialog.getItem(
                 self._parent,
@@ -179,12 +186,13 @@ class MoveRequestDialogHandler:
                 editable=False,
             )
             if not ok:
-                self._state.move_thread.provide_decision(rid, {"abort": True})
+                self._answer(move_thread, rid, {"abort": True})
                 return
             selected = next(candidate for candidate in candidates if candidate["label"] == label)
-            self._state.move_thread.provide_decision(rid, {"path": selected["path"]})
+            self._answer(move_thread, rid, {"path": selected["path"]})
 
     def handle_episode_replacement(self, rid: str, payload: dict) -> None:
+            move_thread = payload.get('_request_worker') or self._state.move_thread
             conflicts = [str(name) for name in (payload.get("conflict_names") or []) if str(name)]
             old_text = "\n".join(f"• {name}" for name in conflicts) or "• vorhandene Episode"
             label = str(payload.get("episode_label") or "Episode")
@@ -199,11 +207,12 @@ class MoveRequestDialogHandler:
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No,
             )
-            self._state.move_thread.provide_decision(
+            self._answer(move_thread, 
                 rid, {"replace": answer == QMessageBox.StandardButton.Yes}
             )
 
     def handle_shutdown_countdown(self, rid: str, payload: dict) -> None:
+            move_thread = payload.get('_request_worker') or self._state.move_thread
             try:
                 from ..core.settings_app import APP_ORG, APP_NAME
                 from ..core.settings_storage import SET_KEY_SHUTDOWN_COUNTDOWN
@@ -260,4 +269,10 @@ class MoveRequestDialogHandler:
             _timer.start()
 
             user_confirmed = dlg_shut.exec() == QDialog.DialogCode.Accepted
-            self._state.move_thread.provide_decision(rid, {"ok": user_confirmed})
+            self._answer(move_thread, rid, {"ok": user_confirmed})
+
+    def _answer(self, move_thread, rid, response):
+        if move_thread is not None:
+            if self._state.move_thread is not move_thread:
+                response = {'abort': True}
+            move_thread.provide_decision(rid, response)

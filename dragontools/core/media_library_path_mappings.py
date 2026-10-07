@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import ntpath
+import posixpath
 import sqlite3
 from contextlib import closing
 from pathlib import Path
@@ -9,7 +11,10 @@ from typing import Any, Iterable
 from .media_library_db import _connect, initialize_database
 from .media_library_types import PathMapping, _now
 from .media_library_utils import _normalize_title
-from .path_syntax import join_user_path, normalize_user_path, path_compare_key
+from .path_syntax import (
+    is_windows_style_path, join_user_path, normalize_user_path, path_compare_key,
+    path_is_same_or_child,
+)
 
 def load_path_mappings(value: Any) -> list[PathMapping]:
     if not value:
@@ -98,17 +103,53 @@ def _normalize_slashes(path: str) -> str:
 
 
 def _has_prefix(path: str, prefix: str) -> bool:
-    path_norm = _normalize_slashes(path).casefold()
-    prefix_norm = _normalize_slashes(prefix).casefold()
-    return path_norm == prefix_norm or path_norm.startswith(prefix_norm + "/")
+    if not path or not prefix:
+        return False
+    windows = is_windows_style_path(path) or is_windows_style_path(prefix)
+    if windows:
+        path_norm = ntpath.normcase(ntpath.normpath(str(path).replace("/", "\\")))
+        prefix_norm = ntpath.normcase(ntpath.normpath(str(prefix).replace("/", "\\")))
+        return path_norm == prefix_norm or path_norm.startswith(prefix_norm.rstrip("\\") + "\\")
+    path_norm = posixpath.normpath(_normalize_slashes(path))
+    prefix_norm = posixpath.normpath(_normalize_slashes(prefix))
+    return path_norm == prefix_norm or path_norm.startswith(prefix_norm.rstrip("/") + "/")
+
+
+def _lexical_prefix_rest(path: str, prefix: str) -> str | None:
+    """Return raw remainder before normalization, preserving escape evidence."""
+    if not path or not prefix:
+        return None
+    path_text = _normalize_slashes(path)
+    prefix_text = _normalize_slashes(prefix)
+    if is_windows_style_path(path) or is_windows_style_path(prefix):
+        path_cmp = path_text.casefold()
+        prefix_cmp = prefix_text.casefold()
+    else:
+        path_cmp = path_text
+        prefix_cmp = prefix_text
+    if path_cmp == prefix_cmp:
+        return ""
+    marker = prefix_cmp.rstrip("/") + "/"
+    if not path_cmp.startswith(marker):
+        return None
+    return path_text[len(prefix_text.rstrip("/")) :].lstrip("/")
 
 
 def _prefix_rest(path: str, prefix: str) -> str | None:
     if not path or not prefix or not _has_prefix(path, prefix):
         return None
-    path_norm = _normalize_slashes(path)
-    prefix_norm = _normalize_slashes(prefix)
-    return path_norm[len(prefix_norm) :].lstrip("/")
+    windows = is_windows_style_path(path) or is_windows_style_path(prefix)
+    if windows:
+        relative = ntpath.relpath(
+            ntpath.normpath(str(path).replace("/", "\\")),
+            ntpath.normpath(str(prefix).replace("/", "\\")),
+        )
+        return "" if relative == "." else relative.replace("\\", "/")
+    relative = posixpath.relpath(
+        posixpath.normpath(_normalize_slashes(path)),
+        posixpath.normpath(_normalize_slashes(prefix)),
+    )
+    return "" if relative == "." else relative
 
 
 def _join_mapped_path(root: str, rest: str) -> str:
@@ -221,16 +262,23 @@ def apply_path_mappings(path: str, mappings: Iterable[PathMapping]) -> str:
         return ""
     text = str(path)
     for mapping in sorted(mappings, key=lambda m: len(_normalize_slashes(m.external_prefix)), reverse=True):
-        if not _has_prefix(text, mapping.external_prefix):
+        lexical_rest = _lexical_prefix_rest(text, mapping.external_prefix)
+        rest = _prefix_rest(text, mapping.external_prefix)
+        if lexical_rest is not None and rest is None:
+            # The raw path claimed to live below this mapping but normalization
+            # escaped it via '..'.  Do not reinterpret that path as a host-local
+            # absolute path after the mapping failed.
+            return ""
+        if rest is None:
             continue
-        ext_norm = _normalize_slashes(mapping.external_prefix)
-        path_norm = _normalize_slashes(text)
-        rest = path_norm[len(ext_norm) :].lstrip("/")
         local = normalize_user_path(mapping.local_prefix)
-        if rest:
-            parts = [part for part in _normalize_slashes(rest).split("/") if part]
-            return join_user_path(local, *parts)
-        return local
+        parts = [part for part in _normalize_slashes(rest).split("/") if part]
+        if any(part in {".", ".."} for part in parts):
+            return ""
+        mapped = join_user_path(local, *parts) if parts else local
+        if not path_is_same_or_child(mapped, local):
+            return ""
+        return mapped
     return normalize_user_path(text)
 
 

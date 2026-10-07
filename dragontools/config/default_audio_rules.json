@@ -32,10 +32,10 @@
     "stereo": {
       "max_channels": 2,
       "target_codec": "aac",
-      "max_bitrate_k": 192,
+      "max_bitrate_k": 256,
       "copy_min_bitrate_k": 192,
       "copy_max_bitrate_k": 256,
-      "comment": "Stereo (2 Kanaele): 192-256 kbps mit akzeptiertem Codec kopieren, sonst AAC 192k"
+      "comment": "Stereo (2 Kanaele): 192-256 kbps mit akzeptiertem Codec kopieren, sonst AAC 256k"
     },
     "surround_51": {
       "max_channels": 6,

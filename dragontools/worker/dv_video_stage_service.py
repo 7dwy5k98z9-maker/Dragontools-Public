@@ -1,22 +1,26 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Callable
 
 from .command_formatting import command_to_log_string as _cmd_str
 from .dv_command_runner import DVCommandRunner
 from .dv_crop_reconcile import reconcile_dv_crop, replace_crop_in_vf_args
-from .dv_encode_command import build_dv_encode_command
+from .dv_encode_command import build_dv_encode_command, primary_ffmpeg_video_index
+from .dv_matroska_track_selection import select_matroska_video_track_number
 from .encoder_args import encoder_10bit_filter_pixel_format
 from .frame_count_evidence import FrameCountEvidence, temporal_mapping_for_filters
 from .dv_pipeline_context import DVPipelineState
 from .dv_partial_frame_repair import DVPartialFrameRepair
+from .dv_edge_frame_repair import DVEdgeFrameRepair
 from .dv_pipeline_timeouts import (
     timeout_dovi_editor as _TIMEOUT_DOVI_EDITOR,
     timeout_encode as _TIMEOUT_ENCODE,
     timeout_hevc_extract as _TIMEOUT_HEVC_EXTRACT,
     timeout_rpu_extract as _TIMEOUT_RPU_EXTRACT,
+    timeout_mkvmerge as _TIMEOUT_MKVMERGE,
 )
 from ..core.media_hdr_detection import choose_dovi_convert_mode
 
@@ -63,6 +67,54 @@ class DVVideoStageService:
         self._clear_burn_sub_tmp = clear_burn_sub_tmp
         self._crop_decision = crop_decision
 
+    def _source_stream_selector(self, state: DVPipelineState) -> str:
+        index = primary_ffmpeg_video_index(state.request.media_info)
+        return f"0:{index}" if index is not None else "0:v:0"
+
+    def _resolve_matroska_track_number(
+        self, state: DVPipelineState, runner: DVCommandRunner
+    ) -> int | None:
+        """Resolve dovi_tool ``-t`` via Matroska ``properties.number``.
+
+        dovi_tool's Matroska selector is not an FFmpeg stream index and not the
+        zero-based mkvmerge ``id``.  Map the analyzed primary FFmpeg stream to
+        the same video ordinal, then use the EBML TrackNumber.
+        """
+        mkvmerge = str(getattr(self._tools, "mkvmerge", "") or "").strip()
+        if not mkvmerge:
+            reason = (
+                "Matroska-TrackNumber für dovi_tool kann nicht aufgelöst werden, "
+                "weil mkvmerge nicht konfiguriert ist"
+            )
+            self._temp_state.record_failure(reason=reason, stage="STEP 3/7 RPU-Trackauflösung")
+            self._log(f"❌ [DV] {reason}.", "error")
+            return None
+
+        proc = runner.run(
+            [mkvmerge, "-J", state.request.input_path],
+            return_process=True,
+            timeout=_TIMEOUT_MKVMERGE(),
+            label="STEP 3/7 Matroska-Trackauflösung",
+        )
+        if proc is None or int(getattr(proc, "returncode", 2)) not in (0, 1):
+            return None
+        try:
+            payload = json.loads(str(getattr(proc, "stdout", "") or ""))
+        except (TypeError, ValueError) as exc:
+            reason = f"mkvmerge -J lieferte kein gültiges JSON für die DV-Trackauflösung: {exc}"
+            self._temp_state.record_failure(reason=reason, stage="STEP 3/7 RPU-Trackauflösung")
+            self._log(f"❌ [DV] {reason}", "error")
+            return None
+
+        try:
+            track_number = select_matroska_video_track_number(payload, state.request.media_info)
+        except ValueError as exc:
+            self._temp_state.record_failure(reason=str(exc), stage="STEP 3/7 RPU-Trackauflösung")
+            self._log(f"❌ [DV] {exc}", "error")
+            return None
+        self._vlog(f"[DV][STEP 3/7] Matroska TrackNumber {track_number} für die primäre FFmpeg-Videospur bestätigt.")
+        return track_number
+
     def extract_source_hevc(self, state: DVPipelineState, runner: DVCommandRunner) -> bool:
         """Prepare only metadata-side raw HEVC when the source container requires it.
 
@@ -100,7 +152,7 @@ class DVVideoStageService:
             [
                 self._tools.ffmpeg, "-y",
                 "-i", req.input_path,
-                "-map", "0:v:0", "-c:v", "copy",
+                "-map", self._source_stream_selector(state), "-c:v", "copy",
                 "-bsf:v", "hevc_mp4toannexb",
                 "-an", "-sn", "-dn", "-f", "hevc", str(files.src_hevc),
             ],
@@ -178,9 +230,15 @@ class DVVideoStageService:
         }
         if direct_mkv:
             kwargs["input_path"] = req.input_path
-            # FFmpeg encodes 0:v:0; make dovi_tool read the same first video
-            # track explicitly when the Matroska file contains several videos.
-            kwargs["track_number"] = 0
+            # dovi_tool's default is unambiguous for a single video track.
+            # Only multi-video Matroska needs an explicit EBML TrackNumber; in
+            # that case never guess from FFmpeg/mkvmerge IDs.
+            video_streams = list(getattr(req.media_info, "video_streams", []) or [])
+            if len(video_streams) > 1:
+                track_number = self._resolve_matroska_track_number(state, runner)
+                if track_number is None:
+                    return False
+                kwargs["track_number"] = track_number
         else:
             kwargs["input_hevc"] = files.src_hevc
         if not self._rpu_service.extract_rpu(run_extract, **kwargs):
@@ -251,6 +309,7 @@ class DVVideoStageService:
             output_hevc=files.enc_hevc,
             vf_args=state.effective_vf_args or req.vf_args,
             profile_major=req.profile_major,
+            source_stream_index=primary_ffmpeg_video_index(req.media_info),
         )
         if plan.uses_libplacebo:
             pixel_format = encoder_10bit_filter_pixel_format(self._encoder_config.options)
@@ -345,9 +404,25 @@ class DVVideoStageService:
             return True
 
         encode_count = int(evidence.count)
+        self._log(f'[DV][POST-ENCODE-FRAME-CHECK] HEVC={encode_count}; RPU={rpu_count}', 'info')
         if int(rpu_count) == encode_count:
             self._vlog(
                 f"[DV][STEP 4/7] Frühe RPU/Encode-Parität OK: {encode_count} Frames."
+            )
+            return True
+
+        if encode_count > int(rpu_count) and self._attempt_edge_frame_repair(
+            state,
+            runner,
+            expected_rpu_frames=int(rpu_count),
+            actual_encode_frames=encode_count,
+        ):
+            state.encoded_frame_evidence = FrameCountEvidence.reliable(
+                int(rpu_count),
+                source="ffmpeg_edge_repair_validated",
+                path=files.enc_hevc,
+                stage="STEP 4/7 DV Edge-Recovery",
+                temporal_mapping=evidence.temporal_mapping,
             )
             return True
 
@@ -369,12 +444,33 @@ class DVVideoStageService:
         reason = (
             "RPU/Encode-Frame-Mismatch nach Video-Encoding: "
             f"RPU={int(rpu_count)}, HEVC={encode_count}. "
-            "Eine konservative Teilreparatur des betroffenen GOP-Bereichs war nicht eindeutig und sicher möglich. "
+            "Eine konservative Rand- oder Teilreparatur des betroffenen GOP-Bereichs war nicht eindeutig und sicher möglich. "
             "Da der normale DV-Pfad bereits direkt aus der Original-MKV encodiert, wird kein identischer Voll-Reencode automatisch wiederholt."
         )
         self._temp_state.record_failure(reason=reason, stage="STEP 4/7 Frame-Recovery")
         self._log(f"❌ [DV][RECOVERY] {reason}", "error")
         return False
+
+    def _attempt_edge_frame_repair(
+        self,
+        state: DVPipelineState,
+        runner: DVCommandRunner,
+        *,
+        expected_rpu_frames: int,
+        actual_encode_frames: int,
+    ) -> bool:
+        return DVEdgeFrameRepair(
+            tools=self._tools,
+            encoder_config=self._encoder_config,
+            progress_runner=self._progress_runner,
+            log=self._log,
+            verbose_log=self._vlog,
+        ).attempt(
+            state=state,
+            runner=runner,
+            expected_rpu_frames=expected_rpu_frames,
+            actual_encode_frames=actual_encode_frames,
+        )
 
     def _attempt_partial_frame_repair(
         self,

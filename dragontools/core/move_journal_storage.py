@@ -9,6 +9,7 @@ from .path_defaults import app_documents_dir
 from .json_io import atomic_write_json as _atomic_write_json
 from .move_journal_contracts import ACTIVE_MOVE_JOURNAL_NAME, JOURNAL_FILE_PREFIX, ARCHIVE_DIR_NAME, CLOSED_MOVE_STATUSES
 from .move_journal_utils import _read_json_dict, _unique_archive_path, _now
+from .journal_runtime import recovery_may_run
 
 _LOG = logging.getLogger(__name__)
 
@@ -60,32 +61,18 @@ def read_active_move_journals(root: str | Path | None = None) -> list[dict[str, 
 
 def read_active_move_journal(root: str | Path | None = None) -> dict[str, Any] | None:
     journals = read_active_move_journals(root)
-    return journals[0] if journals else None
+    return next((data for data in journals if recovery_may_run(data, data['_journal_path'])), None)
 
-def archive_move_journal_path(
-    journal_path: str | Path,
-    *,
-    status: str = "ignored",
-) -> Path | None:
+def archive_move_journal_path(journal_path: str | Path, *, status: str = "ignored") -> Path | None:
+    from .journal_archive import archive_journal
     path = Path(journal_path)
     if not path.exists():
         return None
     data = _read_json_dict(path)
-    data["active"] = False
-    data["status"] = str(status or "ignored")
-    data["finished_at"] = _now()
-    data["updated_at"] = data["finished_at"]
+    if data and data.get('active') and not recovery_may_run(data, path):
+        raise OSError('Ein laufendes Move-Journal darf nicht archiviert werden.')
+    return archive_journal(path, status=status, write=_atomic_write_json)
 
-    archive_dir = path.parent / ARCHIVE_DIR_NAME
-    archive_dir.mkdir(parents=True, exist_ok=True)
-    run_id = str(data.get("run_id") or datetime.now().strftime("%Y%m%d_%H%M%S"))
-    archive = _unique_archive_path(archive_dir / f"{run_id}_{data['status']}.json")
-    _atomic_write_json(archive, data)
-    try:
-        path.unlink(missing_ok=True)
-    except OSError as exc:
-        _LOG.warning("Archiviertes Move-Journal konnte nicht entfernt werden: %s (%s)", path, exc)
-    return archive
 
 def archive_active_move_journal(
     *,

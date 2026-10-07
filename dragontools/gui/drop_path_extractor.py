@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+from ..core.path_syntax import path_compare_key
+
 import os
 
 from .drop_path_files import iter_video_files_in_folder as _iter_video_files_in_folder
@@ -113,6 +115,23 @@ def _extract_dropped_local_path(url, log_fn=None) -> str:
 
 
 
+
+def _dedupe_drop_paths(paths: list[str]) -> list[str]:
+    """Dedupliziert Drops mit demselben Pfadvertrag wie Queue/Journal."""
+    result: list[str] = []
+    seen: set[str] = set()
+    for raw in paths:
+        normalized = normalize_user_path(raw)
+        if not normalized:
+            continue
+        key = path_compare_key(normalized)
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(normalized)
+    return result
+
+
 def _extract_paths_from_mime_data(mime, log_fn=None) -> list[str]:
     paths: list[str] = []
 
@@ -130,7 +149,7 @@ def _extract_paths_from_mime_data(mime, log_fn=None) -> list[str]:
             )
 
     if paths:
-        return paths
+        return _dedupe_drop_paths(paths)
 
     formats = list(mime.formats() or [])
     preferred_formats = [fmt for fmt in formats if 'value="FileNameW"' in fmt]
@@ -156,7 +175,7 @@ def _extract_paths_from_mime_data(mime, log_fn=None) -> list[str]:
                         f"Drag&Drop: Kandidat aus {fmt} existiert nicht (Länge {len(visible)}): {visible}",
                     )
         if paths:
-            return paths
+            return _dedupe_drop_paths(paths)
 
     raw_text = mime.text().strip() if mime.hasText() else ""
     if raw_text:
@@ -187,7 +206,7 @@ def _extract_paths_from_mime_data(mime, log_fn=None) -> list[str]:
     if not paths:
         paths = _extract_paths_from_shell_idlist(mime, log_fn=log_fn)
 
-    return paths
+    return _dedupe_drop_paths(paths)
 
 
 

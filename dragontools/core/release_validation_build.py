@@ -40,13 +40,29 @@ def validate_dist_bundle(
 
 
 def _check_no_python_source_bundle(data_dir: Path, title: str = "Python-Quellcode") -> ReleaseCheck:
-    """Ensure frozen releases do not ship the project's readable Python sources."""
+    """Ensure frozen releases do not ship readable project Python sources."""
     source_dir = data_dir / "Python"
     if source_dir.exists():
         return ReleaseCheck(
             "error",
             title,
             f"Verbotener Python-Quellordner im Release gefunden: {source_dir}",
+        )
+    try:
+        readable = sorted(
+            path for path in data_dir.rglob("*")
+            if path.is_file() and path.suffix.casefold() in {".py", ".pyw"}
+        )
+    except OSError as exc:
+        return ReleaseCheck("error", title, f"Python-Quellscan fehlgeschlagen: {exc}")
+    if readable:
+        preview = ", ".join(str(path.relative_to(data_dir)) for path in readable[:8])
+        if len(readable) > 8:
+            preview += f" (+{len(readable) - 8} weitere)"
+        return ReleaseCheck(
+            "error",
+            title,
+            "Lesbare Python-Quelldateien im Frozen-Bundle gefunden: " + preview,
         )
     return ReleaseCheck("ok", title, "Keine separat ausgelieferten Python-Quellen im Release-Bundle.")
 

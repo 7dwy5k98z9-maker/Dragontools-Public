@@ -1,8 +1,8 @@
 """Dateisystem-, Konflikt- und Speicherpruefungen fuer den Batch-Preflight."""
 from __future__ import annotations
 
-import os
 import shutil
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -69,15 +69,18 @@ def _can_write_probe(directory: Path) -> tuple[bool, str | None]:
     if not base.exists() or not base.is_dir():
         return False, f"Ziel ist kein Ordner: {base}"
 
-    probe = base / f".dragontools_preflight_{os.getpid()}.tmp"
+    probe = base / f".dragontools_preflight_{uuid.uuid4().hex}.tmp"
+    created = False
     try:
         with open(probe, "xb") as handle:
+            created = True
             handle.write(b"ok")
         probe.unlink(missing_ok=True)
         return True, None
     except Exception as exc:
         try:
-            probe.unlink(missing_ok=True)
+            if created:
+                probe.unlink(missing_ok=True)
         except OSError:
             pass
         return False, str(exc)
@@ -181,11 +184,24 @@ def filesystem_preflight(
                 f"({format_gb(free)} frei, Quelle {format_gb(source_size)})."
             )
 
-    move = dict(preview.get("move") or {})
+    move_info, move_warnings, move_error = _move_destination_preflight(
+        dict(preview.get("move") or {}), final_path)
+    info.update(move_info)
+    warnings.extend(move_warnings)
+    return info, warnings, error or move_error
+
+
+def _move_destination_preflight(move: dict[str, Any], final_path: Path):
+    info: dict[str, Any] = {}
+    warnings: list[str] = []
+    error = False
     planned_move = _text(move.get("planned_target"), "")
     if planned_move:
         move_dir = Path(planned_move)
         info["move_target_dir"] = str(move_dir)
+        if move_dir.exists() and not move_dir.is_dir():
+            warnings.append(f"Verschiebe-Ziel ist kein Ordner: {move_dir}")
+            return info, warnings, True
         can_write_move, move_error = _can_write_probe(move_dir)
         if not can_write_move:
             warnings.append(f"Verschiebe-Ziel nicht beschreibbar: {move_error}")

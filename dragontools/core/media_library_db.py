@@ -8,13 +8,15 @@ from threading import Lock
 from typing import Any
 from uuid import uuid4
 
-from .media_library_schema import _create_schema
+from .media_library_schema import _assert_schema_not_newer, _create_schema
 from .media_library_sqlite import _connect, _sqlite_source_connection, _table_columns, _table_names
 from .media_library_types import LibraryStats, SCHEMA_VERSION, _now
 from .media_library_utils import _normalize_stream_type
+from .path_syntax import path_compare_key
 
 _INITIALIZED_DATABASE_KEYS: set[str] = set()
 _INITIALIZED_DATABASE_LOCK = Lock()
+_INITIALIZED_DATABASE_IDENTITIES: dict[str, tuple[int, int]] = {}
 
 from .media_library_sql_safety import sql_is_read_only as _sql_is_read_only
 
@@ -57,9 +59,13 @@ def initialize_database(db_path: str | Path) -> Path:
     db = Path(db_path)
     db.parent.mkdir(parents=True, exist_ok=True)
     with closing(_connect(db)) as conn:
-        conn.execute("PRAGMA journal_mode = WAL")
+        # Reject future schemas and complete schema migration before changing
+        # persistent database settings.  A failed migration must leave both
+        # schema/data and the previous journal mode untouched.
+        _assert_schema_not_newer(conn)
         _create_schema(conn)
         conn.commit()
+        conn.execute("PRAGMA journal_mode = WAL")
     return db
 
 
@@ -67,13 +73,20 @@ def initialize_database_once(db_path: str | Path) -> Path:
     """Initialisiert eine bekannte DB pro Prozess nur einmal."""
     db = Path(db_path)
     try:
-        key = str(db.resolve(strict=False)).casefold()
+        key = path_compare_key(str(db.resolve(strict=False)))
     except OSError:
-        key = str(db).casefold()
+        key = path_compare_key(str(db))
     with _INITIALIZED_DATABASE_LOCK:
-        if key in _INITIALIZED_DATABASE_KEYS:
+        try:
+            stat = db.stat()
+            identity = (stat.st_dev, stat.st_ino)
+        except FileNotFoundError:
+            identity = None
+        if key in _INITIALIZED_DATABASE_KEYS and identity == _INITIALIZED_DATABASE_IDENTITIES.get(key) and identity is not None:
             return db
         initialized = initialize_database(db)
+        stat = initialized.stat()
+        _INITIALIZED_DATABASE_IDENTITIES[key] = (stat.st_dev, stat.st_ino)
         _INITIALIZED_DATABASE_KEYS.add(key)
         return initialized
 
@@ -151,6 +164,69 @@ def sql_is_read_only(sql: str) -> bool:
     return _sql_is_read_only(sql)
 
 
+def _split_sql_script(statement: str) -> list[str]:
+    """Split a user SQL script using SQLite's own completeness parser."""
+    statements: list[str] = []
+    buffer: list[str] = []
+    for char in str(statement or ""):
+        buffer.append(char)
+        if char != ";":
+            continue
+        candidate = "".join(buffer)
+        if sqlite3.complete_statement(candidate):
+            sql = candidate.strip()
+            if sql:
+                statements.append(sql)
+            buffer.clear()
+    tail = "".join(buffer).strip()
+    if tail:
+        # ``execute`` accepts the final statement without a semicolon.
+        statements.append(tail)
+    return statements
+
+
+def _first_sql_keyword(statement: str) -> str:
+    import re
+
+    # This is only used to reject transaction control/non-transactional script
+    # members. The existing SQL safety lexer remains authoritative for the
+    # read-only/write classification.
+    text = re.sub(r"^\s*(?:(?:--[^\n]*\n)|(?:/\*.*?\*/\s*))*", "", statement, flags=re.S)
+    match = re.match(r"([A-Za-z_]+)", text)
+    return match.group(1).upper() if match else ""
+
+
+def _execute_mutating_script_atomically(conn: sqlite3.Connection, statement: str) -> None:
+    statements = _split_sql_script(statement)
+    if not statements:
+        return
+    non_transactional = {"VACUUM"}
+    transaction_control = {"BEGIN", "COMMIT", "END", "ROLLBACK", "SAVEPOINT", "RELEASE"}
+    keywords = [_first_sql_keyword(sql) for sql in statements]
+
+    if len(statements) == 1 and keywords[0] in non_transactional:
+        conn.execute(statements[0])
+        return
+    forbidden = [keyword for keyword in keywords if keyword in non_transactional | transaction_control]
+    if forbidden:
+        raise sqlite3.OperationalError(
+            "Mehrfach-SQL darf keine eigene Transaktionssteuerung oder nicht-transaktionale "
+            f"Befehle enthalten: {', '.join(forbidden)}"
+        )
+
+    savepoint = "dragontools_manual_sql"
+    conn.execute(f"SAVEPOINT {savepoint}")
+    try:
+        for sql in statements:
+            conn.execute(sql)
+    except Exception:
+        conn.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+        conn.execute(f"RELEASE SAVEPOINT {savepoint}")
+        raise
+    else:
+        conn.execute(f"RELEASE SAVEPOINT {savepoint}")
+
+
 def execute_sql(
     db_path: str | Path,
     sql: str,
@@ -170,7 +246,7 @@ def execute_sql(
             columns = [desc[0] for desc in cur.description or []]
             rows = [tuple(row) for row in cur.fetchall()]
             return columns, rows, f"{len(rows)} Zeile(n)."
-        conn.executescript(statement)
+        _execute_mutating_script_atomically(conn, statement)
         conn.execute("INSERT OR REPLACE INTO meta(key, value) VALUES('updated_at', ?)", (_now(),))
         return [], [], "SQL-Änderung ausgeführt."
 

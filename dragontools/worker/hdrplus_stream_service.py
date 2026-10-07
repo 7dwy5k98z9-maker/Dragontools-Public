@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Callable
 
 from .converter_utils import _fs
+from ..core.strict_numbers import nonnegative_integer
 
 
 class HDRPlusStreamService:
@@ -21,6 +22,7 @@ class HDRPlusStreamService:
         output_hevc: str,
         *,
         run_tool: Callable[..., bool],
+        stream_index: int | None = None,
     ) -> bool:
         try:
             src = Path(input_path)
@@ -29,7 +31,7 @@ class HDRPlusStreamService:
             cmd = [
                 self._ffmpeg, "-y", "-loglevel", "error",
                 "-i", input_path,
-                "-map", "0:v:0",
+                "-map", f"0:{nonnegative_integer(stream_index)}" if stream_index is not None else "0:v:0",
                 "-c:v", "copy",
                 "-bsf:v", "hevc_mp4toannexb",
                 "-an", "-sn", "-dn",

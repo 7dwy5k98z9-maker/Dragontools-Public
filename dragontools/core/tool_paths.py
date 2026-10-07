@@ -76,6 +76,18 @@ def _resolve_tool_candidate(path: Path, executable_names: tuple[str, ...]) -> st
     return None
 
 
+def _tool_path_available(path: str) -> bool:
+    value = str(path or "").strip()
+    if not value:
+        return False
+    try:
+        if Path(value).is_file():
+            return True
+    except OSError:
+        pass
+    return bool(shutil.which(value))
+
+
 def find_tool(
     name: str,
     *alt_names: str,
@@ -106,7 +118,8 @@ class ToolPaths:
 
     def __init__(self, provider: ToolPathSettingsProvider | None = None) -> None:
         self._provider = provider
-        extend_path(extra=provider.get_custom_dirs() if provider is not None else None)
+        # Resolution is instance-local. Unsaved previews and provider changes
+        # must not install their directories into the process-wide PATH.
         self._cache: dict[str, str] = {}
 
     def _find(self, tool_key: str, *names: str) -> str:
@@ -261,7 +274,7 @@ class ToolPaths:
             "tesseract": self.tesseract,
         }
         return {
-            name: (Path(path).exists() or bool(shutil.which(path)))
+            name: _tool_path_available(path)
             for name, path in tools.items()
         }
 
@@ -274,10 +287,17 @@ _tool_paths_lock = threading.Lock()
 def get_tool_paths(provider: ToolPathSettingsProvider | None = None) -> ToolPaths:
     """Return the process-wide, thread-safe ToolPaths instance."""
     global _tool_paths_instance, _tool_paths_provider
-    if _tool_paths_instance is not None:
+    # Ordinary readers may use the fast path.  Supplying a provider is a
+    # registration operation and must always pass through the lock: otherwise
+    # an earlier provider-less access permanently wins and GUI-configured tool
+    # paths are ignored for the whole process lifetime.
+    if provider is None and _tool_paths_instance is not None:
         return _tool_paths_instance
     with _tool_paths_lock:
-        if _tool_paths_instance is None:
+        if provider is not None and provider is not _tool_paths_provider:
+            _tool_paths_provider = provider
+            _tool_paths_instance = ToolPaths(provider=provider)
+        elif _tool_paths_instance is None:
             if provider is not None:
                 _tool_paths_provider = provider
             _tool_paths_instance = ToolPaths(provider=_tool_paths_provider)

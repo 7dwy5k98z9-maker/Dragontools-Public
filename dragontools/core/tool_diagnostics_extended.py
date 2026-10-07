@@ -1,18 +1,16 @@
 from __future__ import annotations
 
-import shutil
 import subprocess
 import tempfile
 from pathlib import Path
 from typing import Any, Callable
 
-from .process_runner import subprocess_no_window_kwargs
+from .process_runner import subprocess_no_window_kwargs, tool_available
 
 CommandRunner = Callable[[list[str], int], tuple[int, str]]
 
 def _exists_or_which(path: str) -> bool:
-    value = str(path or "").strip()
-    return bool(value) and (Path(value).exists() or bool(shutil.which(value)))
+    return tool_available(path)
 
 def _run_command(cmd: list[str], timeout: int = 15) -> tuple[int, str]:
     try:
@@ -191,7 +189,9 @@ def run_extended_system_test(
                 rows.append(_mini_row(label, False, f"{key} nicht gefunden", skipped=True))
                 continue
             rc, text = run([tool, "--version"], 10)
-            ok = rc == 0 or bool(text.strip())
+            # Error output is still "a reaction", but it is not a successful
+            # CLI self-test.  A non-zero return code must remain a failure.
+            ok = rc == 0
             rows.append(
                 _mini_row(
                     label,

@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .info_button import InfoButton
+from .encoder_settings_options import encoder_quality_range
 
 
 @dataclass
@@ -81,6 +82,7 @@ class EncoderSettingsUI:
         self.widgets.scale_combo = scale_combo
         self.widgets.preset_combo = preset_combo
         self.widgets.crf_spin = crf_spin
+        crf_spin.setRange(*encoder_quality_range(self._default_codec, "cpu"))
         self.widgets.strip_cb = strip_cb
         self.widgets.over_cb = over_cb
         self.widgets.move_cb = move_cb
@@ -108,12 +110,13 @@ class EncoderSettingsUI:
         np.addWidget(InfoButton("p1=schnell/schlechter, p7=langsam/besser. p4 ist guter Kompromiss."), 0, 2)
         np.addWidget(QLabel("🎚️ CQ:"), 0, 3)
         self.widgets.nv_cq = QSpinBox()
-        self.widgets.nv_cq.setRange(0, 63)
+        self.widgets.nv_cq.setRange(*encoder_quality_range(self._default_codec, "nvenc"))
         self.widgets.nv_cq.setValue(23)
         np.addWidget(self.widgets.nv_cq, 0, 4)
         np.addWidget(InfoButton(
             "CQ (Constant Quality): Qualitätsziel für NVENC.\n"
-            "0 = beste Qualität / größte Datei, 63 = schlechteste Qualität.\n"
+            f"{encoder_quality_range(self._default_codec, 'nvenc')[0]} = beste Qualität / größte Datei, "
+            f"{encoder_quality_range(self._default_codec, 'nvenc')[1]} = schlechteste Qualität.\n"
             "Empfohlen: 18–28. CQ 23 ist ein guter Ausgangspunkt.\n"
             "Anders als CRF (CPU) steuert CQ den internen Quantizer direkt."
         ), 0, 5)
@@ -212,12 +215,13 @@ class EncoderSettingsUI:
         ), 0, 2)
         qp.addWidget(QLabel("🎚️ Q:"), 0, 3)
         self.widgets.qsv_q = QSpinBox()
-        self.widgets.qsv_q.setRange(0, 63)
+        self.widgets.qsv_q.setRange(*encoder_quality_range(self._default_codec, "qsv"))
         self.widgets.qsv_q.setValue(23)
         qp.addWidget(self.widgets.qsv_q, 0, 4)
         qp.addWidget(InfoButton(
             "Q (Quantizer / ICQ-Qualität): Qualitätsziel für Intel QSV.\n"
-            "0 = beste Qualität / größte Datei, 63 = schlechteste Qualität.\n"
+            f"{encoder_quality_range(self._default_codec, 'qsv')[0]} = beste Qualität / größte Datei, "
+            f"{encoder_quality_range(self._default_codec, 'qsv')[1]} = schlechteste Qualität.\n"
             "Empfohlen: 18–28. 23 ist ein guter Ausgangspunkt.\n"
             "Entspricht dem CRF-Wert bei Software-Encodern."
         ), 0, 5)
@@ -241,7 +245,7 @@ class EncoderSettingsUI:
         ap = QGridLayout(w)
         ap.addWidget(QLabel("🎚️ CRF/QP:"), 0, 0)
         self.widgets.amf_qp = QSpinBox()
-        self.widgets.amf_qp.setRange(0, 63)
+        self.widgets.amf_qp.setRange(*encoder_quality_range(self._default_codec, "amf"))
         self.widgets.amf_qp.setValue(23)
         ap.addWidget(self.widgets.amf_qp, 0, 1)
         ap.addWidget(InfoButton("Qualitätsfaktor (QP). Niedriger = besser/größer. 18-26 empfohlen."), 0, 2)
@@ -260,7 +264,7 @@ class EncoderSettingsUI:
         xp = QGridLayout(w)
         xp.addWidget(QLabel("🎚️ CRF:"), 0, 0)
         self.widgets.x265_crf = QSpinBox()
-        self.widgets.x265_crf.setRange(0, 63)
+        self.widgets.x265_crf.setRange(*encoder_quality_range(self._default_codec, "cpu"))
         self.widgets.x265_crf.setValue({"h264": 22, "h265": 22, "av1": 28}.get(self._default_codec, 22))
         self.widgets.x265_crf.valueChanged.connect(lambda v: self.widgets.crf_spin.setValue(v))
         xp.addWidget(self.widgets.x265_crf, 0, 1)

@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 from pathlib import Path
+from ..core.recovery_file import preserve_recovery_file
+from .log_dispatch import dispatch_log
 
 from .duration_repair_runtime import DurationRepairRuntime
 
@@ -41,15 +43,15 @@ class DurationRepairArchive:
         try:
             archive_dir.mkdir(parents=True, exist_ok=True)
             target = unique_archive_path(archive_dir, output_path.name)
-            self._runtime.replace_file(output_path, target)
-            self._runtime.log(
+            preserve_recovery_file(output_path, target)
+            dispatch_log(self._runtime.log,
                 "📦 Datei aufgrund weiterhin fehlerhafter Laufzeit in den Archiv-Ordner verschoben: "
                 f"{target}",
                 "warn",
             )
             return str(target)
         except Exception as exc:
-            self._runtime.log(
+            dispatch_log(self._runtime.log,
                 f"❌ Archivierung der fehlerhaften Ausgabedatei fehlgeschlagen: {exc}",
                 "error",
             )

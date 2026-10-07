@@ -19,14 +19,18 @@ def test_davinci_resolve_is_exposed_as_external_program_in_menus() -> None:
 
 def test_main_window_launcher_maps_resolve_to_central_tool_key() -> None:
     source = _source("main_window_system_actions.py")
-    assert '"Resolve.exe":          ("davinci_resolve", ["Resolve.exe", "resolve"])' in source
-    assert 'resolved = get_tool_paths().davinci_resolve' in source
-    assert 'if resolved and Path(resolved).is_file()' in source
+    assert 'launch_external_program(' in source
+    shared = _source("external_program_launch.py")
+    assert '"Resolve.exe": ("davinci_resolve", ("Resolve.exe", "resolve"))' in shared
+    assert 'candidates.append(tools.davinci_resolve)' in shared
+    assert 'if path and Path(path).is_file()' in shared
 
 
 def test_tab_manager_exposes_and_resolves_davinci() -> None:
     source = _source("tab_manager.py")
     assert '("DaVinci Resolve", "Resolve.exe")' in source
-    assert '"Resolve.exe":          ("davinci_resolve", ["Resolve.exe", "resolve"])' in source
-    assert 'resolved = get_tool_paths().davinci_resolve' in source
+    assert 'launch_external_program(' in source
+    shared = _source("external_program_launch.py")
+    assert '"Resolve.exe": ("davinci_resolve", ("Resolve.exe", "resolve"))' in shared
+    assert 'candidates.append(tools.davinci_resolve)' in shared
     assert 'EXE_DIR / "Daten" / "Programme" / "davinci_resolve" / name' in source

@@ -54,7 +54,9 @@ class ConvertWidgetQueueRemoveMixin:
         journal = getattr(self.state, "job_journal", None)
         if journal is not None and hasattr(journal, "update_queue_order"):
             try:
-                journal.update_queue_order(new_order)
+                journal.update_queue_order(
+                    new_order, file_overrides=dict(self.state.file_overrides or {})
+                )
             except (OSError, RuntimeError, TypeError, ValueError) as exc:
                 self.log(f"⚠️ Queue-Reihenfolge konnte nicht im Job-Journal gespeichert werden: {exc}", "warn")
 

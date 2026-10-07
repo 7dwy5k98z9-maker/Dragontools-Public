@@ -1,14 +1,27 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import logging
 import time
-import threading
 from pathlib import Path
 from typing import Callable
 
 from ..core.callback_dispatch import invoke_callback
 from ..core.result_status import accepts_result
 from .worker_events import progress_event, result_event
+from .worker_result_accounting import WorkerResultAccounting
+from .worker_contracts import normalize_worker_path
+from .log_dispatch import dispatch_log
+
+
+_LOG = logging.getLogger(__name__)
+
+
+def _safe_emit(callback, *args) -> None:
+    try:
+        invoke_callback(callback, *args)
+    except Exception:
+        _LOG.exception("Worker-Ergebnisbeobachter fehlgeschlagen")
 
 
 def _format_size(value: int) -> str:
@@ -47,24 +60,26 @@ class WorkerConversionResultService:
         self._file_result_emit = file_result_emit
         self._log = log
         self._failure_details = failure_details
-        self._result_lock = threading.RLock()
+        self._accounting = WorkerResultAccounting(runtime_state)
+        self._result_lock = self._accounting.lock
         self._terminal_status: dict[str, str] = {}
 
     def emit_file_progress(self, path, pct, eta=None) -> None:
         event = progress_event(path, pct, eta)
-        invoke_callback(self._event_emit, event)
-        invoke_callback(self._file_progress_emit, path, event.percent or 0, eta)
+        _safe_emit(self._event_emit, event)
+        _safe_emit(self._file_progress_emit, path, event.percent or 0, eta)
 
     def emit_file_result(self, input_path: str, output_path: str, status: str) -> None:
         # Serialize the decision AND signal delivery; concurrent Future callbacks
         # must not enqueue an older success after a warning/error.
         with self._result_lock:
-            if not accepts_result(self._terminal_status.get(input_path), status):
+            key = normalize_worker_path(input_path)
+            if not accepts_result(self._terminal_status.get(key), status):
                 return
-            self._terminal_status[input_path] = status
-            invoke_callback(self._event_emit, result_event(input_path, output_path, status))
-            if self._terminal_status[input_path] == status:
-                invoke_callback(self._file_result_emit, input_path, output_path, status)
+            self._terminal_status[key] = status
+            _safe_emit(self._event_emit, result_event(input_path, output_path, status))
+            if self._terminal_status[key] == status:
+                _safe_emit(self._file_result_emit, input_path, output_path, status)
 
     def finalize_success(self, ctx) -> None:
         self.record_success(ctx)
@@ -80,6 +95,8 @@ class WorkerConversionResultService:
             self.emit_file_result(ctx.input_path, ctx.final_output_path or ctx.output_path, "🧩")
 
     def record_success(self, ctx) -> None:
+        if self._accounting.recorded(ctx.input_path):
+            return
         final_output = ctx.final_output_path or ctx.output_path
         if not final_output:
             raise RuntimeError("Finaler Ausgabepfad fehlt.")
@@ -88,18 +105,29 @@ class WorkerConversionResultService:
             raise RuntimeError(f"Finale Ausgabedatei fehlt: {out.name}")
 
         sz_after = out.stat().st_size
-        self._runtime_state.total_before += ctx.size_before
-        self._runtime_state.total_after += sz_after
-        self._runtime_state.erfolgreich += 1
-        self._logger.file_done(
-            path=ctx.input_path,
-            new_path=final_output,
-            sz_before=ctx.size_before,
-            sz_after=sz_after,
-            duration_s=time.time() - ctx.start_ts,
-            overwritten=self._overwrite_original,
-            start_ts=ctx.start_ts,
-        )
+        if not self._accounting.success(ctx.input_path, ctx.size_before, sz_after):
+            return
+        try:
+            self._logger.file_done(
+                path=ctx.input_path,
+                new_path=final_output,
+                sz_before=ctx.size_before,
+                sz_after=sz_after,
+                duration_s=time.time() - ctx.start_ts,
+                overwritten=self._overwrite_original,
+                start_ts=ctx.start_ts,
+            )
+        except Exception as exc:
+            # The media transaction is already verified at this point.
+            # Diagnostic logging must not turn a valid output into ❌.
+            try:
+                dispatch_log(self._log, f"⚠️ Abschluss-Logging fehlgeschlagen: {exc}", "warn")
+            except Exception as fallback_exc:
+                _LOG.error(
+                    "Abschluss-Logging und Fallback-Logger fehlgeschlagen: %s",
+                    fallback_exc,
+                    exc_info=True,
+                )
         self.emit_file_progress(ctx.input_path, 100)
 
     def finalize_cleanup_pending(self, ctx) -> None:
@@ -113,11 +141,11 @@ class WorkerConversionResultService:
                 "container": str(getattr(ctx, "container", "") or ""),
                 "strategy": str(getattr(ctx, "strategy_name", "") or ""),
             }
-        self._log(f"⚠️ Replace abgeschlossen, Cleanup ausstehend: {Path(ctx.input_path).name}", "warn")
-        self._log(reason, "warn")
+        dispatch_log(self._log, f"⚠️ Replace abgeschlossen, Cleanup ausstehend: {Path(ctx.input_path).name}", "warn")
+        dispatch_log(self._log, reason, "warn")
         self.emit_file_result(ctx.input_path, final_output or ctx.input_path, "⚠️")
         self.emit_file_progress(ctx.input_path, 100)
-        self._runtime_state.fehlgeschlagen += 1
+        self._accounting.failure(ctx.input_path)
 
     def finalize_blocked(self, ctx) -> None:
         reason = (
@@ -140,21 +168,21 @@ class WorkerConversionResultService:
                 "strategy": str(getattr(ctx, "strategy_name", "") or ""),
             }
 
-        self._log(f"Original nicht ersetzt: {Path(ctx.input_path).name}", "warn")
-        self._log(reason, "warn")
+        dispatch_log(self._log, f"Original nicht ersetzt: {Path(ctx.input_path).name}", "warn")
+        dispatch_log(self._log, reason, "warn")
         if archived_path:
-            self._log(f"Archivierte Ausgabe: {archived_path}", "warn")
+            dispatch_log(self._log, f"Archivierte Ausgabe: {archived_path}", "warn")
             archived = Path(archived_path)
             size_before = int(getattr(ctx, "size_before", 0) or 0)
             if archived.exists() and size_before > 0:
-                self._log(
+                dispatch_log(self._log, 
                     f"Größe: {_format_size(size_before)} → {_format_size(archived.stat().st_size)}",
                     "warn",
                 )
 
         self.emit_file_result(ctx.input_path, archived_path or ctx.input_path, "\u26a0\ufe0f")
         self.emit_file_progress(ctx.input_path, 100)
-        self._runtime_state.fehlgeschlagen += 1
+        self._accounting.failure(ctx.input_path)
 
     def fail(self, ctx, reason: str) -> None:
         report_path = str(getattr(ctx, "error_report_path", "") or "")
@@ -170,19 +198,19 @@ class WorkerConversionResultService:
                 "container": str(getattr(ctx, "container", "") or ""),
                 "strategy": str(getattr(ctx, "strategy_name", "") or ""),
             }
-        self._log(f"Fehler: {Path(ctx.input_path).name}", "error")
+        dispatch_log(self._log, f"Fehler: {Path(ctx.input_path).name}", "error")
         if reason:
-            self._log(reason, "error")
+            dispatch_log(self._log, reason, "error")
         if archive_path:
-            self._log(f"📦 Diagnosearchiv: {archive_path}", "warn")
+            dispatch_log(self._log, f"📦 Diagnosearchiv: {archive_path}", "warn")
         if report_path:
-            self._log(f"Fehlerbericht: {report_path}", "error")
+            dispatch_log(self._log, f"Fehlerbericht: {report_path}", "error")
         self.emit_file_result(ctx.input_path, archive_path or ctx.input_path, "❌")
         self.emit_file_progress(ctx.input_path, 100)
-        self._runtime_state.fehlgeschlagen += 1
+        self._accounting.failure(ctx.input_path)
 
     def fail_unhandled(self, input_path: str) -> None:
-        self._runtime_state.fehlgeschlagen += 1
+        self._accounting.failure(input_path)
         details = {}
         if self._failure_details is not None:
             if input_path not in self._failure_details:
@@ -196,10 +224,10 @@ class WorkerConversionResultService:
             details = dict(self._failure_details.get(input_path, {}) or {})
         message = str(details.get("message", "") or "Unbehandelte Ausnahme im Converter-Worker.")
         report_path = str(details.get("error_report", "") or "")
-        self._log(f"Fehler: {Path(input_path).name}", "error")
-        self._log(message, "error")
+        dispatch_log(self._log, f"Fehler: {Path(input_path).name}", "error")
+        dispatch_log(self._log, message, "error")
         if report_path:
-            self._log(f"Fehlerbericht: {report_path}", "error")
+            dispatch_log(self._log, f"Fehlerbericht: {report_path}", "error")
         self.emit_file_result(input_path, input_path, "❌")
         self.emit_file_progress(input_path, 100)
 
@@ -212,8 +240,8 @@ class WorkerConversionResultService:
                 "container": "",
                 "strategy": "source_visual_check",
             }
-        self._log(f"⏭️ Datei übersprungen: {Path(input_path).name}", "warn")
+        dispatch_log(self._log, f"⏭️ Datei übersprungen: {Path(input_path).name}", "warn")
         if reason:
-            self._log(reason, "warn")
+            dispatch_log(self._log, reason, "warn")
         self.emit_file_result(input_path, input_path, "⏭️")
         self.emit_file_progress(input_path, 100)

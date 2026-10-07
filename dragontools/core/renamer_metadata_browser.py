@@ -45,6 +45,8 @@ from .online_metadata_tvdb_helpers import (
     _year_from_tvdb_record,
 )
 from .path_syntax import path_compare_key
+from .movie_renamer_season_override import normalize_episode_number
+from .online_metadata_identity import episode_number, TVDB_SEASON_FIELDS, TVDB_EPISODE_FIELDS
 
 MetadataKind = Literal["series", "movie"]
 ProviderName = Literal["tmdb", "thetvdb"]
@@ -78,6 +80,10 @@ class MetadataBrowserEpisode:
     provider_episode_id: int | None = None
     air_date: str = ""
 
+    def __post_init__(self):
+        object.__setattr__(self, 'season', normalize_episode_number(self.season, minimum=0))
+        object.__setattr__(self, 'episode', normalize_episode_number(self.episode))
+
     @property
     def code(self) -> str:
         return f"S{self.season:02d}E{self.episode:02d}"
@@ -102,6 +108,8 @@ class ExplicitSeriesFileMapping:
     title_mode: TitleMode = "all"
 
     def __post_init__(self) -> None:
+        object.__setattr__(self, 'season', normalize_episode_number(self.season, minimum=0))
+        object.__setattr__(self, 'episodes', tuple(self.episodes))
         if self.hit.kind != "series":
             raise ValueError("Serienzuordnung benötigt einen Serien-Treffer.")
         if int(self.season) < 0:
@@ -346,27 +354,11 @@ class RenamerMetadataBrowserService:
 
     @staticmethod
     def _tvdb_season_number(item: dict[str, Any]) -> int | None:
-        value = next(
-            (
-                item.get(key)
-                for key in ("seasonNumber", "season_number", "airedSeason", "officialSeasonNumber")
-                if item.get(key) is not None
-            ),
-            None,
-        )
-        return _int_or_none(value)
+        return episode_number(item, TVDB_SEASON_FIELDS, minimum=0)
 
     @staticmethod
     def _tvdb_episode_number(item: dict[str, Any]) -> int | None:
-        value = next(
-            (
-                item.get(key)
-                for key in ("number", "episodeNumber", "episode_number", "airedEpisodeNumber")
-                if item.get(key) is not None
-            ),
-            None,
-        )
-        return _int_or_none(value)
+        return episode_number(item, TVDB_EPISODE_FIELDS)
 
     def _client(self, provider: str):
         try:

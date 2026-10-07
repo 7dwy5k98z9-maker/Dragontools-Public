@@ -1,10 +1,17 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-from .media_metadata import _normalize_lang, _parse_mediainfo_duration_s, _parse_seconds_value
+from .media_metadata import (
+    _normalize_lang,
+    _parse_mediainfo_duration_s,
+    _parse_seconds_value,
+    clean_metadata_text,
+    first_metadata_text,
+)
+from .media_track_pairing import pair_media_tracks
 from .models import SubtitleStream
-from .media_analyzer_io import _mi_forced, _mi_stream_index
-from .type_utils import _safe_int
+from .media_analyzer_io import _ffmpeg_stream_index, _mi_default, _mi_forced, _warn_untrusted_stream_index
+from .type_utils import _safe_bool, _safe_int
 
 
 def _normalize_subtitle_codec(value: str | None) -> str:
@@ -51,27 +58,35 @@ def _normalize_subtitle_codec(value: str | None) -> str:
     return text
 
 
-def _parse_stream_duration_s(*values) -> float | None:
-    for value in values:
-        parsed = _parse_mediainfo_duration_s(value) or _parse_seconds_value(value)
-        if parsed is not None:
-            return parsed
-        text = str(value or "").strip()
-        if not text or ":" not in text:
-            continue
-        try:
-            parts = [float(part.replace(",", ".")) for part in text.split(":")]
-        except (TypeError, ValueError):
-            continue
-        if len(parts) == 3:
-            return parts[0] * 3600.0 + parts[1] * 60.0 + parts[2]
-        if len(parts) == 2:
-            return parts[0] * 60.0 + parts[1]
+def _parse_clock_duration_s(value) -> float | None:
+    text = str(value or "").strip()
+    if not text or ":" not in text:
+        return None
+    try:
+        parts = [float(part.replace(",", ".")) for part in text.split(":")]
+    except (TypeError, ValueError):
+        return None
+    if len(parts) == 3:
+        return parts[0] * 3600.0 + parts[1] * 60.0 + parts[2]
+    if len(parts) == 2:
+        return parts[0] * 60.0 + parts[1]
     return None
 
 
+def _parse_stream_duration_s(mi_value, fp_value, tag_value) -> float | None:
+    """Parse duration without mixing MediaInfo milliseconds with ffprobe seconds."""
+    parsed = _parse_mediainfo_duration_s(mi_value)
+    if parsed is not None:
+        return parsed
+    parsed = _parse_seconds_value(fp_value)
+    if parsed is not None:
+        return parsed
+    return _parse_clock_duration_s(tag_value)
+
+
 def _subtitle_event_count(mi_track: dict, fp_stream: dict) -> int | None:
-    tags = fp_stream.get("tags", {}) or {}
+    tags_raw = fp_stream.get("tags", {}) or {}
+    tags = tags_raw if isinstance(tags_raw, dict) else {}
     candidates = (
         fp_stream.get("nb_read_packets"),
         fp_stream.get("nb_read_frames"),
@@ -91,33 +106,52 @@ def _subtitle_event_count(mi_track: dict, fp_stream: dict) -> int | None:
     return None
 
 
-def _build_subtitle_streams(mi_texts: list[dict], fp_subs: list[dict]) -> list[SubtitleStream]:
+def _build_subtitle_streams(
+    mi_texts: list[dict],
+    fp_subs: list[dict],
+    analysis_warnings: list[str] | None = None,
+) -> list[SubtitleStream]:
     subtitle_streams: list[SubtitleStream] = []
-    for i in range(max(len(mi_texts), len(fp_subs))):
-        mi_s = mi_texts[i] if i < len(mi_texts) else {}
-        fp_s = fp_subs[i] if i < len(fp_subs) else {}
-        tags = fp_s.get("tags", {}) or {}
-        disposition = fp_s.get("disposition", {}) or {}
+    for i, (mi_s, fp_s) in enumerate(pair_media_tracks(mi_texts, fp_subs, analysis_warnings)):
+        tags_raw = fp_s.get("tags", {}) or {}
+        tags = tags_raw if isinstance(tags_raw, dict) else {}
+        disposition_raw = fp_s.get("disposition", {}) or {}
+        disposition = disposition_raw if isinstance(disposition_raw, dict) else {}
 
-        idx = _safe_int(fp_s.get("index"), None) if fp_s else _mi_stream_index(mi_s, i)
-        if idx is None:
-            idx = _mi_stream_index(mi_s, i)
+        idx = _ffmpeg_stream_index(fp_s, i)
+        if idx < 0:
+            _warn_untrusted_stream_index(
+                analysis_warnings,
+                stream_type="Untertitel",
+                ordinal=i,
+            )
 
         codec = _normalize_subtitle_codec(
-            fp_s.get("codec_name")
-            or mi_s.get("Format")
-            or mi_s.get("CodecID")
-            or mi_s.get("Format_Commercial")
+            first_metadata_text(
+                fp_s.get("codec_name"),
+                mi_s.get("Format"),
+                mi_s.get("CodecID"),
+                mi_s.get("Format_Commercial"),
+            )
             or ""
         )
-        title = tags.get("title") or mi_s.get("Title") or ""
+        title = first_metadata_text(tags.get("title"), mi_s.get("Title")) or ""
         fp_lang = tags.get("language")
         mi_lang = mi_s.get("Language") or mi_s.get("Language_String3")
-        raw_lang = fp_lang if fp_lang and fp_lang.lower() != "und" else mi_lang
+        fp_lang_text = clean_metadata_text(fp_lang)
+        if fp_lang_text and fp_lang_text.casefold() not in {"und", "unk", "undefined"}:
+            raw_lang = fp_lang_text
+        else:
+            raw_lang = clean_metadata_text(mi_lang)
         final_language = _normalize_lang(raw_lang, title)
-        forced = bool(disposition.get("forced", 0)) if fp_s else _mi_forced(mi_s)
+        forced = _safe_bool(disposition.get("forced", 0)) if "forced" in disposition else _mi_forced(mi_s)
+        default = _safe_bool(disposition.get("default", 0)) if "default" in disposition else _mi_default(mi_s)
         event_count = _subtitle_event_count(mi_s, fp_s)
-        duration_s = _parse_stream_duration_s(mi_s.get("Duration"), fp_s.get("duration"), tags.get("DURATION"))
+        duration_s = _parse_stream_duration_s(
+            mi_s.get("Duration"),
+            fp_s.get("duration"),
+            tags.get("DURATION"),
+        )
 
         subtitle_streams.append(
             SubtitleStream(
@@ -128,6 +162,7 @@ def _build_subtitle_streams(mi_texts: list[dict], fp_subs: list[dict]) -> list[S
                 codec=str(codec),
                 event_count=event_count,
                 duration_s=duration_s,
+                default=default,
             )
         )
     return subtitle_streams

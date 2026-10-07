@@ -8,12 +8,15 @@ import os
 import sys
 import threading
 import traceback
+import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from .json_io import atomic_write_json
+from .crash_state_files import is_crash_state_file
 from .logger import log_base_from_settings, make_log_dir
+from .diagnostic_redaction import redact_command, redact_sensitive_data, redact_sensitive_text
 
 _LOG = logging.getLogger(__name__)
 
@@ -55,11 +58,11 @@ def install_crash_guard(app_version: str = "") -> Path | None:
     try:
         _state_dir = make_log_dir(log_base_from_settings()) / "CrashReports"
         _state_dir.mkdir(parents=True, exist_ok=True)
-        _state_file = _state_dir / _STATE_FILE_NAME
-        _report_unclean_previous_run(app_version)
+        _state_file = _state_dir / f"crash_state_{os.getpid()}.json"
+        _report_unclean_previous_runs(app_version)
 
-        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        _fatal_log_file = _state_dir / f"{ts}_fatal_runtime.txt"
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        _fatal_log_file = _state_dir / f"{ts}_p{os.getpid()}_{uuid.uuid4().hex[:8]}_fatal_runtime.txt"
         _fatal_log_handle = open(_fatal_log_file, "a", encoding="utf-8", buffering=1)
         faulthandler.enable(file=_fatal_log_handle, all_threads=True)
 
@@ -107,10 +110,10 @@ def mark_activity(
             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "pid": os.getpid(),
             "executable": sys.executable,
-            "stage": str(stage or ""),
+            "stage": redact_sensitive_text(stage),
             "file": str(file_path or ""),
-            "command": _normalize_command(command),
-            "extra": extra or {},
+            "command": redact_command(_normalize_command(command)),
+            "extra": redact_sensitive_data(extra or {}),
         }
         # Ein gemeinsamer Lock definiert den Vertrag "letzter abgeschlossener
         # Aufruf gewinnt". atomic_write_json() verwendet zusätzlich für jeden
@@ -143,8 +146,8 @@ def clear_activity() -> bool:
 def write_manual_crash_note(reason: str, *, traceback_text: str = "") -> str:
     """Schreibt einen sofortigen Crash-/Exceptionbericht."""
     report_dir = _ensure_report_dir()
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    path = report_dir / f"{ts}_crash.txt"
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    path = report_dir / f"{ts}_{uuid.uuid4().hex[:8]}_crash.txt"
     state = _read_state()
     text = _build_report_text(
         title="DragonTools Crashbericht",
@@ -152,7 +155,7 @@ def write_manual_crash_note(reason: str, *, traceback_text: str = "") -> str:
         state=state,
         traceback_text=traceback_text,
     )
-    path.write_text(text, encoding="utf-8")
+    path.write_text(redact_sensitive_text(text), encoding="utf-8")
     return str(path)
 
 
@@ -185,17 +188,29 @@ def _handle_thread_exception(args) -> None:
 def _report_unclean_previous_run(app_version: str) -> None:
     if _state_file is None or not _state_file.exists():
         return
-    state = _read_state()
+    _report_unclean_state(_state_file, app_version)
+
+
+def _report_unclean_previous_runs(app_version: str) -> None:
+    if _state_dir is None:
+        return
+    for candidate in sorted(_state_dir.glob("crash_state*.json")):
+        if is_crash_state_file(candidate):
+            _report_unclean_state(candidate, app_version)
+
+
+def _report_unclean_state(state_path: Path, app_version: str) -> None:
+    state = _read_state(state_path)
     if not state.get("active"):
-        _state_file.unlink(missing_ok=True)
+        state_path.unlink(missing_ok=True)
         return
 
     pid = _safe_int(state.get("pid"))
     if pid and pid != os.getpid() and _pid_is_running(pid):
         return
 
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    path = _state_file.parent / f"{ts}_unclean_shutdown.txt"
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    path = state_path.parent / f"{ts}_{uuid.uuid4().hex[:8]}_unclean_shutdown.txt"
     text = _build_report_text(
         title="DragonTools unvollstaendig beendet",
         reason=(
@@ -207,10 +222,10 @@ def _report_unclean_previous_run(app_version: str) -> None:
         traceback_text="",
         extra={"current_app_version": app_version},
     )
-    path.write_text(text, encoding="utf-8")
+    path.write_text(redact_sensitive_text(text), encoding="utf-8")
     _remove_empty_fatal_log_from_state(state)
     try:
-        _state_file.unlink(missing_ok=True)
+        state_path.unlink(missing_ok=True)
     except Exception:
         logging.getLogger(__name__).debug("Unterdrückte Best-Effort-Ausnahme in _report_unclean_previous_run.", exc_info=True)
 
@@ -254,7 +269,7 @@ def _build_report_text(
     if traceback_text:
         lines += ["", "Traceback", "-" * 80, traceback_text.rstrip()]
     lines.append("")
-    return "\n".join(lines)
+    return redact_sensitive_text("\n".join(lines))
 
 
 def _ensure_report_dir() -> Path:
@@ -307,13 +322,17 @@ def _remove_empty_fatal_log_path(path_value: str | Path | None) -> None:
         logging.getLogger(__name__).debug("Unterdrückte Best-Effort-Ausnahme in _remove_empty_fatal_log_path.", exc_info=True)
 
 
-def _read_state() -> dict[str, Any]:
-    if _state_file is None or not _state_file.exists():
+def _read_state(path: Path | None = None) -> dict[str, Any]:
+    state_path = path if path is not None else _state_file
+    if state_path is None or not state_path.exists():
         return {}
     try:
-        return json.loads(_state_file.read_text(encoding="utf-8") or "{}")
+        state = json.loads(state_path.read_text(encoding="utf-8") or "{}")
+        if not isinstance(state, dict):
+            raise ValueError("CrashGuard-Zustand muss ein JSON-Objekt sein.")
+        return state
     except Exception as exc:
-        _LOG.warning("CrashGuard-Zustand konnte nicht gelesen werden: %s", _state_file, exc_info=True)
+        _LOG.warning("CrashGuard-Zustand konnte nicht gelesen werden: %s", state_path, exc_info=True)
         _fallback_diagnostic("CrashGuard-Zustand konnte nicht gelesen werden", exc)
         return {}
 
@@ -340,6 +359,10 @@ def _safe_int(value: Any) -> int | None:
 def _pid_is_running(pid: int) -> bool:
     if pid <= 0:
         return False
+    if os.name == "nt":
+        from .process_status import windows_pid_is_running
+
+        return windows_pid_is_running(pid)
     try:
         os.kill(pid, 0)
         return True

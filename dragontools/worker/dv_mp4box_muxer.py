@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 from typing import Callable
+from .dv_mux_input_validation import required_mux_inputs_available
+from .mp4box_track_args import mp4box_track_argument, append_mp4box_subtitle
 
 
 class DVMP4BoxMuxer:
@@ -16,14 +18,8 @@ class DVMP4BoxMuxer:
             if not (af.exists() and af.stat().st_size > 0):
                 continue
 
-            lang = (meta.get("lang") or "und").lower()
-            title = self._audio_track_name(meta)
-            safe_title = title.replace('"', "'") if title else ""
-
-            add_arg = f"{af}:lang={lang}"
-            if safe_title:
-                add_arg += f':name="{safe_title}"'
-
+            add_arg = mp4box_track_argument(af, language=meta.get('lang'), media_type='audio',
+                title=self._audio_track_name(meta), default=meta.get('default'))
             mp4_cmd += ["-add", add_arg]
 
 
@@ -34,14 +30,7 @@ class DVMP4BoxMuxer:
             path = track.path
             if not (path.exists() and path.stat().st_size > 0):
                 continue
-            lang = str(track.language or "und").strip().lower()
-            title = str(track.title or "").replace('"', "'").strip()
-            if bool(getattr(track, "forced", False)) and "forced" not in title.lower():
-                title = f"{title} [Forced]".strip() if title else "Forced"
-            add_arg = f"{path}:lang={lang}"
-            if title:
-                add_arg += f':name="{title}"'
-            mp4_cmd += ["-add", add_arg]
+            append_mp4box_subtitle(mp4_cmd, track)
 
     def mux_plain_mp4_without_dv(
         self,
@@ -65,6 +54,10 @@ class DVMP4BoxMuxer:
         mux_tracks,
         subtitle_tracks=(),
     ) -> bool:
+        mux_tracks = list(mux_tracks)
+        subtitle_tracks = list(subtitle_tracks or ())
+        if not required_mux_inputs_available(track.path for track in [*mux_tracks, *subtitle_tracks]):
+            return False
         mp4_cmd = [
             self._mp4box_path,
             "-new",

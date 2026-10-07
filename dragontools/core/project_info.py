@@ -29,12 +29,12 @@ class ProjectStatistics:
 # Wird bei Dokumentations-/Release-Pflege aktualisiert und dient nur als
 # Fallback, wenn ein Frozen-Build keine .py-Quellen enthält.
 RELEASE_STATISTICS = ProjectStatistics(
-    python_files=1064,
-    total_lines=165934,
-    code_lines=140321,
-    test_package_files=281,
-    test_files=276,
-    static_tests=2037,
+    python_files=1298,
+    total_lines=208363,
+    code_lines=176045,
+    test_package_files=376,
+    test_files=370,
+    static_tests=3293,
     dynamic=False,
 )
 
@@ -147,16 +147,19 @@ def build_about_html(root: str | Path | None = None) -> str:
         "Modulares Medienwerkzeug für Konvertierung, Remux, Analyse und automatisierte Nachbearbeitung in einer PyQt6-Oberfläche.<br><br>"
         "<b>Video &amp; HDR</b><br>"
         "H.264 · H.265/HEVC · AV1 · NVENC · QSV · AMF · CPU/x265 · SVT-AV1<br>"
-        "Dolby Vision · HDR10+ · HLG · SDR · RPU-Prüfung · Auto-Crop · IMAX · Downscale und optionales SDR→HDR-Enhancement<br><br>"
+        "Dolby Vision · HDR10+ · HLG · SDR · frühe Quell-RPU-Prüfung vor dem Encode mit einstellbarem Datei-Fallback · Auto-Crop · IMAX · Downscale und optionales SDR→HDR-Enhancement<br><br>"
         "<b>Untertitel &amp; Batch-Steuerung</b><br>"
         "Untertitel automatisch neben Videos finden · Deutsch/Englisch · frei editierbare Spurtitel<br>"
         "Zehn Schnellschalter in einer Zeile inklusive PGS/Text → SRT, NFO und Trickplay<br>"
-        "Worker-Anzahl 1–8 während eines Laufs ändern · laufende Dateien fertig verarbeiten<br><br>"
+        "Worker-Anzahl 1–8 während eines Laufs ändern · einzelne Worker per Rechtsklick pausieren und fortsetzen<br>"
+        "Asynchrone, abbrechbare Quellbildprüfung · automatische TheTVDB-Token-Erneuerung<br><br>"
+        "Patch 29: eindeutige Mux-Spurenauswahl und sichere Filmersetzung bei typografischen Namensvarianten<br><br>"
         "<b>Projektumfang (DragonTools + Dragon HDR10+ Generator)</b><br>"
         f"{_fmt_int(stats.python_files)} Python-Dateien/Programme · "
         f"{_fmt_int(stats.total_lines)} Gesamtzeilen · "
         f"{_fmt_int(stats.code_lines)} Codezeilen ({source_note})<br>"
-        f"Tests: {stats.test_files} test_*.py · {_fmt_int(stats.static_tests)} statisch erkannte Tests<br><br>"
+        f"Testbestand: {stats.test_files} Testdateien · {_fmt_int(stats.static_tests)} statisch erkannte Testfunktionen<br>"
+        "Abnahme Patch 29 (07.10.2026): 5.175 Testfälle bestanden (5.152 Gesamtsuite + 23 DV/HDR)<br><br>"
         "<b>Integrierte Zusatzkomponente</b><br>"
         "Dragon HDR10+ Generator (separate EXE/CLI, im Projektumfang enthalten)<br><br>"
         "<b>Externe Werkzeuge &amp; optionale Komponenten</b><br>"

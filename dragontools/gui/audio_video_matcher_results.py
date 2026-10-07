@@ -25,11 +25,13 @@ class AudioVideoMatcherResultsMixin:
                     for item in result.suspect_cut_ranges
                 )
             )
-        self._set_running(False)
+        if self._worker is None:
+            self._set_running(False)
 
     def _cuts_ready(self, cuts: list[CutMatchResult]) -> None:
         self._cut_results = list(cuts or [])
-        self._set_running(False)
+        if self._worker is None:
+            self._set_running(False)
         if self._analysis and any(not item.resolved for item in self._cut_results):
             QMessageBox.warning(
                 self,
@@ -93,3 +95,14 @@ class AudioVideoMatcherResultsMixin:
         if self._analysis.mode == "C":
             return bool(self._cut_results) and all(item.resolved for item in self._cut_results)
         return False
+
+    def _invalidate_analysis(self) -> None:
+        self._analysis = None
+        self._cut_results = []
+        self.case_value.setText("Bitte erneut analysieren")
+        self.audio_combo.clear()
+        self._set_running(self._worker is not None)
+
+    def _invalidate_cuts(self) -> None:
+        self._cut_results = []
+        self._set_running(self._worker is not None)

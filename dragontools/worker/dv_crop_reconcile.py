@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from .crop_geometry import CropRect, normalize_crop_rect, parse_crop_filter
+from .dv_level5_values import collect_level5_offsets
 
 
 @dataclass(frozen=True)
@@ -40,33 +41,12 @@ def crop_from_level5_offsets(
 
 
 def _collect_offset_dicts(node: Any, result: list[tuple[int, int, int, int]]) -> None:
-    if isinstance(node, dict):
-        aliases = (
-            ("left", "right", "top", "bottom"),
-            (
-                "active_area_left_offset",
-                "active_area_right_offset",
-                "active_area_top_offset",
-                "active_area_bottom_offset",
-            ),
-        )
-        for names in aliases:
-            if all(name in node for name in names):
-                try:
-                    result.append(tuple(int(node[name]) for name in names))
-                except (TypeError, ValueError):
-                    pass
-                break
-        for value in node.values():
-            _collect_offset_dicts(value, result)
-    elif isinstance(node, list):
-        for value in node:
-            _collect_offset_dicts(value, result)
+    collect_level5_offsets(node, result)
 
 
 def read_level5_offsets(path: str | Path) -> tuple[tuple[int, int, int, int], ...]:
     """Return all unique Level-5 active-area offset tuples from a dovi_tool export."""
-    payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    payload = json.loads(Path(path).read_text(encoding="utf-8-sig"))
     offsets: list[tuple[int, int, int, int]] = []
     _collect_offset_dicts(payload, offsets)
     return tuple(dict.fromkeys(offsets))
@@ -84,7 +64,7 @@ def parse_level5_export(
     wird kein globaler physischer Crop erzwungen, weil das typischerweise auf
     wechselnde Aspect-Ratios/IMAX hindeutet.
     """
-    payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    payload = json.loads(Path(path).read_text(encoding="utf-8-sig"))
     offsets: list[tuple[int, int, int, int]] = []
     _collect_offset_dicts(payload, offsets)
     unique = list(dict.fromkeys(offsets))
@@ -215,6 +195,9 @@ def reconcile_dv_crop(
             label=f"DV Level-5 Export ({idx + 1}/{len(attempts)})",
             allow_error=True,
         )
+        if rc in (124, 130):
+            reason = "DV-Level-5-Diagnose: Timeout" if rc == 124 else "DV-Level-5-Diagnose: durch Benutzer abgebrochen"
+            return DVCropOutcome(False, auto, "autocrop", failure_reason=reason)
         if rc == 0 and export_path.exists() and export_path.stat().st_size > 0:
             break
     else:
@@ -299,7 +282,10 @@ def replace_crop_in_vf_args(vf_args: list, old_crop: str | None, new_crop: str |
             return args
         graph = str(args[idx + 1])
         if old_text and old_text in graph:
-            graph = graph.replace(old_text, new_text, 1) if new_text else graph.replace(old_text, "", 1)
+            # In filter_complex a bare input label followed by a comma is invalid.
+            # Keep graph topology intact with an explicit no-op when a physical
+            # crop is removed (e.g. subtitle burn-in graph).
+            graph = graph.replace(old_text, new_text if new_text else "null", 1)
         elif new_text:
             # Insert directly after the video input label.  DV P7/P8 remapping
             # later turns [0:v:0] into [1:v:0], so support both forms here.

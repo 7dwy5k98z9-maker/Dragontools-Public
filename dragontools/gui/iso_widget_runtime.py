@@ -2,12 +2,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from .utility_worker_start import owned_utility_start, restore_utility_start, connect_owned_signal, utility_workers, start_utility_worker
+
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QListWidgetItem
 
 from ..core.formatting import format_binary_size
 from ..worker.iso_selection import choose_auto_titles
 from ..worker.iso_thread import ISOThread
+from ..worker.iso_models import FFMPEG_FALLBACK_TITLE_ID
 
 
 def _safe_display_name(path: str) -> str:
@@ -41,6 +44,7 @@ class ISOWidgetRuntimeMixin:
             "ffmpeg_fallback": self.ffmpeg_fallback_cb.isChecked() if self.ffmpeg_fallback_cb is not None else True,
         }
 
+    @owned_utility_start("_worker", "_scan_worker")
     def _analyze(self) -> None:
         if self._worker is not None or self._scan_worker is not None:
             return
@@ -60,17 +64,18 @@ class ISOWidgetRuntimeMixin:
             scan_only=True,
             **self._worker_options(),
         )
-        self._scan_worker.log_line.connect(self._append_log)
-        self._scan_worker.progress.connect(self._on_progress)
-        self._scan_worker.file_progress.connect(self._on_scan_file_progress)
-        self._scan_worker.file_result.connect(self._on_scan_file_result)
-        self._scan_worker.finished.connect(self._on_scan_finished)
+        connect_owned_signal(self, "_scan_worker", self._scan_worker, self._scan_worker.log_line, self._append_log)
+        connect_owned_signal(self, "_scan_worker", self._scan_worker, self._scan_worker.progress, self._on_progress)
+        connect_owned_signal(self, "_scan_worker", self._scan_worker, self._scan_worker.file_progress, self._on_scan_file_progress)
+        connect_owned_signal(self, "_scan_worker", self._scan_worker, self._scan_worker.file_result, self._on_scan_file_result)
+        connect_owned_signal(self, "_scan_worker", self._scan_worker, self._scan_worker.finished, self._on_scan_finished)
 
         self._append_log("")
         self._append_log(f"▶ Analysiere {_safe_display_name(path)} …")
         self._set_running(True)
-        self._scan_worker.start()
+        start_utility_worker(self, self._scan_worker)
 
+    @owned_utility_start("_worker", "_scan_worker")
     def _start(self) -> None:
         if self._worker is not None:
             return
@@ -95,22 +100,25 @@ class ISOWidgetRuntimeMixin:
             selected_titles=self._collect_selected_titles(),
             **options,
         )
-        self._worker.log_line.connect(self._append_log)
-        self._worker.progress.connect(self._on_progress)
-        self._worker.file_progress.connect(self._on_file_progress)
-        self._worker.file_result.connect(self._on_file_result)
-        self._worker.files_extracted.connect(self._on_files_extracted)
-        self._worker.finished.connect(self._on_finished)
+        connect_owned_signal(self, "_worker", self._worker, self._worker.log_line, self._append_log)
+        connect_owned_signal(self, "_worker", self._worker, self._worker.progress, self._on_progress)
+        connect_owned_signal(self, "_worker", self._worker, self._worker.file_progress, self._on_file_progress)
+        connect_owned_signal(self, "_worker", self._worker, self._worker.file_result, self._on_file_result)
+        connect_owned_signal(self, "_worker", self._worker, self._worker.files_extracted, self._on_files_extracted)
+        connect_owned_signal(self, "_worker", self._worker, self._worker.finished, self._on_finished)
 
         if self.progress_bar is not None:
             self.progress_bar.setValue(0)
         self._append_log("")
         self._append_log(f"▶ Starte ISO-Extraktion für {len(files)} Eingabe(n) …")
         self._set_running(True)
-        self._worker.start()
+        start_utility_worker(self, self._worker)
+
+    def set_utility_running(self, running: bool) -> None:
+        self._set_running(running)
 
     def iter_shutdown_workers(self) -> tuple:
-        return tuple(worker for worker in (self._worker, self._scan_worker) if worker is not None)
+        return utility_workers(self, "_worker", "_scan_worker")
 
     def _abort(self) -> None:
         if self._worker is not None:
@@ -131,7 +139,8 @@ class ISOWidgetRuntimeMixin:
             if isinstance(obj[0], dict):
                 self._append_log(f"ℹ️ {_safe_display_name(path)}: {len(obj)} Titel gescannt.")
             elif isinstance(obj[0], int):
-                self._append_log(f"ℹ️ {_safe_display_name(path)}: Titel {', '.join(map(str, obj))} ausgewählt.")
+                selection = "FFmpeg-Fallback" if obj == [FFMPEG_FALLBACK_TITLE_ID] else f"Titel {', '.join(map(str, obj))}"
+                self._append_log(f"ℹ️ {_safe_display_name(path)}: {selection} ausgewählt.")
 
     def _on_file_result(self, path: str, success: bool, message: str) -> None:
         icon = "✅" if success else "❌"
@@ -165,6 +174,8 @@ class ISOWidgetRuntimeMixin:
             name = str(title.get("name") or f"Title {tid}")
             prefix = "★ " if tid in suggested else ""
             text = f"{prefix}Titel {tid}: {name} | Dauer {_fmt_duration(duration)} | Größe {_fmt_size(size)}"
+            if tid == FFMPEG_FALLBACK_TITLE_ID:
+                text = f"{name} | Größe {_fmt_size(size)}"
             item = QListWidgetItem(text)
             item.setData(Qt.ItemDataRole.UserRole, tid)
             item.setData(Qt.ItemDataRole.UserRole + 1, path)

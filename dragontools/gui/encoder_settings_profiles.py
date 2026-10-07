@@ -6,65 +6,31 @@ from ..core.type_utils import _safe_bool, _safe_float, _safe_int
 
 class EncoderSettingsProfilesMixin:
     def save_profile(self):
+            options = self.collect_enc_opts()
             payload = {
                 "codec": self._default_codec,
                 "crf": self._ui.widgets.crf_spin.value(),
                 "preset": self._ui.widgets.preset_combo.currentText(),
                 "scale": self._ui.widgets.scale_combo.currentText(),
-                "encoder_options": self.collect_enc_opts(),
+                "encoder_options": options,
             }
             self._profile_service.save_profile_dialog(payload)
 
     def apply_profile_to_ui(self, profile: dict) -> None:
-            if not profile:
+            if not isinstance(profile, dict) or not profile:
                 return
-            widgets = self._ui.widgets
-            opts = profile.get("encoder_options") or {}
-            enc = opts.get("encoder", "cpu")
-            enc_map = {"cpu": 0, "auto": 1, "nvenc": 2, "qsv": 3, "amf": 4}
-            if enc in enc_map:
-                widgets.encoder_combo.setCurrentIndex(enc_map[enc])
-            self.refresh_enc_panel()
-            scale = profile.get("scale", "original")
-            if widgets.scale_combo.findText(scale) >= 0:
-                widgets.scale_combo.setCurrentText(scale)
-            crf = profile.get("crf") or opts.get("crf")
-            if crf is not None:
-                crf_value = _safe_int(crf)
-                if crf_value is not None:
-                    widgets.crf_spin.setValue(crf_value)
-                    widgets.x265_crf.setValue(crf_value)
-            preset = profile.get("preset")
-            self._apply_encoder_combo_value(widgets.preset_combo, preset)
-            self._apply_encoder_combo_value(widgets.x265_preset, preset)
-            if enc == "nvenc":
-                self._apply_encoder_combo_value(widgets.nv_preset, opts.get("preset"))
-                self._apply_int_value(widgets.nv_cq, opts.get("cq"))
-                self._apply_int_value(widgets.nv_bf, opts.get("bf"))
-                self._apply_encoder_combo_value(widgets.nv_bref, opts.get("bref_mode"))
-                self._apply_int_value(widgets.nv_la, opts.get("rc_lookahead"))
-                self._apply_encoder_combo_value(getattr(widgets, "nv_lookahead_level", None), opts.get("lookahead_level"))
-                self._apply_encoder_combo_value(getattr(widgets, "nv_multipass", None), opts.get("multipass"))
-                self._apply_int_value(widgets.nv_aq, opts.get("aq_strength"))
-                if "spatial_aq" in opts:
-                    widgets.nv_spatial.setChecked(_safe_bool(opts["spatial_aq"], True))
-                if "temporal_aq" in opts:
-                    widgets.nv_temporal.setChecked(_safe_bool(opts["temporal_aq"], True))
-            elif enc == "qsv":
-                self._apply_encoder_combo_value(widgets.qsv_preset, opts.get("preset"))
-                self._apply_int_value(widgets.qsv_q, opts.get("q"))
-                self._apply_int_value(widgets.qsv_la_depth, opts.get("lookahead_depth"))
-            elif enc == "amf":
-                self._apply_encoder_combo_value(widgets.amf_qual, opts.get("quality"))
-                self._apply_int_value(widgets.amf_qp, opts.get("qp"))
-            elif enc == "cpu":
-                self._apply_encoder_combo_value(widgets.x265_tune, opts.get("tune"))
-                self._apply_encoder_combo_value(widgets.x265_aqm, opts.get("aq_mode"))
-                self._apply_float_value(widgets.x265_aqs, opts.get("aq_strength"))
-                self._apply_float_value(widgets.x265_psy, opts.get("psy_rd"))
-                self._apply_float_value(widgets.x265_psyrdoq, opts.get("psy_rdoq"))
-                self._apply_int_value(widgets.x265_bf, opts.get("bf"))
-                self._apply_int_value(widgets.x265_la, opts.get("rc_lookahead"))
+            if str(profile.get("codec") or self._default_codec).lower() != self._default_codec:
+                self._log("Profil passt nicht zum Codec dieses Tabs; bitte den passenden Tab verwenden.", "warn")
+                return
+            from .encoder_profile_application import apply_profile_values
+            was_loading = self._state.loading
+            self._state.loading = True
+            self._state.profile_options = {}
+            try:
+                apply_profile_values(self, profile)
+            finally:
+                self._state.loading = was_loading
+            self.save_encoder_settings()
 
     def apply_assistant_profile(self) -> None:
             profile = self._profile_service.assistant_profile_dialog(self._default_codec)
@@ -85,6 +51,7 @@ class EncoderSettingsProfilesMixin:
             preset_default = "6" if c == "av1" else "medium"
 
             self._state.loading = True
+            self._state.profile_options = {}
             try:
                 widgets.encoder_combo.setCurrentIndex(0)
                 widgets.scale_combo.setCurrentText("original")

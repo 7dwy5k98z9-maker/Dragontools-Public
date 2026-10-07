@@ -10,6 +10,8 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QFileDialog, QListWidget, QListWidgetItem, QWidget
 
 from ..core.callback_dispatch import invoke_callback, is_callback_like
+from ..core.path_syntax import normalize_user_path, path_compare_key
+from .drop_path_extractor import _extract_paths_from_mime_data, _mime_has_file_payload
 
 
 VIDEO_EXTENSIONS = frozenset({
@@ -30,19 +32,20 @@ class VideoDropListWidget(QListWidget):
         self.setSelectionMode(QListWidget.SelectionMode.ExtendedSelection)
 
     def dragEnterEvent(self, event):
-        if event.mimeData().hasUrls():
+        if event.mimeData() and _mime_has_file_payload(event.mimeData()):
             event.acceptProposedAction()
             return
         super().dragEnterEvent(event)
 
     def dragMoveEvent(self, event):
-        if event.mimeData().hasUrls():
+        if event.mimeData() and _mime_has_file_payload(event.mimeData()):
             event.acceptProposedAction()
             return
         super().dragMoveEvent(event)
 
     def dropEvent(self, event):
-        if not event.mimeData().hasUrls():
+        mime = event.mimeData()
+        if mime is None or not _mime_has_file_payload(mime):
             super().dropEvent(event)
             return
 
@@ -51,7 +54,10 @@ class VideoDropListWidget(QListWidget):
             event.ignore()
             return
 
-        paths = [url.toLocalFile() for url in event.mimeData().urls() if url.toLocalFile()]
+        paths = _extract_paths_from_mime_data(mime)
+        if not paths:
+            event.ignore()
+            return
         invoke_callback(callback, paths)
         event.acceptProposedAction()
 
@@ -80,20 +86,25 @@ def add_video_paths_to_list(
     """Fügt Video-Dateien dedupliziert hinzu und liefert die Anzahl neuer Einträge."""
     allowed = {str(ext).lower() for ext in extensions}
     existing = {
-        str(Path(file_list.item(i).data(Qt.ItemDataRole.UserRole)).resolve()).lower()
+        path_compare_key(normalize_user_path(file_list.item(i).data(Qt.ItemDataRole.UserRole)))
         for i in range(file_list.count())
+        if file_list.item(i).data(Qt.ItemDataRole.UserRole)
     }
 
     added = 0
     for raw in paths:
-        path = Path(raw)
+        normalized_raw = normalize_user_path(raw)
+        if not normalized_raw:
+            continue
+        path = Path(normalized_raw)
         candidates = (
             iter_video_files_from_dir(str(path), extensions=allowed)
             if path.is_dir()
-            else [str(path.resolve())] if path.suffix.lower() in allowed else []
+            else [normalize_user_path(path.resolve())] if path.is_file() and path.suffix.lower() in allowed else []
         )
         for candidate in candidates:
-            key = str(Path(candidate).resolve()).lower()
+            candidate = normalize_user_path(candidate)
+            key = path_compare_key(candidate)
             if key in existing:
                 continue
             item = QListWidgetItem(Path(candidate).name)

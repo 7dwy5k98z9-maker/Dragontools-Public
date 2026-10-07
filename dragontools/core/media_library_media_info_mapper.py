@@ -8,6 +8,7 @@ from .media_library_sidecars import _nfo_status_for_path, _subtitle_sidecar_stre
 from .media_library_utils import _infer_item_type, _int_or_none, _normalize_title
 from .media_library_episode_identity import episode_series_root
 from .models import MediaInfo
+from .path_syntax import path_compare_key
 
 _LOG = logging.getLogger(__name__)
 
@@ -127,7 +128,9 @@ def _streams_from_media_info_with_sidecars(path: str | Path, info: MediaInfo) ->
         if (value := _int_or_none(stream.get("stream_index"))) is not None
     ]
     max_index = max(indices, default=-1)
-    streams.extend(_subtitle_sidecar_streams(path, max_index + 1))
+    external_keys = {path_compare_key(stream["external_path"]) for stream in streams if stream.get("external_path")}
+    streams.extend(stream for stream in _subtitle_sidecar_streams(path, max_index + 1)
+                   if path_compare_key(stream["external_path"]) not in external_keys)
     return streams
 
 

@@ -13,12 +13,16 @@ from .duration_repair_models import MediaTimingInfo, TimestampRepairResult, dura
 from .duration_repair_stream_guard import RepairStreamGuard
 from .duration_timestamp_candidate_archive import RejectedTimestampArchive
 from .workflow_engine import WorkflowVerifyResult
+from .duration_packet_integrity import PacketIntegrityVerifier
+from .verification_control import stopped, require_running
+from .duration_timestamp_helpers import mkv_video_track_id
 
 
 @dataclass(frozen=True, slots=True)
 class SourceVideoTimeline:
     timestamps_s: tuple[float, ...]
     duration_s: float
+    start_s: float = 0.0
 
     @property
     def frame_count(self) -> int:
@@ -38,6 +42,8 @@ class OriginalTimelineRepairService:
         self._timing_analyzer = timing_analyzer
         self._stream_guard = stream_guard
         self._archive = RejectedTimestampArchive(runtime)
+        self._packet_integrity = PacketIntegrityVerifier(
+            ffprobe_path=runtime.ffprobe_path, run_tool=runtime.run_tool)
 
     def try_repair(
         self,
@@ -107,7 +113,7 @@ class OriginalTimelineRepairService:
             ]
             before_ffprobe, before_mediainfo = self._stream_guard.inspect_pair(str(out))
             run = self._runtime.run_tool(command, label="MKVToolNix-Original-Timeline-Reparatur")
-            if run.returncode > 1 or not self._candidate_plausible(out, tmp):
+            if run.returncode not in {0, 1} or stopped(run, getattr(self._runtime, 'worker', None)) or not self._candidate_plausible(out, tmp):
                 detail = (run.stderr or run.stdout or f"Returncode {run.returncode}").strip().splitlines()
                 reason = "Original-Timeline-Remux fehlgeschlagen"
                 if detail:
@@ -161,6 +167,7 @@ class OriginalTimelineRepairService:
                 )
 
             _, verify_result, duration_s = candidate
+            require_running(run, getattr(self._runtime, 'worker', None))
             self._runtime.replace_file(tmp, out)
             self._runtime.log(
                 "✅ VFR-Timestamps wurden verlustfrei aus der Originaldatei übernommen.",
@@ -185,8 +192,19 @@ class OriginalTimelineRepairService:
                 method="Original-VFR-Timeline",
             )
         except Exception as exc:
-            self._runtime.safe_unlink(tmp)
             reason = f"Original-Timeline-Reparatur fehlgeschlagen: {exc}"
+            # Ein bereits erzeugter Kandidat ist bei einem spaeten Python-/
+            # Verifikationsfehler wertvolles Diagnosematerial. Nicht still
+            # loeschen; best-effort archivieren, wobei der Archiv-Service die
+            # Datei bei eigenem Fehler am Arbeitsort stehen laesst.
+            if tmp.exists():
+                self._archive.archive(
+                    tmp,
+                    out=out,
+                    base_dir=base_dir,
+                    label="Original-Timeline-Reparatur",
+                    reason=reason,
+                )
             self._runtime.log(f"❌ {reason}", "error")
             return TimestampRepairResult(
                 attempted=True,
@@ -226,12 +244,12 @@ class OriginalTimelineRepairService:
             "-v", "error",
             "-select_streams", "v:0",
             "-show_frames",
-            "-show_entries", "frame=best_effort_timestamp_time,pts_time,pkt_duration_time",
+            "-show_entries", "frame=best_effort_timestamp_time,pts_time,pkt_duration_time,duration_time",
             "-of", "json",
             str(source),
         ]
         run = self._runtime.run_tool(command, label="ffprobe-Original-Timeline")
-        if run.returncode != 0:
+        if run.returncode != 0 or stopped(run, getattr(self._runtime, 'worker', None)):
             raise RuntimeError((run.stderr or run.stdout or "ffprobe fehlgeschlagen.").strip())
         payload = json.loads(run.stdout or "{}")
         frames = list(payload.get("frames") or [])
@@ -253,12 +271,12 @@ class OriginalTimelineRepairService:
         deltas = [b - a for a, b in zip(normalized, normalized[1:])]
         if any(delta <= 0 or not math.isfinite(delta) for delta in deltas):
             raise ValueError("Original-PTS sind nicht streng monoton steigend.")
-        last_duration = self._finite_float(frames[-1].get("pkt_duration_time"))
+        last_duration = self._finite_float(frames[-1].get("duration_time", frames[-1].get("pkt_duration_time")))
         if last_duration is None or last_duration <= 0:
             last_duration = median(deltas[-min(len(deltas), 120):])
         if last_duration <= 0 or not math.isfinite(last_duration):
             raise ValueError("Dauer des letzten Originalframes ist nicht bestimmbar.")
-        return SourceVideoTimeline(tuple(normalized), normalized[-1] + last_duration)
+        return SourceVideoTimeline(tuple(normalized), normalized[-1] + last_duration, first)
 
     def _source_timeline_error(
         self,
@@ -308,27 +326,14 @@ class OriginalTimelineRepairService:
         return ""
 
     def _mkv_video_track_id(self, out: Path) -> int:
-        run = self._runtime.run_tool(
-            [self._runtime.mkvmerge_path, "-J", str(out)],
-            label="MKVToolNix-Trackanalyse",
-        )
-        if run.returncode != 0:
-            raise RuntimeError((run.stderr or run.stdout or "mkvmerge -J fehlgeschlagen.").strip())
-        payload = json.loads(run.stdout or "{}")
-        video_tracks = [track for track in (payload.get("tracks") or []) if track.get("type") == "video"]
-        if len(video_tracks) != 1:
-            raise ValueError(f"erwartet genau 1 Videotrack, gefunden {len(video_tracks)}")
-        try:
-            return int(video_tracks[0]["id"])
-        except (KeyError, TypeError, ValueError) as exc:
-            raise ValueError("Videotrack-ID fehlt") from exc
+        return mkv_video_track_id(self._runtime, out)
 
     @staticmethod
     def _write_timecodes_v2(path: Path, timeline: SourceVideoTimeline) -> None:
         with path.open("w", encoding="utf-8", newline="\n") as handle:
             handle.write("# timestamp format v2\n")
             for timestamp_s in timeline.timestamps_s:
-                handle.write(f"{timestamp_s * 1000.0:.6f}\n")
+                handle.write(f"{(timestamp_s + timeline.start_s) * 1000.0:.6f}\n")
 
     def _validate_candidate(
         self,
@@ -393,8 +398,21 @@ class OriginalTimelineRepairService:
         if info.video_start_s is not None and info.audio_start_s is not None:
             if abs(info.video_start_s - info.audio_start_s) > 1.0:
                 reasons.append("Audio und Video starten nach Original-Timeline-Reparatur nicht synchron.")
+        reasons.extend(self._lossless_timeline_errors(before.path, path, timeline))
         duration_s = info.video_duration_s or verify_result.duration_s
         return ("; ".join(dict.fromkeys(reasons)) if reasons else None, verify_result, duration_s)
+
+    def _lossless_timeline_errors(self, before_path, path, timeline):
+        integrity = self._packet_integrity.validate(before_path, str(path),
+            reference_duration_s=timeline.duration_s, frame_rate=None, tolerance_s=1.0)
+        if not integrity.ok or not integrity.available:
+            return list(integrity.messages or ('Paket-/Hashnachweis fehlt.',))
+        actual = self._read_source_timeline(path)
+        if (actual.frame_count != timeline.frame_count
+                or abs(actual.start_s - timeline.start_s) > 0.002
+                or any(abs(a-b) > 0.002 for a,b in zip(actual.timestamps_s, timeline.timestamps_s))):
+            return ['Reparierte Frame-PTS entsprechen nicht der Original-VFR-Timeline.']
+        return []
 
     @staticmethod
     def _candidate_plausible(out: Path, tmp: Path) -> bool:

@@ -17,6 +17,8 @@ from ..core.comfyui_hdr_models import (
 )
 from .comfyui_client import ComfyUIClient
 from .hdr10plus_generator_client import generator_executable_available
+from ..core.type_utils import _safe_bool
+from .log_dispatch import dispatch_log
 
 
 _COMFYUI_START_LOCK = threading.Lock()
@@ -35,7 +37,7 @@ def configure_comfyui_runtime(worker, tools, options: dict) -> None:
     base_url = str(options.get("comfyui_base_url") or "http://127.0.0.1:8188")
     client = ComfyUIClient(base_url, timeout_s=2.0)
     health = client.health()
-    if not health.success and bool(options.get("comfyui_auto_start", True)):
+    if not health.success and _safe_bool(options.get("comfyui_auto_start", True), True) and not bool(getattr(worker, "abort_requested", False)):
         health = _auto_start_and_wait(worker, tools, options, client, initial_health=health)
 
     options["_comfyui_api_available"] = bool(health.success)
@@ -101,7 +103,11 @@ def _auto_start_and_wait(worker, tools, options: dict, client: ComfyUIClient, *,
     API before launching, and a short cooldown suppresses duplicate portable
     ComfyUI consoles while the first launch is still settling.
     """
-    with _COMFYUI_START_LOCK:
+    if not _acquire_start_lock(worker):
+        return initial_health
+    try:
+        if bool(getattr(worker, 'abort_requested', False)):
+            return initial_health
         # Another worker may have started ComfyUI while this worker waited.
         health = client.health()
         if health.success:
@@ -111,7 +117,7 @@ def _auto_start_and_wait(worker, tools, options: dict, client: ComfyUIClient, *,
         if launcher is None:
             configured = str(options.get("comfyui_start_file") or "").strip()
             detail = f": {configured}" if configured else ""
-            worker.log(
+            dispatch_log(worker.log, 
                 "⚠️ ComfyUI API nicht erreichbar und keine ausführbare Startdatei gefunden"
                 f"{detail}. SDR→HDR fällt für betroffene Dateien sicher auf SDR zurück.",
                 "warn",
@@ -124,28 +130,29 @@ def _auto_start_and_wait(worker, tools, options: dict, client: ComfyUIClient, *,
         last_attempt = _COMFYUI_START_ATTEMPTS.get(launcher_key, 0.0)
         now = time.monotonic()
         if last_attempt and now - last_attempt < 60.0:
-            worker.log(
+            dispatch_log(worker.log, 
                 "⚠️ ComfyUI wurde vor weniger als 60 s bereits automatisch gestartet; "
                 "kein zweiter Launcher wird parallel geöffnet.",
                 "warn",
             )
             return health
         _COMFYUI_START_ATTEMPTS[launcher_key] = now
-        worker.log(
+        dispatch_log(worker.log, 
             f"🚀 ComfyUI API nicht erreichbar. Starte '{launcher.name}' und warte bis zu {wait_seconds} s auf die API …",
             "info",
         )
         try:
             _launch_file(launcher)
         except Exception as exc:
-            worker.log(f"⚠️ ComfyUI konnte nicht gestartet werden: {exc}", "warn")
+            _COMFYUI_START_ATTEMPTS.pop(launcher_key, None)
+            dispatch_log(worker.log, f"⚠️ ComfyUI konnte nicht gestartet werden: {exc}", "warn")
             return initial_health
 
         deadline = time.monotonic() + wait_seconds
         last_health = initial_health
         while time.monotonic() < deadline:
             if bool(getattr(worker, "abort_requested", False)):
-                worker.log("⚠️ ComfyUI-Startwartezeit wegen Abbruch beendet.", "warn")
+                dispatch_log(worker.log, "⚠️ ComfyUI-Startwartezeit wegen Abbruch beendet.", "warn")
                 return last_health
             # Polling instead of a blind 30-second sleep keeps fast launches fast
             # while preserving the requested 30-second maximum startup window.
@@ -153,14 +160,24 @@ def _auto_start_and_wait(worker, tools, options: dict, client: ComfyUIClient, *,
             last_health = client.health()
             if last_health.success:
                 elapsed = max(1, wait_seconds - int(max(0.0, deadline - time.monotonic())))
-                worker.log(f"✅ ComfyUI API nach ca. {elapsed} s erreichbar.", "success")
+                dispatch_log(worker.log, f"✅ ComfyUI API nach ca. {elapsed} s erreichbar.", "success")
                 return last_health
 
-        worker.log(
+        dispatch_log(worker.log, 
             f"⚠️ ComfyUI wurde gestartet, die API ist nach {wait_seconds} s aber weiterhin nicht erreichbar.",
             "warn",
         )
         return last_health
+
+    finally:
+        _COMFYUI_START_LOCK.release()
+
+
+def _acquire_start_lock(worker):
+    while not bool(getattr(worker, 'abort_requested', False)):
+        if _COMFYUI_START_LOCK.acquire(timeout=0.25):
+            return True
+    return False
 
 
 def _resolve_comfyui_launcher(tools, options: dict) -> Path | None:
@@ -209,7 +226,7 @@ def _launch_file(path: Path) -> None:
     creationflags = 0
     if os.name == "nt":
         creationflags = int(getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)) | int(
-            getattr(subprocess, "CREATE_NEW_CONSOLE", 0)
+            getattr(subprocess, "CREATE_NO_WINDOW", 0)
         )
     if suffix in {".bat", ".cmd"}:
         if os.name != "nt":
@@ -235,7 +252,7 @@ def _launch_file(path: Path) -> None:
 def _bounded_int(value, default: int, minimum: int, maximum: int) -> int:
     try:
         parsed = int(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         parsed = default
     return max(minimum, min(maximum, parsed))
 
@@ -250,7 +267,7 @@ def _log_readiness(
     ready: bool,
 ) -> None:
     if not health.success:
-        worker.log(
+        dispatch_log(worker.log, 
             "⚠️ SDR→HDR Backend: ComfyUI gewählt, aber die lokale API ist nicht erreichbar; "
             "bestehende Standardpfade bleiben unverändert.", "warn",
         )
@@ -258,19 +275,19 @@ def _log_readiness(
     device = f" auf {health.device}" if health.device else ""
     version = f" {health.version}" if health.version else ""
     if asset_error:
-        worker.log(f"⚠️ ComfyUI{version}{device}: {asset_error}", "warn")
+        dispatch_log(worker.log, f"⚠️ ComfyUI{version}{device}: {asset_error}", "warn")
         return
     if missing_nodes:
-        worker.log(
+        dispatch_log(worker.log, 
             f"⚠️ ComfyUI{version}{device}: DragonTools-HDRTVDM-Nodes fehlen: {', '.join(missing_nodes)}", "warn",
         )
         return
     if workflow_error:
-        worker.log(f"⚠️ ComfyUI{version}{device}: Workflow ungültig: {workflow_error}", "warn")
+        dispatch_log(worker.log, f"⚠️ ComfyUI{version}{device}: Workflow ungültig: {workflow_error}", "warn")
         return
     if workflow_warning:
-        worker.log(f"⚠️ ComfyUI{version}{device}: {workflow_warning}", "warn")
-    worker.log(
+        dispatch_log(worker.log, f"⚠️ ComfyUI{version}{device}: {workflow_warning}", "warn")
+    dispatch_log(worker.log, 
         f"🧪 ComfyUI{version}{device}: HDRTVDM-Modell, Streaming-Video-Node und Workflow sind ausführbar."
         if ready else f"🧪 ComfyUI{version}{device}: Backend vorbereitet.",
         "info",

@@ -6,12 +6,10 @@ from .media_library_search_streams import ordered_streams
 from .media_library_utils import _int_or_none
 
 _GERMAN_LANGUAGES = {"de", "deu", "ger", "german", "deutsch"}
-_HDR_MARKERS = ("hdr", "bt2020", "pq", "hlg", "dolby", "smpte2084", "st2084")
-_HDR10PLUS_MARKERS = (
-    "hdr10+", "hdr10plus", "dynamic metadata", "2094-40", "st2094",
-    "2094 app 4", "st 2094 app 4",
+from .media_library_video_flags import (
+    HDR_MARKERS as _HDR_MARKERS, HDR10PLUS_MARKERS as _HDR10PLUS_MARKERS,
+    DV_MARKERS as _DV_MARKERS, positive_dv_profile,
 )
-_DV_MARKERS = ("dolby vision", "dovi", "dvhe", "dvh1", "dva1", "dvav", "dav1")
 
 
 def is_german(language: Any) -> bool:
@@ -29,9 +27,9 @@ def _enrich_video(row: dict[str, Any], videos: list[dict[str, Any]]) -> None:
     row["video_codec"] = str(row.get("video_codec") or first.get("codec") or "") or None
     row["width"] = _int_or_none(row.get("width")) or _int_or_none(first.get("width")) or 0
     row["height"] = _int_or_none(row.get("height")) or _int_or_none(first.get("height")) or 0
-    stream_hdr = any(has_marker(s.get("hdr_format"), _HDR_MARKERS) or bool(str(s.get("dv_profile") or "").strip()) for s in videos)
+    stream_hdr = any(has_marker(s.get("hdr_format"), _HDR_MARKERS) or positive_dv_profile(s.get("dv_profile")) for s in videos)
     stream_hdr10plus = any(has_marker(s.get("hdr_format"), _HDR10PLUS_MARKERS) for s in videos)
-    stream_dv = any(has_marker(s.get("hdr_format"), _DV_MARKERS) or bool(str(s.get("dv_profile") or "").strip()) for s in videos)
+    stream_dv = any(has_marker(s.get("hdr_format"), _DV_MARKERS) or positive_dv_profile(s.get("dv_profile")) for s in videos)
     row["is_hdr"] = 1 if int(row.get("is_hdr") or 0) or stream_hdr else 0
     row["has_hdr10plus"] = 1 if int(row.get("has_hdr10plus") or 0) or stream_hdr10plus else 0
     row["has_dolby_vision"] = 1 if int(row.get("has_dolby_vision") or 0) or stream_dv else 0

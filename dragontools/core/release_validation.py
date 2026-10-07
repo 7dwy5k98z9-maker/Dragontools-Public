@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 from .release_validation_app import validate_app_bundle
-from .release_validation_common import ReleaseCheck, _looks_like_app_data_dir, _project_root_from_module
+from .release_validation_common import ReleaseCheck, _looks_like_app_bundle_root, _looks_like_app_data_dir, _project_root_from_module
 from .release_validation_environment import (
     _check_build_environment,
     _check_ci_workflow,
@@ -23,6 +23,7 @@ def validate_release(
     *,
     dist_root: str | Path | None = None,
     mode: str = "auto",
+    check_pdf_privacy: bool = True,
 ) -> list[ReleaseCheck]:
     root = Path(project_root) if project_root is not None else _project_root_from_module()
     root = root.resolve()
@@ -30,11 +31,11 @@ def validate_release(
     if normalized_mode not in {"auto", "source", "app"}:
         raise ValueError(f"Unbekannter Release-Prüfmodus: {mode!r}")
     if normalized_mode == "auto":
-        normalized_mode = "app" if getattr(sys, "frozen", False) or _looks_like_app_data_dir(root) else "source"
+        normalized_mode = "app" if getattr(sys, "frozen", False) or _looks_like_app_data_dir(root) or _looks_like_app_bundle_root(root) else "source"
     if normalized_mode == "app":
         return validate_app_bundle(root)
     dist_base = Path(dist_root) if dist_root is not None else None
-    return validate_source_release(root, dist_root=dist_base)
+    return validate_source_release(root, dist_root=dist_base, check_pdf_privacy=check_pdf_privacy)
 
 
 def _stdout_supports_status_icons() -> bool:

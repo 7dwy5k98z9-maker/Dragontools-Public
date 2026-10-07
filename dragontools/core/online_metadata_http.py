@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from http.client import IncompleteRead, RemoteDisconnected
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from typing import Any
@@ -10,7 +11,12 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from .online_metadata_retry import RetryableOnlineMetadataError
-from .online_metadata_types import OnlineMetadataAuthError, OnlineMetadataError
+from .online_metadata_types import (
+    OnlineMetadataAuthError,
+    OnlineMetadataError,
+    OnlineMetadataNotFoundError,
+    OnlineMetadataResponseError,
+)
 
 _RETRYABLE_HTTP_STATUS = frozenset({408, 425, 429, 500, 502, 503, 504})
 
@@ -25,12 +31,25 @@ def request_json(
     """Open one JSON request and classify permanent vs. transient failures."""
     try:
         with urlopen(request, timeout=timeout) as response:
-            return json.loads(response.read().decode("utf-8"))
+            try:
+                payload = json.loads(response.read().decode("utf-8"))
+            except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+                raise OnlineMetadataResponseError(
+                    f"{label}-Antwort war kein gültiges UTF-8-JSON."
+                ) from exc
+            if not isinstance(payload, dict):
+                raise OnlineMetadataResponseError(
+                    f"{label}-Antwort hat ein unerwartetes JSON-Format "
+                    f"({type(payload).__name__} statt Objekt)."
+                )
+            return payload
     except HTTPError as exc:
         if exc.code in (401, 403) and auth_error_template:
             raise OnlineMetadataAuthError(auth_error_template.format(code=exc.code)) from exc
         detail = _http_error_detail(exc)
         message = f"{label} meldet HTTP {exc.code}{detail}"
+        if exc.code == 404:
+            raise OnlineMetadataNotFoundError(message) from exc
         if exc.code in _RETRYABLE_HTTP_STATUS:
             raise RetryableOnlineMetadataError(
                 message,
@@ -45,10 +64,8 @@ def request_json(
         raise RetryableOnlineMetadataError(
             f"{label}-Abfrage hat zu lange gedauert."
         ) from exc
-    except json.JSONDecodeError as exc:
-        raise RetryableOnlineMetadataError(
-            f"{label}-Antwort war kein gültiges JSON."
-        ) from exc
+    except (IncompleteRead, RemoteDisconnected, ConnectionError) as exc:
+        raise RetryableOnlineMetadataError(f'{label}-Verbindung wurde vor vollständiger Antwort beendet.') from exc
 
 
 def _http_error_detail(exc: HTTPError) -> str:

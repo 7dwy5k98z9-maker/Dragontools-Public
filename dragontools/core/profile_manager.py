@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """dragontools/core/profile_manager.py – Default + User Profile"""
 from __future__ import annotations
+import copy
 import json
 import logging
 import re
@@ -54,7 +55,7 @@ def _extend_defaults_with_assistant_profiles() -> None:
         from .codec_profile_assistant import assistant_profiles_for_codec
 
         for suggestion in assistant_profiles_for_codec("h265"):
-            _DEFAULTS.setdefault(suggestion.key, dict(suggestion.profile))
+            _DEFAULTS.setdefault(suggestion.key, copy.deepcopy(suggestion.profile))
     except Exception:
         # Die Assistentenprofile sind optional; ein Fehler darf die statischen
         # Built-ins nicht blockieren, muss aber fuer die Diagnose sichtbar sein.
@@ -182,10 +183,20 @@ class ProfileManager:
             )
             return {}
         if migrated.changed:
-            write_json_atomic(
-                self.path,
-                sanitize_config_for_persistence(migrated.data),
-            )
+            try:
+                write_json_atomic(
+                    self.path,
+                    sanitize_config_for_persistence(migrated.data),
+                )
+            except OSError as exc:
+                # A read-only/full profile directory must not make application
+                # startup unusable. The migrated values are safe to use in
+                # memory for this run; later explicit saves still surface the
+                # persistence error to the user.
+                self._report_warning(
+                    f"Profil-Migration konnte nicht gespeichert werden: {self.path} | {exc}. "
+                    "Die migrierten Werte werden nur für diese Sitzung verwendet."
+                )
         return {
             k: v for k, v in migrated.data.items()
             if not str(k).startswith("_") and k not in _DEFAULTS and isinstance(v, dict)
@@ -195,32 +206,41 @@ class ProfileManager:
         ensure_config_write_compatible(self.path, "profiles")
 
     def save(self) -> None:
+        self._write_user_state(self._user)
+
+    def _write_user_state(self, user_state: dict[str, Any]) -> None:
+        """Persist a candidate state before making it visible in memory."""
         self._assert_writable()
         data = {
             SCHEMA_VERSION_KEY: current_schema_version("profiles"),
-            **self._user,
+            **user_state,
         }
         write_json_atomic(self.path, data)
 
     @property
     def data(self) -> dict[str, Any]:
-        merged = dict(_DEFAULTS); merged.update(self._user); return merged
+        merged = copy.deepcopy(_DEFAULTS)
+        merged.update(copy.deepcopy(self._user))
+        return merged
 
-    def defaults(self) -> dict[str, Any]: return dict(_DEFAULTS)
+    def defaults(self) -> dict[str, Any]: return copy.deepcopy(_DEFAULTS)
 
     def get(self, key: str) -> dict[str, Any]:
-        return dict(self._user.get(key, _DEFAULTS.get(key, {})))
+        return copy.deepcopy(self._user.get(key, _DEFAULTS.get(key, {})))
 
     def set(self, key: str, value: dict[str, Any]) -> bool:
         if key in _DEFAULTS: return False
-        self._assert_writable()
         value = dict(value); value.pop("builtin", None)
         value, _messages = migrate_encoder_profile(
             key,
             value,
             default_codec=self._default_codec(),
         )
-        self._user[key] = value; self.save(); return True
+        candidate = dict(self._user)
+        candidate[key] = value
+        self._write_user_state(candidate)
+        self._user = candidate
+        return True
 
     def profile_label(self, key: str, value: dict[str, Any] | None = None) -> str:
         profile = value if isinstance(value, dict) else self.data.get(key, {})
@@ -274,8 +294,11 @@ class ProfileManager:
     def delete(self, key: str) -> bool:
         if key in _DEFAULTS: return False
         if key in self._user:
-            self._assert_writable()
-            del self._user[key]; self.save(); return True
+            candidate = dict(self._user)
+            del candidate[key]
+            self._write_user_state(candidate)
+            self._user = candidate
+            return True
         return False
 
     def is_builtin(self, key: str) -> bool: return key in _DEFAULTS

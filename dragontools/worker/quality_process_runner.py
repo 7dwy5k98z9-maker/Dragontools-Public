@@ -11,6 +11,10 @@ class QualityProcessRunner:
         self._prefix = prefix
         self._abort_on_request = bool(abort_on_request)
 
+    @property
+    def worker(self):
+        return self._worker
+
     def run(self, cmd: list[str], *, label: str) -> tuple[int, str, str]:
         result = run_tool(
             cmd,

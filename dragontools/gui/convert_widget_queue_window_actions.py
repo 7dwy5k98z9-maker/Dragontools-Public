@@ -1,9 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QListWidgetItem
-
 from .convert_queue_window import ConvertQueueWindow
 from ..core.path_syntax import display_name
 
@@ -62,23 +59,5 @@ class ConvertWidgetQueueWindowActionsMixin:
     def _apply_queue_window_order(self, new_order: list[str]) -> None:
         if not self._guard_queue_edit_allowed("Reihenfolge aendern"):
             return
-        old_state: dict[str, dict] = {}
-        for i in range(self._ui.file_list.count()):
-            item = self._ui.file_list.item(i)
-            if item is None:
-                continue
-            path = item.data(Qt.ItemDataRole.UserRole)
-            old_state[path] = {"text": item.text(), "selected": item.isSelected()}
-
-        self._ui.file_list.clear()
-        for path in new_order:
-            item = QListWidgetItem(old_state.get(path, {}).get("text", display_name(path)))
-            item.setData(Qt.ItemDataRole.UserRole, path)
-            self._ui.file_list.addItem(item)
-            if old_state.get(path, {}).get("selected"):
-                item.setSelected(True)
-        if hasattr(self._ui.file_list, "rebuild_path_index"):
-            self._ui.file_list.rebuild_path_index()
-        self._ui.file_list.update_empty_banner()
-
+        self._ui.file_list.apply_path_order(new_order)
         self._sync_queue_order()

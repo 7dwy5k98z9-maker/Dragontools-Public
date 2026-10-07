@@ -12,6 +12,10 @@ from .dv_video_filters import (
 from .encoder_args import _vid_args, encoder_10bit_filter_pixel_format
 
 
+
+
+from ..core.media_stream_selection import primary_ffmpeg_video_index, pin_primary_video_selector
+
 _DV_HDR10_OUTPUT_FLAGS = [
     "-color_range", "tv",
     "-color_primaries", "bt2020",
@@ -49,6 +53,7 @@ def build_dv_encode_command(
     output_hevc: Path,
     vf_args: list,
     profile_major: int | None,
+    source_stream_index: int | None = None,
 ) -> DVEncodeCommand:
     """Build the normal DV picture encode directly from the source container.
 
@@ -65,7 +70,7 @@ def build_dv_encode_command(
 
     if profile_major == 5:
         processed_vf = build_dv5_libplacebo_vf(
-            vf_args, pixel_format=filter_pixel_format
+            vf_args, pixel_format=filter_pixel_format, source_stream_index=source_stream_index
         )
         uses_libplacebo = True
     else:
@@ -73,8 +78,11 @@ def build_dv_encode_command(
             list(vf_args),
             is_p5=False,
             pixel_format=filter_pixel_format,
+            source_stream_index=source_stream_index,
         )
         uses_libplacebo = False
+
+    processed_vf = pin_primary_video_selector(processed_vf, source_stream_index)
 
     command = (
         [

@@ -5,6 +5,7 @@ Lesen/Archivieren und Resume-Auswertung sind getrennt; der Writer bleibt hier,
 damit bestehende Monkeypatch-/Fehlergrenzen für atomare Writes stabil bleiben.
 """
 from __future__ import annotations
+from copy import deepcopy
 
 import logging
 import os
@@ -21,6 +22,7 @@ from .job_journal_storage import (
     now_iso, read_active_job_journal, read_active_job_journals,
     read_job_journal_path, unique_archive_path,
 )
+from .path_syntax import path_compare_key
 from .job_journal_resume import (
     PENDING_STATUSES, RUNNING_STATUSES, TERMINAL_PROBLEM_STATUSES,
     build_resume_plan, format_unfinished_job_summary, normalize_status,
@@ -56,12 +58,32 @@ class JobJournal:
         mode: str,
         log_file: str | None = None,
         encoder: str | None = None,
+        file_overrides: dict[str, dict] | None = None,
         root: str | Path | None = None,
         on_write_error: Callable[[str], None] | None = None,
     ) -> "JobJournal":
         journal = cls(new_job_journal_path(root), on_write_error=on_write_error)
         now = now_iso()
         run_id = journal.path.stem.removeprefix(JOURNAL_FILE_PREFIX)
+        unique_files: list[str] = []
+        seen_keys: set[str] = set()
+        for raw_path in files or []:
+            value = str(raw_path or "")
+            key = path_compare_key(value)
+            if not value or not key or key in seen_keys:
+                continue
+            seen_keys.add(key)
+            unique_files.append(value)
+        override_source = file_overrides if isinstance(file_overrides, dict) else {}
+        stored_overrides: dict[str, dict] = {}
+        for path in unique_files:
+            wanted = path_compare_key(path)
+            for raw_path, raw_override in override_source.items():
+                if path_compare_key(raw_path) != wanted or not isinstance(raw_override, dict):
+                    continue
+                if raw_override:
+                    stored_overrides[path] = dict(raw_override)
+                break
         journal.data = {
             "format": "DragonToolsJobJournal",
             "format_version": JOB_JOURNAL_VERSION,
@@ -76,8 +98,9 @@ class JobJournal:
             "log_file": str(log_file or ""),
             "current_file": "",
             "current_files": [],
-            "queue_order": [str(path) for path in files],
+            "queue_order": list(unique_files),
             "pid": os.getpid(),
+            "file_overrides": stored_overrides,
             "files": {
                 str(path): {
                     "status": "queued",
@@ -86,7 +109,7 @@ class JobJournal:
                     "started_at": "",
                     "finished_at": "",
                 }
-                for path in files
+                for path in unique_files
             },
         }
         journal._write()
@@ -114,7 +137,9 @@ class JobJournal:
             self._remove_current_file(input_path)
             self._touch()
 
-    def update_queue_order(self, paths: list[str]) -> None:
+    def update_queue_order(
+        self, paths: list[str], *, file_overrides: dict[str, dict] | None = None
+    ) -> None:
         """Persistiert die aktuelle sichtbare Queue-Reihenfolge atomar.
 
         Neu live hinzugefügte Dateien werden dabei zugleich als ``queued`` in
@@ -126,14 +151,45 @@ class JobJournal:
             seen: set[str] = set()
             for path in paths or []:
                 value = str(path or "")
-                key = os.path.normcase(value)
+                key = path_compare_key(value)
                 if not value or key in seen:
                     continue
                 seen.add(key)
                 ordered.append(value)
                 self._row(value)
             self.data["queue_order"] = ordered
+            if isinstance(file_overrides, dict):
+                for path in ordered:
+                    override = self._override_for_path(file_overrides, path)
+                    self._set_override_no_touch(path, override)
             self._touch()
+
+    def update_file_override(self, input_path: str, override: dict | None) -> None:
+        with self._lock:
+            self._set_override_no_touch(input_path, override)
+            self._touch()
+
+    @staticmethod
+    def _override_for_path(mapping: dict[str, dict], input_path: str) -> dict | None:
+        wanted = path_compare_key(input_path)
+        for raw_path, raw_override in mapping.items():
+            if path_compare_key(raw_path) == wanted and isinstance(raw_override, dict):
+                return deepcopy(raw_override)
+        return None
+
+    def _set_override_no_touch(self, input_path: str, override: dict | None) -> None:
+        overrides = self.data.setdefault("file_overrides", {})
+        wanted = path_compare_key(input_path)
+        stored_key = next(
+            (raw for raw in list(overrides) if path_compare_key(raw) == wanted),
+            str(input_path),
+        )
+        if isinstance(override, dict) and override:
+            overrides[stored_key] = deepcopy(override)
+        else:
+            for raw in list(overrides):
+                if path_compare_key(raw) == wanted:
+                    overrides.pop(raw, None)
 
     def finish_run(self, *, status: str = "completed") -> None:
         with self._lock:
@@ -150,16 +206,20 @@ class JobJournal:
 
     def _row(self, input_path: str) -> dict[str, Any]:
         files = self.data.setdefault("files", {})
-        return files.setdefault(
-            str(input_path),
-            {
-                "status": "queued",
-                "output_path": "",
-                "message": "",
-                "started_at": "",
-                "finished_at": "",
-            },
-        )
+        value = str(input_path)
+        wanted = path_compare_key(value)
+        for stored_path, row in files.items():
+            if path_compare_key(stored_path) == wanted:
+                return row
+        row = {
+            "status": "queued",
+            "output_path": "",
+            "message": "",
+            "started_at": "",
+            "finished_at": "",
+        }
+        files[value] = row
+        return row
 
     def _touch(self) -> None:
         self.data["updated_at"] = now_iso()
@@ -171,16 +231,18 @@ class JobJournal:
             if str(path or "")
         ]
         value = str(input_path)
-        if value not in current:
+        wanted = path_compare_key(value)
+        if not any(path_compare_key(path) == wanted for path in current):
             current.append(value)
         self.data["current_files"] = current
         self.data["current_file"] = value
 
     def _remove_current_file(self, input_path: str) -> None:
         value = str(input_path)
+        wanted = path_compare_key(value)
         current = [
             str(path) for path in self.data.get("current_files") or []
-            if str(path or "") and str(path) != value
+            if str(path or "") and path_compare_key(str(path)) != wanted
         ]
         self.data["current_files"] = current
         self.data["current_file"] = current[-1] if current else ""
@@ -203,28 +265,12 @@ class JobJournal:
 
     def _archive_completed(self) -> Path:
         try:
-            archive_dir = self.path.parent / ARCHIVE_DIR_NAME
-            archive_dir.mkdir(parents=True, exist_ok=True)
-            run_id = str(self.data.get("run_id") or datetime.now().strftime("%Y%m%d_%H%M%S"))
-            archive = unique_archive_path(
-                archive_dir / f"{run_id}_{self.data.get('status', 'completed')}.json"
-            )
-            _atomic_write_json(archive, self.data)
+            from .journal_archive import archive_journal
+            archive = archive_journal(self.path, status=self.data.get('status', 'completed'),
+                data=self.data, write=_atomic_write_json)
         except (OSError, TypeError, ValueError) as exc:
             message = f"Job-Journal konnte nicht archiviert werden: {self.path} ({exc})"
             self._notify_write_error(message)
             raise JobJournalWriteError(message) from exc
 
-        try:
-            self.path.unlink(missing_ok=True)
-        except OSError as exc:
-            # Das Archiv ist bereits durable. Der Fehler wird trotzdem sichtbar
-            # weitergereicht, damit eine liegengebliebene aktive Datei nicht still
-            # zu einem späteren Schein-Recovery-Eintrag führt.
-            message = (
-                "Aktives Job-Journal konnte nach erfolgreicher Archivierung nicht "
-                f"entfernt werden: {self.path} ({exc})"
-            )
-            self._notify_write_error(message)
-            raise JobJournalWriteError(message) from exc
         return archive

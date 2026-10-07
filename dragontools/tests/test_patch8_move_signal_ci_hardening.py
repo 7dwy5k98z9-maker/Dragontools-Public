@@ -217,6 +217,12 @@ def test_build_validator_requires_defusedxml_in_build_script(tmp_path):
         "python -c \"import PyInstaller, PyQt6, cryptography\"\n", encoding="utf-8"
     )
 
+    # Keep every dependency prerequisite current so this test isolates the
+    # missing build-script import rather than an unrelated requirement gate.
+    for name in ("requirements-runtime.txt", "requirements-optional.txt",
+                 "requirements-whisper.txt", "requirements-build.txt"):
+        (tmp_path / name).write_bytes((PROJECT_ROOT / name).read_bytes())
+
     result = _check_build_environment(tmp_path)
 
     assert result.status == "error"

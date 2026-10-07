@@ -17,6 +17,21 @@ from .media_library_repository import _item_from_media_info, _streams_from_media
 from .media_library_types import PathMapping
 from .media_library_utils import _int_or_none, _normalize_title, _safe_parent
 from .path_syntax import VIDEO_EXTENSIONS, path_compare_key
+from .media_library_analysis_merge import merge_analysis
+
+
+def _analyze_jellyfin_file(item, streams, path, tools, warnings):
+    """An optional local analysis may enrich, but cannot rename, a catalog item."""
+    try:
+        from .media_analyzer import analyze_media
+        info = analyze_media(str(path), tools=tools)
+        analyzed = _item_from_media_info(path, info, source="jellyfin+scan")
+        refreshed_streams = _streams_from_media_info(info)
+        merge_analysis(item, analyzed)
+        return refreshed_streams
+    except Exception as exc:
+        warnings.append(f"Analyse fehlgeschlagen: {path.name}: {exc}")
+        return streams
 
 
 def build_jellyfin_item(
@@ -103,11 +118,5 @@ def build_jellyfin_item(
     }
 
     if analyze_existing_files and path_obj.suffix.casefold() in VIDEO_EXTENSIONS and path_obj.exists():
-        try:
-            from .media_analyzer import analyze_media
-            info = analyze_media(str(path_obj), tools=tools)
-            item.update(_item_from_media_info(path_obj, info, source="jellyfin+scan"))
-            streams = _streams_from_media_info(info)
-        except Exception as exc:
-            warnings.append(f"Analyse fehlgeschlagen: {path_obj.name}: {exc}")
+        streams = _analyze_jellyfin_file(item, streams, path_obj, tools, warnings)
     return item, streams, source_id

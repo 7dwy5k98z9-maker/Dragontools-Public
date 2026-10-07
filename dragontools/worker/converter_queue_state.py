@@ -6,6 +6,7 @@ from typing import Callable
 
 from ..core.path_syntax import display_name, normalize_user_path, path_compare_key
 from .worker_contracts import RemoveFileStatus, normalize_worker_path
+from .log_dispatch import dispatch_log
 
 
 LogFn = Callable[[str, str], None]
@@ -23,23 +24,28 @@ class ConverterQueueState:
         self.done_files: set[str] = set()
         self.skip_files: set[str] = set()
         self.pending_remove_files: set[str] = set()
+        self.closed = False
 
-    def add_file(self, path: str, log: LogFn) -> bool:
+    def add_file(self, path: str, log: LogFn, *, before_enqueue=None) -> bool:
         path = normalize_user_path(path)
         path_n = path_compare_key(path)
         name = display_name(path)
 
         with self.lock:
+            if self.closed:
+                return False
             current_n = normalize_worker_path(self.current_file) if self.current_file else None
             done_n = {normalize_worker_path(p) for p in self.done_files}
 
             if path_n == current_n or path_n in self._file_keys or path_n in done_n:
                 return False
 
+            if before_enqueue is not None:
+                before_enqueue(path)
             self.files.append(path)
             self._file_keys.add(path_n)
 
-        log(f"➕ Queue: {name} hinzugefügt.", "info")
+        dispatch_log(log, f"➕ Queue: {name} hinzugefügt.", "info")
         return True
 
     def remove_file(self, path: str, log: LogFn) -> RemoveFileStatus:
@@ -50,35 +56,32 @@ class ConverterQueueState:
         with self.lock:
             if self.current_file and normalize_worker_path(self.current_file) == path_n:
                 if self.current_file in self.pending_remove_files:
-                    log(f"'{name}' ist bereits zur Entfernung nach Abschluss vorgemerkt.", "info")
-                    return RemoveFileStatus.CURRENT
-
-                self.pending_remove_files.add(self.current_file)
-                log(
-                    f"'{name}' läuft gerade und wird nach Abschluss aus der Queue entfernt.",
-                    "warn",
-                )
-                return RemoveFileStatus.PENDING_REMOVE
-
-            for i, queued_path in enumerate(self.files):
-                if normalize_worker_path(queued_path) == path_n:
-                    del self.files[i]
-                    self._file_keys.discard(path_n)
-                    self.skip_files.discard(queued_path)
-                    self.pending_remove_files.discard(queued_path)
-                    log(f"Queue: '{name}' entfernt.", "info")
-                    return RemoveFileStatus.REMOVED
-
-            # Datei wurde bereits erfolgreich verarbeitet – keine Warnung nötig.
-            if any(normalize_worker_path(p) == path_n for p in self.done_files):
-                return RemoveFileStatus.NOT_FOUND
-
-        log(f"Queue: '{name}' war nicht mehr vorhanden.", "warn")
-        return RemoveFileStatus.NOT_FOUND
+                    status = RemoveFileStatus.CURRENT
+                    message, level = f"'{name}' ist bereits zur Entfernung nach Abschluss vorgemerkt.", "info"
+                else:
+                    self.pending_remove_files.add(self.current_file)
+                    status = RemoveFileStatus.PENDING_REMOVE
+                    message, level = f"'{name}' läuft gerade und wird nach Abschluss aus der Queue entfernt.", "warn"
+            else:
+                status = RemoveFileStatus.NOT_FOUND
+                message, level = f"Queue: '{name}' war nicht mehr vorhanden.", "warn"
+                for i, queued_path in enumerate(self.files):
+                    if normalize_worker_path(queued_path) == path_n:
+                        del self.files[i]
+                        self._file_keys.discard(path_n)
+                        self.skip_files.discard(queued_path)
+                        self.pending_remove_files.discard(queued_path)
+                        status = RemoveFileStatus.REMOVED
+                        message, level = f"Queue: '{name}' entfernt.", "info"
+                        break
+                if status == RemoveFileStatus.NOT_FOUND and any(normalize_worker_path(p) == path_n for p in self.done_files):
+                    return status
+        dispatch_log(log, message, level)
+        return status
 
     def is_current(self, path: str) -> bool:
         with self.lock:
-            return self.current_file == path
+            return bool(self.current_file) and normalize_worker_path(self.current_file) == normalize_worker_path(path)
 
     def reorder_waiting_files(self, new_order: list[str]) -> None:
         with self.lock:
@@ -110,6 +113,7 @@ class ConverterQueueState:
                 self._file_keys.discard(normalize_worker_path(removed))
 
             if not self.files:
+                self.closed = True
                 return None
 
             path = self.files[0]

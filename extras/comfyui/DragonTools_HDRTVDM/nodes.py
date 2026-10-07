@@ -24,7 +24,7 @@ import torch
 
 try:
     from comfy.model_management import throw_exception_if_processing_interrupted as _check_interrupt
-except Exception:  # pragma: no cover - only absent outside ComfyUI
+except ImportError:  # pragma: no cover - only absent outside ComfyUI
     def _check_interrupt() -> None:
         return None
 
@@ -156,6 +156,8 @@ class DragonHDRTVDMVideoConvert:
         expected_frames: int,
         manifest_path: str,
     ):
+        _validate_job_paths(input_video, output_video, manifest_path)
+        _check_job_stop(Path(manifest_path).expanduser())
         started = time.monotonic()
         output = Path(output_video).expanduser()
         manifest = Path(manifest_path).expanduser()
@@ -188,9 +190,11 @@ class DragonHDRTVDMVideoConvert:
             )
             if decoder.stdout is None:
                 raise RuntimeError("FFmpeg decoder stdout is unavailable")
-            frame_reader = _PPMFrameReader(decoder, timeout_s=_PROCESS_INACTIVITY_TIMEOUT_S)
+            frame_reader = _PPMFrameReader(decoder, timeout_s=_PROCESS_INACTIVITY_TIMEOUT_S, check_stop=lambda: _check_job_stop(manifest))
             batch: list[np.ndarray] = []
+            last_manifest_write = time.monotonic()
             while True:
+                _check_job_stop(manifest)
                 frame = frame_reader.read()
                 if frame is None:
                     break
@@ -202,20 +206,25 @@ class DragonHDRTVDMVideoConvert:
                     ffmpeg_path=ffmpeg_path, output=output,
                     encode_args=encode_args, hdr_args=hdr_args,
                     fps_num=fps_num, fps_den=fps_den,
+                    check_stop=lambda: _check_job_stop(manifest),
                 )
                 frames += count
                 batch.clear()
-                _write_manifest(manifest, success=False, state="running", frames=frames, expected_frames=expected_frames)
+                now = time.monotonic()
+                if now - last_manifest_write >= 0.5:
+                    _write_manifest(manifest, success=False, state="running", frames=frames, expected_frames=expected_frames)
+                    last_manifest_write = now
             if batch:
                 encoder, encoder_writer, count = _process_batch(
                     model, batch, encoder, encoder_writer, encoder_err,
                     ffmpeg_path=ffmpeg_path, output=output,
                     encode_args=encode_args, hdr_args=hdr_args,
                     fps_num=fps_num, fps_den=fps_den,
+                    check_stop=lambda: _check_job_stop(manifest),
                 )
                 frames += count
                 batch.clear()
-            decoder_rc = _wait_process(decoder, "FFmpeg decoder", timeout_s=30.0)
+            decoder_rc = _wait_process(decoder, "FFmpeg decoder", timeout_s=30.0, check_stop=lambda: _check_job_stop(manifest))
             if decoder_rc != 0:
                 raise RuntimeError("FFmpeg decoder failed: " + _stderr_text(decoder_err))
             if int(expected_frames) > 0 and frames != int(expected_frames):
@@ -224,9 +233,10 @@ class DragonHDRTVDMVideoConvert:
                 )
             if encoder is None or encoder_writer is None:
                 raise RuntimeError("No video frames were decoded")
+            _check_job_stop(manifest)
             encoder_writer.close()
             encoder_writer = None
-            encoder_rc = _wait_process(encoder, "FFmpeg HDR encoder", timeout_s=_PROCESS_INACTIVITY_TIMEOUT_S)
+            encoder_rc = _wait_process(encoder, "FFmpeg HDR encoder", timeout_s=_PROCESS_INACTIVITY_TIMEOUT_S, check_stop=lambda: _check_job_stop(manifest))
             if encoder_rc != 0:
                 raise RuntimeError("FFmpeg HDR encoder failed: " + _stderr_text(encoder_err))
             if not output.is_file() or output.stat().st_size <= 0:
@@ -237,7 +247,7 @@ class DragonHDRTVDMVideoConvert:
             _write_manifest(
                 manifest, success=True, state="complete", frames=frames,
                 expected_frames=expected_frames, elapsed_s=elapsed,
-                peak_vram_bytes=peak, fps=f"{fps_num}/{fps_den}",
+                peak_vram_bytes=peak, fps=f"{fps_num}/{fps_den}", input_path=str(Path(input_video).resolve()), output_path=str(output.resolve()),
             )
             return str(output), str(manifest)
         except BaseException as exc:
@@ -334,6 +344,20 @@ class DragonHDR16TiffWriter:
         return (last,)
 
 
+def _check_job_stop(manifest: Path) -> None:
+    _check_interrupt()
+    if Path(str(manifest) + '.cancel').is_file():
+        raise RuntimeError('DragonTools job cancelled')
+
+
+def _validate_job_paths(input_path, output_path, manifest_path) -> None:
+    paths = [Path(str(p)).expanduser() for p in (input_path, output_path, manifest_path, str(manifest_path) + '.cancel')]
+    for pos, path in enumerate(paths):
+        for other in paths[:pos]:
+            if path.resolve() == other.resolve() or (path.exists() and other.exists() and path.samefile(other)):
+                raise ValueError('Path collision: source, output and manifest must be distinct files')
+
+
 def _decoder_command(ffmpeg_path: str, input_video: str, decode_args: list[str]) -> list[str]:
     return [
         ffmpeg_path, "-nostdin", "-hide_banner", "-loglevel", "error", "-i", input_video,
@@ -359,11 +383,14 @@ def _encoder_command(
 def _process_batch(
     model: dict[str, Any], batch: list[np.ndarray], encoder, encoder_writer, encoder_err,
     *, ffmpeg_path: str, output: Path, encode_args: list[str], hdr_args: list[str],
-    fps_num: int, fps_den: int,
+    fps_num: int, fps_den: int, check_stop=None,
 ):
-    _check_interrupt()
+    (check_stop or _check_interrupt)()
     source = torch.from_numpy(np.stack(batch, axis=0)).float().div_(255.0)
     converted = _convert_batch(model, source)
+    pixels = converted.numpy()
+    if pixels.ndim != 4 or pixels.shape[0] != len(batch) or pixels.shape[-1] != 3 or not np.isfinite(pixels).all():
+        raise ValueError('HDRTVDM model must return one finite RGB image per source frame')
     height, width = int(converted.shape[1]), int(converted.shape[2])
     if encoder is None:
         encoder = subprocess.Popen(
@@ -376,8 +403,8 @@ def _process_batch(
     if encoder.stdin is None:
         raise RuntimeError("FFmpeg HDR encoder stdin is unavailable")
     if encoder_writer is None:
-        encoder_writer = _ProcessStdinWriter(encoder, timeout_s=_PROCESS_INACTIVITY_TIMEOUT_S)
-    for frame in converted.numpy():
+        encoder_writer = _ProcessStdinWriter(encoder, timeout_s=_PROCESS_INACTIVITY_TIMEOUT_S, check_stop=check_stop)
+    for frame in pixels:
         rgb16 = np.round(np.clip(frame, 0.0, 1.0) * 65535.0).astype("<u2", copy=False)
         encoder_writer.write(rgb16.tobytes(order="C"))
     if encoder.poll() not in (None, 0):
@@ -386,7 +413,8 @@ def _process_batch(
 
 
 class _PPMFrameReader:
-    def __init__(self, process, *, timeout_s: float) -> None:
+    def __init__(self, process, *, timeout_s: float, check_stop=None) -> None:
+        self.check_stop = check_stop or _check_interrupt
         self.process = process
         self.timeout_s = max(1.0, float(timeout_s))
         self._queue: queue.Queue[tuple[str, object]] = queue.Queue(maxsize=2)
@@ -421,7 +449,7 @@ class _PPMFrameReader:
 
     def read(self) -> np.ndarray | None:
         while True:
-            _check_interrupt()
+            self.check_stop()
             try:
                 kind, value = self._queue.get(timeout=0.25)
             except queue.Empty:
@@ -446,7 +474,8 @@ class _PPMFrameReader:
 
 
 class _ProcessStdinWriter:
-    def __init__(self, process, *, timeout_s: float) -> None:
+    def __init__(self, process, *, timeout_s: float, check_stop=None) -> None:
+        self.check_stop = check_stop or _check_interrupt
         if process.stdin is None:
             raise RuntimeError("Process stdin is unavailable")
         self.process = process
@@ -477,7 +506,7 @@ class _ProcessStdinWriter:
         errors: list[BaseException] = []
         started = time.monotonic()
         while True:
-            _check_interrupt()
+            self.check_stop()
             try:
                 self._queue.put((data, done, errors), timeout=0.25)
                 break
@@ -486,7 +515,7 @@ class _ProcessStdinWriter:
                     _terminate(self.process)
                     raise TimeoutError(f"FFmpeg encoder stdin blocked for {self.timeout_s:.0f}s")
         while not done.wait(0.25):
-            _check_interrupt()
+            self.check_stop()
             if self.process.poll() is not None:
                 raise RuntimeError("FFmpeg HDR encoder terminated while writing a frame")
             if time.monotonic() - started >= self.timeout_s:
@@ -508,6 +537,9 @@ class _ProcessStdinWriter:
 
     def abort(self) -> None:
         self._stop.set()
+        # BufferedWriter.close waits for a concurrent blocked write. Stop the
+        # owned child first so its pipe releases that writer's lock.
+        _terminate(self.process)
         _close_stream(self.stream)
         if self._thread.is_alive():
             self._thread.join(timeout=2.0)
@@ -564,10 +596,10 @@ def _json_arg_list(raw: str, label: str) -> list[str]:
 
 
 def _write_manifest(path: Path, **payload: Any) -> None:
+    # Ephemeral progress is advisory; readers retry incomplete writes. Writing
+    # the existing file avoids Windows rename/sharing violations from readers.
     path.parent.mkdir(parents=True, exist_ok=True)
-    temp = path.with_suffix(path.suffix + ".tmp")
-    temp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    temp.replace(path)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def _stderr_text(file_obj) -> str:
@@ -595,12 +627,18 @@ def _close_process_streams(process) -> None:
         _close_stream(getattr(process, name, None))
 
 
-def _wait_process(process, label: str, *, timeout_s: float) -> int:
-    try:
-        return int(process.wait(timeout=max(1.0, float(timeout_s))))
-    except subprocess.TimeoutExpired as exc:
-        _terminate(process)
-        raise TimeoutError(f"{label} did not exit within {timeout_s:.0f}s") from exc
+def _wait_process(process, label: str, *, timeout_s: float, check_stop=None) -> int:
+    deadline = time.monotonic() + max(1.0, float(timeout_s))
+    while True:
+        (check_stop or _check_interrupt)()
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            _terminate(process)
+            raise TimeoutError(f"{label} did not exit within {timeout_s:.0f}s")
+        try:
+            return int(process.wait(timeout=min(0.25, remaining)))
+        except subprocess.TimeoutExpired:
+            continue
 
 
 def _terminate(process) -> None:

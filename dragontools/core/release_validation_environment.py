@@ -34,6 +34,45 @@ def _requirement_names(path: Path, *, _seen: set[Path] | None = None) -> set[str
     return names
 
 
+def _requirement_specs(path: Path, *, _seen: set[Path] | None = None) -> dict[str, str]:
+    """Return normalized package -> specifier text, following ``-r`` includes."""
+    path = path.resolve()
+    if not path.is_file():
+        return {}
+    seen = _seen if _seen is not None else set()
+    if path in seen:
+        return {}
+    seen.add(path)
+    specs: dict[str, str] = {}
+    for raw_line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        line = raw_line.split("#", 1)[0].strip()
+        if not line:
+            continue
+        include = re.match(r"^-r\s*([^\s]+)$", line, flags=re.IGNORECASE)
+        if include:
+            specs.update(_requirement_specs(path.parent / include.group(1), _seen=seen))
+            continue
+        if line.startswith("-"):
+            continue
+        match = re.match(r"^([A-Za-z0-9_.-]+)(?:\[[^\]]+\])?\s*(.*)$", line)
+        if not match:
+            continue
+        name = match.group(1).casefold().replace("_", "-")
+        spec = match.group(2).split(";", 1)[0].strip().replace(" ", "")
+        specs[name] = spec
+    return specs
+
+
+def _has_reproducible_bound(spec: str) -> bool:
+    from .release_requirement_bounds import has_reproducible_bound
+    return has_reproducible_bound(spec)
+
+
+def _unbounded_requirements(path: Path, names: set[str]) -> list[str]:
+    specs = _requirement_specs(path)
+    return sorted(name for name in names if name in specs and not _has_reproducible_bound(specs[name]))
+
+
 def _check_runtime_environment(root: Path) -> ReleaseCheck:
     requirements = root / "requirements-runtime.txt"
     if not requirements.is_file():
@@ -43,13 +82,20 @@ def _check_runtime_environment(root: Path) -> ReleaseCheck:
             "requirements-runtime.txt fehlt; das Quellpaket ist nicht reproduzierbar installierbar.",
         )
     declared = _requirement_names(requirements)
-    required = {"pyqt6", "cryptography", "defusedxml"}
+    required = {"pyqt6", "cryptography", "defusedxml", "packaging"}
     missing = sorted(required - declared)
     if missing:
         return ReleaseCheck(
             "error",
             "Runtime-Abhängigkeiten",
             "requirements-runtime.txt deklariert nicht: " + ", ".join(missing),
+        )
+    unbounded = _unbounded_requirements(requirements, required)
+    if unbounded:
+        return ReleaseCheck(
+            "error",
+            "Runtime-Abhängigkeiten",
+            "Fehlende reproduzierbare Versionsgrenzen: " + ", ".join(unbounded),
         )
     return ReleaseCheck(
         "ok",
@@ -74,6 +120,13 @@ def _check_optional_environment(root: Path) -> ReleaseCheck:
             "warn",
             "Optionale Abhängigkeiten",
             "Nicht vollständig deklariert: " + ", ".join(missing),
+        )
+    unbounded = _unbounded_requirements(requirements, expected)
+    if unbounded:
+        return ReleaseCheck(
+            "warn",
+            "Optionale Abhängigkeiten",
+            "Optionale Pakete ohne reproduzierbare Versionsgrenzen: " + ", ".join(unbounded),
         )
     return ReleaseCheck(
         "ok",
@@ -103,7 +156,7 @@ def _check_build_environment(root: Path) -> ReleaseCheck:
 
     declared = _requirement_names(requirements)
     missing_packages = [
-        name for name in ("pyinstaller", "pyinstaller-hooks-contrib")
+        name for name in ("pyinstaller", "pyinstaller-hooks-contrib", "pypdf")
         if name not in declared
     ]
     if missing_packages:
@@ -111,6 +164,13 @@ def _check_build_environment(root: Path) -> ReleaseCheck:
             "error",
             "Build-Umgebung",
             "requirements-build.txt deklariert nicht: " + ", ".join(missing_packages),
+        )
+    unbounded_build = _unbounded_requirements(requirements, set(declared))
+    if unbounded_build:
+        return ReleaseCheck(
+            "error",
+            "Build-Umgebung",
+            "Build-Abhängigkeiten ohne reproduzierbare Versionsgrenzen: " + ", ".join(unbounded_build),
         )
 
     req_text = requirements.read_text(encoding="utf-8", errors="replace").casefold().replace(" ", "")
@@ -134,8 +194,12 @@ def _check_build_environment(root: Path) -> ReleaseCheck:
         "requirements-whisper.txt",
         "pip install -r requirements-whisper.txt",
         "from importlib.metadata import version",
-        "--collect-all faster_whisper",
-        "--collect-all ctranslate2",
+        "--collect-submodules faster_whisper",
+        "--collect-binaries faster_whisper",
+        "--collect-data faster_whisper",
+        "--collect-submodules ctranslate2",
+        "--collect-binaries ctranslate2",
+        "--collect-data ctranslate2",
         "--copy-metadata faster-whisper",
         "--smoke-test",
         "waitforexit(90000)",
@@ -215,13 +279,26 @@ def _check_test_environment(root: Path) -> ReleaseCheck:
             "Testumgebung",
             "Test-/Runtime-Requirements deklarieren nicht: " + ", ".join(missing_packages),
         )
-
     req_text = requirements.read_text(encoding="utf-8", errors="replace").casefold().replace(" ", "")
     if "-rrequirements-runtime.txt" not in req_text:
         return ReleaseCheck(
             "error",
             "Testumgebung",
             "requirements-test.txt bindet requirements-runtime.txt nicht ein.",
+        )
+    if "pypdf" not in test_names:
+        return ReleaseCheck(
+            "error",
+            "Testumgebung",
+            "requirements-test.txt deklariert pypdf für die PDF-Privacy-Regressionstests nicht.",
+        )
+
+    unbounded_tests = _unbounded_requirements(requirements, {"pytest", "pytest-qt", "pypdf"})
+    if unbounded_tests:
+        return ReleaseCheck(
+            "error",
+            "Testumgebung",
+            "Test-Abhängigkeiten ohne reproduzierbare Versionsgrenzen: " + ", ".join(unbounded_tests),
         )
 
     ini_text = pytest_ini.read_text(encoding="utf-8", errors="replace").casefold().replace(" ", "")

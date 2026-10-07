@@ -26,6 +26,26 @@ def _stream_index_set(streams: Iterable[object]) -> set[int]:
     return {int(stream.index) for stream in streams}
 
 
+def add_default_sidecar_flag(
+    output_path: str,
+    *,
+    is_default: bool,
+    forced: bool,
+    number: int | None,
+) -> str:
+    """Encode a default-track flag into a Jellyfin-compatible sidecar name."""
+    if not is_default:
+        return output_path
+    path = Path(output_path)
+    stem = path.stem
+    trailer = (".forced" if forced else "") + (f".{number}" if number is not None else "")
+    if trailer and stem.endswith(trailer):
+        stem = f"{stem[:-len(trailer)]}.default{trailer}"
+    else:
+        stem = f"{stem}.default"
+    return str(path.with_name(stem + path.suffix))
+
+
 def _target_number(
     key: tuple[str, bool],
     counts: Counter[tuple[str, bool]],
@@ -56,13 +76,21 @@ def _append_native_target(
         unsupported.append((stream, language, codec))
         return
     ext, codec_args = codec_result
+    forced = bool(getattr(stream, "forced", False))
+    output_path = filename_builder(base, language, forced, ext, number)
+    output_path = add_default_sidecar_flag(
+        output_path,
+        is_default=bool(getattr(stream, "default", False)),
+        forced=forced,
+        number=number,
+    )
     targets.append(
         SidecarTarget(
             stream=stream,
             language=language,
             key=key,
             number=number,
-            output_path=filename_builder(base, language, bool(getattr(stream, "forced", False)), ext, number),
+            output_path=output_path,
             codec_args=tuple(str(arg) for arg in codec_args),
             output_codec=codec,
         )
@@ -79,7 +107,14 @@ def _append_text_to_srt_target(
     base: Path,
     filename_builder: Callable[[Path, str, bool, str, int | None], str],
 ) -> None:
-    output_path = filename_builder(base, language, bool(getattr(stream, "forced", False)), ".srt", number)
+    forced = bool(getattr(stream, "forced", False))
+    output_path = filename_builder(base, language, forced, ".srt", number)
+    output_path = add_default_sidecar_flag(
+        output_path,
+        is_default=bool(getattr(stream, "default", False)),
+        forced=forced,
+        number=number,
+    )
     if any(target.output_path == output_path for target in targets):
         return
     targets.append(

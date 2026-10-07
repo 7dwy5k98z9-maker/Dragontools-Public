@@ -14,11 +14,36 @@ def trickplay_sprite_dir_for_video(video_path: str | Path, settings: TrickplaySe
     return trickplay_root_for_video(video_path) / f"{int(settings.width)} - {settings.tile_label}"
 
 
+def has_valid_trickplay_sprites(path: str | Path) -> bool:
+    directory = Path(path)
+    if not directory.is_dir():
+        return False
+    try:
+        return any(
+            image.is_file() and image.stat().st_size > 0
+            for image in directory.glob("*.jpg")
+        )
+    except OSError:
+        return False
+
+
 def normalize_trickplay_conflict_mode(settings: TrickplaySettings) -> str:
     mode = str(getattr(settings, "conflict_mode", "") or "").strip().lower()
     if mode in {"skip", "overwrite", "backup"}:
         return mode
     return "skip" if bool(getattr(settings, "only_missing", True)) else "overwrite"
+
+
+def trickplay_result_status(mode, *, root_exists, variant_exists):
+    if mode == 'skip' and variant_exists:
+        return 'skipped'
+    if mode == 'skip' and root_exists:
+        return 'created_variant'
+    if mode == 'backup' and root_exists:
+        return 'backed_up'
+    if mode == 'overwrite' and root_exists:
+        return 'replaced'
+    return 'created'
 
 
 def unique_trickplay_backup_path(path: Path) -> Path:

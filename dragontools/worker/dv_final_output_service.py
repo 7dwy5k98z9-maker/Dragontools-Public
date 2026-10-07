@@ -34,6 +34,9 @@ class DVFinalOutputService:
             ok = self._mkv_muxer.mux_final_output(run_mux, output_path=req.output_path, injected_hevc=files.injected,
                 mux_tracks=state.mux_audio_tracks, subtitle_tracks=state.mux_subtitle_tracks)
             return ok, "STEP 7 MKV-Mux"
+        if container != "mp4":
+            self._log(f"❌ [DV] Ungültiger DV-Container: {container!r}", "error")
+            return False, "ungültiger DV-Container"
         self._log("ℹ️  [DV][STEP 7/7] MP4Box-Mux (streamingoptimiert)", "info")
         run_mux = runner.adapter(timeout=_TIMEOUT_MP4BOX(), label="STEP 7/7 MP4Box-Mux")
         ok = self._mp4box_muxer.mux_final_output(run_mux, output_path=req.output_path, injected_hevc=files.injected,

@@ -6,6 +6,7 @@ import tempfile
 from pathlib import Path
 
 from .dv_remux_audio import build_dv_audio_jobs
+from .dv_encode_command import primary_ffmpeg_video_index
 from ..core.lang_codes import canonical_lang
 from ..core.media_metadata import normalize_video_codec
 from .media_contract import _audio_codec_family, _subtitle_codec_family
@@ -58,8 +59,18 @@ class DVRemuxPipelineRunner:
             filter_builder=self._audio_filter_builder,
         )
 
-    def extract_video(self, input_path: str, output_hevc: str, dur_ms: int | None) -> bool:
+    def extract_video(
+        self, input_path: str, output_hevc: str, dur_ms: int | None, *, media_info=None
+    ) -> bool:
         w = self.worker
+        stream_index = primary_ffmpeg_video_index(media_info) if media_info is not None else None
+        if media_info is not None and (
+            getattr(media_info, "ffmpeg_stream_indices_trusted", True) is False
+            or (hasattr(media_info, "primary_video") and stream_index is None)
+        ):
+            w.log("❌ DV-Remux: primäre FFmpeg-Videospur ist nicht zuverlässig zugeordnet; keine geratenen Track-IDs.", "error")
+            return False
+        stream_selector = f"0:{stream_index}" if stream_index is not None else "0:v:0"
         cmd = [
             w.tools.ffmpeg,
             "-y",
@@ -68,7 +79,7 @@ class DVRemuxPipelineRunner:
             "-i",
             input_path,
             "-map",
-            "0:v:0",
+            stream_selector,
             "-c:v",
             "copy",
             "-bsf:v",
@@ -191,7 +202,7 @@ class DVRemuxPipelineRunner:
                 self.worker.log(f"  ⚠️ {decision.warning}", "warn")
 
             self.worker.log(f"  🎞️ Extrahiere DV-Videostream für {muxer_name} ...", "info")
-            if not self.extract_video(input_path, str(raw_video), dur_ms):
+            if not self.extract_video(input_path, str(raw_video), dur_ms, media_info=mi):
                 self.worker.log(f"❌ Video-Extraktion fehlgeschlagen: {name}", "error")
                 return False
             if self._abort_current_file():
@@ -269,6 +280,7 @@ class DVRemuxPipelineRunner:
                     codec=_audio_codec_family(job.get("codec")),
                     channels=max(0, int(job.get("channels") or getattr(source_audio.get(int(job.get("stream_index") or -1)), "channels", 0) or 0)),
                     language=canonical_lang(job.get("language")),
+                    default=(bool(job.get("default")) if _container(self.worker) == "mkv" and "default" in job else None),
                 )
                 for job in audio_jobs
             ),
@@ -277,6 +289,7 @@ class DVRemuxPipelineRunner:
                     codec=_subtitle_codec_family(track.codec),
                     language=canonical_lang(track.language),
                     forced=bool(track.forced),
+                    default=(bool(getattr(track, "default", False)) if _container(self.worker) == "mkv" else None),
                 )
                 for track in subtitle_tracks
             ),

@@ -6,6 +6,8 @@ damaged container cannot be hidden by a healthy video duration.
 from __future__ import annotations
 
 import math
+from fractions import Fraction
+from .type_utils import _safe_bool
 
 TIMESTAMP_WRAP_SECONDS = (2 ** 32) / 1000.0
 
@@ -39,11 +41,22 @@ def _plausible(value) -> float | None:
 
 
 def stream_duration(stream: dict) -> float | None:
+    if not isinstance(stream, dict):
+        return None
     duration = positive_seconds(stream.get("duration"))
     if duration is not None:
         return duration
+    try:
+        ticks = positive_seconds(stream.get("duration_ts"))
+        time_base = Fraction(str(stream.get("time_base") or "0"))
+        if ticks is not None and time_base > 0:
+            return positive_seconds(ticks * time_base)
+    except (ValueError, ZeroDivisionError, OverflowError):
+        pass
     # Matroska DURATION is an endpoint, not a length when start_time != 0.
-    tag = (stream.get("tags") or {}).get("DURATION")
+    tags_raw = stream.get("tags") or {}
+    tags = tags_raw if isinstance(tags_raw, dict) else {}
+    tag = tags.get("DURATION")
     if tag:
         try:
             hours, minutes, seconds = str(tag).split(":")
@@ -55,28 +68,51 @@ def stream_duration(stream: dict) -> float | None:
     return None
 
 
-def source_duration(payload: dict, *, video_streams=(), audio_streams=(), container_duration=None) -> float | None:
-    """Prefer the first real video (the pipeline's v:0), not the longest track.
-
-    No FPS multiplication: header evidence works for VFR and TS as well. Model
-    durations supply MediaInfo evidence when ffprobe has no stream duration.
-    """
+def _probe_tracks(payload):
     streams = payload.get("streams") or []
-    videos = [s for s in streams if s.get("codec_type") == "video"
-              and not (s.get("disposition") or {}).get("attached_pic")]
-    audios = [s for s in streams if s.get("codec_type") == "audio"]
-    container = _plausible((payload.get("format") or {}).get("duration")) or _plausible(container_duration)
-    model_by_index = {getattr(s, "index", None): s for s in video_streams}
-    primary = videos[0] if videos else None
-    video = _plausible(stream_duration(primary)) if primary else None
-    if video is None:
-        model = model_by_index.get(primary.get("index")) if primary else next(iter(video_streams), None)
-        video = _plausible(getattr(model, "duration_s", None))
-    audio = next((d for s in audios if (d := _plausible(stream_duration(s))) is not None), None)
-    if audio is None:
-        audio = next((d for s in audio_streams if (d := _plausible(getattr(s, "duration_s", None))) is not None), None)
-    # A wildly conflicting video header is rejected only with independent
-    # container AND audio agreement; a long subtitle cannot overrule video.
+    return [stream for stream in streams if isinstance(stream, dict)] if isinstance(streams, list) else []
+
+
+def _is_real_video(stream):
+    disposition = stream.get("disposition")
+    flags = disposition if isinstance(disposition, dict) else {}
+    return stream.get("codec_type") == "video" and not _safe_bool(flags.get("attached_pic"))
+
+
+def _video_duration_reference(streams, video_streams):
+    primary = next((s for s in streams if _is_real_video(s)), None)
+    measured = _plausible(stream_duration(primary)) if primary else None
+    if measured is not None:
+        return measured
+    models = {getattr(s, "index", None): s for s in video_streams}
+    model = models.get(primary.get("index")) if primary else next(iter(video_streams), None)
+    return _plausible(getattr(model, "duration_s", None))
+
+
+def _audio_duration_reference(streams, audio_streams, container):
+    raw = [d for s in streams if s.get("codec_type") == "audio"
+           if (d := _plausible(stream_duration(s))) is not None]
+    models = [d for s in audio_streams if (d := _plausible(getattr(s, "duration_s", None))) is not None]
+    candidates = raw or models
+    if container is not None and candidates:
+        return min(candidates, key=lambda value: abs(value - container))
+    return max(candidates, default=None)
+
+
+def source_duration(payload: dict, *, video_streams=(), audio_streams=(), container_duration=None) -> float | None:
+    """Choose the primary real video duration, using independent fallback evidence.
+
+    No FPS multiplication; only agreeing container/audio evidence can reject a
+    wildly conflicting video header. Output validation must still check the
+    actual container duration independently of this source-reference policy.
+    """
+    payload = payload if isinstance(payload, dict) else {}
+    streams = _probe_tracks(payload)
+    raw_format = payload.get("format")
+    fmt = raw_format if isinstance(raw_format, dict) else {}
+    container = _plausible(fmt.get("duration")) or _plausible(container_duration)
+    video = _video_duration_reference(streams, video_streams)
+    audio = _audio_duration_reference(streams, audio_streams, container)
     if video and container and audio:
         extreme = max(video, container) >= 2 * min(video, container) and abs(video - container) >= 120
         if extreme and abs(audio - container) <= max(3, container * .02):

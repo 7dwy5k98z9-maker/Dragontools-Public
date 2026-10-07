@@ -10,10 +10,12 @@ from typing import Callable
 
 from .move_journal import MoveJournalWriteError
 from .move_transaction import (
-    PathSwapTransaction, PathTransactionRollbackError, remove_path, unique_staging_path,
+    PathSwapTransaction, PathTransactionRollbackError, publish_staged_no_replace,
+    remove_path, unique_staging_path,
 )
 from .move_copy_verification import verify_staged_file_copy
 from .move_conflicts import same_path
+from .transaction_identity import path_receipt, receipt_matches, renamed_receipt_matches, object_identity, same_object
 
 
 class MoveTransferExecutor:
@@ -57,32 +59,33 @@ class MoveTransferExecutor:
     ) -> bool:
         destination_installed = False
         tmp_p = unique_staging_path(dst_p)
+        stage_identity = None
+        installed_receipt = None
+        source_receipt = path_receipt(src_p)
         try:
+            self.check_abort()
+            # Persist the expected shared inode before the hardlink crash window.
+            # The actual installed receipt replaces this intent before cleanup.
+            self.journal.set_commit_proof(src_p, source_receipt, source_receipt)
             try:
-                moved_size = src_p.stat().st_size
                 os.link(str(src_p), str(dst_p))
+            except OSError:
+                linked = False
+            else:
+                linked = True
                 destination_installed = True
-                self.notify_progress(hook, moved_size)
-                return self.finish_installed_file(
-                    src_p, dst_p, result, backup_pairs, replacement_mode=replacement_mode
-                )
-            except (OSError, FileExistsError):
-                pass
-
-            progress_hook = hook
-            try:
-                source_size = src_p.stat().st_size
-                with open(src_p, "rb") as fsrc, open(tmp_p, "wb") as fdst:
+                installed_receipt = path_receipt(dst_p)
+            if linked:
+                if not renamed_receipt_matches(src_p, source_receipt):
+                    raise OSError('Quelle wurde während des Hardlink-Commits verändert.')
+                source_receipt = path_receipt(src_p)
+                self.notify_progress(hook, src_p.stat().st_size)
+            else:
+                progress_hook = hook
+                with open(src_p, 'rb') as fsrc, open(tmp_p, 'xb') as fdst:
+                    stage_identity = object_identity(tmp_p)
                     while True:
-                        self.wait()
-                        if self.abort_immediately():
-                            try:
-                                tmp_p.unlink(missing_ok=True)
-                            except OSError as cleanup_exc:
-                                self.log(f"⚠️ Temporäre Datei konnte nicht gelöscht werden: {tmp_p.name} – {cleanup_exc}", "warn")
-                            if backup_pairs:
-                                self.conflicts.rollback(src_p, backup_pairs, result)
-                            return False
+                        self.check_abort()
                         buf = fsrc.read(8 * 1024 * 1024)
                         if not buf:
                             break
@@ -91,116 +94,55 @@ class MoveTransferExecutor:
                             progress_hook = None
                     fdst.flush()
                     os.fsync(fdst.fileno())
-
                 verify_staged_file_copy(src_p, tmp_p)
+                self.check_abort()
+                if not receipt_matches(src_p, source_receipt):
+                    raise OSError('Quelle wurde nach der Kopierprüfung verändert.')
                 shutil.copystat(src_p, tmp_p)
-                os.replace(str(tmp_p), str(dst_p))
+                publish_staged_no_replace(tmp_p, dst_p)
                 destination_installed = True
-                return self.finish_installed_file(
-                    src_p, dst_p, result, backup_pairs, replacement_mode=replacement_mode
-                )
-            except (OSError, shutil.Error) as exc:
-                self.log(f"❌ Fehler beim Verschieben: {exc}", "error")
-                try:
-                    tmp_p.unlink(missing_ok=True)
-                except OSError as cleanup_exc:
-                    self.log(f"⚠️ Temporäre Datei konnte nicht gelöscht werden: {tmp_p.name} – {cleanup_exc}", "warn")
-                if backup_pairs and not destination_installed:
-                    self.conflicts.rollback(src_p, backup_pairs, result)
-                return False
+                installed_receipt = path_receipt(dst_p)
+            self.check_abort()
+            if not receipt_matches(src_p, source_receipt):
+                raise OSError('Quelle wurde vor dem Cleanup verändert.')
+            self.journal.set_commit_proof(src_p, source_receipt, installed_receipt)
+            return self.finish_installed_file(src_p, dst_p, result, backup_pairs,
+                replacement_mode=replacement_mode, source_receipt=source_receipt,
+                destination_receipt=installed_receipt)
         except MoveJournalWriteError:
+            # A persistence failure is fatal; never retry another transfer path.
+            raise
+        except (OSError, shutil.Error, InterruptedError) as exc:
+            self.log(f'Fehler beim Verschieben: {exc}', 'error')
+            if destination_installed and receipt_matches(dst_p, installed_receipt):
+                remove_path(dst_p)
+                destination_installed = False
+            result['ok'] = False
+            return False
+        finally:
+            if same_object(tmp_p, stage_identity):
+                remove_path(tmp_p)
             if backup_pairs and not destination_installed:
                 self.conflicts.rollback(src_p, backup_pairs, result)
-            raise
-        except Exception:
-            if backup_pairs and not destination_installed:
-                self.conflicts.rollback(src_p, backup_pairs, result)
-            raise
+
+    def check_abort(self):
+        self.wait()
+        if self.abort_immediately():
+            raise InterruptedError('Verschieben sofort abgebrochen.')
+
+    def finish_existing_file(self, source, destination, result):
+        source_receipt = path_receipt(source)
+        destination_receipt = path_receipt(destination)
+        self.journal.set_commit_proof(source, source_receipt, destination_receipt)
+        completed = self.finish_installed_file(source, destination, result, [],
+            replacement_mode=None, source_receipt=source_receipt,
+            destination_receipt=destination_receipt)
+        self.log(f'Datei liegt bereits im Zielordner: {destination.name}', 'info')
+        return completed
 
     def move_directory(self, src_p: Path, dst_p: Path, result: dict, *, conflict_mode: str) -> bool:
-        backup_pairs: list[dict[str, str]] = []
-        destination_installed = False
-        transaction: PathSwapTransaction | None = None
-        try:
-            if dst_p.exists() and same_path(src_p, dst_p):
-                result["ok"] = True
-                self.log(f"ℹ️ Ordner liegt bereits im Zielordner: {dst_p.name}", "info")
-                return True
-
-            if dst_p.exists():
-                result["conflict"] = True
-                result["conflict_paths"] = [str(dst_p)]
-                if conflict_mode == "skip":
-                    result["skipped_conflict"] = True
-                    self.log(f"⚠️ Zielordner existiert bereits, übersprungen: {dst_p.name}", "warn")
-                    return False
-                if conflict_mode in {"delete_first", "overwrite"}:
-                    backup_p = self.conflicts.unique_backup_path(dst_p)
-                    backup_pairs = [{"original": str(dst_p), "backup": str(backup_p)}]
-                    transaction = PathSwapTransaction(src_p, dst_p, backup_p)
-                    transaction.stage()
-                    self.journal.set_backups(src_p, backup_pairs)
-                    result["backup_pairs"] = list(backup_pairs)
-                    result["transaction_backup_count"] = 1
-                    transaction.commit(
-                        on_backup=lambda original, _backup: self.log(
-                            f"🛡️ Vorhandener Ordner temporär gesichert: {original.name}", "info"
-                        )
-                    )
-                    destination_installed = True
-                    if not self.remove_committed_source(src_p):
-                        message = "Zielordner installiert; Quellordner konnte nicht entfernt werden."
-                        result["cleanup_pending"] = True
-                        result["cleanup_message"] = message
-                        self.journal.set_cleanup_pending(src_p, message)
-                    result["ok"] = True
-                    result["dest_path"] = str(dst_p)
-                    key = "deleted_existing" if conflict_mode == "delete_first" else "replaced_existing"
-                    result[key] = True
-                    result[f"{key}_count"] = 1
-                    self.conflicts.discard(src_p, backup_pairs, result)
-                    return True
-                if conflict_mode == "rename":
-                    dst_p = self.resolve_directory_rename_path(dst_p)
-                    result["renamed"] = True
-                    result["dest_path"] = str(dst_p)
-                    self.journal.set_destination(src_p, dst_p)
-                    self.log(f"📝 Umbenennung: Zielordner heißt jetzt {dst_p.name}", "info")
-
-            # Fast same-volume rename; cross-volume copies are never exposed
-            # under the final name until the entire staged tree is verified.
-            try:
-                os.rename(str(src_p), str(dst_p))
-            except OSError as exc:
-                if exc.errno != errno.EXDEV and getattr(exc, 'winerror', None) != 17:
-                    raise
-                transaction = PathSwapTransaction(
-                    src_p, dst_p, self.conflicts.unique_backup_path(dst_p)
-                )
-                transaction.stage()
-                transaction.commit()
-                destination_installed = True
-                if not self.remove_committed_source(src_p):
-                    message = "Zielordner installiert; Quellordner konnte nicht entfernt werden."
-                    result["cleanup_pending"] = True
-                    result["cleanup_message"] = message
-                    self.journal.set_cleanup_pending(src_p, message)
-            result["ok"] = True
-            result["dest_path"] = str(dst_p)
-            return True
-        except MoveJournalWriteError:
-            if transaction is not None:
-                transaction.cleanup_staging(best_effort=True)
-            if backup_pairs and not destination_installed:
-                self.conflicts.rollback(src_p, backup_pairs, result)
-            raise
-        except (OSError, shutil.Error, PathTransactionRollbackError, RuntimeError) as exc:
-            self.log(f"❌ Fehler beim Verschieben des Ordners: {exc}", "error")
-            if transaction is not None:
-                transaction.cleanup_staging(best_effort=True)
-            if backup_pairs and not destination_installed:
-                self.conflicts.rollback(src_p, backup_pairs, result)
-            return False
+        from .move_directory_transfer import move_directory
+        return move_directory(self, src_p, dst_p, result, conflict_mode)
 
     @staticmethod
     def resolve_directory_rename_path(dst_p: Path) -> Path:
@@ -218,7 +160,14 @@ class MoveTransferExecutor:
         backup_pairs: list[dict[str, str]],
         *,
         replacement_mode: str | None,
+        source_receipt=None,
+        destination_receipt=None,
     ) -> bool:
+        self.check_abort()
+        if source_receipt is not None and not receipt_matches(src_p, source_receipt):
+            raise OSError('Quelle wurde vor dem Löschen verändert.')
+        if destination_receipt is not None and not receipt_matches(dst_p, destination_receipt):
+            raise OSError('Installiertes Ziel wurde vor dem Cleanup verändert.')
         result["ok"] = True
         result["dest_path"] = str(dst_p)
         video_conflict_count = len(result.get("conflict_paths") or [])
@@ -242,7 +191,8 @@ class MoveTransferExecutor:
             result["cleanup_message"] = message
             self.journal.set_cleanup_pending(src_p, message)
             self.log(f"⚠️ {message}", "warn")
-        self.conflicts.discard(src_p, backup_pairs, result)
+        if not result.get('cleanup_pending'):
+            self.conflicts.discard(src_p, backup_pairs, result)
         return True
 
     def remove_committed_source(self, src_p: Path) -> bool:

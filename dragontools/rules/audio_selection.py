@@ -85,7 +85,10 @@ def _fallback_audio_streams(
     rules: dict[str, Any],
 ) -> list[AudioStream]:
     policy = str(rules.get("fallback_if_no_priority_match", "keep_all")).strip().lower()
-    fallback_pool = eligible_streams or streams
+    # Explicit exclusions (commentary / descriptive audio) are hard filters.
+    # Re-introducing the original stream list here would silently undo the
+    # user's "ignore" settings exactly when every stream is excluded.
+    fallback_pool = eligible_streams
     if policy == "keep_none":
         return []
     if policy == "keep_first":
@@ -128,8 +131,6 @@ def choose_audio_streams(
         stream for stream in streams
         if not _should_skip_for_language_rules(stream, rules)
     ]
-    if not eligible_streams:
-        eligible_streams = list(streams)
 
     selected: list[AudioStream] = []
     seen_indices: set[int] = set()

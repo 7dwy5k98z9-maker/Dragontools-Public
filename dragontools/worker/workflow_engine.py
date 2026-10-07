@@ -44,6 +44,7 @@ class WorkflowVerifyResult:
     subtitle_stream_count: int = 0
     attachment_stream_count: int = 0
     data_stream_count: int = 0
+    chapter_count: int = 0
     video_codec: str = ""
     video_bit_depth: int | None = None
     has_hdr: bool = False
@@ -58,6 +59,7 @@ class WorkflowVerifyResult:
     geometry_max_delta: int = 0
     geometry_severity: str = "exact"
     contract_non_geometry_ok: bool = True
+    dolby_vision_profile: int | None = None
 
     @property
     def ok(self) -> bool:
@@ -155,6 +157,8 @@ class WorkflowContext:
     cleanup_pending_message: str = ""
     postprocess_pending: bool = False
     postprocess_pending_announced: bool = False
+    nfo_prepare_future: Any = None
+    prepared_nfo: Any = None
     replace_original: bool = False
     strip_only: bool = False
     pipeline_failure_reason: str = ""
@@ -180,11 +184,13 @@ class ConversionWorkflowRunner:
             file_override=dict(override or {}),
         )
         ctx.start_ts = time.time()
+        verified = False
         try:
             self.analyze(ctx)
             self.build_plan(ctx, override)
             self.process(ctx, override)
             self.verify(ctx)
+            verified = True
             self.replace(ctx)
             if ctx.replacement_blocked:
                 self.services.finalize_blocked(ctx)
@@ -197,6 +203,9 @@ class ConversionWorkflowRunner:
             self.finalize(ctx)
             return True
         except Exception as exc:
+            ctx.success = False
+            if verified:
+                ctx.keep_failed_output = True
             ctx.error = str(exc)
             self.services.fail(ctx, str(exc), traceback.format_exc())
             return False

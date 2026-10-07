@@ -81,7 +81,9 @@ class SeriesMetadataResolver:
         if by_year is not None:
             return by_year
 
-        raw_choices = self.folders.choices(self.series_name, None)
+        # A known edition/year is authoritative. A year-less retry would
+        # select e.g. the 1989 series after the requested 2024 lookup failed.
+        raw_choices = [] if self.desired_year else self.folders.choices(self.series_name, None)
         local = self._resolve_raw_folder_choices(raw_choices, early_suggestion)
         if local is not None:
             return local

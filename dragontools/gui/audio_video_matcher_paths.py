@@ -51,10 +51,10 @@ class AudioVideoMatcherPathsMixin:
     def _validate_paths(self, *, require_output: bool) -> bool:
         source = Path(self.source_edit.text().strip())
         target = Path(self.target_edit.text().strip())
-        if not source.exists():
+        if not self.source_edit.text().strip() or not source.is_file():
             QMessageBox.information(self, "Audio-Video-Matcher", "Bitte die deutsche Quelle wählen.")
             return False
-        if not target.exists():
+        if not self.target_edit.text().strip() or not target.is_file():
             QMessageBox.information(self, "Audio-Video-Matcher", "Bitte das Zielvideo wählen.")
             return False
         if require_output and not self.output_edit.text().strip():

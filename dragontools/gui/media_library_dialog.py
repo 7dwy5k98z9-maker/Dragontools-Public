@@ -142,31 +142,22 @@ class MediaLibraryDialog(MediaLibraryFixActionsMixin, QDialog):
         QMessageBox.information(self, "Gespeichert", "Mediathek-Einstellungen wurden gespeichert.")
 
     def save_and_close(self) -> None:
-        self._save_without_popup()
-        self.reject()
+        self.close()
 
-    def closeEvent(self, event) -> None:
+    def done(self, result: int) -> None:
+        if self._can_close():
+            self._save_without_popup()
+            save_window_geometry(self, "media_library_dialog", self.settings)
+            super().done(result)
+
+    def _can_close(self) -> bool:
         if self._scan.is_running or self._nfo.is_running or self._fix.is_running:
-            QMessageBox.information(
-                self,
-                "Mediathek-Aufgabe läuft",
-                "Eine Mediathek-Aufgabe läuft noch. Bitte zuerst abbrechen oder vollständig abschließen.",
-            )
-            event.ignore()
-            return
-        # A SQLite search runs in a QThread. Ensure the worker is not destroyed
-        # together with the dialog while it still owns a live connection.
+            QMessageBox.information(self, "Mediathek-Aufgabe läuft", "Eine Mediathek-Aufgabe läuft noch. Bitte zuerst abbrechen oder vollständig abschließen.")
+            return False
         if not self._search.shutdown():
-            QMessageBox.information(
-                self,
-                "Mediathek-Suche läuft",
-                "Die laufende Mediathek-Suche wird noch beendet. Bitte das Fenster gleich erneut schließen.",
-            )
-            event.ignore()
-            return
-        self._save_without_popup()
-        save_window_geometry(self, "media_library_dialog", self.settings)
-        super().closeEvent(event)
+            QMessageBox.information(self, "Mediathek-Suche läuft", "Die laufende Mediathek-Suche wird noch beendet. Bitte das Fenster gleich erneut schließen.")
+            return False
+        return True
 
     # ── Pfade / Mapping ─────────────────────────────────────────────
 

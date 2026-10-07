@@ -38,7 +38,7 @@ class AudioTabChannelRulesMixin:
         self.s20_codec = QComboBox(); self.s20_codec.addItems(["aac","eac3","ac3","copy"]); self.s20_codec.setCurrentText(s20.get("target_codec","aac"))
         sg2l.addWidget(self.s20_codec, 0, 1)
         sg2l.addWidget(QLabel("Max. Ziel-Bitrate (kbps):"), 0, 2)
-        self.s20_br = QSpinBox(); self.s20_br.setRange(64,1024); self.s20_br.setSingleStep(32); self.s20_br.setValue(int(s20.get("max_bitrate_k",192)))
+        self.s20_br = QSpinBox(); self.s20_br.setRange(64,1024); self.s20_br.setSingleStep(32); self.s20_br.setValue(int(s20.get("max_bitrate_k",256)))
         self.s20_br.setSuffix(" kbps"); sg2l.addWidget(self.s20_br, 0, 3)
         sg2l.addWidget(QLabel("Kopieren von:"), 1, 0)
         self.s20_copy_min_br = QSpinBox()
@@ -58,10 +58,10 @@ class AudioTabChannelRulesMixin:
             "Stereo-Spuren mit akzeptiertem Codec werden nur in diesem Bitratenbereich kopiert.\n"
             "Liegt die Bitrate außerhalb des Bereichs, wird auf den Ziel-Codec transkodiert.\n"
             "Die Max. Ziel-Bitrate ist dabei eine Obergrenze: niedrigere Quellbitraten werden nicht künstlich erhöht.\n\n"
-            "Beispiel: Kopieren 192-256 kbps, Max. Ziel 192 kbps:\n"
+            "Beispiel: Kopieren 192-256 kbps, Max. Ziel 256 kbps:\n"
             "AAC Stereo 196 kbps -> kopieren\n"
             "MP3 Stereo 128 kbps -> AAC 128 kbps\n"
-            "MP3/AAC Stereo 320 kbps -> AAC 192 kbps"
+            "MP3/AAC Stereo 320 kbps -> AAC 256 kbps"
         ), 1, 4)
         self.s20_copy_max_br.setMinimum(self.s20_copy_min_br.value())
         self.s20_copy_min_br.valueChanged.connect(self.s20_copy_max_br.setMinimum)

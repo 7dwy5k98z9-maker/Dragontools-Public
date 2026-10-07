@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from .duration_repair_models import MediaTimingInfo
+from ..core.media_duration import _is_real_video
 from .duration_timing_parsing import (
     choose_frame_rate,
     max_known,
@@ -18,10 +19,11 @@ def apply_ffprobe_timing(info: MediaTimingInfo, data: dict) -> None:
     fmt = data.get("format") or {}
     info.container_duration_s = parse_seconds(fmt.get("duration"))
     streams = list(data.get("streams") or [])
-    videos = [s for s in streams if s.get("codec_type") == "video"]
+    videos = [s for s in streams if _is_real_video(s)]
     audios = [s for s in streams if s.get("codec_type") == "audio"]
     subtitles = [s for s in streams if s.get("codec_type") == "subtitle"]
     attachments = [s for s in streams if s.get("codec_type") == "attachment"]
+    attachments += [s for s in streams if s.get('codec_type') == 'video' and not _is_real_video(s)]
     info.video_stream_count = len(videos)
     info.audio_stream_count = len(audios)
     info.subtitle_stream_count = len(subtitles)

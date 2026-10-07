@@ -53,6 +53,10 @@ def build_static_converter_services(
     services.replace = ReplaceService(
         overwrite_original=job.overwrite_original,
         log=worker.log,
+        abort_check=lambda: bool(
+            getattr(worker, "abort_requested", False)
+            and getattr(worker, "abort_type", None) == "sofort"
+        ),
     )
     services.cleanup = CleanupService(
         overwrite_original=job.overwrite_original,

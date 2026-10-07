@@ -37,6 +37,7 @@ from dragontools.core.media_library import (
 )
 from dragontools.core.models import AudioStream, MediaInfo, SubtitleStream, VideoStream
 from dragontools.core.media_library_nfo_scan import scan_nfo_inventory
+from dragontools.core.media_library_types import SCHEMA_VERSION
 from dragontools.core.paths import path_compare_key
 
 
@@ -1800,7 +1801,7 @@ def test_database_schema_migrates_legacy_media_items_with_size_bytes(tmp_path: P
         "profile", "duration_s", "frame_count", "frame_rate", "frame_rate_mode",
         "color_space", "color_transfer", "color_primaries",
     } <= stream_columns
-    assert schema == "6"
+    assert schema == str(SCHEMA_VERSION)
 
 
 def test_storage_scan_records_real_file_size_and_size_filter(tmp_path: Path) -> None:
@@ -2592,7 +2593,7 @@ def test_database_schema_migrates_minimal_legacy_tables_before_creating_indexes(
     assert {"stream_type", "codec", "language"} <= stream_columns
     assert "idx_media_items_series_lookup" in indexes
     assert "idx_media_items_video" in indexes
-    assert schema == "6"
+    assert schema == str(SCHEMA_VERSION)
 
 
 def test_jellyfin_import_normalized_title_uses_series_id_when_series_name_is_empty(tmp_path: Path) -> None:

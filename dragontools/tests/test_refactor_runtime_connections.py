@@ -60,7 +60,9 @@ def test_move_journal_split_error_and_fallback_paths(tmp_path):
     broken = tmp_path / "broken.json"
     broken.write_text("{", encoding="utf-8")
     assert _read_json_dict(broken) == {}
-    assert _json_safe_dict({"not_json": object()}) == {}
+    with pytest.raises(TypeError, match="Nicht serialisierbarer Move-Kontext"):
+        _json_safe_dict({"not_json": object()})
+    assert _json_safe_dict({"target": tmp_path}) == {"target": str(tmp_path)}
 
     source = str(tmp_path / "episode.mkv")
     journal = MoveJournal.start(files=[source], root=tmp_path)

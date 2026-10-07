@@ -2,7 +2,7 @@
 """Metadata worker and lifecycle coordinator for the renamer GUI."""
 from __future__ import annotations
 from PyQt6.QtCore import QSettings, QThread, QTimer, pyqtSignal
-from PyQt6.QtWidgets import QMessageBox, QWidget
+from PyQt6.QtWidgets import QMessageBox, QWidget, QApplication
 from ..core.movie_renamer import build_rename_proposal, parse_movie_release_name
 from ..core.online_metadata import (
     OnlineMetadataAuthError,
@@ -13,6 +13,7 @@ from ..core.online_metadata import (
 )
 from .movie_renamer_job_queue import RenamerResolveJobQueue
 from .movie_renamer_resolve_search import MovieRenamerResolveSearchMixin
+from .movie_renamer_resolve_runtime import RenamerResolveRuntimeMixin
 
 
 class MovieRenameResolveThread(QThread):
@@ -66,7 +67,8 @@ class MovieRenameResolveThread(QThread):
                     series_episode_override=episode_override,
                     year_override=year_override,
                 )
-                self.proposal_ready.emit(path, request_id, proposal)
+                if not self.isInterruptionRequested():
+                    self.proposal_ready.emit(path, request_id, proposal)
         except OnlineMetadataError as exc:
             self._jobs.close()
             self.failed.emit(str(exc))
@@ -77,7 +79,7 @@ class MovieRenameResolveThread(QThread):
             self._jobs.close()
 
 
-class MovieRenamerResolveCoordinator(MovieRenamerResolveSearchMixin):
+class MovieRenamerResolveCoordinator(RenamerResolveRuntimeMixin, MovieRenamerResolveSearchMixin):
     def __init__(self, owner, settings: QSettings, table_controller, view) -> None:
         self.owner = owner
         self.settings = settings
@@ -87,13 +89,18 @@ class MovieRenamerResolveCoordinator(MovieRenamerResolveSearchMixin):
         self.auto_resolve_pending = False
         self.is_automatic = False
         self._request_versions: dict[str, int] = {}
+        self._pending_versioned_jobs = {}
+        self._utility_start_owner = None
+        self._utility_start_cancelled = False
+        self._shutdown_requested = False
 
     def resolve_all(self) -> None:
         if self.thread is not None and self.thread.isRunning():
             QMessageBox.information(self.owner, "Metadaten-Suche", "Die Vorschlagssuche läuft bereits.")
             return
         jobs = [
-            (row, self.table_controller.row_path(row), "", "", False,
+            (row, self.table_controller.row_path(row), self.table_controller.row_search_kind(row),
+             self.table_controller.current_search_text([row], kind=self.table_controller.row_search_kind(row)), False,
              self.table_controller.row_season_override(row),
              self.table_controller.row_episode_override(row))
             for row in range(self.view.table.rowCount())
@@ -120,7 +127,8 @@ class MovieRenamerResolveCoordinator(MovieRenamerResolveSearchMixin):
             if self.table_controller.row_item(row, self.table_controller.columns.STATUS).text() != "bereit":
                 continue
             jobs.append((
-                row, path, "", "", False,
+                row, path, self.table_controller.row_search_kind(row),
+                self.table_controller.current_search_text([row], kind=self.table_controller.row_search_kind(row)), False,
                 self.table_controller.row_season_override(row),
                 self.table_controller.row_episode_override(row),
             ))
@@ -128,73 +136,8 @@ class MovieRenamerResolveCoordinator(MovieRenamerResolveSearchMixin):
         if jobs:
             self.start_jobs(jobs, automatic=True)
 
-    def start_jobs(self, jobs: list[tuple], *, automatic: bool, priority: bool = False) -> None:
-        if not jobs:
-            return
-        versioned = self._version_jobs(jobs)
-        for job in jobs:
-            row = job[0]
-            if 0 <= row < self.view.table.rowCount():
-                self.table_controller.set_status(row, "🔎 Suche")
+    def _resolve_config(self):
+        return config_from_settings(self.settings, require_enabled=False)
 
-        if priority and self.thread is not None and self.thread.isRunning() and self.thread.enqueue_priority(versioned):
-            self.is_automatic = False
-            self.view.set_busy(True)
-            self.view.status_lbl.setText(
-                f"Manuelle Suche priorisiert: {len(versioned)} Datei(en); laufende Suche wird fortgesetzt."
-            )
-            return
-
-        try:
-            config = config_from_settings(self.settings, require_enabled=False)
-        except OnlineMetadataAuthError as exc:
-            for job in jobs:
-                row = job[0]
-                if 0 <= row < self.view.table.rowCount():
-                    self.table_controller.set_status(row, "⚠️ Metadaten fehlen")
-            self.view.status_lbl.setText("Automatische Vorschlagssuche nicht möglich: Metadaten-Provider nicht eingerichtet.")
-            if not automatic:
-                QMessageBox.warning(
-                    self.owner, "Metadaten nicht eingerichtet",
-                    f"{exc}\n\nÖffne Online-Metadaten und prüfe die Provider-Zugänge.",
-                )
-            return
-
-        self.is_automatic = automatic
-        self.view.set_busy(True)
-        prefix = "Neue Dateien: " if automatic else ""
-        self.view.status_lbl.setText(f"{prefix}Metadaten-Vorschläge werden geladen: {len(jobs)} Datei(en).")
-        thread = MovieRenameResolveThread(versioned, config, self.owner)
-        thread.proposal_ready.connect(self.on_proposal_ready)
-        thread.failed.connect(lambda message: self.on_failed(message, thread))
-        thread.finished.connect(lambda: self.on_finished(thread))
-        thread.finished.connect(thread.deleteLater)
-        self.thread = thread
-        thread.start()
-
-    def on_failed(self, message: str, failed_thread=None) -> None:
-        if failed_thread is not None and self.thread is not failed_thread:
-            return
-        for row in range(self.view.table.rowCount()):
-            if self.table_controller.row_item(row, self.table_controller.columns.STATUS).text() == "🔎 Suche":
-                self.table_controller.set_status(row, "❌ Fehler")
-        self.view.status_lbl.setText(f"Metadaten-Suche fehlgeschlagen: {message}")
-        if not self.is_automatic:
-            QMessageBox.warning(self.owner, "Metadaten-Suche fehlgeschlagen", message)
-
-    def on_finished(self, finished_thread=None) -> None:
-        if finished_thread is not None and self.thread is not finished_thread:
-            return
-        self.view.set_busy(False)
-        self.thread = None
-        self.is_automatic = False
-        if self.auto_resolve_pending:
-            self.view.status_lbl.setText("Vorschlagssuche abgeschlossen. Neue Dateien werden jetzt geprüft …")
-            QTimer.singleShot(0, self.resolve_new)
-        else:
-            self.view.status_lbl.setText("Vorschlagssuche abgeschlossen.")
-
-    def shutdown(self, timeout_ms: int = 1500) -> None:
-        if self.thread is not None and self.thread.isRunning():
-            self.thread.requestInterruption()
-            self.thread.wait(timeout_ms)
+    def _create_resolve_thread(self, jobs, config):
+        return MovieRenameResolveThread(jobs, config, QApplication.instance())

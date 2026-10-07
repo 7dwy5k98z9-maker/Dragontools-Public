@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import re
+import unicodedata
+from datetime import datetime
 from pathlib import Path
 
 from .online_metadata_types import (
     MovieMetadataSuggestion, ParsedMovieQuery, ParsedSeriesQuery, SeriesMetadataSuggestion,
 )
 from ..rules.renamer_rules import strip_configured_release_groups
+from .german_title_variants import fold_german_umlauts
 
 _VIDEO_EXTENSIONS = {".mkv", ".mp4", ".avi", ".m4v", ".mov", ".ts", ".m2ts", ".wmv"}
 
@@ -21,6 +24,32 @@ def _metadata_input_stem(value: str | Path) -> tuple[str, str]:
     text = leaf_path.stem if leaf_path.suffix.lower() in _VIDEO_EXTENSIONS else raw
     return raw, text
 
+def _extract_metadata_year(text: str) -> tuple[int | None, re.Match[str] | None]:
+    """Return a defensible release-year token without eating numeric titles.
+
+    Parenthesized years are explicit metadata. Bare four-digit numbers are
+    ambiguous (``1917``, ``1899``, ``Blade Runner 2049``), so only accept a
+    plausible release year when meaningful title text already precedes it.
+    The last plausible token wins, allowing e.g. ``2001 A Space Odyssey 1968``.
+    """
+    explicit = re.search(r"\((19\d{2}|20\d{2})\)", text)
+    if explicit:
+        return int(explicit.group(1)), explicit
+
+    max_release_year = datetime.now().year + 1
+    candidates: list[re.Match[str]] = []
+    for match in re.finditer(r"(?<!\d)(19\d{2}|20\d{2})(?!\d)", text):
+        value = int(match.group(1))
+        prefix = text[: match.start()].strip(" -._")
+        if value > max_release_year or not re.search(r"\w", prefix, flags=re.UNICODE):
+            continue
+        candidates.append(match)
+    if not candidates:
+        return None, None
+    chosen = candidates[-1]
+    return int(chosen.group(1)), chosen
+
+
 def parse_movie_query(value: str | Path) -> ParsedMovieQuery:
     raw, text = _metadata_input_stem(value)
     text, _configured_groups = strip_configured_release_groups(text)
@@ -28,12 +57,8 @@ def parse_movie_query(value: str | Path) -> ParsedMovieQuery:
     text = text.replace("_", " ").replace(".", " ")
     text = re.sub(r"\s+", " ", text).strip()
 
-    year: int | None = None
-    m = re.search(r"\((19\d{2}|20\d{2})\)", text)
-    if not m:
-        m = re.search(r"(?<!\d)(19\d{2}|20\d{2})(?!\d)", text)
-    if m:
-        year = int(m.group(1))
+    year, m = _extract_metadata_year(text)
+    if m is not None:
         text = text[: m.start()].strip(" -._")
 
     cleanup_patterns = (
@@ -75,12 +100,8 @@ def parse_series_query(value: str | Path) -> ParsedSeriesQuery:
     text = re.sub(r"\b\d{1,4}x\d{1,4}\b.*$", "", text, flags=re.I)
     text = re.sub(r"\s+", " ", text).strip()
 
-    year: int | None = None
-    m = re.search(r"\((19\d{2}|20\d{2})\)", text)
-    if not m:
-        m = re.search(r"(?<!\d)(19\d{2}|20\d{2})(?!\d)", text)
-    if m:
-        year = int(m.group(1))
+    year, m = _extract_metadata_year(text)
+    if m is not None:
         text = text[: m.start()].strip(" -._")
 
     # Ab dem ERSTEN technischen Release-Marker wird der Rest abgeschnitten.
@@ -159,6 +180,13 @@ class ParsedMetadataResolverMixin:
         return self.resolve_series(parsed.title, year=parsed.year)
 
 def compare_metadata_text(value: str) -> str:
-    text = str(value or "").lower()
-    text = re.sub(r"[^a-z0-9äöüß]+", " ", text)
+    """Unicode-safe comparison key for provider titles and cache identity.
+
+    Provider names can be Japanese, Chinese, Cyrillic, etc.  Restricting the key
+    to ASCII/Latin characters collapses such titles to an empty string and makes
+    unrelated non-Latin records score as identical/no-match.
+    """
+    text = unicodedata.normalize("NFKC", fold_german_umlauts(value)).casefold()
+    text = text.replace("&", " und ")
+    text = "".join(ch if ch.isalnum() else " " for ch in text)
     return re.sub(r"\s+", " ", text).strip()

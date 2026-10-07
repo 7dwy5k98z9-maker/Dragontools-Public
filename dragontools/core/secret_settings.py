@@ -13,6 +13,7 @@ import ctypes
 import logging
 import os
 from ctypes import wintypes
+from dataclasses import dataclass
 
 _LOG = logging.getLogger(__name__)
 _PREFIX = "dpapi:v1:"
@@ -20,6 +21,22 @@ _PREFIX = "dpapi:v1:"
 
 class SecretProtectionError(RuntimeError):
     pass
+
+
+@dataclass(frozen=True)
+class SecretReadState:
+    """Result of reading a possibly DPAPI-protected setting.
+
+    ``readable`` is False only when a protected value exists but cannot be
+    decrypted in the current Windows/user context.  Callers that merely open
+    and save a settings dialog can use this to preserve the opaque stored blob
+    instead of accidentally replacing it with an empty fallback.
+    """
+
+    value: str
+    protected: bool
+    readable: bool
+
 
 
 class _DATA_BLOB(ctypes.Structure):
@@ -116,7 +133,8 @@ def decode_secret_from_storage(value: str) -> str:
     return _dpapi_unprotect(text)
 
 
-def read_secret(settings, key: str, default: str = "") -> str:
+def read_secret_state(settings, key: str, default: str = "") -> SecretReadState:
+    """Read a secret without hiding whether an encrypted blob was unreadable."""
     try:
         raw = settings.value(key, default, type=str)
     except TypeError:
@@ -127,13 +145,22 @@ def read_secret(settings, key: str, default: str = "") -> str:
         if raw is None:
             raw = default
     text = str(raw or "")
-    if not text.startswith(_PREFIX):
-        return text
+    protected = text.startswith(_PREFIX)
+    if not protected:
+        return SecretReadState(text, protected=False, readable=True)
     try:
-        return decode_secret_from_storage(text)
+        return SecretReadState(
+            decode_secret_from_storage(text),
+            protected=True,
+            readable=True,
+        )
     except SecretProtectionError:
         _LOG.warning("Geschützte Einstellung konnte nicht entschlüsselt werden: %s", key, exc_info=True)
-        return str(default or "")
+        return SecretReadState(str(default or ""), protected=True, readable=False)
+
+
+def read_secret(settings, key: str, default: str = "") -> str:
+    return read_secret_state(settings, key, default).value
 
 
 def write_secret(settings, key: str, value: str) -> None:

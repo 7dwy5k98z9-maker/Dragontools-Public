@@ -19,9 +19,23 @@ from ..core.settings_conversion import (
 )
 from ..core.settings_access import settings_bool, settings_float, settings_int
 from ..core.comfyui_hdr_models import collect_comfyui_hdr_options
+from .encoder_profile_options import profile_policy_settings
+
+
+def encoder_quality_range(codec: str, encoder: str) -> tuple[int, int]:
+    """GUI-Grenzen passend zu den tatsächlich verwendeten FFmpeg-Encodern."""
+    codec_key = str(codec or "h265").strip().lower()
+    encoder_key = str(encoder or "cpu").strip().lower()
+    if encoder_key == "qsv":
+        return 1, 51
+    if codec_key == "av1":
+        return 0, 63
+    return 0, 51
+
 class EncoderSettingsOptionsMixin:
     def collect_enc_opts(self) -> dict:
             widgets = self._ui.widgets
+            policy_settings = profile_policy_settings(self)
             enc = self._active_encoder()
             opts = {"encoder": enc}
             if enc == "nvenc":
@@ -114,10 +128,10 @@ class EncoderSettingsOptionsMixin:
                 maximum=50,
             )
             opts["quality_target_enabled"] = settings_bool(
-                self._settings, SET_KEY_QUALITY_TARGET_ENABLED, DEFAULT_QUALITY_TARGET_ENABLED
+                policy_settings, SET_KEY_QUALITY_TARGET_ENABLED, DEFAULT_QUALITY_TARGET_ENABLED
             )
             opts["quality_target_vmaf"] = settings_float(
-                self._settings, SET_KEY_QUALITY_TARGET_VMAF, DEFAULT_QUALITY_TARGET_VMAF,
+                policy_settings, SET_KEY_QUALITY_TARGET_VMAF, DEFAULT_QUALITY_TARGET_VMAF,
                 minimum=70.0, maximum=100.0,
             )
             opts["quality_target_samples"] = self._settings_int(
@@ -132,19 +146,19 @@ class EncoderSettingsOptionsMixin:
             high = self._settings_int(SET_KEY_QUALITY_TARGET_MAX, DEFAULT_QUALITY_TARGET_MAX, minimum=0, maximum=63)
             opts["quality_target_min"], opts["quality_target_max"] = sorted((low, high))
             opts["sdr_hdr_enabled"] = settings_bool(
-                self._settings, SET_KEY_SDR_HDR_ENABLED, DEFAULT_SDR_HDR_ENABLED
+                policy_settings, SET_KEY_SDR_HDR_ENABLED, DEFAULT_SDR_HDR_ENABLED
             )
             opts["sdr_hdr_contrast_recovery"] = settings_float(
-                self._settings, SET_KEY_SDR_HDR_CONTRAST_RECOVERY, DEFAULT_SDR_HDR_CONTRAST_RECOVERY,
+                policy_settings, SET_KEY_SDR_HDR_CONTRAST_RECOVERY, DEFAULT_SDR_HDR_CONTRAST_RECOVERY,
                 minimum=0.0, maximum=3.0,
             )
             opts["sdr_hdr_backend"] = self._settings_text(
                 SET_KEY_SDR_HDR_BACKEND, DEFAULT_SDR_HDR_BACKEND,
                 allowed={"ffmpeg", "davinci_free", "comfyui"},
             )
-            opts.update(collect_comfyui_hdr_options(self._settings))
+            opts.update(collect_comfyui_hdr_options(policy_settings))
             opts["hdr10plus_generator_enabled"] = settings_bool(
-                self._settings, SET_KEY_HDR10PLUS_GENERATOR_ENABLED, DEFAULT_HDR10PLUS_GENERATOR_ENABLED
+                policy_settings, SET_KEY_HDR10PLUS_GENERATOR_ENABLED, DEFAULT_HDR10PLUS_GENERATOR_ENABLED
             )
             return opts
     @staticmethod
@@ -164,11 +178,12 @@ class EncoderSettingsOptionsMixin:
 
     def _settings_int(self, key: str, default: int, *, minimum: int, maximum: int) -> int:
             return settings_int(
-                self._settings, key, default, minimum=minimum, maximum=maximum
+                profile_policy_settings(self), key, default, minimum=minimum, maximum=maximum
             )
 
     def _settings_text(self, key: str, default: str, *, allowed: set[str]) -> str:
-            try: value = str(self._settings.value(key, default, type=str) or default)
-            except TypeError: value = str(self._settings.value(key, default) or default)
+            settings = profile_policy_settings(self)
+            try: value = str(settings.value(key, default, type=str) or default)
+            except TypeError: value = str(settings.value(key, default) or default)
             value = value.strip().lower()
             return value if value in allowed else default

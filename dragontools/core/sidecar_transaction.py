@@ -15,6 +15,8 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from pathlib import Path
+from .move_transaction import publish_staged_no_replace
+from .transaction_identity import path_receipt, receipt_matches
 
 
 class SidecarCommitError(OSError):
@@ -27,6 +29,8 @@ class _CommittedSidecar:
     destination: Path
     backup: Path | None = None
     noop: bool = False
+    destination_receipt: dict | None = None
+    backup_receipt: dict | None = None
 
 
 class SidecarCommitTransaction:
@@ -77,6 +81,8 @@ class SidecarCommitTransaction:
                 "destination": str(destination),
                 "backup": str(backup) if backup is not None else "",
                 "noop": "1" if same_path else "0",
+                'new_receipt': path_receipt(source),
+                'old_receipt': path_receipt(destination) if backup is not None else None,
             })
         self._planned_records = rows
         return [dict(row) for row in rows]
@@ -97,6 +103,8 @@ class SidecarCommitTransaction:
     def commit(self) -> list[str]:
         if self._committed:
             return self.final_paths
+        if self._records:
+            raise SidecarCommitError('Sidecar-Rollback ist noch ausstehend; neuer Commit ist gesperrt.')
 
         try:
             for row in self.prepare_records():
@@ -117,18 +125,21 @@ class SidecarCommitTransaction:
 
     def rollback(self) -> None:
         errors: list[str] = []
+        pending: list[_CommittedSidecar] = []
         for record in reversed(self._records):
             if record.noop:
                 continue
             try:
                 # Neu erzeugtes Sidecar wieder an seinen Staging-Pfad legen.
                 if record.destination.exists() or record.destination.is_symlink():
+                    if not receipt_matches(record.destination, record.destination_receipt):
+                        raise OSError('Sidecar-Ziel wurde nach Commit verändert; bleibt erhalten.')
                     if record.source.exists() or record.source.is_symlink():
                         raise FileExistsError(
                             f"Rollback-Quelle existiert bereits: {record.source}"
                         )
                     record.source.parent.mkdir(parents=True, exist_ok=True)
-                    os.replace(str(record.destination), str(record.source))
+                    publish_staged_no_replace(record.destination, record.source)
 
                 # Vorheriges Benutzer-Sidecar wieder auf den Originalnamen setzen.
                 if record.backup is not None and (
@@ -138,10 +149,16 @@ class SidecarCommitTransaction:
                         raise FileExistsError(
                             f"Rollback-Ziel ist belegt: {record.destination}"
                         )
-                    os.replace(str(record.backup), str(record.destination))
+                    if not receipt_matches(record.backup, record.backup_receipt):
+                        raise OSError('Sidecar-Backup wurde nach Commit verändert; bleibt erhalten.')
+                    publish_staged_no_replace(record.backup, record.destination)
             except Exception as exc:
                 errors.append(f"{record.destination.name}: {exc}")
+                pending.append(record)
 
+        # Completed records must never inspect the restored old destination as
+        # though it were still the new candidate on a retry or second cleanup.
+        self._records = list(reversed(pending))
         self._committed = False
         if errors:
             raise SidecarCommitError("; ".join(errors))
@@ -157,6 +174,8 @@ class SidecarCommitTransaction:
             "destination": str(destination),
             "backup": str(backup) if backup is not None else "",
             "noop": "0",
+            'new_receipt': path_receipt(source),
+            'old_receipt': path_receipt(destination) if backup is not None else None,
         })
 
     def _commit_one_prepared(self, row: dict[str, str]) -> _CommittedSidecar:
@@ -168,6 +187,8 @@ class SidecarCommitTransaction:
 
         if not (source.exists() or source.is_symlink()):
             raise FileNotFoundError(f"Erzeugtes Sidecar fehlt: {source}")
+        if not receipt_matches(source, row.get('new_receipt')):
+            raise OSError('Sidecar-Staging wurde nach der Planung verändert.')
         destination.parent.mkdir(parents=True, exist_ok=True)
         if noop:
             return _CommittedSidecar(source, destination, noop=True)
@@ -177,26 +198,33 @@ class SidecarCommitTransaction:
                 raise FileExistsError(f"Geplanter Sidecar-Backup-Pfad ist bereits belegt: {backup}")
             if not (destination.exists() or destination.is_symlink()):
                 raise FileNotFoundError(f"Zu sicherndes Sidecar fehlt vor Commit: {destination}")
-            os.replace(str(destination), str(backup))
+            if not receipt_matches(destination, row.get('old_receipt')):
+                raise OSError('Sidecar-Altbestand wurde nach der Planung verändert.')
+            publish_staged_no_replace(destination, backup)
+            backup_receipt = path_receipt(backup)
         elif destination.exists() or destination.is_symlink():
             raise FileExistsError(
                 f"Sidecar-Ziel wurde nach der Planung unerwartet belegt: {destination}"
             )
 
         try:
-            os.replace(str(source), str(destination))
+            publish_staged_no_replace(source, destination)
         except Exception:
             if backup is not None and (backup.exists() or backup.is_symlink()):
                 if destination.exists() or destination.is_symlink():
                     raise
-                os.replace(str(backup), str(destination))
+                if not receipt_matches(backup, backup_receipt):
+                    raise OSError('Sidecar-Backup wurde verändert; bleibt erhalten.')
+                publish_staged_no_replace(backup, destination)
             raise
-        return _CommittedSidecar(source, destination, backup=backup)
+        return _CommittedSidecar(source, destination, backup=backup,
+            destination_receipt=path_receipt(destination),
+            backup_receipt=path_receipt(backup) if backup is not None else None)
 
     def _destination_for(self, source: Path) -> Path:
         source_name = source.name
         base_name = self.source_base.name
-        if not source_name.startswith(base_name):
+        if not source_name.startswith(base_name + '.'):
             raise ValueError(
                 "Sidecar-Name passt nicht zum erwarteten Quell-Stem: "
                 f"{source_name} / {base_name}"

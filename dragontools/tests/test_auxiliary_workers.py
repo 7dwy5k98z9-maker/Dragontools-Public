@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
+from dragontools.tests.subtitle_command_fixtures import subtitle_command_validation  # noqa: F401
 
 import importlib
 import sys
@@ -139,20 +140,34 @@ def test_iso_detects_direct_bdmv_and_video_ts_folders(tmp_path):
     assert thread._detect_iso_type(str(video_ts)) == "dvd"
 
 
-def test_iso_extracts_multiple_titles_as_single_makemkv_calls(tmp_path):
+def test_iso_extracts_multiple_titles_as_single_makemkv_calls(tmp_path, monkeypatch):
     thread = _iso_thread()
     thread._extracted_files = []
     calls: list[list[str]] = []
 
+    class _Verifier:
+        def __init__(self, **_kwargs):
+            pass
+
+        def verify(self, *_args, **_kwargs):
+            return SimpleNamespace(ok=True, messages=[])
+
+    monkeypatch.setattr("dragontools.worker.iso_makemkv_service.OutputVerifier", _Verifier)
+
     def fake_run(args, progress_path=None):
         calls.append(args)
+        stage_dir = Path(args[-1])
+        stage_dir.mkdir(parents=True, exist_ok=True)
+        (stage_dir / f"title_{len(calls):02d}.mkv").write_bytes(b"x" * 2048)
         return 0, []
 
     thread._run_makemkv = fake_run
     assert thread._extract_titles("Film.iso", [1, 2], str(tmp_path))
 
-    assert calls[0] == ["-r", "--cache=1", "mkv", "iso:Film.iso", "1", str(tmp_path)]
-    assert calls[1] == ["-r", "--cache=1", "mkv", "iso:Film.iso", "2", str(tmp_path)]
+    assert calls[0][:-1] == ["-r", "--cache=1", "mkv", "iso:Film.iso", "1"]
+    assert calls[1][:-1] == ["-r", "--cache=1", "mkv", "iso:Film.iso", "2"]
+    assert calls[0][-1] == calls[1][-1]
+    assert Path(calls[0][-1]).parent == tmp_path
 
 
 def test_iso_scan_reports_outdated_makemkv():
@@ -272,7 +287,8 @@ def test_subtitle_injector_uses_configured_mkvmerge_path(tmp_path):
     out = tmp_path / "Film_sub.mkv"
 
     def fake_run(cmd, *args, **kwargs):
-        out.write_bytes(b"OK")
+        stage = Path(cmd[cmd.index("-o") + 1])
+        stage.write_bytes(b"OK")
         return SimpleNamespace(ok=True, returncode=0, stdout="", stderr="")
 
     with (
@@ -295,7 +311,7 @@ def test_subtitle_injector_mp4_text_mode_maps_only_video_audio_and_new_subtitle(
     out = tmp_path / "Film_sub.mp4"
 
     def fake_run(cmd, *args, **kwargs):
-        out.write_bytes(b"OK")
+        Path(cmd[-1]).write_bytes(b"OK")
         return SimpleNamespace(ok=True, returncode=0, stdout="", stderr="")
 
     with (
@@ -313,10 +329,11 @@ def test_subtitle_injector_mp4_text_mode_maps_only_video_audio_and_new_subtitle(
 
     cmd = mock_run.call_args.args[0]
     assert cmd[0] == "C:/Tools/ffmpeg.exe"
-    assert "0:v?" in cmd
-    assert "0:a?" in cmd
-    assert "1:0" in cmd
-    assert cmd[cmd.index("-c:s") + 1] == "mov_text"
+    assert "0" in cmd
+    assert "-0:s?" in cmd
+    assert "1:s:0" in cmd
+    codec_flag = "-c:s:0" if "-c:s:0" in cmd else "-c:s"
+    assert cmd[cmd.index(codec_flag) + 1] == "mov_text"
 
 
 def test_subtitle_extract_with_ffmpeg_accepts_codec_args(tmp_path):
@@ -325,7 +342,7 @@ def test_subtitle_extract_with_ffmpeg_accepts_codec_args(tmp_path):
     out = tmp_path / "Film.de.srt"
 
     def fake_run(cmd, *args, **kwargs):
-        out.write_bytes(b"OK")
+        Path(cmd[-1]).write_bytes(b"OK")
         return SimpleNamespace(ok=True, returncode=0, stdout="", stderr="")
 
     with (
@@ -386,7 +403,8 @@ def test_mp4_overwrite_exportiert_sidecars_vor_original_replace(tmp_path, monkey
     monkeypatch.setitem(service_globals, "SidecarJournal", TestJournal)
     file_service = thread._remux_file.__globals__["MP4RemuxFileService"]
     replace_function = file_service.remux.__globals__["commit_staged_output"]
-    monkeypatch.setitem(replace_function.__globals__, "ReplaceJournal", TestJournal)
+    import inspect
+    monkeypatch.setitem(inspect.unwrap(replace_function).__globals__, "ReplaceJournal", TestJournal)
     source = tmp_path / "Film.mp4"
     source.write_bytes(b"ORIGINAL-MP4")
     old_sidecar = tmp_path / "Film.de.srt"
@@ -397,7 +415,7 @@ def test_mp4_overwrite_exportiert_sidecars_vor_original_replace(tmp_path, monkey
     thread.export_subtitles = True
     thread.ignore_subtitles = False
     mi = SimpleNamespace(
-        primary_video=SimpleNamespace(codec="h264"),
+        primary_video=SimpleNamespace(codec="h264", index=0),
         dolby_vision=False,
         dolby_vision_profile=None,
         has_dv=False,
@@ -454,7 +472,7 @@ def test_mp4_overwrite_blockiert_replace_wenn_sidecar_export_fehlschlaegt(tmp_pa
     thread.export_subtitles = True
     thread.ignore_subtitles = False
     mi = SimpleNamespace(
-        primary_video=SimpleNamespace(codec="h264"),
+        primary_video=SimpleNamespace(codec="h264", index=0),
         dolby_vision=False,
         dolby_vision_profile=None,
         has_dv=False,
@@ -476,8 +494,7 @@ def test_mp4_overwrite_blockiert_replace_wenn_sidecar_export_fehlschlaegt(tmp_pa
         planned_stream_indices=(3,),
         failures=(SubtitleExportFailure(3, "de", "subrip", "rc=1"),),
     )
-    module = thread.__class__.__module__
-    with patch(f"{module}.analyze_media", return_value=mi):
+    with patch.dict(thread._remux_file.__globals__, {"analyze_media": lambda *_args: mi}):
         ok = thread._remux_file(str(source), str(source))
 
     assert ok is False
@@ -488,15 +505,16 @@ def test_mp4_overwrite_blockiert_replace_wenn_sidecar_export_fehlschlaegt(tmp_pa
 
 def test_dv_remux_exportiert_sidecars_vor_container_replace(tmp_path, monkeypatch):
     from dragontools.worker.subtitle_sidecar_service import SubtitleExportResult
-    from dragontools.core import sidecar_journal
-
-    monkeypatch.setattr(sidecar_journal, "app_documents_dir", lambda _root=None: tmp_path)
-
     source = tmp_path / "Film.mkv"
     source.write_bytes(b"ORIGINAL-DV")
     temp_output = tmp_path / "temp.mp4"
     final_output = tmp_path / "Film.mp4"
     thread = _dv_remux_thread([str(source)], overwrite_original=True)
+    runner_type = thread._file_dispatcher.run.__func__.__globals__["DVRemuxJobRunner"]
+    journal_type = runner_type.run.__globals__["SidecarJournal"]
+    monkeypatch.setitem(journal_type.start.__func__.__globals__, "app_documents_dir", lambda _root=None: tmp_path)
+    messages = []
+    thread.log = lambda message, *_args: messages.append(str(message))
     thread._prepare_remux_metadata = lambda path: (
         "Film",
         SimpleNamespace(has_dv=True, dv_profile_major=8, audio_streams=[]),
@@ -540,6 +558,6 @@ def test_dv_remux_exportiert_sidecars_vor_container_replace(tmp_path, monkeypatc
     thread._subtitle_service = SubtitleService()
     thread._output_manager = OutputManager()
 
-    assert thread._remux_file_safe(str(source)) is True
+    assert thread._remux_file_safe(str(source)) is True, messages
     assert final_output.read_bytes() == b"NEW-DV-MP4"
     assert (tmp_path / "Film.de.srt").read_text(encoding="utf-8") == "DV-SUB"

@@ -90,6 +90,7 @@ class ParsedSeriesReleaseName:
     # episode model for every existing caller.
     episodes: tuple[int, ...] = ()
     episode_titles: tuple[str, ...] = ()
+    episode_mapping_required: bool = False
 
     @property
     def query_title(self) -> str:

@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any, Mapping
@@ -35,11 +36,11 @@ class HDRPlusEncoderConfig:
             codec=normalize_target_codec(codec),
             crf=crf,
             preset=str(preset or ""),
-            encoder_options=MappingProxyType(dict(encoder_options or {})),
+            encoder_options=MappingProxyType(deepcopy(dict(encoder_options or {}))),
         )
 
     def mutable_encoder_options(self) -> dict[str, Any]:
-        return dict(self.encoder_options)
+        return deepcopy(dict(self.encoder_options))
 
 
 @dataclass(frozen=True)
@@ -85,8 +86,8 @@ class HDRPlusExecutionContext:
             audio_input_args=tuple(audio_input_args or ()),
             subtitle_args=tuple(subtitle_args or ()),
             crop=crop,
-            container=str(container or "mkv").lower(),
-            override=MappingProxyType(dict(override or {})),
+            container=str(container or "").strip().lower(),
+            override=MappingProxyType(deepcopy(dict(override or {}))),
             encoder=encoder,
             generate_hdr10plus=bool(generate_hdr10plus),
         )
@@ -97,3 +98,6 @@ class HDRPlusPipelineOutcome:
     success: bool
     verified_hdr10plus: bool = False
     sidecar_paths: tuple[str, ...] = ()
+    failure_archive_path: str = ""
+    failure_artifact_paths: tuple[str, ...] = ()
+    preserve_failed_output: bool = False

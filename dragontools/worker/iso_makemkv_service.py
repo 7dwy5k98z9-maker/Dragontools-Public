@@ -1,15 +1,19 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-import re
 import shutil
 from pathlib import Path
 from typing import Callable
 
 from ..core.timeout_settings import get_timeout
-from .iso_disc_inspector import ISODiscInspector, parse_duration_to_seconds, parse_size_to_bytes
+from ..core.move_transaction import publish_staged_no_replace
+from .iso_disc_inspector import ISODiscInspector
+from .iso_title_parser import parse_makemkv_titles
 from .iso_models import ISOExtractionResult, ISOScanResult, ISOUserAbortError
 from .tool_runner import run_tool
+from .output_verifier import OutputVerifier
+from .iso_output_publication import ISOExtractionWorkspace, publish_iso_titles
+from ..core.callback_dispatch import best_effort_callback
 
 ProgressFn = Callable[[str, int, object], None]
 RunMakeMKVFn = Callable[[list[str], str | None], tuple[int, list[str]]]
@@ -34,6 +38,7 @@ class ISOMakeMKVService:
         self._worker = worker
         self._log = log
         self._progress = progress
+        self._title_durations = {}
 
     def ensure_tool(self) -> str:
         tool = getattr(self._tools, "makemkvcon", "") or ""
@@ -70,12 +75,15 @@ class ISOMakeMKVService:
         )
         if result.aborted:
             raise ISOUserAbortError("Abgebrochen")
+        if result.timed_out:
+            raise RuntimeError('MakeMKV wurde wegen Zeitüberschreitung beendet.')
         return result.returncode, lines
 
     def scan_titles(self, path: str, *, run_makemkv: RunMakeMKVFn) -> ISOScanResult:
         source = self._inspector.makemkv_source(path)
+        self._title_durations.pop(str(Path(path).resolve()), None)
         rc, lines = run_makemkv(["-r", "--cache=1", "info", source], progress_path=path)
-        if rc != 0:
+        if isinstance(rc, bool) or not isinstance(rc, int) or rc != 0:
             self._log(f"❌ MakeMKV-Scan fehlgeschlagen (Exitcode {rc}).", "info")
             joined = "\n".join(lines).lower()
             if "programmversion ist zu alt" in joined or "program version is too old" in joined:
@@ -92,27 +100,8 @@ class ISOMakeMKVService:
                 error = f"MakeMKV-Scan fehlgeschlagen (Exitcode {rc})."
             return ISOScanResult(error=error)
 
-        titles: dict[int, dict] = {}
-        title_re = re.compile(r'^TINFO:(\d+),(\d+),\d+,"?(.*?)"?$')
-        for line in lines:
-            match = title_re.match(line)
-            if not match:
-                continue
-            title_id = int(match.group(1))
-            code = int(match.group(2))
-            raw = match.group(3).strip().strip('"')
-            entry = titles.setdefault(
-                title_id,
-                {"id": title_id, "duration": 0, "size": 0, "name": f"Title {title_id}"},
-            )
-            if code == 2 and raw:
-                entry["name"] = raw
-            elif code == 8 and raw:
-                entry["duration"] = parse_duration_to_seconds(raw)
-            elif code == 11 and raw:
-                entry["size"] = parse_size_to_bytes(raw)
-
-        result = [titles[key] for key in sorted(titles)]
+        result = parse_makemkv_titles(lines)
+        self._title_durations[str(Path(path).resolve())] = {row["id"]: row["duration"] for row in result}
         if result:
             self._log(f"ℹ️ {len(result)} Titel gefunden.", "info")
         else:
@@ -131,32 +120,92 @@ class ISOMakeMKVService:
             self._log("⚠️ Keine Titel zur Extraktion angegeben.", "info")
             return ISOExtractionResult(ok=False, error="Keine Titel zur Extraktion angegeben.")
 
+        if any(type(title_id) is not int or title_id < 0 for title_id in title_ids):
+            return ISOExtractionResult(ok=False, error="Ungültige MakeMKV-Titel-ID.")
+        selected = list(dict.fromkeys(title_ids))
+
         out_dir = Path(output_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
         source = self._inspector.makemkv_source(path)
-        before: set[Path] = set(out_dir.glob("*.mkv"))
+        selection = ", ".join(str(title_id) for title_id in selected)
+        self._log(f"ℹ️ Extrahiere Titel {selection} transaktional nach {out_dir}", "info")
+        self._progress(path, 35, selected)
+        total_titles = max(1, len(selected))
 
-        selection = ", ".join(str(title_id) for title_id in title_ids)
-        self._log(f"ℹ️ Extrahiere Titel {selection} nach {out_dir}", "info")
-        self._progress(path, 35, title_ids)
-        total_titles = max(1, len(title_ids))
-        for offset, title_id in enumerate(title_ids, start=1):
-            self._log(f"ℹ️ MakeMKV-Titel {title_id} ({offset}/{total_titles})", "info")
-            rc, _lines = run_makemkv(
-                ["-r", "--cache=1", "mkv", source, str(title_id), str(out_dir)],
-                progress_path=path,
+        # MakeMKV chooses its own output names. Extract into a private sibling
+        # directory so partial/malformed results are never visible under the
+        # user's final destination names before all selected titles succeeded.
+        workspace = ISOExtractionWorkspace(out_dir, self._log)
+        with workspace as temp_root:
+            stage_dir = Path(temp_root)
+            staged_title_ids = {}
+            for offset, title_id in enumerate(selected, start=1):
+                previous_files = set(stage_dir.glob("*.mkv"))
+                self._log(f"ℹ️ MakeMKV-Titel {title_id} ({offset}/{total_titles})", "info")
+                rc, lines = run_makemkv(
+                    ["-r", "--cache=1", "mkv", source, str(title_id), str(stage_dir)],
+                    progress_path=path,
+                )
+                if isinstance(rc, bool) or not isinstance(rc, int) or rc != 0:
+                    detail = "\n".join(lines[-8:]).strip()
+                    error = f"MakeMKV-Extraktion von Titel {title_id} fehlgeschlagen (Exitcode {rc})."
+                    if detail:
+                        error += f"\n{detail}"
+                    self._log(f"❌ {error}", "error")
+                    return ISOExtractionResult(ok=False, error=error)
+                created = set(stage_dir.glob("*.mkv")) - previous_files
+                if len(created) != 1:
+                    return ISOExtractionResult(ok=False, error="MakeMKV erzeugte aber nicht genau eine neue MKV für den ausgewählten Titel.")
+                staged_title_ids[next(iter(created))] = title_id
+                self._progress(path, 35 + int(offset / total_titles * 45), selected)
+
+            staged_files = sorted(stage_dir.glob("*.mkv"), key=lambda file: file.name)
+            if len(staged_files) != len(selected):
+                error = (
+                    "MakeMKV meldete Erfolg, erzeugte aber nicht genau eine MKV pro ausgewähltem Titel: "
+                    f"erwartet {len(selected)}, gefunden {len(staged_files)}."
+                )
+                self._log(f"❌ {error}", "error")
+                return ISOExtractionResult(ok=False, error=error)
+
+            verifier = OutputVerifier(
+                worker=self._worker,
+                ffprobe_path=str(getattr(self._tools, "ffprobe", "") or ""),
+                min_size_bytes=1024,
             )
-            if rc != 0:
-                self._log(f"❌ MakeMKV-Extraktion von Titel {title_id} fehlgeschlagen (Exitcode {rc}).", "info")
-                return ISOExtractionResult(ok=False, error=f"MakeMKV-Extraktion fehlgeschlagen (Exitcode {rc}).")
-            self._progress(path, 35 + int(offset / total_titles * 55), title_ids)
+            for staged in staged_files:
+                duration = self._title_durations.get(str(Path(path).resolve()), {}).get(staged_title_ids[staged], 0)
+                verification = verifier.verify(str(staged), "mkv", source_has_audio=False,
+                    expected_duration_ms=(duration * 1000 if duration > 0 else None))
+                if not verification.ok:
+                    detail = "; ".join(verification.messages or []) or "unbekannter Verifikationsfehler"
+                    error = f"MakeMKV-Ausgabe {staged.name} ist ungültig: {detail}"
+                    self._log(f"❌ {error}", "error")
+                    return ISOExtractionResult(ok=False, error=error)
+                workspace.mark_verified(staged)
 
-        after: set[Path] = set(out_dir.glob("*.mkv"))
-        new_files = sorted(after - before, key=lambda file: file.name)
-        if new_files:
-            self._log(
-                f"ℹ️ {len(new_files)} MKV-Datei(en) extrahiert: {', '.join(file.name for file in new_files)}",
+            destinations = [out_dir / staged.name for staged in staged_files]
+            occupied = [dest.name for dest in destinations if dest.exists()]
+            if occupied:
+                error = "MakeMKV-Zieldatei(en) existieren bereits und werden nicht überschrieben: " + ", ".join(occupied)
+                self._log(f"❌ {error}", "error")
+                return ISOExtractionResult(ok=False, error=error)
+
+            try:
+                publish_iso_titles(staged_files, destinations, receipts=workspace.verified,
+                    worker=self._worker, publish=publish_staged_no_replace)
+            except Exception as exc:
+                error = f"MakeMKV-Ausgaben konnten nicht atomar veröffentlicht werden: {exc}"
+                self._log(f"❌ {error}", "error")
+                return ISOExtractionResult(ok=False, error=error)
+
+            workspace.published = True
+            final_files = [str(destination) for destination in destinations]
+            best_effort_callback(self._progress, path, 90, selected)
+            best_effort_callback(self._log,
+                f"ℹ️ {len(final_files)} MKV-Datei(en) extrahiert und verifiziert: "
+                + ", ".join(Path(file).name for file in final_files),
                 "info",
             )
-        self._log("✅ MakeMKV-Extraktion erfolgreich abgeschlossen.", "info")
-        return ISOExtractionResult(ok=True, extracted_files=[str(file) for file in new_files])
+            best_effort_callback(self._log, "✅ MakeMKV-Extraktion erfolgreich abgeschlossen.", "info")
+            return ISOExtractionResult(ok=True, extracted_files=final_files)

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from copy import deepcopy
 
 
 @dataclass(frozen=True)
@@ -10,6 +11,9 @@ class DVEncoderConfig:
     crf: int | str
     preset: str
     options: dict = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "options", deepcopy(self.options))
 
 
 @dataclass

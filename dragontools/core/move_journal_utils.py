@@ -45,13 +45,12 @@ def _has_retryable_files(data: dict[str, Any]) -> bool:
     return False
 
 def _json_safe_dict(value: dict) -> dict:
-    # round-trip entfernt versehentlich nicht serialisierbare Fremdobjekte,
-    # ohne dass das Journal den Move blockiert.
-    try:
-        return json.loads(json.dumps(value, ensure_ascii=False))
-    except (TypeError, ValueError) as exc:
-        _LOG.warning("Move-Journal-Kontext konnte nicht JSON-sicher gespeichert werden: %s", exc)
-        return {}
+    # Planned targets are authoritative. Never silently drop their whole map.
+    return json.loads(json.dumps(value, ensure_ascii=False, allow_nan=False,
+        default=lambda item: os.fspath(item) if isinstance(item, os.PathLike) else _invalid_context(item)))
+
+def _invalid_context(item):
+    raise TypeError(f'Nicht serialisierbarer Move-Kontext: {type(item).__name__}')
 
 def _dedupe(paths: list[str]) -> list[str]:
     seen: set[str] = set()
@@ -75,3 +74,9 @@ def _unique_archive_path(path: Path) -> Path:
 
 def _now() -> str:
     return datetime.now().isoformat(timespec="seconds")
+
+
+def resume_companion_proofs(planned):
+    """Carry verified companion records into a new, independently owned run."""
+    proofs = planned.get('resume_companion_proofs') if isinstance(planned, dict) else None
+    return _json_safe_dict(proofs) if isinstance(proofs, dict) else {}

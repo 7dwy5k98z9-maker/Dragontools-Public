@@ -4,6 +4,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Callable
+from .hdr_metadata_file_ownership import metadata_output_conflicts_with_sources
+
+from ..core.hdr10plus_generation import validate_hdr10plus_json_payload
 
 
 class HDR10PlusBitstreamService:
@@ -31,8 +34,10 @@ class HDR10PlusBitstreamService:
             self._log(f"❌ HDR10+: Metadata-Datei ist kein gültiges JSON: {path.name}", "error")
             self._log(f"  JSON-Fehler: {exc}", "error")
             return None
-        if payload in (None, {}, [], ""):
-            self._log(f"❌ HDR10+: Metadata-Datei ist semantisch leer: {path.name}", "error")
+        valid, reason = validate_hdr10plus_json_payload(payload)
+        if not valid:
+            self._log(f"❌ HDR10+: Metadata-Datei ist semantisch ungültig: {path.name}", "error")
+            self._log(f"  JSON-Vertrag: {reason}", "error")
             return None
         return payload
 
@@ -55,6 +60,8 @@ class HDR10PlusBitstreamService:
         }
 
     def extract_metadata(self, run_cmd, *, source_stream: Path, output_json: Path) -> bool:
+        if metadata_output_conflicts_with_sources(output_json, source_stream):
+            return False
         # Ein fehlgeschlagener Wiederholungsversuch darf niemals ein JSON eines
         # vorherigen Laufs als vermeintlich frisches Ergebnis weiterverwenden.
         output_json.unlink(missing_ok=True)
@@ -85,6 +92,8 @@ class HDR10PlusBitstreamService:
         metadata_json: Path,
         output_hevc: Path,
     ) -> bool:
+        if metadata_output_conflicts_with_sources(output_hevc, input_hevc, metadata_json):
+            return False
         if not self._valid_json(metadata_json):
             self._log("❌ HDR10+: Injection abgebrochen – Quellmetadaten sind ungültig.", "error")
             return False
@@ -120,6 +129,8 @@ class HDR10PlusBitstreamService:
         scratch_json: Path,
         expected_json: Path | None = None,
     ) -> bool:
+        if metadata_output_conflicts_with_sources(scratch_json, source_stream, expected_json):
+            return False
         scratch_json.unlink(missing_ok=True)
         if not self.extract_metadata(run_cmd, source_stream=source_stream, output_json=scratch_json):
             return False

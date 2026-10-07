@@ -1,12 +1,14 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+from .dialog_ownership import exec_owned_dialog
+
 
 class MainWindowSettingsActionsMixin:
     def _exec_settings_dialog(self, *, visible_sections: tuple[str, ...] | None = None, window_title: str | None = None):
         from .settings_dialog import SettingsDialog
         dlg = SettingsDialog(self, visible_sections=visible_sections, window_title=window_title)
-        if dlg.exec():
+        if exec_owned_dialog(dlg):
             self._reload_all_paths()
             self.statusBar().showMessage("Einstellungen gespeichert.", 3000)
 
@@ -70,7 +72,7 @@ class MainWindowSettingsActionsMixin:
     def _open_settings_save(self):
         from .save_settings_dialog import SaveSettingsDialog
         dlg = SaveSettingsDialog(self)
-        if dlg.exec():
+        if exec_owned_dialog(dlg):
             self._reload_all_paths()
             self.statusBar().showMessage("Einstellungen gespeichert.", 3000)
 
@@ -80,7 +82,7 @@ class MainWindowSettingsActionsMixin:
     def _open_timeout_settings(self):
         from .timeout_settings_dialog import TimeoutSettingsDialog
         dlg = TimeoutSettingsDialog(self)
-        if dlg.exec():
+        if exec_owned_dialog(dlg):
             self.statusBar().showMessage("Timeout-Einstellungen gespeichert.", 3000)
 
     def _exec_rules_dialog(
@@ -91,12 +93,12 @@ class MainWindowSettingsActionsMixin:
         window_title: str | None = None,
     ):
         from .rules_dialog import RulesDialog
-        RulesDialog(
+        exec_owned_dialog(RulesDialog(
             self,
             visible_tabs=visible_tabs,
             initial_tab=initial_tab,
             window_title=window_title,
-        ).exec()
+        ))
 
     def _open_rules(self):
         self._exec_rules_dialog()
@@ -120,19 +122,27 @@ class MainWindowSettingsActionsMixin:
         from .online_metadata_dialog import OnlineMetadataDialog
 
         dlg = OnlineMetadataDialog(self)
-        if dlg.exec():
+        if exec_owned_dialog(dlg):
             self.statusBar().showMessage("Online-Metadaten gespeichert.", 3000)
 
     def _open_media_library(self, initial_tab: str = "status"):
         from .media_library_dialog import MediaLibraryDialog
 
         dlg = MediaLibraryDialog(self, initial_tab=initial_tab)
-        dlg.exec()
+        exec_owned_dialog(dlg)
 
     def _reload_all_paths(self):
         from .watch_folder_main_window_bridge import refresh_watch_folder_controller
         refresh_watch_folder_controller(self)
-        for i in range(self.tabs.count()):
-            w = self.tabs.widget(i)
-            if hasattr(w, "reload_paths"):
-                w.reload_paths()
+
+        # Auch bereits geladene, aktuell ausgeblendete Lazy-Tabs muessen den
+        # neuen Settings-Stand erhalten. QTabWidget enthaelt nur sichtbare Tabs;
+        # _tab_widgets ist der kanonische Cache fuer alle geladenen Widgets.
+        seen: set[int] = set()
+        for widget in getattr(self, "_tab_widgets", {}).values():
+            if widget is None or id(widget) in seen:
+                continue
+            seen.add(id(widget))
+            reload_paths = getattr(widget, "reload_paths", None)
+            if callable(reload_paths):
+                reload_paths()

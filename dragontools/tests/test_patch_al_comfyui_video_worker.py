@@ -65,6 +65,9 @@ def test_video_service_queues_full_file_workflow_and_reads_manifest(tmp_path: Pa
 
     from dragontools.worker import comfyui_video_worker
     monkeypatch.setattr(comfyui_video_worker, "ComfyUIClient", FakeClient)
+    # This test covers workflow submission and manifest reading. Real bytes and
+    # independent probe rejection are exercised by the second review tests.
+    monkeypatch.setattr(comfyui_video_worker, "verify_comfyui_video", lambda **_kw: SimpleNamespace(success=True, video_offset_s=0.0))
     repo = tmp_path / "HDRTVDM"
     method = repo / "method"
     method.mkdir(parents=True)
@@ -86,7 +89,7 @@ def test_video_service_queues_full_file_workflow_and_reads_manifest(tmp_path: Pa
     assert result.frames == 100
     workflow = calls[0]
     assert workflow["2"]["inputs"]["input_video"] == r"D:\Input ä\film.mkv"
-    assert json.loads(workflow["2"]["inputs"]["decode_args_json"]) == ["-map", "0:v:0"]
+    assert json.loads(workflow["2"]["inputs"]["decode_args_json"]) == ["-map", "0:0"]
     assert workflow["2"]["inputs"]["fps_num"] == 24000
 
 
@@ -130,6 +133,7 @@ def test_standard_runner_uses_comfyui_video_then_muxes_original_audio(tmp_path: 
             return ComfyUIVideoResult(True, output_path=kwargs["output_path"], frames=100, elapsed_s=1.0)
 
     monkeypatch.setattr(module, "ComfyUIHDRVideoService", FakeService)
+    monkeypatch.setattr(module, "verify_comfyui_mux", lambda **_kw: SimpleNamespace(success=True))
     commands = []
     output = tmp_path / "final.mkv"
     runner = StandardPipelineRunner(

@@ -29,6 +29,7 @@ class WorkflowVerificationService:
         result = self._output_verifier.verify(ctx.output_path, ctx.container, **kwargs)
         ctx.verify_result = result
         if apply_geometry_policy(ctx, result):
+            ctx.keep_failed_output = True
             self._log_warnings(result)
             return
 
@@ -36,6 +37,7 @@ class WorkflowVerificationService:
             result = try_duration_repair(ctx, result, required_audio, self._duration_repair_service)
             ctx.verify_result = result
             if result.ok:
+                ctx.keep_failed_output = True
                 self._log_warnings(result)
                 self._log_success(result)
                 return
@@ -43,6 +45,7 @@ class WorkflowVerificationService:
             self._log_failure(result)
             raise RuntimeError(f"Verify fehlgeschlagen: {self._detail(result)}")
 
+        ctx.keep_failed_output = True
         self._log_warnings(result)
         self._log_success(result)
 

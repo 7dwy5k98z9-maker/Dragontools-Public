@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import os
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
@@ -130,6 +131,15 @@ def _volume_key(path: Path) -> str:
         resolved = path.resolve()
     except OSError:
         resolved = path.absolute()
+    # On POSIX every absolute path has the anchor '/'.  Grouping by anchor
+    # therefore mixed unrelated mount points and checked all jobs against only
+    # the first filesystem's free space.  st_dev identifies the actual mounted
+    # filesystem and is available for the existing probe path.
+    if os.name != "nt":
+        try:
+            return f"dev:{resolved.stat().st_dev}"
+        except OSError:
+            pass
     anchor = resolved.anchor
     if anchor:
         return anchor.lower()

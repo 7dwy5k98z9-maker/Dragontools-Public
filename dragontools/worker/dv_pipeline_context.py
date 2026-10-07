@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+from copy import deepcopy
 
 from .dv_audio_mux_service import DVExtractedAudioTrack, DVMuxAudioTrack
 from .dv_subtitle_mux_service import DVMuxSubtitleTrack
@@ -70,10 +71,13 @@ class DVRunRequest:
             audio_input_args=list(audio_input_args or []),
             sn=list(sn),
             crop=crop,
-            override=dict(override or {}),
+            override=deepcopy(override or {}),
             preserve_hdrplus=bool(preserve_hdrplus),
             generate_hdr10plus=bool(generate_hdr10plus),
-            container=str(container or "mp4").strip().lower(),
+            # The public API default is explicit ("mp4"), but an explicitly
+            # empty/None value must not silently turn into MP4.  Preflight owns
+            # validation and rejects unknown container values fail-closed.
+            container=str(container or "").strip().lower(),
             profile_major=normalize_dv_profile_major(media_info),
         )
 

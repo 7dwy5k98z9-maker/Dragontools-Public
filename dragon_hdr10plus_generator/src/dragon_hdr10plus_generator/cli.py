@@ -73,6 +73,8 @@ def main(argv: list[str] | None = None) -> int:
 
     source = Path(args.input)
     output = Path(args.output)
+    if source.resolve(strict=False) == output.resolve(strict=False) or (source.exists() and output.exists() and source.samefile(output)):
+        return _emit({"success": False, "error": "OUTPUT_INPUT_COLLISION", "message": "Input and output must be different files."})
     output.unlink(missing_ok=True)
     if not source.is_file():
         return _emit({"success": False, "error": "INPUT_NOT_FOUND", "message": f"Input not found: {source}"})
@@ -156,6 +158,25 @@ def main(argv: list[str] | None = None) -> int:
         frame_count = len(scan.frames)
         analysis_width = scan.width
         analysis_height = scan.height
+        if (
+            probe.frames is not None
+            and probe.frames > 0
+            and str(probe.frame_count_reliability or "").lower() == "reported"
+            and frame_count != probe.frames
+        ):
+            output.unlink(missing_ok=True)
+            return _emit({
+                "success": False,
+                "error": "FRAME_COUNT_MISMATCH",
+                "message": (
+                    f"ffprobe meldet {probe.frames} Frames, die vollständige Dekodierung lieferte aber "
+                    f"{frame_count} Frames. HDR10+-Metadaten werden nicht erzeugt."
+                ),
+                "reported_frames": probe.frames,
+                "decoded_frames": frame_count,
+                "frame_count_source": probe.frame_count_source,
+                "frame_count_reliability": probe.frame_count_reliability,
+            })
         metadata = build_st2094_40_metadata(
             scan.frames,
             scene_threshold=max(0.01, min(1.0, float(args.scene_threshold))),

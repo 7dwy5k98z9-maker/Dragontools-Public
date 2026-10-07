@@ -16,6 +16,10 @@ from .media_library_repository import (
 from .media_library_types import DEFAULT_DB_FILENAME, AbortFn, LibraryScanResult, LogFn, PathMapping, ProgressFn, _now
 from .media_library_utils import _normalize_title
 from .models import MediaInfo
+from .media_library_scan_analysis import analyze_scan_file
+from .media_library_publication import publish_library
+from .media_library_db import _snapshot_database
+from .media_library_scan_plan import prepare_scan, iter_prepared_files
 from .path_syntax import VIDEO_EXTENSIONS, normalize_user_path, path_compare_key
 
 _SCAN_SKIP_DIRS = {
@@ -23,10 +27,13 @@ _SCAN_SKIP_DIRS = {
     "bdmv", "certificate", "lost+found",
 }
 
-def _scan_video_files(roots: Iterable[PathMapping]) -> tuple[list[tuple[Path, str]], list[str], int]:
+def _scan_video_files(
+    roots: Iterable[PathMapping],
+) -> tuple[list[tuple[Path, str]], list[str], int, bool]:
     files: list[tuple[Path, str]] = []
     warnings: list[str] = []
     skipped_roots = 0
+    incomplete = False
     seen_roots: set[str] = set()
     seen_files: set[str] = set()
 
@@ -41,9 +48,16 @@ def _scan_video_files(roots: Iterable[PathMapping]) -> tuple[list[tuple[Path, st
         root_path = Path(local)
         if not root_path.is_dir():
             skipped_roots += 1
+            incomplete = True
             warnings.append(f"Scan-Ordner nicht erreichbar: {root.label or local} -> {local}")
             continue
-        for current, dirs, names in os.walk(root_path):
+
+        def on_walk_error(exc: OSError, *, root_label=root.label or local) -> None:
+            nonlocal incomplete
+            incomplete = True
+            warnings.append(f"Scan-Pfad nicht vollständig lesbar: {root_label}: {exc}")
+
+        for current, dirs, names in os.walk(root_path, onerror=on_walk_error):
             dirs[:] = [
                 name for name in dirs
                 if name.casefold() not in _SCAN_SKIP_DIRS and not name.startswith(".")
@@ -58,7 +72,7 @@ def _scan_video_files(roots: Iterable[PathMapping]) -> tuple[list[tuple[Path, st
                 seen_files.add(file_key)
                 files.append((path, root.label or ""))
     files.sort(key=lambda entry: path_compare_key(entry[0]))
-    return files, warnings, skipped_roots
+    return files, warnings, skipped_roots, incomplete
 
 
 def _year_from_text(text: str | None) -> int | None:
@@ -195,6 +209,30 @@ def _insert_storage_scan_hierarchy(conn: sqlite3.Connection, item: dict[str, Any
     return inserted
 
 
+def _commit_storage_scan(work_db, spool, roots, *, replace_existing, should_abort):
+    """Atomically commit a complete plan; analysis never holds this write lock."""
+    hierarchy_items = 0
+    with closing(_connect(work_db)) as conn, conn:
+        conn.execute("BEGIN")
+        if not replace_existing:
+            conn.execute("DELETE FROM path_mappings")
+            conn.executemany(
+                "INSERT INTO path_mappings(label, external_prefix, local_prefix, created_at) VALUES(?, ?, ?, ?)",
+                [(mapping.label, mapping.external_prefix, mapping.local_prefix, _now()) for mapping in roots],
+            )
+        for path, area, item, streams in iter_prepared_files(spool):
+            if should_abort and should_abort():
+                conn.rollback()
+                return hierarchy_items, True
+            hierarchy_items += _insert_storage_scan_hierarchy(conn, item, path, area)
+            _insert_item(conn, item, streams)
+        if should_abort and should_abort():
+            conn.rollback()
+            return hierarchy_items, True
+        conn.execute("INSERT OR REPLACE INTO meta(key, value) VALUES('updated_at', ?)", (_now(),))
+    return hierarchy_items, False
+
+
 def scan_storage_paths_to_database(
     target_db_path: str | Path,
     scan_roots: Iterable[PathMapping],
@@ -216,18 +254,30 @@ def scan_storage_paths_to_database(
     target = Path(target_db_path)
     target.parent.mkdir(parents=True, exist_ok=True)
     roots = [root for root in scan_roots if str(root.local_prefix or "").strip()]
-    files, warnings, skipped_roots = _scan_video_files(roots)
+    files, warnings, skipped_roots, incomplete_discovery = _scan_video_files(roots)
     total = len(files)
     if logger:
         logger(f"Mediathek-Scan: {total} Videodatei(en) in {len(roots)} Speicherpfad(en) gefunden.")
+    if incomplete_discovery:
+        warnings.append(
+            "Mediathek-Scan nicht veröffentlicht: Mindestens ein Speicherpfad war nicht vollständig erreichbar."
+        )
+        if logger:
+            logger(warnings[-1])
+        return LibraryScanResult(
+            target,
+            total,
+            0,
+            0,
+            0,
+            skipped_roots,
+            True,
+            tuple(warnings),
+        )
 
+    if not roots:
+        return LibraryScanResult(target, 0, 0, 0, 0, 0, True, ("Keine Speicherpfade ausgewählt; vorhandene Datenbank bleibt erhalten.",))
     analyze_fn = analyzer or analyze_media
-    imported_items = 0
-    imported_streams = 0
-    failed_files = 0
-    hierarchy_items = 0
-    aborted = False
-
     if replace_existing:
         tmp_context = tempfile.TemporaryDirectory(prefix="dragontools_storage_scan_", dir=str(target.parent))
         tmp_dir = Path(tmp_context.name)
@@ -238,38 +288,23 @@ def scan_storage_paths_to_database(
 
     try:
         initialize_database(work_db)
-        if roots:
+        if replace_existing and roots:
             save_path_mappings(work_db, roots)
-        with closing(_connect(work_db)) as conn:
-            with conn:
-                for index, (path_obj, area_label) in enumerate(files, start=1):
-                    if should_abort and should_abort():
-                        aborted = True
-                        break
-                    if progress:
-                        progress(index, total, str(path_obj))
-                    try:
-                        info = analyze_fn(str(path_obj), tools)
-                        item = _item_from_media_info(path_obj, info, source="storage_scan")
-                        _apply_storage_scan_context(item, path_obj, area_label)
-                        streams = _streams_from_media_info_with_sidecars(path_obj, info)
-                        hierarchy_items += _insert_storage_scan_hierarchy(conn, item, path_obj, area_label)
-                        _insert_item(conn, item, streams)
-                        imported_items += 1
-                        imported_streams += len(streams)
-                    except Exception as exc:
-                        failed_files += 1
-                        warnings.append(f"Analyse fehlgeschlagen: {path_obj.name}: {exc}")
-                        if logger:
-                            logger(f"Warnung: {path_obj.name} konnte nicht analysiert werden: {exc}")
-                        item = _fallback_item_from_path(path_obj, source="storage_scan")
-                        _apply_storage_scan_context(item, path_obj, area_label)
-                        hierarchy_items += _insert_storage_scan_hierarchy(conn, item, path_obj, area_label)
-                        streams = _subtitle_sidecar_streams(path_obj)
-                        _insert_item(conn, item, streams)
-                        imported_items += 1
-                        imported_streams += len(streams)
-                conn.execute("INSERT OR REPLACE INTO meta(key, value) VALUES('updated_at', ?)", (_now(),))
+        def prepare_file(path, area):
+            return analyze_scan_file(path, area, tools, analyze_fn, logger,
+                                     _item_from_media_info, _fallback_item_from_path,
+                                     _streams_from_media_info_with_sidecars,
+                                     _subtitle_sidecar_streams, _apply_storage_scan_context)
+
+        with tempfile.TemporaryFile(mode="w+t", encoding="utf-8", dir=target.parent) as spool:
+            plan = prepare_scan(files, spool, prepare_file, warnings, progress, should_abort)
+            imported_items, imported_streams, failed_files = plan.items, plan.streams, plan.failures
+            hierarchy_items = 0
+            aborted = plan.aborted
+            if not aborted:
+                hierarchy_items, aborted = _commit_storage_scan(
+                    work_db, spool, roots, replace_existing=replace_existing, should_abort=should_abort,
+                )
 
         if aborted:
             if logger:
@@ -288,7 +323,9 @@ def scan_storage_paths_to_database(
         if replace_existing:
             if target.exists():
                 backup_database(target, "pre_storage_scan")
-            os.replace(work_db, target)
+            ready = work_db.with_name(".library.ready")
+            _snapshot_database(work_db, ready)
+            publish_library(ready, target, replace_file=os.replace)
 
         if logger:
             logger(

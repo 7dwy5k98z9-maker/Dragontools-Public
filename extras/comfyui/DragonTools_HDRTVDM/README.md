@@ -22,6 +22,10 @@ Dadurch werden keine kompletten Frame-Sequenzen auf Platte geschrieben. Crop/Sca
 
 Der Node erzeugt während der Verarbeitung ein JSON-Manifest mit Framezahl, Status, Laufzeit und – bei CUDA – Peak-VRAM. ComfyUI-Abbruch wird zwischen Frames/Batches geprüft und beendet die gestarteten FFmpeg-Prozesse.
 
+Die Bridge prüft zusätzlich die auftragsbezogene Datei `<manifest_path>.cancel`, auch beim Warten auf Decoder-/Encoder-Pipes. Ein angenommener HTTP-Abbruch allein gibt temporäre Dateien noch nicht zur Löschung frei. Quelle, Ausgabe, Manifest und Abbruchdatei müssen unterschiedliche Dateien sein. Vor dem Schließen einer blockierten Encoder-Pipe wird zuerst der zugehörige FFmpeg-Prozess beendet.
+
+Progress wird höchstens zweimal pro Sekunde direkt in die ephemere Manifestdatei geschrieben. Dadurch entstehen beim gleichzeitigen Lesen unter Windows keine Rename-/Replace-Konflikte. Anfang, Abschluss und Fehler werden unabhängig von dieser Drosselung geschrieben. Ungültige oder nicht endliche RGB-Modellbilder werden vor der Ausgabe abgewiesen. Nach dem Node prüft DragonTools den tatsächlichen Videostream und den abschließenden Mux erneut; ein Erfolgsmanifest allein genügt nicht.
+
 Die älteren Nodes `DragonFrameSequenceLoader`, `DragonHDRTVDMConvert` und `DragonHDR16TiffWriter` bleiben für Debug-/Entwicklungstests erhalten, werden vom eingebauten Voll-Datei-Workflow aber nicht benötigt.
 
 Aktuelle Grenze: eindeutig erkannte CFR-Quelle mit bekannter Framerate. VFR wird von DragonTools fail-closed abgelehnt.

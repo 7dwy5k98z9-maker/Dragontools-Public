@@ -3,17 +3,20 @@
 from __future__ import annotations
 
 import sys
+import os
 import threading
 import traceback
+import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Callable
 
 from .callback_dispatch import invoke_callback
+from .diagnostic_redaction import redact_sensitive_text
 from .logger_messages import DragonLoggerMessageMixin
 from .logger_paths import (
     _fd, _fs, _ts, log_base_from_settings, log_settings_from_qsettings,
-    make_log_dir, resolve_log_month_dir,
+    make_log_dir, log_month_dir, resolve_log_month_dir,
 )
 from .logger_verbose import (
     VerboseLogger, create_verbose_logger, discard_verbose_after_clean_run,
@@ -29,7 +32,7 @@ def create_worker_logger(
     """Erzeugt Worker-Logger aus der globalen Logging-Konfiguration."""
     enabled, base_root = log_settings_from_qsettings(settings)
     log_dir = Path(log_file_path).parent if log_file_path else (
-        make_log_dir(base_root) if enabled else Path(base_root) / "Logging"
+        log_month_dir(base_root) if enabled else Path(base_root) / "Logging"
     )
     return DragonLogger(log_dir, log_enabled=enabled, gui_callback=gui_callback)
 
@@ -47,6 +50,10 @@ class DragonLogger(DragonLoggerMessageMixin):
         self.log_dir = Path(log_dir)
         self.gui_callback = gui_callback
         self.log_file: Path | None = None
+        # Must always exist, including when logging is disabled or directory
+        # creation fails.  _write() is deliberately fail-soft and may still be
+        # called in both cases.
+        self.long_log_file: Path | None = None
 
         # Diagnose-Zähler für stille Ausfälle. Ohne diese Zähler konnte ein
         # kaputter Log-Pfad (volle Platte, kein Schreibrecht, GUI-Callback
@@ -63,15 +70,22 @@ class DragonLogger(DragonLoggerMessageMixin):
         if self.log_enabled:
             try:
                 self.log_dir.mkdir(parents=True, exist_ok=True)
-                ts = datetime.now().strftime("%d.%m.%Y_%H-%M")
-                self.log_file = self.log_dir / f"{ts}.txt"
-                self.long_log_file = self.log_dir / f"{ts}_lang.txt"
+                # A logging session owns its files.  Minute-level names made
+                # unrelated workers started close together append to the same
+                # files while guarding them with different locks.
+                ts = datetime.now().strftime("%d.%m.%Y_%H-%M-%S_%f")
+                token = f"p{os.getpid()}_{uuid.uuid4().hex[:8]}"
+                self.log_file = self.log_dir / f"{ts}_{token}.txt"
+                self.long_log_file = self.log_dir / f"{ts}_{token}_lang.txt"
             except Exception as exc:
                 # mkdir selbst kann scheitern (z.B. UNC-Pfad offline).
                 # Keine Exception durchreichen - Logging darf die App nicht
                 # kippen - aber sichtbar auf stderr melden, damit der
                 # fehlende Log nicht schweigend untergeht.
                 self.log_file = None
+                self.long_log_file = None
+                self._file_write_failures += 1
+                self._file_failure_reported = True
                 print(
                     f"[DragonLogger] Log-Verzeichnis konnte nicht erstellt "
                     f"werden ({self.log_dir}): {exc}",
@@ -120,6 +134,7 @@ class DragonLogger(DragonLoggerMessageMixin):
         return f, g
 
     def _write(self, line: str, to_gui: bool = False, to_short: bool = False) -> None:
+        line = redact_sensitive_text(line)
         # Vollständiger bisheriger Log -> *_lang.txt. Der sichtbare Standardlog
         # bekommt nur explizit markierte, kompakte Kernmeldungen.
         long_target = self.long_log_file or self.log_file

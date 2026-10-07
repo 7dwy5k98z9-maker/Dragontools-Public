@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 from pathlib import Path
+from ..core.recovery_file import preserve_recovery_file
+from .log_dispatch import dispatch_log
 
 from .duration_repair_archive import unique_archive_path
 
@@ -19,16 +21,19 @@ class RejectedTimestampArchive:
             archive_dir = root / "Archiv" / "Timestamp_Reparatur"
             archive_dir.mkdir(parents=True, exist_ok=True)
             target = unique_archive_path(archive_dir, f"{out.stem}.{self.safe_label(label)}{out.suffix}")
-            self._runtime.replace_file(tmp, target)
-            self._runtime.log(
+            preserve_recovery_file(tmp, target)
+            dispatch_log(self._runtime.log,
                 "📦 Verworfener Timestamp-Reparaturkandidat wurde zur Prüfung archiviert: "
                 f"{target} ({reason})",
                 "warn",
             )
             return str(target)
         except (OSError, RuntimeError, AttributeError) as exc:
-            self._runtime.log(f"⚠️ Verworfener Timestamp-Reparaturkandidat konnte nicht archiviert werden: {exc}", "warn")
-            self._runtime.safe_unlink(tmp)
+            dispatch_log(self._runtime.log,
+                "⚠️ Verworfener Timestamp-Reparaturkandidat konnte nicht archiviert werden; "
+                f"Diagnoseartefakt bleibt am Arbeitsort erhalten: {tmp} ({exc})",
+                "warn",
+            )
             return None
 
     @staticmethod

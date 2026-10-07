@@ -2,13 +2,17 @@
 from __future__ import annotations
 
 from pathlib import Path
+from difflib import SequenceMatcher
 from typing import Any
 
+from .online_metadata_identity import validate_tmdb_episode, provider_id
 from .german_title_variants import german_umlaut_search_variants
 from .online_metadata_common import (
     EpisodeMetadataSuggestion,
     MovieMetadataSuggestion,
     OnlineMetadataError,
+    OnlineMetadataNotFoundError,
+    OnlineMetadataResponseError,
     SeriesMetadataSuggestion,
     _actors_from_credits,
     _certification_from_release_dates,
@@ -21,6 +25,7 @@ from .online_metadata_common import (
     _trailer_url,
     _year_from_date,
     clean_tmdb_collection_name,
+    compare_metadata_text,
     normalize_episode_metadata_title,
     parse_series_query,
 )
@@ -49,7 +54,14 @@ class TmdbResolverMixin:
             params["year"] = str(year)
             params["primary_release_year"] = str(year)
         data = self._request_json("/search/movie", params)
-        return list(data.get("results") or [])
+        results = self._tmdb_search_results(data, label="Film")
+        if year is not None:
+            results = [
+                item for item in results
+                if (candidate_year := _year_from_date(item.get("release_date"))) is None
+                or candidate_year == int(year)
+            ]
+        return results
 
     def search_tv(
         self,
@@ -67,7 +79,14 @@ class TmdbResolverMixin:
         if year:
             params["first_air_date_year"] = str(year)
         data = self._request_json("/search/tv", params)
-        return list(data.get("results") or [])
+        results = self._tmdb_search_results(data, label="Serie")
+        if year is not None:
+            results = [
+                item for item in results
+                if (candidate_year := _year_from_date(item.get("first_air_date"))) is None
+                or candidate_year == int(year)
+            ]
+        return results
 
     def movie_details(
         self,
@@ -133,23 +152,34 @@ class TmdbResolverMixin:
         if not results:
             return None
 
-        selected = self._select_best_result(results, year, date_key="release_date")
+        selected = self._select_best_result(results, query, year, date_key="release_date")
         if not selected:
             return None
 
         movie_id = int(selected["id"])
-        details = self.movie_details(
-            movie_id,
-            append_to_response="credits,videos,keywords,release_dates,external_ids",
-        )
+        try:
+            details = self.movie_details(
+                movie_id,
+                append_to_response="credits,videos,keywords,release_dates,external_ids",
+            )
+        except OnlineMetadataNotFoundError:
+            return None
+        self._validate_detail_identity(details, movie_id, label="Film")
+        if not self._title_match_is_plausible(
+            query,
+            details.get("title"), details.get("original_title"),
+            selected.get("title"), selected.get("original_title"),
+        ):
+            return None
         title = str(details.get("title") or selected.get("title") or query).strip()
         original_title = str(
             details.get("original_title") or selected.get("original_title") or title
         ).strip()
-        release_year = (
-            _year_from_date(details.get("release_date") or selected.get("release_date"))
-            or year
+        release_year = _year_from_date(
+            details.get("release_date") or selected.get("release_date")
         )
+        if year is not None and release_year != int(year):
+            return None
         collection = dict(details.get("belongs_to_collection") or {})
         collection_id = _int_or_none(collection.get("id"))
         collection_name = str(collection.get("name") or "").strip()
@@ -216,22 +246,31 @@ class TmdbResolverMixin:
         if not results:
             return None
 
-        selected = self._select_best_result(results, year, date_key="first_air_date")
+        selected = self._select_best_result(results, query, year, date_key="first_air_date")
         if not selected:
             return None
 
         tv_id = int(selected["id"])
-        details = self.tv_details(tv_id)
+        try:
+            details = self.tv_details(tv_id)
+        except OnlineMetadataNotFoundError:
+            return None
+        self._validate_detail_identity(details, tv_id, label="Serie")
+        if not self._title_match_is_plausible(
+            query,
+            details.get("name"), details.get("original_name"),
+            selected.get("name"), selected.get("original_name"),
+        ):
+            return None
         name = str(details.get("name") or selected.get("name") or query).strip()
         original_name = str(
             details.get("original_name") or selected.get("original_name") or name
         ).strip()
-        first_air_year = (
-            _year_from_date(
-                details.get("first_air_date") or selected.get("first_air_date")
-            )
-            or year
+        first_air_year = _year_from_date(
+            details.get("first_air_date") or selected.get("first_air_date")
         )
+        if year is not None and first_air_year != int(year):
+            return None
 
         return SeriesMetadataSuggestion(
             query_title=query,
@@ -265,17 +304,25 @@ class TmdbResolverMixin:
         episode = int(parsed.get("episode") or 0)
         if season < 0 or episode <= 0:
             return None
-        details = self.tv_episode_details(
-            series.tmdb_id,
-            season,
-            episode,
-            append_to_response="credits,external_ids",
-        )
+        try:
+            details = self.tv_episode_details(
+                series.tmdb_id,
+                season,
+                episode,
+                append_to_response="credits,external_ids",
+            )
+        except OnlineMetadataNotFoundError:
+            return None
+        validate_tmdb_episode(details, season, episode)
         title, title_is_fallback = normalize_episode_metadata_title(
             details.get("name"), episode, source_path=path
         )
         credits = details.get("credits") or {}
-        episode_id = int(details.get("id") or 0)
+        episode_id = _int_or_none(details.get("id"))
+        if episode_id is None:
+            raise OnlineMetadataResponseError(
+                "TMDB-Episodenantwort enthält keine gültige ID."
+            )
         return EpisodeMetadataSuggestion(
             query_series=str(parsed["series"]),
             series_tmdb_id=series.tmdb_id,
@@ -285,6 +332,7 @@ class TmdbResolverMixin:
             season_number=season,
             episode_number=episode,
             title=title,
+            first_air_year=series.first_air_year,
             overview=str(details.get("overview") or "").strip(),
             air_date=str(details.get("air_date") or "").strip(),
             runtime_min=_int_or_none(details.get("runtime")),
@@ -302,22 +350,86 @@ class TmdbResolverMixin:
         )
 
     def clear_cache(self) -> int:
+        self.enable_fresh_session()
         return _clear_cache_dir(self.cache_dir)
+
+    @staticmethod
+    def _tmdb_search_results(data: dict[str, Any], *, label: str) -> list[dict[str, Any]]:
+        raw = data.get("results")
+        if not isinstance(raw, list):
+            raise OnlineMetadataResponseError(
+                f"TMDB-{label}suche enthält keine gültige Ergebnisliste."
+            )
+        results: list[dict[str, Any]] = []
+        for item in raw:
+            if not isinstance(item, dict):
+                continue
+            if provider_id(item.get("id")) is None:
+                continue
+            record = dict(item)
+            record["provider"] = "tmdb"
+            record["provider_id"] = int(item["id"])
+            results.append(record)
+        return results
+
+    @staticmethod
+    def _validate_detail_identity(details: dict[str, Any], expected_id: int, *, label: str) -> None:
+        actual = provider_id(details.get("id"))
+        if actual is not None and actual != int(expected_id):
+            raise OnlineMetadataResponseError(
+                f"TMDB-{label}details gehören zu ID {actual}, erwartet war {expected_id}."
+            )
 
     def _select_best_result(
         self,
         results: list[dict[str, Any]],
+        query: str,
         year: int | None,
         *,
         date_key: str,
     ) -> dict[str, Any] | None:
-        if not results:
+        eligible = [dict(item) for item in results if provider_id(item.get("id")) is not None]
+        if year is not None:
+            eligible = [
+                item for item in eligible
+                if (candidate_year := _year_from_date(item.get(date_key))) is None
+                or candidate_year == int(year)
+            ]
+        if not eligible:
             return None
-        if year:
-            for result in results:
-                if _year_from_date(result.get(date_key)) == year:
-                    return result
-        return results[0]
+
+        query_key = compare_metadata_text(query)
+
+        def score(item: dict[str, Any]) -> tuple[float, int, float]:
+            names = (
+                item.get("title"), item.get("name"),
+                item.get("original_title"), item.get("original_name"),
+            )
+            title_score = max(
+                (SequenceMatcher(None, query_key, compare_metadata_text(str(name))).ratio()
+                 for name in names if str(name or "").strip()),
+                default=0.0,
+            )
+            candidate_year = _year_from_date(item.get(date_key))
+            year_score = int(year is not None and candidate_year == int(year))
+            return title_score, year_score, float(item.get("popularity") or 0.0)
+
+        return max(eligible, key=score)
+
+    @staticmethod
+    def _title_match_is_plausible(query: str, *names: Any) -> bool:
+        query_key = compare_metadata_text(query)
+        score = max(
+            (SequenceMatcher(None, query_key, compare_metadata_text(str(name))).ratio()
+             for name in names if str(name or "").strip()),
+            default=0.0,
+        )
+        try:
+            from ..rules.renamer_rules import minimum_candidate_score
+            floor = float(minimum_candidate_score())
+        except Exception:
+            floor = 0.60
+        return bool(query_key) and score >= floor
 
     def _search_movies_with_title_variants(
         self,

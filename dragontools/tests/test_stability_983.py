@@ -180,6 +180,7 @@ def test_abort_after_journal_preparation_never_installs(tmp_path, monkeypatch, s
 
 def test_mp4_abort_after_sidecar_commit_restores_old_sidecar(tmp_path):
     from dragontools.worker.mp4_remux_file_service import MP4RemuxFileService
+    from dragontools.worker.mp4_remux_plan import MP4RemuxPlan
     from dragontools.core.sidecar_transaction import SidecarCommitTransaction
     source, stage, dest = (tmp_path/n for n in ('in.mkv','stage.mp4','in.mp4'))
     old_sub, new_sub = tmp_path/'in.de.srt', tmp_path/'stage.de.srt'
@@ -194,11 +195,11 @@ def test_mp4_abort_after_sidecar_commit_restores_old_sidecar(tmp_path):
         aborted[0] = True
         return tx
     service = MP4RemuxFileService(
-        planner=SimpleNamespace(build=lambda *a: SimpleNamespace(source=source, staging=stage,
-            destination=dest, duration_s=1, command=['ffmpeg']), video_compatibility=lambda _: (True,'ok')),
+        planner=SimpleNamespace(build=lambda *a: MP4RemuxPlan(source, dest, stage, ('ffmpeg',), 1, (), 0, 0), video_compatibility=lambda _: (True,'ok')),
         logger=SimpleNamespace(file_start=lambda *a, **kw: None), log=lambda *a: None,
         run_ffmpeg=lambda *a: 0, export_sidecars=lambda *a, **kw: SimpleNamespace(exported_paths=[str(new_sub)], complete=True),
         commit_sidecars=commit, cleanup_sidecars=lambda paths: [Path(p).unlink(missing_ok=True) for p in paths],
+        output_verifier=SimpleNamespace(verify=lambda **kw: SimpleNamespace(ok=True, messages=())),
         abort_requested=lambda: aborted[0], emit_file_result=lambda *a: None,
         emit_file_progress=lambda *a: None, export_subtitles=True, ignore_subtitles=False,
     )
@@ -206,7 +207,8 @@ def test_mp4_abort_after_sidecar_commit_restores_old_sidecar(tmp_path):
         current_index=1,total_files=1,user_abort_error=RuntimeError)
     assert source.read_bytes() == b'original' and not dest.exists()
     assert old_sub.read_text() == 'user subtitle'
-    assert not stage.exists() and not new_sub.exists()
+    assert aborted[0]  # The sidecar-commit boundary must actually have been reached.
+    assert stage.read_bytes() == b'converted' and new_sub.read_text() == 'new subtitle'
 
 
 @pytest.mark.parametrize('same_path', [True, False])
@@ -217,12 +219,18 @@ def test_abort_during_first_rename_keeps_original(tmp_path, monkeypatch, same_pa
     stage.write_bytes(b'converted')
     dest = source if same_path else tmp_path/'in.mp4'
     aborted = [False]
-    original_replace = module.os.replace
+    original_replace = module.os.rename
     def replace(src, dst):
         original_replace(src, dst)
         if Path(src) == (source if same_path else stage):
             aborted[0] = True
-    monkeypatch.setattr(module.os, 'replace', replace)
+    monkeypatch.setattr(module.os, 'rename', replace)
+    if not same_path:
+        publish = module.publish_staged_no_replace
+        def publish_then_abort(src, dst):
+            publish(src, dst)
+            aborted[0] = True
+        monkeypatch.setattr(module, 'publish_staged_no_replace', publish_then_abort)
     with pytest.raises(RuntimeError, match='Abgebrochen'):
         commit_staged_output(source=source, staging=stage, destination=dest,
             log=lambda *a: None, journal_root=tmp_path, abort_check=lambda: aborted[0])

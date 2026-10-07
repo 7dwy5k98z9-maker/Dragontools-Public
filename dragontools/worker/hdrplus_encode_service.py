@@ -9,6 +9,8 @@ from .dv_runtime_models import DVTempState
 from .encoder_args import _vid_args
 from .hdr10_color import hdr10_output_args
 from .hdrplus_runtime_models import HDRPlusEncoderConfig
+from ..core.media_stream_selection import pin_primary_video_selector
+from .hdrplus_source_selection import trusted_hdr_primary_index
 
 
 class HDRPlusEncodeService:
@@ -50,6 +52,11 @@ class HDRPlusEncodeService:
         media_info,
         encoder: HDRPlusEncoderConfig,
     ) -> bool:
+        try:
+            video_args = pin_primary_video_selector(list(vf_args or ()), trusted_hdr_primary_index(media_info))
+        except ValueError as exc:
+            self._log(f'❌ HDR10+: {exc}', 'error')
+            return False
         options = encoder.mutable_encoder_options()
         color_args = hdr10_output_args(media_info, encoder.codec)
         if color_args and encoder.codec == "h265":
@@ -59,10 +66,10 @@ class HDRPlusEncodeService:
             [self._ffmpeg, "-y", "-loglevel", "error"]
             + list(audio_input_args or ())
             + ["-i", input_path]
-            + list(vf_args or ())
+            + video_args
             + _vid_args(encoder.codec, encoder.crf, encoder.preset, options)
             + color_args
-            + ["-an", "-sn", "-dn", "-f", "hevc", str(encoded_hevc)]
+            + ["-fps_mode", "passthrough", "-an", "-sn", "-dn", "-f", "hevc", str(encoded_hevc)]
         )
 
         if self.has_aux_stream_output(audio_args, subtitle_args):

@@ -24,8 +24,9 @@ from pathlib import Path
 from typing import Callable, Iterable
 
 from .command_formatting import command_to_log_string as _cmd_str
-from .dv_encode_command import build_dv_encode_command
+from .dv_encode_command import build_dv_encode_command, primary_ffmpeg_video_index
 from .dv_pipeline_timeouts import timeout_encode as _TIMEOUT_ENCODE
+from .frame_count_evidence import temporal_mapping_for_filters
 
 
 _FINGERPRINT_WIDTH = 9
@@ -93,6 +94,26 @@ def read_dhash_file(path: Path) -> list[int]:
         _frame_dhash(data[pos : pos + _FINGERPRINT_BYTES])
         for pos in range(0, len(data), _FINGERPRINT_BYTES)
     ]
+
+
+def fingerprint_luma_matches(reference_path: Path, candidate_path: Path) -> bool:
+    """dHash alone cannot distinguish a uniform black picture from white.
+
+    Compare brightness across the complete decoded candidate as an independent
+    guard. The small thumbnails tolerate normal compression, not substituted
+    flat pictures or large temporal/content changes.
+    """
+    reference = reference_path.read_bytes()
+    candidate = candidate_path.read_bytes()
+    if not reference or len(reference) != len(candidate) or len(reference) % _FINGERPRINT_BYTES:
+        return False
+    for pos in range(0, len(reference), _FINGERPRINT_BYTES):
+        distance = sum(abs(a - b) for a, b in zip(
+            reference[pos:pos + _FINGERPRINT_BYTES], candidate[pos:pos + _FINGERPRINT_BYTES]
+        )) / _FINGERPRINT_BYTES
+        if distance > 8.0:
+            return False
+    return True
 
 
 def _block_alignment_score(
@@ -295,6 +316,10 @@ def choose_repair_window(
 
     source_start = enc_start
     source_end = enc_end + region.delta
+    # A missing IRAP must never turn a local repair into an unbounded/full
+    # re-encode. Retain the original and let diagnostic archival handle it.
+    if source_end - source_start > 5000 or (source_start == 0 and enc_end == encoded_frames):
+        return None
     return RepairWindow(
         encoded_start=enc_start,
         encoded_end=enc_end,
@@ -367,26 +392,46 @@ class DVPartialFrameRepair:
         self._log = log
         self._vlog = verbose_log
 
-    def _fingerprint_command(self, *, input_path: str, output_path: Path, source_vf: str = "") -> list:
+    def _fingerprint_command(
+        self, *, input_path: str, output_path: Path, source_vf: str = "", source_stream_index: int | None = None
+    ) -> list:
         fp = f"scale={_FINGERPRINT_WIDTH}:{_FINGERPRINT_HEIGHT}:flags=area,format=gray"
         chain = f"{source_vf},{fp}" if source_vf else fp
         return [
             self._tools.ffmpeg, "-y", "-nostdin", "-v", "error",
+            "-xerror", "-err_detect", "explode",
             "-i", input_path,
-            "-map", "0:v:0", "-vf", chain,
+            "-map", (f"0:{source_stream_index}" if source_stream_index is not None else "0:v:0"), "-vf", chain,
             "-an", "-sn", "-dn", "-fps_mode", "passthrough",
             "-pix_fmt", "gray", "-f", "rawvideo", str(output_path),
         ]
 
-    def _write_fingerprint(self, runner, *, input_path: str, output_path: Path, source_vf: str = "") -> bool:
+    def _write_fingerprint(
+        self, runner, *, input_path: str, output_path: Path, source_vf: str = "", source_stream_index: int | None = None
+    ) -> bool:
         output_path.unlink(missing_ok=True)
         rc = runner.run(
-            self._fingerprint_command(input_path=input_path, output_path=output_path, source_vf=source_vf),
+            self._fingerprint_command(
+                input_path=input_path, output_path=output_path, source_vf=source_vf,
+                source_stream_index=source_stream_index,
+            ),
             allow_error=True,
             timeout=_TIMEOUT_ENCODE(),
             label="DV Partial-Recovery Frame-Fingerprints",
         )
         return rc == 0 and output_path.exists() and output_path.stat().st_size > 0
+
+    def _eligible(self, request, delta: int) -> bool:
+        encoder_name = str(self._encoder_config.options.get("encoder", "cpu") or "cpu").lower()
+        if request.profile_major not in {5, 7, 8} or delta <= 0:
+            return False
+        if encoder_name != "cpu" or str(self._encoder_config.codec).lower() not in {"h265", "hevc", "x265"}:
+            self._vlog("[DV][PARTIAL-RECOVERY] Nur CPU/libx265 ist für HEVC-Splicing freigegeben.")
+            return False
+        if delta > 5000:
+            self._vlog(f"[DV][PARTIAL-RECOVERY] Delta {delta} ist zu groß für eine sichere Teilreparatur.")
+            return False
+        return True
 
     def attempt(
         self,
@@ -398,17 +443,12 @@ class DVPartialFrameRepair:
     ) -> bool:
         req, files = state.request, state.files
         delta = int(expected_rpu_frames) - int(actual_encode_frames)
-        encoder_name = str(self._encoder_config.options.get("encoder", "cpu") or "cpu").lower()
-        if req.profile_major not in {5, 7, 8} or delta <= 0:
-            return False
-        if encoder_name != "cpu" or str(self._encoder_config.codec).lower() not in {"h265", "hevc", "x265"}:
-            self._vlog("[DV][PARTIAL-RECOVERY] Nur CPU/libx265 ist für HEVC-Splicing freigegeben.")
-            return False
-        if delta > 5000:
-            self._vlog(f"[DV][PARTIAL-RECOVERY] Delta {delta} ist zu groß für eine sichere Teilreparatur.")
+        if not self._eligible(req, delta):
             return False
 
         vf_args = list(state.effective_vf_args or req.vf_args)
+        if temporal_mapping_for_filters(vf_args) != "preserved":
+            return False
         # Build the exact production filter chain first.  Fingerprinting the MKV
         # after this chain makes source-vs-encode alignment valid for P5 as well:
         # the source hash then sees the same libplacebo ICtCp -> HDR10 conversion
@@ -422,6 +462,7 @@ class DVPartialFrameRepair:
             output_hevc=files.root / "_unused_partial_probe.hevc",
             vf_args=vf_args,
             profile_major=req.profile_major,
+            source_stream_index=primary_ffmpeg_video_index(getattr(req, "media_info", None)),
         )
         source_vf = _extract_simple_vf(fingerprint_plan.command)
         if source_vf is None:
@@ -431,6 +472,10 @@ class DVPartialFrameRepair:
             return False
 
         root = files.root
+        previous = root / "encoded_frame_mismatch.hevc"
+        if previous.exists():
+            self._vlog("[DV][PARTIAL-RECOVERY] Vorhandener Erstencode wird nicht überschrieben.")
+            return False
         src_fp = root / "frame_repair_source.gray"
         enc_fp = root / "frame_repair_encoded.gray"
         candidate_fp = root / "frame_repair_candidate.gray"
@@ -442,47 +487,55 @@ class DVPartialFrameRepair:
             "und versuche ausschließlich diesen Bereich neu zu encodieren.",
             "warn",
         )
-        if not self._write_fingerprint(runner, input_path=req.input_path, output_path=src_fp, source_vf=source_vf):
+        fingerprints = self._source_fingerprints(state, runner, src_fp, enc_fp, source_vf, expected_rpu_frames, actual_encode_frames)
+        if fingerprints is None:
             return False
-        if not self._write_fingerprint(runner, input_path=str(files.enc_hevc), output_path=enc_fp):
-            return False
-
-        source_hashes = read_dhash_file(src_fp)
-        encoded_hashes = read_dhash_file(enc_fp)
-        if len(source_hashes) != int(expected_rpu_frames) or len(encoded_hashes) != int(actual_encode_frames):
-            self._vlog(
-                "[DV][PARTIAL-RECOVERY] Fingerprint-Bildzahlen stimmen nicht mit RPU/Encode-Evidenz überein: "
-                f"source={len(source_hashes)}, encoded={len(encoded_hashes)}."
-            )
-            return False
-
+        source_hashes, encoded_hashes = fingerprints
         region = locate_deleted_region(source_hashes, encoded_hashes, expected_delta=delta)
         if region is None:
-            self._vlog("[DV][PARTIAL-RECOVERY] Fehlbereich konnte nicht eindeutig als reine Bildlöschung lokalisiert werden.")
+            self._vlog("[DV][PARTIAL-RECOVERY] Kein eindeutig lokalisierter Fehlbereich.")
+            return False
+        geometry = self._repair_geometry(state, region, actual_encode_frames, expected_rpu_frames)
+        if geometry is None:
+            return False
+        window, parameter_sets, encoded_size = geometry
+
+        if not self._encode_replacement(state, vf_args, window, replacement):
             return False
 
-        try:
-            iraps, parameter_sets, parsed_frames = inspect_hevc_irap(files.enc_hevc)
-            encoded_size = files.enc_hevc.stat().st_size
-        except (OSError, ValueError) as exc:
-            self._vlog(f"[DV][PARTIAL-RECOVERY] HEVC-IRAP-Analyse fehlgeschlagen: {exc}")
+        # Raw HEVC concatenation is only a *candidate*.  Duplicate headers and
+        # sequence-end markers are legal between independent sequences.  The
+        # candidate is never committed until full decoder + timeline checks pass.
+        if not self._assemble_candidate(
+            original=files.enc_hevc, candidate=candidate, replacement=replacement,
+            window=window, parameter_sets=parameter_sets, encoded_size=encoded_size,
+        ):
             return False
-        if parsed_frames != int(actual_encode_frames):
-            self._vlog(
-                f"[DV][PARTIAL-RECOVERY] HEVC-Parser zählt {parsed_frames} statt {actual_encode_frames} Bilder; kein Raw-Splice."
-            )
+        if not self._validate_candidate(
+            runner, candidate=candidate, candidate_fp=candidate_fp,
+            source_fp=src_fp, expected_rpu_frames=expected_rpu_frames, source_hashes=source_hashes, window=window,
+        ):
             return False
 
-        window = choose_repair_window(
-            region=region,
-            irap_points=iraps,
-            encoded_frames=actual_encode_frames,
-            encoded_size=encoded_size,
-            bframe_margin=max(16, int(self._encoder_config.options.get("bf", 0) or 0) * 2),
+        if not self._commit_candidate(original=files.enc_hevc, candidate=candidate, previous=previous):
+            return False
+
+        state.frame_recovery_applied = True
+        state.frame_recovery_original_count = int(actual_encode_frames)
+        state.frame_recovery_final_count = int(expected_rpu_frames)
+        state.frame_recovery_message = (
+            f"Teilreparatur: Frames {window.source_start}..{window.source_end} "
+            "aus Original-MKV neu encodiert und vollständig validiert."
         )
-        if window is None or window.source_end > expected_rpu_frames:
-            return False
+        self._log(
+            "✅ [DV][PARTIAL-RECOVERY] Nur der lokalisierte Fehlerbereich wurde neu encodiert; "
+            f"finale Bildzahl={expected_rpu_frames}. Der Erstencode bleibt als {previous.name} erhalten.",
+            "info",
+        )
+        return True
 
+    def _encode_replacement(self, state, vf_args, window, replacement):
+        req = state.request
         # Build the same normal encode, then constrain it to the source-frame
         # interval after all visual filters (including P5 libplacebo conversion
         # and subtitle burn-in) have seen original timestamps.
@@ -494,6 +547,7 @@ class DVPartialFrameRepair:
             output_hevc=replacement,
             vf_args=vf_args,
             profile_major=req.profile_major,
+            source_stream_index=primary_ffmpeg_video_index(getattr(req, "media_info", None)),
         )
         processed_vf = _extract_simple_vf(plan.command)
         if processed_vf is None:
@@ -530,12 +584,75 @@ class DVPartialFrameRepair:
             )
             return False
 
-        # Raw HEVC concatenation is only a *candidate*.  Duplicate headers and
-        # sequence-end markers are legal between independent sequences.  The
-        # candidate is never committed until full decoder + timeline checks pass.
+        return True
+
+    def _source_fingerprints(self, state, runner, src_fp, enc_fp, source_vf, expected, actual):
+        req = state.request
+        files = state.files
+        source_index = primary_ffmpeg_video_index(getattr(req, "media_info", None))
+        source_fp_kwargs = ({"source_stream_index": source_index} if source_index is not None else {})
+        if not self._write_fingerprint(
+            runner, input_path=req.input_path, output_path=src_fp, source_vf=source_vf,
+            **source_fp_kwargs,
+        ):
+            return None
+        if not self._write_fingerprint(runner, input_path=str(files.enc_hevc), output_path=enc_fp):
+            return None
+
+        source_hashes = read_dhash_file(src_fp)
+        encoded_hashes = read_dhash_file(enc_fp)
+        if len(source_hashes) != expected or len(encoded_hashes) != actual:
+            self._vlog(
+                "[DV][PARTIAL-RECOVERY] Fingerprint-Bildzahlen stimmen nicht mit RPU/Encode-Evidenz überein: "
+                f"source={len(source_hashes)}, encoded={len(encoded_hashes)}."
+            )
+            return None
+
+        return source_hashes, encoded_hashes
+
+    def _repair_geometry(self, state, region, actual, expected):
+        files = state.files
+        try:
+            iraps, parameter_sets, parsed_frames = inspect_hevc_irap(files.enc_hevc)
+            encoded_size = files.enc_hevc.stat().st_size
+        except (OSError, ValueError) as exc:
+            self._vlog(f"[DV][PARTIAL-RECOVERY] HEVC-IRAP-Analyse fehlgeschlagen: {exc}")
+            return None
+        if parsed_frames != actual:
+            self._vlog(
+                f"[DV][PARTIAL-RECOVERY] HEVC-Parser zählt {parsed_frames} statt {actual} Bilder; kein Raw-Splice."
+            )
+            return None
+
+        window = choose_repair_window(
+            region=region,
+            irap_points=iraps,
+            encoded_frames=actual,
+            encoded_size=encoded_size,
+            bframe_margin=max(16, int(self._encoder_config.options.get("bf", 0) or 0) * 2),
+        )
+        if window is None or window.source_end > expected:
+            return None
+
+        return window, parameter_sets, encoded_size
+
+    def _commit_candidate(self, *, original, candidate, previous) -> bool:
+        if previous.exists():
+            self._vlog("[DV][PARTIAL-RECOVERY] Vorhandener Erstencode wird nicht überschrieben.")
+            return False
+        try:
+            original.replace(previous)
+            candidate.replace(original)
+        except OSError:
+            if not original.exists() and previous.exists():
+                previous.replace(original)
+            return False
+        return True
+
+    def _assemble_candidate(self, *, original, candidate, replacement, window, parameter_sets, encoded_size) -> bool:
         candidate.unlink(missing_ok=True)
         try:
-            with files.enc_hevc.open("rb") as old, candidate.open("wb") as out:
+            with original.open("rb") as old, candidate.open("wb") as out:
                 remaining = window.prefix_byte_end
                 while remaining > 0:
                     chunk = old.read(min(4 * 1024 * 1024, remaining))
@@ -554,8 +671,10 @@ class DVPartialFrameRepair:
         except OSError as exc:
             self._vlog(f"[DV][PARTIAL-RECOVERY] Kandidat konnte nicht zusammengesetzt werden: {exc}")
             return False
+        return True
 
-        # Producing the candidate fingerprint is also a full decoder pass.
+    def _validate_candidate(self, runner, *, candidate, candidate_fp, source_fp, expected_rpu_frames, source_hashes, window) -> bool:
+        # Producing the candidate fingerprint is also a strict full decoder pass.
         if not self._write_fingerprint(runner, input_path=str(candidate), output_path=candidate_fp):
             self._vlog("[DV][PARTIAL-RECOVERY] Zusammengesetzter HEVC-Kandidat ist nicht vollständig decodierbar.")
             return False
@@ -565,7 +684,9 @@ class DVPartialFrameRepair:
                 f"[DV][PARTIAL-RECOVERY] Kandidat hat {len(candidate_hashes)} statt {expected_rpu_frames} decodierbare Bilder."
             )
             return False
-
+        if not fingerprint_luma_matches(source_fp, candidate_fp):
+            self._vlog("[DV][PARTIAL-RECOVERY] Vollständiger Helligkeits-/Bildvergleich fehlgeschlagen.")
+            return False
         left_distance = _join_hash_distance(source_hashes, candidate_hashes, window.source_start)
         right_distance = _join_hash_distance(source_hashes, candidate_hashes, window.source_end)
         if left_distance > 18.0 or right_distance > 18.0:
@@ -574,27 +695,4 @@ class DVPartialFrameRepair:
                 f"links={left_distance:.2f}, rechts={right_distance:.2f} dHash-Bits."
             )
             return False
-
-        previous = root / "encoded_frame_mismatch.hevc"
-        previous.unlink(missing_ok=True)
-        try:
-            files.enc_hevc.replace(previous)
-            candidate.replace(files.enc_hevc)
-        except OSError:
-            if not files.enc_hevc.exists() and previous.exists():
-                previous.replace(files.enc_hevc)
-            return False
-
-        state.frame_recovery_applied = True
-        state.frame_recovery_original_count = int(actual_encode_frames)
-        state.frame_recovery_final_count = int(expected_rpu_frames)
-        state.frame_recovery_message = (
-            f"Teilreparatur: Frames {window.source_start}..{window.source_end} "
-            "aus Original-MKV neu encodiert und vollständig validiert."
-        )
-        self._log(
-            "✅ [DV][PARTIAL-RECOVERY] Nur der lokalisierte Fehlerbereich wurde neu encodiert; "
-            f"finale Bildzahl={expected_rpu_frames}. Der Erstencode bleibt als {previous.name} erhalten.",
-            "info",
-        )
         return True

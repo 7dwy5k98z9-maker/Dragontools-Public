@@ -13,19 +13,32 @@ from .audio_video_match_models import (
     MatchPoint,
     TimeMappingResult,
     VideoInfo,
+    INTERIOR_TARGET_EXTRA_TOLERANCE_S,
 )
 from .audio_video_match_utils import format_seconds, parse_cut_regions
 from .audio_video_time_mapping import _linear_regression, classify_time_mapping, select_landmark_times
 from .media_analyzer import analyze_media
 from .tool_paths import ToolPaths, get_tool_paths
+from .transaction_identity import stat_identity
+from .media_analyzer_io import _run_ffprobe_json
+from .audio_video_stream_timing import stream_timing
 
 class VideoAnalyzer:
-    def __init__(self, tools: ToolPaths | None = None) -> None:
+    def __init__(self, tools: ToolPaths | None = None, *, run_process=None) -> None:
         self.tools = tools or get_tool_paths()
+        self.run_process = run_process
 
     def analyze(self, path: str) -> VideoInfo:
-        mi = analyze_media(path, self.tools)
+        identity = tuple(stat_identity(path)) if Path(path).is_file() else None
+        mi = analyze_media(path, self.tools, **({'run_process': self.run_process} if self.run_process is not None else {}))
         video = mi.primary_video
+        origin, offsets = 0.0, None
+        if getattr(self.tools, 'ffprobe', None):
+            payload, _warnings = _run_ffprobe_json(path, self.tools,
+                **({'run_process': self.run_process} if self.run_process is not None else {}))
+            origin, offsets = stream_timing(payload, getattr(video, 'index', None))
+        if identity is not None and tuple(stat_identity(path)) != identity:
+            raise RuntimeError('Datei wurde während der Analyse verändert.')
         return VideoInfo(
             path=str(Path(path).resolve()),
             duration_s=float(mi.duration_s or getattr(video, "duration_s", 0.0) or 0.0),
@@ -33,7 +46,10 @@ class VideoAnalyzer:
             frame_rate_mode=str(getattr(video, "frame_rate_mode", "") or ""),
             width=int(getattr(video, "width", 0) or 0),
             height=int(getattr(video, "height", 0) or 0),
+            start_time_s=origin,
             audio_streams=list(mi.audio_streams or []),
+            file_identity=identity,
+            audio_start_offsets=offsets,
         )
 
 
@@ -45,12 +61,13 @@ class AudioVideoMatcher:
         settings: AudioVideoMatcherSettings | None = None,
         run_bytes: RunBytesFn | None = None,
         progress: Callable[[str], None] | None = None,
+        run_process=None,
     ) -> None:
         self.tools = tools or get_tool_paths()
         self.settings = settings or AudioVideoMatcherSettings()
         extractor = FrameExtractor(self.tools.ffmpeg, settings=self.settings, run_bytes=run_bytes)
         self.frame_matcher = FrameMatcher(extractor, settings=self.settings)
-        self.video_analyzer = VideoAnalyzer(self.tools)
+        self.video_analyzer = VideoAnalyzer(self.tools, run_process=run_process)
         self._progress = progress
 
     def _log_progress(self, message: str) -> None:
@@ -189,12 +206,14 @@ class CutRegionAnalyzer:
             target_len = region.duration_s
             source_extra = max(0.0, source_len - target_len)
             target_extra = max(0.0, target_len - source_len)
-            resolved = target_extra <= self.settings.target_extra_block_s
+            resolved = target_extra <= INTERIOR_TARGET_EXTRA_TOLERANCE_S
             warning = ""
-            if target_extra > self.settings.edge_extra_warn_s:
+            if target_extra > INTERIOR_TARGET_EXTRA_TOLERANCE_S:
                 warning = (
                     f"Zielbereich {format_seconds(region.start_s)}-{format_seconds(region.end_s)} "
-                    f"enthält ca. {target_extra:.1f}s mehr Inhalt als die deutsche Quelle."
+                    f"enthält ca. {target_extra:.2f}s Inhalt ohne deutsche Audioentsprechung. "
+                    "Die Position einer notwendigen Stille ist aus den Randankern nicht sicher ableitbar; "
+                    "die automatische Erstellung wird blockiert."
                 )
             elif source_extra > self.settings.edge_extra_warn_s:
                 warning = (

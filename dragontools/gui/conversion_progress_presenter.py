@@ -9,6 +9,7 @@ from typing import Callable
 from ..core.result_status import POSTPROCESS_PENDING_ICON
 from .conversion_progress_display import ConversionProgressDisplay, eta_text as _eta
 from .conversion_progress_focus import ConversionProgressFocusController, PROGRESS_FOCUS_ACTIVE_TOTAL
+from .file_worker_pause import file_pause_caption
 
 
 class ConversionProgressPresenter:
@@ -58,7 +59,8 @@ class ConversionProgressPresenter:
         self._state.active_file_eta.pop(path, None)
         self._set_file_list_item_text(
             path,
-            f"🧬 HEVC fertig · DV/HDR+/Mux läuft · {Path(path).name}",
+            file_pause_caption(f"🧬 HEVC fertig · DV/HDR+/Mux läuft · {Path(path).name}",
+                               worker=self._state.thread, path=path),
         )
         self.update_file_progress_display(changed_path=path, changed_pct=90, changed_eta=None)
         self._refresh_queue()
@@ -87,7 +89,9 @@ class ConversionProgressPresenter:
         else:
             self._set_file_list_item_text(
                 path_str,
-                f"⏳ {eta_str}  {Path(path_str).name}" if eta_str else f"⏳ {Path(path_str).name}",
+                file_pause_caption(
+                    f"⏳ {eta_str}  {Path(path_str).name}" if eta_str else f"⏳ {Path(path_str).name}",
+                    worker=state.thread, path=path_str),
             )
         if pct >= 100:
             state.active_file_progress.pop(path_str, None); state.active_file_eta.pop(path_str, None)

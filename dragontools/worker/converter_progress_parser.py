@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import time
+from math import isfinite
+from .converter_progress_eta import estimate_eta, progress_percent, progress_from_eta
 
 
 def _parse_out_time(value: str) -> int | None:
@@ -16,7 +18,7 @@ def _parse_out_time(value: str) -> int | None:
 def _parse_speed(value: str) -> float | None:
     try:
         parsed = float((value or "").strip().lower().rstrip("x"))
-        return parsed if parsed > 0 else None
+        return parsed if isfinite(parsed) and parsed > 0 else None
     except Exception:
         return None
 
@@ -71,41 +73,29 @@ def read_progress(worker, proc, path, dur_ms: int | None, total_frames: int | No
             continue
         if key == "out_time_ms":
             try:
-                last_out_ms = int(int(value) / 1000)
+                last_out_ms = int(value) // 1000
             except ValueError:
                 last_out_ms = 0
             if last_out_ms and dur_ms:
-                pct = int(max(0, min(100, (last_out_ms / dur_ms) * 100)))
+                pct = progress_percent(last_out_ms, dur_ms)
         elif key == "out_time":
             out_time = _parse_out_time(value)
             if out_time is not None:
                 last_out_ms = out_time
             if out_time and dur_ms:
-                pct = int(max(0, min(100, (out_time / dur_ms) * 100)))
+                pct = progress_percent(out_time, dur_ms)
         elif key == "frame":
             frame_count = _record_output_frame_count(worker, path, value)
             if frame_count is not None and total_frames:
-                pct = int(max(0, min(100, frame_count / total_frames * 100)))
+                pct = progress_percent(frame_count, total_frames)
         elif key == "progress" and value == "end":
             _mark_progress_end(worker, path)
             worker.emit_file_progress(path, 100, 0.0)
             break
 
         elapsed_s = max(0.001, time.time() - start_ts)
-        if dur_ms and last_out_ms > 0:
-            remaining_media_s = max(0.0, (dur_ms - last_out_ms) / 1000.0)
-            if last_speed and last_speed > 0:
-                eta_s = remaining_media_s / last_speed
-            else:
-                processed_s = max(0.001, last_out_ms / 1000.0)
-                derived_speed = processed_s / elapsed_s
-                if derived_speed > 0:
-                    eta_s = remaining_media_s / derived_speed
-
-        if eta_s is not None and elapsed_s >= 15 and last_out_ms >= 30_000:
-            denom = elapsed_s + max(0.0, eta_s)
-            if denom > 0:
-                pct = int(max(0, min(99, (elapsed_s / denom) * 100)))
+        eta_s = estimate_eta(dur_ms, last_out_ms, last_speed, elapsed_s)
+        pct = progress_from_eta(pct, eta_s=eta_s, elapsed_s=elapsed_s, output_ms=last_out_ms)
         if pct is not None:
             pct = max(last_pct, min(99, pct))
             last_pct = pct

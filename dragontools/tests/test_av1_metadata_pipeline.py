@@ -57,6 +57,7 @@ def test_av1_dv_builds_native_svt_profile10_command(monkeypatch):
     progress = _Progress()
     runner = AV1DolbyVisionPipeline(tools=_Tools(), progress_runner=progress, temp_state=DVTempState())
     monkeypatch.setattr(runner, "_ffmpeg_help_contains", lambda *_: (True, "dolbyvision"))
+    monkeypatch.setattr(runner, "_check_source", lambda *_: True)
     monkeypatch.setattr(
         "dragontools.worker.av1_metadata_pipeline.inspect_dynamic_hdr_with_mediainfo",
         lambda *_: SimpleNamespace(dolby_vision=True, dolby_vision_profile="10", hdr10plus=False),

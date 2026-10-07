@@ -6,6 +6,8 @@ import subprocess
 
 from ..core.media_duration import stream_duration, timestamp_wrap
 from ..core.process_runner import subprocess_no_window_kwargs
+from .owned_probe import owned_probe_runner
+from .log_dispatch import dispatch_log
 
 
 def wrap_message(expected, actual, *, container: str, stream: str) -> str | None:
@@ -21,7 +23,7 @@ def wrap_message(expected, actual, *, container: str, stream: str) -> str | None
     )
 
 
-def log_timestamp_diagnostics(*, source_path, output_path, expected_s, actual_s, container, ffprobe_path, log):
+def log_timestamp_diagnostics(*, source_path, output_path, expected_s, actual_s, container, ffprobe_path, log, worker=None):
     """Best effort, failure-only; no frames are decoded or counted.
 
     At most 16 initial video packets are read. No end seek: seeking using a
@@ -29,6 +31,8 @@ def log_timestamp_diagnostics(*, source_path, output_path, expected_s, actual_s,
     """
     if not log:
         return
+    callback = log
+    log = lambda message, level='warn': dispatch_log(callback, message, level)
     message = wrap_message(expected_s, actual_s, container=container, stream="Container; Streamzuordnung folgt")
     if message:
         log(message, "warn")
@@ -40,7 +44,7 @@ def log_timestamp_diagnostics(*, source_path, output_path, expected_s, actual_s,
             log(f"Timestamp-Diagnose {label}: Pfad nicht verfügbar.", "warn")
             continue
         try:
-            payload = _probe(ffprobe_path, path, ["-show_format", "-show_streams"])
+            payload = _probe(ffprobe_path, path, ["-show_format", "-show_streams"], worker=worker)
             fmt = payload.get("format") or {}
             log(f"Timestamp-Diagnose {label}: Container={fmt.get('format_name', container)}; "
                 f"duration={fmt.get('duration', 'N/A')}; start_time={fmt.get('start_time', 'N/A')}", "warn")
@@ -58,7 +62,7 @@ def log_timestamp_diagnostics(*, source_path, output_path, expected_s, actual_s,
             packets = _probe(ffprobe_path, path, [
                 "-select_streams", "v:0", "-read_intervals", "%+#16",
                 "-show_packets", "-show_entries", "packet=pts_time,dts_time",
-            ]).get("packets") or []
+            ], worker=worker).get("packets") or []
             if packets:
                 log(f"   {label} Video: erstes Paket PTS/DTS={packets[0]}; "
                     f"letztes Paket der begrenzten Startprobe={packets[-1]} (nicht Dateiende).", "warn")
@@ -67,8 +71,9 @@ def log_timestamp_diagnostics(*, source_path, output_path, expected_s, actual_s,
             log(f"Timestamp-Diagnose {label} nicht vollständig verfügbar: {exc}", "warn")
 
 
-def _probe(ffprobe_path, path, args):
-    result = subprocess.run(
+def _probe(ffprobe_path, path, args, *, worker=None):
+    runner = subprocess.run if worker is None else owned_probe_runner(worker, label='Timestamp-Diagnose')
+    result = runner(
         [str(ffprobe_path), "-v", "error", *args, "-of", "json", str(path)],
         capture_output=True, text=True, encoding="utf-8", errors="replace",
         stdin=subprocess.DEVNULL, timeout=10, **subprocess_no_window_kwargs(),

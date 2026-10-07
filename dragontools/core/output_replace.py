@@ -11,8 +11,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from .move_transaction import PathSwapTransaction, PathTransactionRollbackError
+from .move_transaction import PathSwapTransaction, PathTransactionRollbackError, publish_staged_no_replace
 from .replace_journal import ReplaceJournal, ReplaceJournalWriteError
+from .transaction_identity import receipt_matches, renamed_receipt_matches
+from .journal_runtime import journal_transaction
 
 LogFn = Callable[[str, str], None]
 RemoveFn = Callable[[str], None]
@@ -39,6 +41,7 @@ def unique_backup_path(destination: str | Path) -> Path:
         counter += 1
 
 
+@journal_transaction
 def commit_staged_output(
     *,
     source: str | Path,
@@ -49,6 +52,8 @@ def commit_staged_output(
     min_size: int = 1,
     remove_source: RemoveFn | None = None,
     abort_check: Callable[[], bool] | None = None,
+    expected_source_receipt: dict | None = None,
+    expected_staging_receipt: dict | None = None,
 ) -> OutputCommitResult:
     """Installiert ``staging`` als ``destination`` und schuetzt ``source``.
 
@@ -65,6 +70,8 @@ def commit_staged_output(
     staging_path = Path(staging)
     destination_path = Path(destination)
     min_size = max(1, int(min_size))
+    _require_expected_receipt(source_path, expected_source_receipt, "Originalquelle")
+    _require_expected_receipt(staging_path, expected_staging_receipt, "Geprüfte Ausgabe")
 
     if not staging_path.exists() or staging_path.stat().st_size < min_size:
         raise RuntimeError(
@@ -89,6 +96,8 @@ def commit_staged_output(
             log=log,
             journal_root=journal_root,
             abort_check=abort_check,
+            expected_source_receipt=expected_source_receipt,
+            expected_staging_receipt=expected_staging_receipt,
         )
 
     return _commit_container_change(
@@ -99,6 +108,8 @@ def commit_staged_output(
         journal_root=journal_root,
         remove_source=remove_source or os.remove,
         abort_check=abort_check,
+        expected_source_receipt=expected_source_receipt,
+        expected_staging_receipt=expected_staging_receipt,
     )
 
 
@@ -110,6 +121,8 @@ def _commit_same_path(
     log: LogFn,
     journal_root: str | Path | None,
     abort_check: Callable[[], bool] | None = None,
+    expected_source_receipt: dict | None = None,
+    expected_staging_receipt: dict | None = None,
 ) -> OutputCommitResult:
     backup = unique_backup_path(destination)
     transaction = PathSwapTransaction(
@@ -118,6 +131,8 @@ def _commit_same_path(
         backup_path=backup,
         staging_path=staging,
         preserve_staging_on_rollback=True,
+        expected_destination_receipt=expected_source_receipt,
+        expected_staging_receipt=expected_staging_receipt,
     )
     journal = ReplaceJournal.start(
         source=source,
@@ -126,6 +141,8 @@ def _commit_same_path(
         backup=backup,
         mode="same_path",
         root=journal_root,
+        source_receipt=expected_source_receipt,
+        staging_receipt=expected_staging_receipt,
     )
 
     try:
@@ -147,7 +164,9 @@ def _commit_same_path(
         # Restore the actual original before reporting failure to the caller.
         if transaction.committed:
             try:
-                os.replace(str(destination), str(staging))
+                if not renamed_receipt_matches(destination, transaction.installed_receipt):
+                    raise OSError('Ausgabe wurde nach Commit verändert; Rollback verschiebt sie nicht.')
+                publish_staged_no_replace(destination, staging)
                 transaction.rollback()
             except OSError as rollback_error:
                 log(f"Kritisch: Rollback unvollständig; Backup bleibt: {backup}", "error")
@@ -191,6 +210,8 @@ def _commit_container_change(
     journal_root: str | Path | None,
     remove_source: RemoveFn,
     abort_check: Callable[[], bool] | None = None,
+    expected_source_receipt: dict | None = None,
+    expected_staging_receipt: dict | None = None,
 ) -> OutputCommitResult:
     journal = ReplaceJournal.start(
         source=source,
@@ -199,31 +220,63 @@ def _commit_container_change(
         backup=None,
         mode="container_change",
         root=journal_root,
+        source_receipt=expected_source_receipt,
+        staging_receipt=expected_staging_receipt,
     )
 
+    installed = False
     try:
         _check_commit_abort(abort_check)
-        os.replace(str(staging), str(destination))
-    except Exception:
-        # Wenn der Commit sichtbar wurde, muss das Journal fuer Recovery aktiv
-        # bleiben. Andernfalls ist noch nichts Destruktives geschehen.
-        if not destination.exists() or staging.exists():
+        _require_expected_receipt(source, expected_source_receipt, "Originalquelle")
+        if not receipt_matches(staging, journal.data['staging_receipt']):
+            raise OSError('Video-Staging wurde nach der Prüfung verändert.')
+        publish_staged_no_replace(staging, destination)
+        installed = True
+        # Erst ein *dauerhaft* geschriebenes "committed" darf spaeter die
+        # Loeschung der Quelle autorisieren.  Ein Crash oder Datentraegerfehler
+        # zwischen Rename und Journal-Update darf niemals dazu fuehren, dass die
+        # Recovery nur aus der Existenz des Ziels auf einen Commit schliesst.
+        journal.set_status("committed", fatal=True)
+    except Exception as operation_error:
+        if installed and destination.exists() and not staging.exists():
+            if not renamed_receipt_matches(destination, journal.data['staging_receipt']):
+                raise ReplaceJournalWriteError('Ausgabe wurde nach Commit verändert; bleibt zur Prüfung erhalten.') from operation_error
+            try:
+                publish_staged_no_replace(destination, staging)
+            except OSError as rollback_error:
+                log(
+                    "Kritisch: Containerwechsel wurde sichtbar, konnte nach fehlgeschlagenem "
+                    f"Commit-Journal aber nicht zurueckgerollt werden: {rollback_error}",
+                    "error",
+                )
+                raise RuntimeError(
+                    "Containerwechsel-Journal fehlgeschlagen und Dateisystem-Rollback war unvollstaendig. "
+                    "Die Originalquelle wurde nicht geloescht."
+                ) from operation_error
+        # Wenn Quelle + Staging wieder vorhanden sind, ist nichts Destruktives
+        # mehr aktiv.  Das Update ist best-effort; die Recovery behandelt ein
+        # verbliebenes 'prepared'-Journal ebenfalls fail-closed.
+        if source.exists() and staging.exists() and not destination.exists():
             journal.set_status("rolled_back")
             journal.finish()
         raise
 
-    journal.set_status("committed")
-
     if abort_check is not None and abort_check():
         # The original still exists. Undo the install before cleanup can remove
         # it; the caller owns staging cleanup and sidecar rollback.
-        os.replace(str(destination), str(staging))
-        journal.set_status("rolled_back")
+        if not renamed_receipt_matches(destination, journal.data['staging_receipt']):
+            raise OSError('Ausgabe wurde nach Commit verändert; Abbruch verschiebt sie nicht.')
+        publish_staged_no_replace(destination, staging)
+        journal.set_status("rolled_back", fatal=True)
         journal.finish()
         raise RuntimeError("Abgebrochen vor Original-Cleanup")
 
     if source.resolve() != destination.resolve():
         try:
+            if not receipt_matches(source, journal.data['source_receipt']):
+                raise OSError('Originalquelle wurde vor dem Cleanup verändert; bleibt erhalten.')
+            if not renamed_receipt_matches(destination, journal.data['staging_receipt']):
+                raise OSError('Installierte Ausgabe wurde verändert; Original bleibt erhalten.')
             remove_source(str(source))
             log(f"Original gelöscht (Containerwechsel): {source.name}", "info")
         except FileNotFoundError:
@@ -248,6 +301,11 @@ def _commit_container_change(
 def _check_commit_abort(abort_check) -> None:
     if abort_check is not None and abort_check():
         raise RuntimeError("Abgebrochen vor destruktivem Video-Commit")
+
+
+def _require_expected_receipt(path, receipt, label):
+    if receipt is not None and not receipt_matches(path, receipt):
+        raise OSError(f'{label} wurde seit der Planung/Prüfung verändert; bleibt erhalten.')
 
 
 __all__ = ["OutputCommitResult", "commit_staged_output", "unique_backup_path"]

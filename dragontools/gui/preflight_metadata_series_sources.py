@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from inspect import signature
 
-from .preflight_metadata_common import MetadataLookupCache, series_folder_choices
+from .preflight_metadata_common import MetadataLookupCache, series_folder_choices, safe_year
 
 
 @dataclass(slots=True)
@@ -38,19 +39,26 @@ class SeriesOnlineLookup:
     def lookup(self, year: int | None):
         key = (self.series_name.casefold(), year)
         if key not in self.cache.online_series:
-            try:
-                value = self.suggest_series_metadata_for_name(
-                    self.series_name,
-                    self.settings,
-                    year=year,
-                )
-            except TypeError as exc:
-                # Compatibility with older extension/test callbacks.
-                if "year" not in str(exc):
-                    raise
-                value = self.suggest_series_metadata_for_name(self.series_name, self.settings)
+            value = _call_series_lookup(self.suggest_series_metadata_for_name,
+                self.series_name, self.settings, year)
+            if year is not None and safe_year(getattr(value, 'first_air_year', None)) != year:
+                value = None
             self.cache.online_series[key] = value
         return self.cache.online_series[key]
+
+
+def _call_series_lookup(callback, name, settings, year):
+    # Bind before execution. An internal TypeError is a provider error, not a
+    # signal to retry without the authoritative edition/year.
+    try:
+        callback_signature = signature(callback)
+    except (TypeError, ValueError):
+        return callback(name, settings, year=year)
+    try:
+        callback_signature.bind(name, settings, year=year)
+    except TypeError:
+        return callback(name, settings)
+    return callback(name, settings, year=year)
 
 
 @dataclass(slots=True)

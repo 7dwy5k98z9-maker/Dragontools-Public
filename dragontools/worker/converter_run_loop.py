@@ -34,14 +34,17 @@ def quick_video_resolution(path: str, ffprobe: str) -> tuple[int, int] | None:
             stdin=subprocess.DEVNULL,
             **_no_window_kwargs(),
         )
+        if result.returncode != 0:
+            return None
         data = json.loads(result.stdout or "{}")
-        streams = data.get("streams") or []
-        if streams:
+        streams = data.get("streams") if isinstance(data, dict) else None
+        if isinstance(streams, list) and streams and isinstance(streams[0], dict):
             width = streams[0].get("width", 0)
             height = streams[0].get("height", 0)
             if width and height:
-                return int(width), int(height)
-    except (OSError, subprocess.SubprocessError, json.JSONDecodeError, TypeError, ValueError, KeyError):
+                width, height = int(width), int(height)
+                return (width, height) if width > 0 and height > 0 else None
+    except (OSError, subprocess.SubprocessError, json.JSONDecodeError, TypeError, ValueError, KeyError, OverflowError):
         return None
     return None
 

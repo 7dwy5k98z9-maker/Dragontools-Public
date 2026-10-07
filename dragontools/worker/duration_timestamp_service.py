@@ -25,6 +25,8 @@ from .duration_timestamp_helpers import (
     timestamp_tool_availability_error,
 )
 from .workflow_engine import WorkflowVerifyResult
+from .duration_timestamp_plan import build_repair_attempts
+from .verification_control import stopped
 
 
 class TimestampRepairService:
@@ -179,43 +181,7 @@ class TimestampRepairService:
             before_mediainfo = before_mediainfo or inspected[1]
             before_mkvmerge = before_mkvmerge or inspected[2]
 
-        container_name = str(container or "").strip().lower().lstrip(".")
-        attempts: list[tuple[Path, list[str], str, str]] = []
-
-        if container_name == "mp4":
-            tmp = out.with_name(f"{out.stem}.timestamp_fix_{uuid4().hex}{out.suffix}")
-            command = self.build_timestamp_repair_command(out, tmp, before.frame_rate, container=container)
-            attempts.append((tmp, command, "MP4Box-Timestamp-Reparatur", "MP4Box CFR-Neuaufbau"))
-        else:
-            if tool_available(self._runtime.mkvmerge_path):
-                try:
-                    track_id = mkv_video_track_id(self._runtime, out)
-                    tmp = out.with_name(f"{out.stem}.timestamp_mkvmerge_{uuid4().hex}{out.suffix}")
-                    command = build_timestamp_repair_command(
-                        out, tmp, before.frame_rate, container=container,
-                        mp4box_path=self._runtime.mp4box_path, ffmpeg_path=self._runtime.ffmpeg_path,
-                        mkvmerge_path=self._runtime.mkvmerge_path, mkv_video_track_id=track_id,
-                    )
-                    attempts.append((tmp, command, "MKVToolNix-default-duration-Timestamp-Reparatur", "MKVToolNix --default-duration"))
-                except Exception as exc:
-                    self._runtime.log(f"⚠️ MKVToolNix-Videotrack-ID konnte nicht bestimmt werden: {exc}", "warn")
-
-            if tool_available(self._runtime.ffmpeg_path) and self.ffmpeg_supports_setts():
-                tmp = out.with_name(f"{out.stem}.timestamp_setts_{uuid4().hex}{out.suffix}")
-                command = build_timestamp_repair_command(
-                    out, tmp, before.frame_rate, container=container,
-                    mp4box_path=self._runtime.mp4box_path, ffmpeg_path=self._runtime.ffmpeg_path,
-                )
-                attempts.append((tmp, command, "FFmpeg-setts-Timestamp-Reparatur", "FFmpeg setts"))
-
-            if tool_available(self._runtime.ffmpeg_path):
-                tmp = out.with_name(f"{out.stem}.timestamp_genpts_{uuid4().hex}{out.suffix}")
-                attempts.append((
-                    tmp,
-                    build_genpts_repair_command(out, tmp, ffmpeg_path=self._runtime.ffmpeg_path),
-                    "FFmpeg-+genpts+igndts-Timestamp-Reparatur",
-                    "FFmpeg +genpts+igndts",
-                ))
+        attempts = build_repair_attempts(out, before, container, self._runtime, self.ffmpeg_supports_setts)
 
         if not attempts:
             return TimestampRepairResult(
@@ -251,14 +217,25 @@ class TimestampRepairService:
                     source_reference=source_reference,
                 )
             except Exception as exc:
-                self._runtime.safe_unlink(tmp)
+                reason = f"{label} fehlgeschlagen: {exc}"
+                if tmp.exists():
+                    self._candidate_service.archive_rejected_candidate(
+                        tmp,
+                        out=out,
+                        base_dir=base_dir,
+                        label=label,
+                        reason=reason,
+                    )
                 result = TimestampRepairResult(
-                    attempted=True, reason=f"{label} fehlgeschlagen: {exc}", command=command,
+                    attempted=True, reason=reason, command=command,
                     timing_summary=timing_summary, retry_recommended=True, method=method,
                 )
             if result.repaired:
                 return result
             last_result = result
+            if stopped(worker=getattr(self._runtime, 'worker', None)) or not result.retry_recommended:
+                result.retry_recommended = False
+                return result
             if result.reason:
                 previous_reasons.append(f"{method}: {result.reason}")
             if attempt_no < len(attempts):

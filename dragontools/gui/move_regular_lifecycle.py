@@ -6,6 +6,8 @@ import traceback
 from PyQt6.QtCore import QSettings
 
 from ..core.callback_dispatch import invoke_callback
+from ..worker.log_dispatch import dispatch_log
+from .move_lifecycle_helpers import claim_move_finish, owned_move_callback
 from ..core.settings_app import APP_NAME, APP_ORG
 from ..core.settings_storage import (
     DEFAULT_EPISODE_REPLACEMENT_MODE,
@@ -35,7 +37,7 @@ class RegularMoveLifecycle:
     ) -> None:
         self._state = state
         self._ui = ui
-        self._log = log
+        self._log = lambda message, level='info': dispatch_log(log, message, level)
         self._get_target_paths = get_target_paths
         self._finalize_run = finalize_run
         self._set_start_enabled = set_start_enabled
@@ -44,7 +46,10 @@ class RegularMoveLifecycle:
         self._worker_factory = worker_factory
         self._on_move_req = on_move_req
 
-    def start(self, files: list[str], finished_thread) -> None:
+    def start(self, files: list[str], finished_thread) -> bool:
+        if self._state.move_thread is not None:
+            return False
+        move_thread = None
         try:
             self._prepare_ui(files)
             restored_context = self._restored_context(finished_thread)
@@ -61,9 +66,37 @@ class RegularMoveLifecycle:
             )
             self._wire_thread(move_thread, files, finished_thread)
             move_thread.start()
+            return True
         except Exception:
             self._log("❌ Unbehandelte Ausnahme in start_move()", "error")
             self._log(traceback.format_exc(), "error")
+            if self._state.move_thread is move_thread:
+                self._state.move_thread = None
+            if move_thread is not None:
+                retire_move_thread(self._state, move_thread)
+            self._state.start_reserved = False
+            self._set_start_enabled(True)
+            self._set_queue_edit(True)
+            self._ui.abort_btn.setEnabled(False)
+            self._ui.pause_btn.setEnabled(False)
+            self._ui.pause_btn.setText("⏸ Pause")
+            self._refresh_queue()
+            if finished_thread is not None:
+                # Conversion itself succeeded, but the configured post-step did not
+                # even start. Finalize as a move error instead of silently reporting
+                # a clean run or leaving the session locked.
+                try:
+                    self._finalize_run(
+                        finished_thread,
+                        move_log=[],
+                        did_shutdown=False,
+                        move_ok=0,
+                        move_errors=max(1, len(files)),
+                    )
+                except Exception:
+                    self._log("❌ Abschluss nach fehlgeschlagenem Move-Start ist fehlgeschlagen.", "error")
+                    self._log(traceback.format_exc(), "error")
+            return False
 
     def _prepare_ui(self, files: list[str]) -> None:
         ui = self._ui
@@ -129,7 +162,8 @@ class RegularMoveLifecycle:
         move_thread.log_line.connect(lambda message: invoke_callback(self._log, message))
         move_thread.progress.connect(ui.progress_bar.setValue)
         move_thread.request_user.connect(
-            lambda request_id, payload: invoke_callback(self._on_move_req, request_id, payload)
+            lambda request_id, payload: owned_move_callback(self._state, move_thread,
+                self._on_move_req, request_id, dict(payload, _request_worker=move_thread))
         )
         move_thread.file_counted.connect(
             lambda done, total: ui.total_lbl.setText(f"Gesamt: Verschieben {done}/{total}")
@@ -153,6 +187,11 @@ class RegularMoveLifecycle:
         self._refresh_queue()
 
     def _finish(self, move_thread, *, finished_thread, moved: bool, shutdown: bool) -> None:
+        if not claim_move_finish(move_thread):
+            return
+        if self._state.move_thread is not move_thread:
+            retire_move_thread(self._state, move_thread)
+            return
         try:
             state = self._state
             ui = self._ui
@@ -193,11 +232,19 @@ class RegularMoveLifecycle:
                 move_ok=move_ok,
                 move_errors=move_errors,
             )
-            self._set_start_enabled(True)
-            self._set_queue_edit(True)
-            ui.pause_btn.setEnabled(False)
-            ui.pause_btn.setText("⏸ Pause")
-            self._refresh_queue()
         except Exception:
             self._log("❌ Unbehandelte Ausnahme in _move_done()", "error")
             self._log(traceback.format_exc(), "error")
+        finally:
+            # The synchronous start reservation deliberately spans conversion ->
+            # move hand-off. Only the terminal move callback may release it.
+            if self._state.move_thread is move_thread:
+                self._state.move_thread = None
+            retire_move_thread(self._state, move_thread)
+            self._state.start_reserved = False
+            self._set_start_enabled(True)
+            self._set_queue_edit(True)
+            self._ui.abort_btn.setEnabled(False)
+            self._ui.pause_btn.setEnabled(False)
+            self._ui.pause_btn.setText("⏸ Pause")
+            self._refresh_queue()

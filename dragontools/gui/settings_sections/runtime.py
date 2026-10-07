@@ -246,7 +246,8 @@ class RuntimeToolsSection(SettingsSection):
 
     def load(self) -> None:
         d, s = self.dialog, self.settings
-        migrate_parallel_defaults(s)
+        if self.is_visible("parallel"):
+            migrate_parallel_defaults(s)
         d.default_codec_combo.setCurrentText(s.value("defaults/codec", "h265", type=str))
         d.series_default_combo.setCurrentText(s.value(cfg.SET_KEY_SERIES_DEFAULT_TYPE, "Anime", type=str))
         d.shutdown_countdown_spin.setValue(int(s.value(cfg.SET_KEY_SHUTDOWN_COUNTDOWN, 30, type=int)))
@@ -267,21 +268,28 @@ class RuntimeToolsSection(SettingsSection):
 
     def save(self) -> bool:
         d, s = self.dialog, self.settings
-        s.setValue("defaults/codec", d.default_codec_combo.currentText())
-        s.setValue(cfg.SET_KEY_SERIES_DEFAULT_TYPE, d.series_default_combo.currentText())
-        s.setValue(cfg.SET_KEY_SHUTDOWN_COUNTDOWN, d.shutdown_countdown_spin.value())
-        s.setValue(cfg.SET_KEY_PARALLEL_CPU_JOBS, d.parallel_cpu_spin.value())
-        s.setValue(cfg.SET_KEY_PARALLEL_GPU_JOBS, d.parallel_gpu_spin.value())
-        for key, cb in d._tool_cbs.items():
-            s.setValue(key, cb.isChecked())
-        for key, ed in d._tool_edits.items():
-            s.setValue(key, ed.text().strip())
-        s.setValue(SET_KEY_WHISPER_MODEL_DIR, d.whisper_model_dir_edit.text().strip())
-        s.setValue(SET_KEY_WHISPER_USE_LOCAL_MODEL, d.whisper_local_model_cb.isChecked())
-        invalidate_tool_paths()
-        if not self._watch_panel.save():
-            return False
-        return self._notification_panel.save()
+        if self.is_visible("defaults"):
+            s.setValue("defaults/codec", d.default_codec_combo.currentText())
+            s.setValue(cfg.SET_KEY_SERIES_DEFAULT_TYPE, d.series_default_combo.currentText())
+            s.setValue(cfg.SET_KEY_SHUTDOWN_COUNTDOWN, d.shutdown_countdown_spin.value())
+        if self.is_visible("parallel"):
+            s.setValue(cfg.SET_KEY_PARALLEL_CPU_JOBS, d.parallel_cpu_spin.value())
+            s.setValue(cfg.SET_KEY_PARALLEL_GPU_JOBS, d.parallel_gpu_spin.value())
+        if self.is_visible("tools"):
+            for key, cb in d._tool_cbs.items():
+                s.setValue(key, cb.isChecked())
+            for key, ed in d._tool_edits.items():
+                s.setValue(key, ed.text().strip())
+            s.setValue(SET_KEY_WHISPER_MODEL_DIR, d.whisper_model_dir_edit.text().strip())
+            s.setValue(SET_KEY_WHISPER_USE_LOCAL_MODEL, d.whisper_local_model_cb.isChecked())
+            invalidate_tool_paths()
+        if self.is_visible("watch_folders"):
+            if not self._watch_panel.save():
+                return False
+        if self.is_visible("notifications"):
+            if not self._notification_panel.save():
+                return False
+        return True
 
     def check_current_tools(self) -> None:
         d = self.dialog

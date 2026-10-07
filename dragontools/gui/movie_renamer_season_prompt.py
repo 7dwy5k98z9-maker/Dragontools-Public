@@ -18,18 +18,23 @@ class MovieRenamerSeasonPromptMixin:
         if not unresolved:
             return True
 
-        groups: dict[tuple[str, str], list[int]] = {}
+        groups: dict[tuple[str, str, int | None], list[int]] = {}
         for row in unresolved:
             path = Path(self.table_controller.row_path(row))
             parsed = parse_series_release_name(path)
             series_key = (parsed.series if parsed is not None else path.stem).casefold()
-            groups.setdefault((str(path.parent), series_key), []).append(row)
+            year = self.table_controller.row_year_override(row)
+            if year is None and parsed is not None:
+                year = parsed.year
+            groups.setdefault((str(path.parent), series_key, year), []).append(row)
 
         all_resolved = True
-        for group_rows in groups.values():
+        for (_folder, _series_key, year), group_rows in groups.items():
             first_path = Path(self.table_controller.row_path(group_rows[0]))
             parsed = parse_series_release_name(first_path)
             series = parsed.series if parsed is not None else first_path.stem
+            if year is not None:
+                series = f'{series} ({year})'
             episodes: list[str] = []
             for row in group_rows[:5]:
                 row_parsed = parse_series_release_name(self.table_controller.row_path(row))
@@ -156,7 +161,7 @@ class MovieRenamerSeasonPromptMixin:
             "Episode ändern",
             f"Episode für {len(series_rows)} ausgewählte Serien-Datei(en):",
             default_episode,
-            0,
+            1,
             9999,
             1,
         )

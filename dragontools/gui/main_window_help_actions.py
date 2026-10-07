@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PyQt6.QtCore import QTimer, QUrl
+from PyQt6.QtCore import QUrl
 from PyQt6.QtGui import QDesktopServices
 from PyQt6.QtWidgets import QApplication, QMessageBox
 
@@ -11,12 +11,14 @@ from .shortcut_dialog import ShortcutDialog
 from ..core.resource_paths import BASE, EXE_DIR
 from ..core.version import APP_VERSION
 from ..core.update_check import UpdateCheckResult
+from .dialog_ownership import exec_owned_dialog
+from .qt_receiver_state import receiver_is_alive
 
 
 class MainWindowHelpActionsMixin:
     def _open_help(self):
         from .help_dialog import HelpDialog
-        HelpDialog(self).exec()
+        exec_owned_dialog(HelpDialog(self))
 
     def _find_handbook(self) -> Path | None:
         filename = "Handbuch.pdf"
@@ -54,15 +56,15 @@ class MainWindowHelpActionsMixin:
             )
 
     def _open_shortcuts(self):
-        ShortcutDialog(self._shortcut_entries(), self).exec()
+        exec_owned_dialog(ShortcutDialog(self._shortcut_entries(), self))
 
     def _open_changelog(self):
         from .changelog_dialog import ChangelogDialog
-        ChangelogDialog(self).exec()
+        exec_owned_dialog(ChangelogDialog(self))
 
     def _open_legacy_changelog(self):
         from .changelog_dialog import ChangelogDialog
-        ChangelogDialog(self, version_key="v8").exec()
+        exec_owned_dialog(ChangelogDialog(self, version_key="v8"))
 
     def _open_url(self, url: str) -> None:
         import webbrowser
@@ -93,7 +95,8 @@ class MainWindowHelpActionsMixin:
         # laufen auch innerhalb eines modalen Dialogs weiter, daher verschieben
         # wir die Abfrage, bis kein anderer Dialog mehr geöffnet ist.
         if QApplication.activeModalWidget() is not None:
-            QTimer.singleShot(3000, self._check_for_updates_on_startup)
+            from .ui_helpers import schedule_window_callback
+            schedule_window_callback(self, 3000, self._check_for_updates_on_startup)
             return
         self._check_for_updates(manual=False)
 
@@ -103,9 +106,11 @@ class MainWindowHelpActionsMixin:
         manual: bool,
         checker,
     ) -> None:
-        checker.deleteLater()
-        if getattr(self, "_github_update_checker", None) is checker:
-            self._github_update_checker = None
+        if receiver_is_alive(checker):
+            checker.deleteLater()
+        if not receiver_is_alive(self) or getattr(self, "_github_update_checker", None) is not checker:
+            return
+        self._github_update_checker = None
         if manual:
             self.statusBar().clearMessage()
 

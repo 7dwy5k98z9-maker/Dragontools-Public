@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 from fractions import Fraction
+import math
+from ..core.media_duration import stream_duration as _stream_duration
+from ..core.strict_numbers import nonnegative_integer
 
 from .duration_repair_models import _COMMON_FRAME_RATES
 
@@ -13,16 +16,19 @@ def parse_duration_tag(value) -> float | None:
     text = str(value).strip()
     if ":" not in text:
         try:
-            return float(text.replace(",", "."))
+            number = float(text.replace(",", "."))
+            return number if math.isfinite(number) and number >= 0 else None
         except (TypeError, ValueError):
             return None
     try:
         parts = text.split(":")
         if len(parts) != 3:
             return None
-        hours = float(parts[0])
-        minutes = float(parts[1])
+        hours = nonnegative_integer(parts[0])
+        minutes = nonnegative_integer(parts[1])
         seconds = float(parts[2].replace(",", "."))
+        if minutes >= 60 or not math.isfinite(seconds) or not 0 <= seconds < 60:
+            return None
         return hours * 3600.0 + minutes * 60.0 + seconds
     except (TypeError, ValueError):
         return None
@@ -32,25 +38,22 @@ def parse_seconds(value) -> float | None:
     if value in (None, "", "N/A"):
         return None
     try:
-        return float(str(value).replace(",", "."))
+        number = float(str(value).replace(",", "."))
+        return number if math.isfinite(number) else None
     except (TypeError, ValueError):
         return parse_duration_tag(value)
 
 
 def parse_mediainfo_duration(value) -> float | None:
-    seconds = parse_seconds(value)
-    if seconds is None:
-        return None
-    if seconds > 10000:
-        return seconds / 1000.0
-    return seconds
+    from ..core.media_metadata import _parse_mediainfo_duration_s
+    return _parse_mediainfo_duration_s(value)
 
 
 def parse_int(value) -> int | None:
     if value in (None, "", "N/A"):
         return None
     try:
-        return int(float(str(value).replace(",", ".")))
+        return nonnegative_integer(value)
     except (TypeError, ValueError):
         return None
 
@@ -96,16 +99,12 @@ def choose_frame_rate(avg: Fraction | None, real: Fraction | None) -> Fraction |
 
 
 def max_known(values: list[float | None]) -> float | None:
-    known = [float(value) for value in values if value is not None and value > 0]
+    known = [float(value) for value in values if value is not None and math.isfinite(value) and value > 0]
     return max(known) if known else None
 
 
 def stream_duration(stream: dict) -> float | None:
-    duration = parse_seconds(stream.get("duration"))
-    if duration is not None:
-        return duration
-    tags = stream.get("tags") or {}
-    return parse_duration_tag(tags.get("DURATION") or tags.get("duration"))
+    return _stream_duration(stream)
 
 
 __all__ = [

@@ -110,7 +110,7 @@ _DEFAULT_RULES: dict[str, Any] = {
         "stereo": {
             "max_channels": 2,
             "target_codec": "aac",
-            "max_bitrate_k": 192,
+            "max_bitrate_k": 256,
             "copy_min_bitrate_k": 192,
             "copy_max_bitrate_k": 256,
         },
@@ -201,7 +201,7 @@ def normalize_audio_processing_config(rules: dict[str, Any] | None) -> dict[str,
 def _normalize_stereo_copy_range(rule: dict[str, Any]) -> None:
     _normalize_copy_range(
         rule,
-        target_default_k=192,
+        target_default_k=256,
         min_default_k=192,
         max_default_k=256,
         maximum_k=2048,

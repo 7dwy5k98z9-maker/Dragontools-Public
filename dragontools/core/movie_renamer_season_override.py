@@ -7,6 +7,18 @@ from dataclasses import replace
 from .movie_renamer_models import ParsedSeriesReleaseName
 
 
+def normalize_episode_number(value, *, minimum=1):
+    if type(value) is int:
+        number = value
+    elif isinstance(value, str) and value.strip().isascii() and value.strip().isdecimal():
+        number = int(value.strip())
+    else:
+        raise ValueError('Episoden- und Staffelnummern müssen ganze Zahlen sein.')
+    if not minimum <= number <= 9999:
+        raise ValueError('Episoden- oder Staffelnummer liegt außerhalb des gültigen Bereichs.')
+    return number
+
+
 def apply_series_season_override(
     parsed: ParsedSeriesReleaseName,
     season_override: int | None,
@@ -20,8 +32,8 @@ def apply_series_season_override(
     if season_override is None:
         return (parsed, "missing") if parsed.season_missing else (parsed, None)
     try:
-        season = int(season_override)
-    except (TypeError, ValueError):
+        season = normalize_episode_number(season_override, minimum=0)
+    except ValueError:
         return parsed, "invalid"
     if season < 0 or season > 9999:
         return parsed, "invalid"
@@ -48,14 +60,18 @@ def apply_series_episode_override(
     if episode_override is None:
         return parsed, None
     try:
-        episode = int(episode_override)
-    except (TypeError, ValueError):
+        episode = normalize_episode_number(episode_override)
+    except ValueError:
         return parsed, "invalid"
-    if episode < 0 or episode > 9999:
+    if episode <= 0 or episode > 9999:
         return parsed, "invalid"
 
     warnings = tuple(
         item for item in parsed.warnings
         if not (item.startswith("Episode ") and "manuell gesetzt" in item)
     ) + (f"Episode {episode} manuell gesetzt.",)
-    return replace(parsed, episode=episode, warnings=warnings), None
+    numbers = tuple(range(episode, episode + len(parsed.episode_numbers)))
+    if numbers[-1] > 9999:
+        return parsed, 'invalid'
+    return replace(parsed, episode=episode, episodes=numbers if parsed.episodes else (),
+        episode_title='', episode_titles=(), episode_mapping_required=False, warnings=warnings), None

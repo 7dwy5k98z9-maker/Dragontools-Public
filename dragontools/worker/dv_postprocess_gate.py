@@ -23,6 +23,14 @@ class DVPostprocessGate:
             if abort_requested is not None and abort_requested():
                 return False
             if self._semaphore.acquire(timeout=0.2):
+                try:
+                    cancelled = abort_requested is not None and abort_requested()
+                except Exception:
+                    self._semaphore.release()
+                    raise
+                if cancelled:
+                    self._semaphore.release()
+                    return False
                 with self._lock:
                     self._active += 1
                 return True

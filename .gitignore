@@ -62,5 +62,6 @@ Thumbs.db
 /DragonTools_Source_*.zip
 
 
-# Generated PyInstaller specifications
+# Generated specifications and local release assets
 /*.spec
+/artifacts/

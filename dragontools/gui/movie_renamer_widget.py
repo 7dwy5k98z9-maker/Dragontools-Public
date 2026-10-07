@@ -136,8 +136,7 @@ class MovieRenamerWidget(QWidget):
 
     # ---- lifecycle -----------------------------------------------------------
     def iter_shutdown_workers(self) -> tuple:
-        thread = self._resolver.thread
-        return (thread,) if thread is not None else ()
+        return self._resolver.iter_shutdown_workers()
 
     def closeEvent(self, event) -> None:
         self._resolver.shutdown()

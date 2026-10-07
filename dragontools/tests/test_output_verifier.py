@@ -121,6 +121,7 @@ def test_output_verifier_uses_configurable_duration_tolerance(tmp_path, monkeypa
         ffprobe_path="ffprobe",
         duration_max_ratio=1.50,
         duration_max_extra_s=0,
+        duration_max_overrun_s=50,
     ).verify(str(out), "mkv", expected_duration_ms=100_000, source_has_audio=True)
 
     assert strict.ok is False

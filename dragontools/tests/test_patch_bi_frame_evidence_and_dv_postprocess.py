@@ -47,6 +47,9 @@ def test_encode_stage_complete_is_not_legacy_committed_postprocess_status():
         def isRunning(self):
             return True
     child = Child()
+    from dragontools.core.path_syntax import path_compare_key
+    queue.assigned[path_compare_key("a.mkv")] = child
+    registry.workers.append(child)
     registry.active_workers.add(child)
     coordinator = ParallelChildResultCoordinator(registry=registry, queue_state=queue, result_state=results)
     emitted: list[tuple[str, str]] = []
@@ -161,8 +164,8 @@ def test_rpu_parity_does_not_accept_estimate_as_exact(tmp_path):
         verbose_log=lambda *_a, **_k: None,
         assert_nonempty_file=lambda *_a, **_k: True,
     )
-    # No fast metadata value -> safe fallback, not a false exact equality.
-    assert service.validate_rpu_frame_parity(
+    # No reliable HEVC count -> fail closed; an estimate must not authorize injection.
+    assert not service.validate_rpu_frame_parity(
         SimpleNamespace(),
         rpu_path=rpu,
         hevc_path=hevc,
@@ -276,7 +279,7 @@ def test_generator_client_older_success_payload_infers_actual_analysis_count(tmp
     source.write_bytes(b"video")
 
     def fake_run(command, **kwargs):
-        output.write_text('{"SceneInfo":[]}', encoding="utf-8")
+        output.write_text(json.dumps({'SceneInfo': [{'SequenceFrameIndex': index} for index in range(321)]}), encoding="utf-8")
         return ToolRunResult(command=list(command), returncode=0, stdout=json.dumps({"success": True, "frames": 321, "scenes": 2}))
 
     result = HDR10PlusGeneratorClient(str(exe), run_tool_fn=fake_run).analyze(source, output)
@@ -371,7 +374,7 @@ def test_hdr10plus_analysis_count_is_reused_after_metadata_injection(tmp_path):
 
     class Generator:
         def analyze(self, input_path, output_path):
-            Path(output_path).write_text('{"SceneInfo":[]}', encoding="utf-8")
+            Path(output_path).write_text('{"SceneInfo":[{"SequenceFrameIndex":0}]}', encoding="utf-8")
             return HDR10PlusGeneratorResult(
                 True, 0, frames=500, frame_count_source="analysis_actual", frame_count_reliability="reliable"
             )

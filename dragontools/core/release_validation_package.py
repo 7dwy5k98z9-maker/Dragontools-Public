@@ -16,7 +16,7 @@ def _load_release_manifest(root: Path) -> tuple[dict, ReleaseCheck]:
             "Kein release_manifest.json vorhanden; Build-Dateien werden nach Legacy-Regeln geprueft.",
         )
     data = _load_json(path)
-    if int(data.get("schema_version", 0) or 0) != 1:
+    if type(data.get("schema_version")) is not int or data.get("schema_version") != 1:
         return data, ReleaseCheck(
             "error",
             "Release-Manifest",
@@ -30,7 +30,13 @@ def _load_release_manifest(root: Path) -> tuple[dict, ReleaseCheck]:
             f"Unbekanntes Release-Profil: {profile!r}",
         )
     declared_version = str(data.get("app_version") or "").strip()
-    if declared_version and declared_version != APP_VERSION:
+    if not declared_version:
+        return data, ReleaseCheck(
+            "error",
+            "Release-Manifest",
+            f"Pflichtfeld app_version fehlt in {path.name}.",
+        )
+    if declared_version != APP_VERSION:
         return data, ReleaseCheck(
             "error",
             "Release-Manifest",

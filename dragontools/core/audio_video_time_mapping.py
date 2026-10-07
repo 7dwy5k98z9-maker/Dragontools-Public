@@ -4,6 +4,7 @@ from __future__ import annotations
 from .audio_video_match_models import AudioVideoMatcherSettings, MatchPoint, TimeMappingResult, VideoInfo
 from .audio_video_match_utils import _clamp
 from .audio_video_time_mapping_edges import evaluate_edges
+from .audio_sync_validation import valid_landmarks
 from .audio_video_time_mapping_fit import confidence as _confidence
 from .audio_video_time_mapping_fit import fit_mapping, linear_regression as _linear_regression, merge_regions as _merge_regions
 
@@ -36,7 +37,7 @@ def classify_time_mapping(
     cfg = settings or AudioVideoMatcherSettings()
     valid = sorted(points, key=lambda p: p.reference_time_s)
     unmatched = sorted(float(t) for t in (unmatched_reference_times or []))
-    if len(valid) < cfg.min_match_points:
+    if len(valid) < cfg.min_match_points or not valid_landmarks(valid, source_info, target_info):
         return _insufficient_result(valid, unmatched, source_info, target_info)
 
     fit = fit_mapping(valid, unmatched_reference_times=unmatched, settings=cfg)

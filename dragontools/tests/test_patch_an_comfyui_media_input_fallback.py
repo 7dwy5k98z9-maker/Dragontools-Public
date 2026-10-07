@@ -102,6 +102,7 @@ def test_video_service_never_queues_static_banner_workflow(tmp_path: Path, monke
     from dragontools.worker import comfyui_video_worker
 
     monkeypatch.setattr(comfyui_video_worker, "ComfyUIClient", FakeClient)
+    monkeypatch.setattr(comfyui_video_worker, "verify_comfyui_video", lambda **_kw: SimpleNamespace(success=True, video_offset_s=0.0))
     result = ComfyUIHDRVideoService(
         tools=SimpleNamespace(ffmpeg="ffmpeg"),
         log=lambda message, level="info": logs.append((level, message)),

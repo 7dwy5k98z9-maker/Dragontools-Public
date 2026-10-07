@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from ..rules.subtitle_rules import build_mp4_subtitle_storage_plan, compute_subtitle_plan
+from ..core.lang_codes import mkv_language_tags
+from .converter_subtitle_args import _subtitle_disposition
 from .converter_strip_runtime import subtitle_rules
 
 
@@ -16,7 +18,7 @@ def build_strip_subtitle_args(worker, mi, ov, container: str, *, exclude_mkv_str
     )
     for warning in getattr(plan, "burn_warnings", ()) or ():
         worker.log(f"⚠️ {warning}", "warn")
-    if str(container or "mkv").lower() == "mp4":
+    if str(container or "mkv").lower() in {"mp4", "m4v", "mov"}:
         return _mp4_subtitle_args(plan, rules)
     return _mkv_subtitle_args(plan, rules=rules, exclude_stream_indices=exclude_mkv_stream_indices)
 
@@ -29,29 +31,19 @@ def _mp4_subtitle_args(plan, rules: dict) -> list[str]:
     for out_idx, stream in enumerate(storage.internal_streams):
         args += ["-map", f"0:{stream.index}", f"-c:s:{out_idx}", "mov_text"]
         if getattr(stream, "language", None):
-            args += [f"-metadata:s:s:{out_idx}", f"language={str(stream.language).lower()}"]
+            args += [f"-metadata:s:s:{out_idx}", f"language={mkv_language_tags(stream.language)[0]}"]
         title = str(getattr(stream, "title", "") or "").replace("\n", " ").strip()
         if title:
             args += [f"-metadata:s:s:{out_idx}", f"title={title}"]
-        args += [f"-disposition:s:{out_idx}", "forced" if bool(getattr(stream, "forced", False)) else "0"]
+        args += [f"-disposition:s:{out_idx}", _subtitle_disposition(stream)]
     return args
 
 
 def _mkv_subtitle_args(plan, *, rules: dict | None = None, exclude_stream_indices: set[int] | None = None) -> list[str]:
     streams = ([plan.burn_sub] if plan.burn_sub else []) + list(plan.keep_streams)
-    deduped = []
-    seen: set[int] = set()
-    excluded = {int(i) for i in (exclude_stream_indices or set())}
-    from ..rules.subtitle_storage import pgs_original_storage
-    pgs_sidecar = pgs_original_storage(rules) == "sidecar"
-    for stream in streams:
-        if int(stream.index) in excluded:
-            continue
-        if pgs_sidecar and str(getattr(stream, "codec", "") or "").strip().lower() in {"hdmv_pgs_subtitle", "pgs"}:
-            continue
-        if stream.index not in seen:
-            seen.add(stream.index)
-            deduped.append(stream)
+    from ..rules.subtitle_storage import mkv_internal_subtitle_streams
+    deduped = mkv_internal_subtitle_streams(streams, subtitle_rules=rules,
+        excluded_indices=exclude_stream_indices or ())
 
     if not deduped:
         return ["-sn"]
@@ -64,11 +56,11 @@ def _mkv_subtitle_args(plan, *, rules: dict | None = None, exclude_stream_indice
         else:
             args += [f"-c:s:{out_idx}", "copy"]
         if getattr(stream, "language", None):
-            args += [f"-metadata:s:s:{out_idx}", f"language={str(stream.language).lower()}"]
+            args += [f"-metadata:s:s:{out_idx}", f"language={mkv_language_tags(stream.language)[0]}"]
         title = str(getattr(stream, "title", "") or "").replace("\n", " ").strip()
         if title:
             args += [f"-metadata:s:s:{out_idx}", f"title={title}"]
-        args += [f"-disposition:s:{out_idx}", "forced" if bool(getattr(stream, "forced", False)) else "0"]
+        args += [f"-disposition:s:{out_idx}", _subtitle_disposition(stream)]
     return args
 
 

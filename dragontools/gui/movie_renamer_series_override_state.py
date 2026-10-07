@@ -5,6 +5,7 @@ from __future__ import annotations
 from PyQt6.QtCore import Qt
 
 from ..core.movie_renamer import parse_series_release_name
+from ..core.movie_renamer_season_override import normalize_episode_number
 
 
 class MovieRenamerSeriesOverrideStateMixin:
@@ -20,7 +21,7 @@ class MovieRenamerSeriesOverrideStateMixin:
             return None
 
     def set_row_season_override(self, row: int, season: int) -> None:
-        season_value = int(season)
+        season_value = normalize_episode_number(season, minimum=0)
         if season_value < 0 or season_value > 9999:
             raise ValueError("Staffel muss zwischen 0 und 9999 liegen.")
         meta = self.row_meta(row)
@@ -56,9 +57,9 @@ class MovieRenamerSeriesOverrideStateMixin:
             return None
 
     def set_row_episode_override(self, row: int, episode: int) -> None:
-        episode_value = int(episode)
-        if episode_value < 0 or episode_value > 9999:
-            raise ValueError("Episode muss zwischen 0 und 9999 liegen.")
+        episode_value = normalize_episode_number(episode)
+        if episode_value <= 0 or episode_value > 9999:
+            raise ValueError("Episode muss zwischen 1 und 9999 liegen.")
         meta = self.row_meta(row)
         meta["episode_override"] = episode_value
         self.row_item(row, self.columns.ACCEPT).setData(Qt.ItemDataRole.UserRole, meta)

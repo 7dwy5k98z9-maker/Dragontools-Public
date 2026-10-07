@@ -2,8 +2,10 @@
 """Qt-independent state models for parallel conversion coordination."""
 from __future__ import annotations
 import logging
+from threading import RLock
+from .parallel_queue_coordination import coordinated_change, canonical_owned_input
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from ..core.path_syntax import path_compare_key
 from ..core.conversion_artifacts import ArtifactRegistry, ConversionArtifactBundle, bundles_from_worker
@@ -12,8 +14,10 @@ from ..core.conversion_artifacts import ArtifactRegistry, ConversionArtifactBund
 @dataclass
 class ParallelQueueState:
     files: list[str]
+    lock: object = field(default_factory=RLock, init=False, repr=False, compare=False)
     pending_files: list[str] = field(init=False)
     assigned: dict[str, object] = field(default_factory=dict)
+    individually_paused: set[str] = field(default_factory=set)
     file_progress_pct: dict[str, int] = field(default_factory=dict)
     terminal_inputs: set[str] = field(default_factory=set)
     postprocessing_inputs: set[str] = field(default_factory=set)
@@ -41,6 +45,7 @@ class ParallelQueueState:
         self.pending_files = list(self.files)
         self.rebuild_display_positions()
 
+    @coordinated_change
     def rebuild_display_positions(self) -> None:
         self.display_total = len(self.files)
         self.file_keys = {path_compare_key(path) for path in self.files}
@@ -49,6 +54,7 @@ class ParallelQueueState:
             for index, path in enumerate(self.files, start=1)
         }
 
+    @coordinated_change
     def aggregate_progress_percent(self) -> int:
         total = max(1, len(self.files))
         active_fraction = sum(
@@ -61,6 +67,7 @@ class ParallelQueueState:
             value = min(value, 99)
         return max(0, min(100, value))
 
+    @coordinated_change
     def display_position(self, path: str, fallback_idx: int, fallback_total: int) -> tuple[int, int]:
         try:
             idx = int(self.display_index_by_path.get(path_compare_key(path), fallback_idx))
@@ -72,6 +79,7 @@ class ParallelQueueState:
             total = fallback_total
         return max(1, idx), max(1, total)
 
+    @coordinated_change
     def reorder(self, order: list[str]) -> None:
         pending_by_key = {path_compare_key(path): path for path in self.pending_files}
         seen_pending: set[str] = set()
@@ -135,6 +143,7 @@ class ParallelWorkerRegistry:
     workers: list[object] = field(default_factory=list)
     active_workers: set[object] = field(default_factory=set)
     postprocessing_workers: set[object] = field(default_factory=set)
+    finished_workers: set[object] = field(default_factory=set)
     replace_service: object | None = None
 
     def active_count(self) -> int:
@@ -155,7 +164,13 @@ class ParallelWorkerRegistry:
         self.replace_service.archiviert = archived
 
     def sync_child_maps(self, child, input_path: str | None = None) -> None:
-        self.result_state.sync_from_child(child, input_path)
+        for bundle in bundles_from_worker(child):
+            canonical = canonical_owned_input(self.queue_state, child, bundle.input_path, allow_terminal=True)
+            if canonical is None:
+                continue
+            if input_path is not None and path_compare_key(input_path) != path_compare_key(canonical):
+                continue
+            self.result_state.artifacts.publish(replace(bundle, input_path=canonical))
         self.sync_replace_service()
 
     def unreported_child_files(self, child) -> list[str]:
@@ -185,7 +200,8 @@ class ParallelWorkerRegistry:
         seen: set[str] = set()
         for path in candidates:
             key = path_compare_key(path)
-            if not key or key in seen or key in terminal_keys:
+            if (not key or key in seen or key in terminal_keys
+                    or self.queue_state.assigned.get(key) is not child):
                 continue
             seen.add(key)
             result.append(path)

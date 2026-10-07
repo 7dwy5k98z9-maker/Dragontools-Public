@@ -222,6 +222,7 @@ def test_metadata_browser_gui_source_contains_required_mapping_contract() -> Non
     """Static GUI contract test stays runnable on CI images without PyQt6."""
     source_path = Path(__file__).parents[1] / "gui" / "movie_renamer_metadata_browser.py"
     source = source_path.read_text(encoding="utf-8")
+    source += '\n' + (source_path.parent / 'movie_renamer_browser_mapping.py').read_text(encoding='utf-8')
     ast.parse(source)
 
     assert 'self.span_spin.setRange(1, 4)' in source

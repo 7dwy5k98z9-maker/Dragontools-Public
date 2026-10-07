@@ -6,17 +6,20 @@ import os
 import shutil
 import traceback
 import uuid
+from functools import partial
 from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
 from ..core.path_safety import is_safe_subpath, safe_unlink
+from .log_dispatch import dispatch_log
 
 
 def preserve_completed_dv_work(state, result, *, log):
     """Retain late failures without copying huge files or requiring HDR10+."""
     if result.success or not state.video_encode_completed or result.failure_archive_path:
         return result
+    log = partial(dispatch_log, log)
     root = state.files.root
     # Set the cleanup veto before any fallible I/O. Even a full/unavailable
     # archive volume must not destroy hours of completed encoding.
@@ -211,7 +214,7 @@ def _persistent_diagnostic_paths(staged: list[Path], source_artifacts: list[Path
 
 class DVFailureRecovery:
     def __init__(self, *, log) -> None:
-        self._log = log
+        self._log = partial(dispatch_log, log)
 
     def cleanup_tmp_sub(self, *, base_dir: Path, tmp_sub: str | None, clear_tmp_sub) -> None:
         if not tmp_sub:
@@ -344,10 +347,10 @@ class DVFailureRecovery:
         level5_proc=None,
     ) -> Path:
         ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        fail_dir = Path(output_path).parent / "Fehler" / f"{Path(output_path).stem}__DV_CROP_FAILED__{ts}"
-        fail_dir.mkdir(parents=True, exist_ok=True)
+        fail_dir = Path(output_path).parent / "Fehler" / f"{Path(output_path).stem}__DV_CROP_FAILED__{ts}_{uuid.uuid4().hex}"
+        fail_dir.mkdir(parents=True, exist_ok=False)
 
-        mux_plain_mp4_without_dv()
+        mux_ok = bool(mux_plain_mp4_without_dv()) and _nonempty_file(plain_mp4)
 
         def copy_if_exists(src: Path | None, dst_name: str):
             if src and src.exists():
@@ -373,13 +376,13 @@ class DVFailureRecovery:
             "Level-5-RPU-Crop: fehlgeschlagen",
             "Unsicherer AutoCrop-Fallback: bewusst deaktiviert",
             "DV-Injektion: abgebrochen",
-            "Hinweis: MP4 ohne DV wurde gesichert.",
+            "Hinweis: MP4 ohne DV wurde gesichert." if mux_ok else "Hinweis: Kein validierter MP4-Kandidat ohne DV; vorhandene Arbeitsartefakte gesichert.",
             "",
         ]
 
         if level5_proc is not None:
-            lines.append(f"Level5 returncode: {level5_proc.returncode}")
-            txt = ((level5_proc.stdout or "") + "\n" + (level5_proc.stderr or "")).strip()
+            lines.append(f"Level5 returncode: {getattr(level5_proc, 'returncode', level5_proc)}")
+            txt = (str(getattr(level5_proc, 'stdout', '') or '') + "\n" + str(getattr(level5_proc, 'stderr', '') or '')).strip()
             if txt:
                 lines.append("--- Level5-Ausgabe ---")
                 lines.extend(txt.splitlines()[-20:])

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -74,34 +75,28 @@ def read_active_job_journal(root: str | Path | None = None) -> dict[str, Any] | 
     return journals[0] if journals else None
 
 
+def job_journal_owned_by_process(data: dict[str, Any] | None, pid: int | None = None) -> bool:
+    """Return True when *data* belongs to the supplied/current process.
+
+    The recovery UI must never offer load/archive actions for the journal of a
+    conversion that is still running in this DragonTools process.
+    """
+    if not isinstance(data, dict):
+        return False
+    try:
+        journal_pid = int(data.get("pid") or 0)
+        owner_pid = os.getpid() if pid is None else int(pid)
+    except (TypeError, ValueError):
+        return False
+    return journal_pid > 0 and owner_pid > 0 and journal_pid == owner_pid
+
+
 def archive_job_journal_path(journal_path: str | Path, *, status: str = "ignored") -> Path | None:
-    """Archiviert genau ein Journal und entfernt nur diese aktive Datei."""
+    from .journal_archive import archive_journal
     path = Path(journal_path)
     if not path.exists():
         return None
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
-        _LOG.warning("Job-Journal konnte vor dem Archivieren nicht gelesen werden: %s (%s)", path, exc)
-        data = {}
-    if not isinstance(data, dict):
-        data = {}
-
-    data["active"] = False
-    data["status"] = str(status or "ignored")
-    data["finished_at"] = now_iso()
-    data["updated_at"] = data["finished_at"]
-
-    archive_dir = path.parent / ARCHIVE_DIR_NAME
-    archive_dir.mkdir(parents=True, exist_ok=True)
-    run_id = str(data.get("run_id") or datetime.now().strftime("%Y%m%d_%H%M%S"))
-    archive = unique_archive_path(archive_dir / f"{run_id}_{data['status']}.json")
-    atomic_write_json(archive, data)
-    try:
-        path.unlink(missing_ok=True)
-    except OSError as exc:
-        _LOG.warning("Archiviertes Job-Journal konnte nicht entfernt werden: %s (%s)", path, exc)
-    return archive
+    return archive_journal(path, status=status, write=atomic_write_json)
 
 
 def archive_active_job_journal(

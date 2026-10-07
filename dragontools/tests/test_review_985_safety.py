@@ -105,6 +105,7 @@ def _probe(monkeypatch, issue, **changes):
     stream.update(changes)
     monkeypatch.setattr(guard, "run_tool", lambda *a, **kw: SimpleNamespace(
         returncode=0, aborted=False, stdout=json.dumps({"streams": [stream]})))
+    return stream
 
 
 def test_replaced_source_is_not_modified(tmp_path, monkeypatch):
@@ -130,10 +131,11 @@ def test_live_track_identity_must_match_snapshot(tmp_path, monkeypatch, changes)
 def test_metadata_commit_checks_late_events(tmp_path, monkeypatch, late_event):
     issue = replace(_stream_issue(tmp_path), stream_ordinal=1)
     worker = SimpleNamespace(abort_requested=False)
-    _probe(monkeypatch, issue)
+    stream = _probe(monkeypatch, issue)
     def edit(path, **kwargs):
         assert Path(path) != Path(issue.path)
         Path(path).write_bytes(b"edited copy")
+        stream["tags"]["title"] = kwargs["title"]
         if late_event == "abort":
             worker.abort_requested = True
         if late_event == "replacement":
@@ -181,7 +183,7 @@ def test_shutdown_refuses_live_jellyfin_thread(monkeypatch):
     monkeypatch.setattr(dispatch, "_ACTIVE_WORKERS", {Active()})
     monkeypatch.setattr(dispatch, "_SHUTTING_DOWN", False)
     monkeypatch.setattr(shutdown, "stop_metadata_action_thread", lambda *a, **kw: True)
-    monkeypatch.setattr(shutdown, "stop_watch_folder_controller", lambda *a: True)
+    monkeypatch.setattr(shutdown, "stop_watch_folder_controller", lambda *a, **kw: True)
     monkeypatch.setattr(shutdown.QMessageBox, "warning", lambda *a: None)
     assert not shutdown.prepare_main_window_close(SimpleNamespace(_tab_widgets={}), timeout_ms=0)
 
@@ -262,6 +264,7 @@ def test_audio_abort_discards_already_collected_evidence(tmp_path, monkeypatch):
     monkeypatch.setattr(service, "_extract_audio_sample", lambda *a: True)
     def detect(path):
         worker.abort_requested = True
+        worker.abort_type = "sofort"
         return LanguageEvidence("de", .99)
     monkeypatch.setattr(service, "_whisper_detector", lambda: SimpleNamespace(detect_file=detect))
     assert not service.detect(_stream_issue(tmp_path)).accepted

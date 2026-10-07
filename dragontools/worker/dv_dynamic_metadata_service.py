@@ -317,12 +317,15 @@ class DVDynamicMetadataService:
             hevc_count = probe_hevc_frame_count(runner, hevc_path)
 
         if rpu_count is None or hevc_count is None:
-            self._vlog(
-                "[DV][STEP 6/7] Kein verlässlicher vollständiger Bildzahlnachweis verfügbar; "
-                "keine Schätzung wird als Parität akzeptiert. Injection bleibt über Tool-RC, "
-                "RPU-Rückextraktion und Inhaltsprüfung abgesichert."
+            reason = (
+                "RPU/Encode-Frame-Parität kann vor der Injection nicht sicher nachgewiesen werden: "
+                f"RPU={rpu_count if rpu_count is not None else 'unbekannt'}, "
+                f"HEVC={hevc_count if hevc_count is not None else 'unbekannt'}. "
+                "Schätzwerte werden nicht als exakter DV-Timeline-Nachweis akzeptiert."
             )
-            return True
+            self._temp_state.record_failure(reason=reason, stage="STEP 6/7 RPU-Injektion")
+            self._log(f"❌ [DV] {reason}", "error")
+            return False
         if rpu_count == hevc_count:
             self._vlog(f"[DV][STEP 6/7] Frame-Paritaet OK: {rpu_count} Frames.")
             return True
@@ -339,7 +342,7 @@ class DVDynamicMetadataService:
             allow_error=True,
             return_process=True,
             timeout=_TIMEOUT_RPU_EXTRACT(),
-            label="STEP 6/7 RPU-Frameprüfung",
+            label="DV RPU-Framezählung",
         )
         if proc is None or getattr(proc, "returncode", 1) != 0:
             return None

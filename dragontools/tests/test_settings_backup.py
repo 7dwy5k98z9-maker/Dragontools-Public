@@ -421,3 +421,220 @@ def test_unknown_scrypt_profile_is_rejected_before_key_derivation(monkeypatch):
     monkeypatch.setattr(crypto, "_derive_key", must_not_derive)
     with pytest.raises(ValueError, match="KDF-Parameter"):
         crypto.decrypt_sensitive_settings(payload, "valid-password")
+
+
+def test_excluded_backup_preserves_opaque_dpapi_storage_value_verbatim(tmp_path):
+    """A local DPAPI blob must never be replaced by an empty decrypted fallback."""
+    from dragontools.core.settings import SET_KEY_METADATA_TMDB_API_KEY
+    from dragontools.core.settings_backup import export_backup, restore_backup
+
+    archive = tmp_path / "excluded.zip"
+    export_backup(
+        archive,
+        settings=FakeSettings({"normal/key": "from-backup"}),
+        documents_dir=tmp_path / "source",
+    )
+
+    opaque = "dpapi:v1:not-decryptable-in-this-process"
+    target = FakeSettings({
+        SET_KEY_METADATA_TMDB_API_KEY: opaque,
+        "normal/key": "old",
+    })
+    restore_backup(
+        archive,
+        settings=target,
+        documents_dir=tmp_path / "restore",
+        clear_settings=True,
+    )
+
+    assert target.values[SET_KEY_METADATA_TMDB_API_KEY] == opaque
+    assert target.values["normal/key"] == "from-backup"
+
+
+def test_failed_restore_rolls_back_opaque_dpapi_storage_value_verbatim(tmp_path):
+    import pytest
+
+    from dragontools.core.settings import SET_KEY_METADATA_TMDB_API_KEY
+    from dragontools.core.settings_backup import export_backup, restore_backup
+
+    archive = tmp_path / "restore-fails.zip"
+    export_backup(
+        archive,
+        settings=FakeSettings({"normal/key": "new"}),
+        documents_dir=tmp_path / "source",
+    )
+
+    opaque = "dpapi:v1:opaque-before-restore"
+    target = FailingSyncSettings({
+        SET_KEY_METADATA_TMDB_API_KEY: opaque,
+        "normal/key": "old",
+    })
+    with pytest.raises(RuntimeError, match="sync failed"):
+        restore_backup(
+            archive,
+            settings=target,
+            documents_dir=tmp_path / "restore",
+            clear_settings=True,
+        )
+
+    assert target.values == {
+        SET_KEY_METADATA_TMDB_API_KEY: opaque,
+        "normal/key": "old",
+    }
+
+
+def test_v2_excluded_backup_rejects_plaintext_secret_in_settings_json(tmp_path):
+    import json
+    import zipfile
+
+    import pytest
+
+    from dragontools.core.settings import SET_KEY_JELLYFIN_API_KEY
+    from dragontools.core.settings_backup import restore_backup
+
+    archive = tmp_path / "plaintext-secret.zip"
+    with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("manifest.json", json.dumps({
+            "format": "DragonToolsBackup",
+            "format_version": 2,
+            "app_version": "9.8.7",
+            "secrets": {"mode": "excluded"},
+        }))
+        zf.writestr("settings.json", json.dumps({SET_KEY_JELLYFIN_API_KEY: "must-not-restore"}))
+
+    target = FakeSettings({"keep": "current"})
+    with pytest.raises(ValueError, match="sensible Schlüssel im Klartext"):
+        restore_backup(archive, settings=target, documents_dir=tmp_path / "restore")
+    assert target.values == {"keep": "current"}
+
+
+def test_encrypted_backup_rejects_non_secret_keys_inside_secret_block(tmp_path):
+    import json
+    import zipfile
+
+    import pytest
+
+    from dragontools.core.settings_backup import SECRET_MODE_ENCRYPTED, restore_backup
+    from dragontools.core.settings_backup_crypto import encrypt_sensitive_settings
+
+    archive = tmp_path / "bad-secret-namespace.zip"
+    encrypted = encrypt_sensitive_settings({"normal/key": "override"}, "very-good-password")
+    with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("manifest.json", json.dumps({
+            "format": "DragonToolsBackup",
+            "format_version": 2,
+            "app_version": "9.8.7",
+            "secrets": {"mode": SECRET_MODE_ENCRYPTED},
+        }))
+        zf.writestr("settings.json", json.dumps({"normal/key": "visible"}))
+        zf.writestr("secrets.enc", encrypted)
+
+    target = FakeSettings({"keep": "current"})
+    with pytest.raises(ValueError, match="nicht-sensitive"):
+        restore_backup(
+            archive,
+            settings=target,
+            documents_dir=tmp_path / "restore",
+            password="very-good-password",
+        )
+    assert target.values == {"keep": "current"}
+
+
+def test_restore_rejects_unexpected_or_nested_backup_file_members(tmp_path):
+    import json
+    import zipfile
+
+    import pytest
+
+    from dragontools.core.settings_backup import restore_backup
+
+    for member in (
+        "files/rules/nested/audio_rules.json",
+        "files/profiles/not-a-profile.json",
+        "files/unknown/data.json",
+    ):
+        archive = tmp_path / (member.replace("/", "_") + ".zip")
+        with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr("manifest.json", json.dumps({
+                "format": "DragonToolsBackup",
+                "format_version": 2,
+                "app_version": "9.8.7",
+                "secrets": {"mode": "excluded"},
+            }))
+            zf.writestr("settings.json", "{}")
+            zf.writestr(member, "{}")
+        target = FakeSettings({"keep": "current"})
+        with pytest.raises(ValueError, match="Backup|Backup|Eintrag"):
+            restore_backup(archive, settings=target, documents_dir=tmp_path / "restore")
+        assert target.values == {"keep": "current"}
+
+
+def test_restore_rejects_invalid_serialized_bytes_without_mutating_settings(tmp_path):
+    import json
+    import zipfile
+
+    import pytest
+
+    from dragontools.core.settings_backup import restore_backup
+
+    archive = tmp_path / "invalid-bytes.zip"
+    with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("manifest.json", json.dumps({
+            "format": "DragonToolsBackup",
+            "format_version": 2,
+            "app_version": "9.8.7",
+            "secrets": {"mode": "excluded"},
+        }))
+        zf.writestr("settings.json", json.dumps({
+            "ui/geometry": {"__bytes_b64__": "%%%not-base64%%%"},
+        }))
+
+    target = FakeSettings({"keep": "current"})
+    with pytest.raises(ValueError, match="Base64"):
+        restore_backup(archive, settings=target, documents_dir=tmp_path / "restore")
+    assert target.values == {"keep": "current"}
+
+
+def test_atomic_restore_write_fsyncs_staged_file(tmp_path, monkeypatch):
+    from dragontools.core import settings_backup_restore as module
+
+    calls: list[int] = []
+    real_fsync = module.os.fsync
+
+    def capture_fsync(fd: int):
+        calls.append(fd)
+        return real_fsync(fd)
+
+    monkeypatch.setattr(module.os, "fsync", capture_fsync)
+    target = tmp_path / "rules" / "audio_rules.json"
+    target.parent.mkdir(parents=True)
+
+    module.atomic_write_bytes(target, b'{"safe": true}')
+
+    assert target.read_bytes() == b'{"safe": true}'
+    assert calls, "Restore-Dateien müssen vor os.replace() fsync erhalten."
+
+
+def test_encrypted_backup_fails_instead_of_exporting_empty_unreadable_dpapi_secret(tmp_path):
+    import pytest
+
+    from dragontools.core.secret_settings import SecretProtectionError
+    from dragontools.core.settings import SET_KEY_METADATA_TMDB_API_KEY
+    from dragontools.core.settings_backup import SECRET_MODE_ENCRYPTED, export_backup
+
+    target = tmp_path / "must-not-exist.zip"
+    settings = FakeSettings({
+        "normal/key": "visible",
+        SET_KEY_METADATA_TMDB_API_KEY: "dpapi:v1:opaque-from-other-user",
+    })
+
+    with pytest.raises(SecretProtectionError, match="verschlüsselte Backup"):
+        export_backup(
+            target,
+            settings=settings,
+            documents_dir=tmp_path / "source",
+            secret_mode=SECRET_MODE_ENCRYPTED,
+            password="strong-password",
+        )
+
+    assert not target.exists()

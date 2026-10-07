@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from fractions import Fraction
+from ..core.media_duration import positive_seconds
 
 from .workflow_engine import WorkflowVerifyResult
 
@@ -104,14 +105,16 @@ def duration_close(
     min_tolerance_s: float = 3.0,
     relative_tolerance: float = 0.02,
 ) -> bool:
-    if value is None or expected is None or value <= 0 or expected <= 0:
+    value, expected = positive_seconds(value), positive_seconds(expected)
+    if value is None or expected is None:
         return False
     tolerance = max(min_tolerance_s, abs(expected) * relative_tolerance)
     return abs(float(value) - float(expected)) <= tolerance
 
 
 def is_extreme_mismatch(value: float | None, expected: float | None) -> bool:
-    if value is None or expected is None or value <= 0 or expected <= 0:
+    value, expected = positive_seconds(value), positive_seconds(expected)
+    if value is None or expected is None:
         return False
     value = float(value)
     expected = float(expected)

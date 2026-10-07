@@ -2,19 +2,26 @@
 from __future__ import annotations
 
 import subprocess
-import tempfile
+from copy import deepcopy
 from pathlib import Path
 
 from ..core.codec_utils import normalize_target_codec
 from ..core.path_syntax import user_path_name
 from ..core.output_timestamps import build_output_timestamp_args
+from ..core.media_stream_selection import primary_ffmpeg_video_index
 
 from .encoder_args import _vid_args
 from .comfyui_video_worker import ComfyUIHDRVideoService
+from .hdrplus_workspace import HDRPlusWorkspace
+from .log_dispatch import dispatch_log
+from .comfyui_video_contract import verify_comfyui_mux
+from .comfyui_mux_plan import comfyui_output_args, build_comfyui_mux_command, log_comfyui_completion
+from ..core.comfyui_timing import source_cfr
 from .hdr10_color import hdr10_output_args
 from .workflow_models import PipelineExecutionRequest, PipelineExecutionResult
 from .subtitle_sidecar_service import SubtitleSidecarService
 from .converter_subtitle_args import build_subtitle_args
+from .required_sidecar_step import finalize_required_sidecars
 from ..rules.subtitle_rules import any_sidecar_export_enabled, compute_subtitle_plan
 
 _VIDEO_STAT_TAGS_TO_CLEAR = ("BPS", "DURATION", "NUMBER_OF_FRAMES", "NUMBER_OF_BYTES")
@@ -66,7 +73,7 @@ class StandardPipelineRunner:
         crf=None,
         preset: str | None = None,
     ) -> tuple[str, object, str, object]:
-        options = encoder_options or self._encoder_options
+        options = self._encoder_options if encoder_options is None else encoder_options
         active_crf = self._crf if crf is None else crf
         active_preset = preset or self._preset
         enc_key = options.get("encoder", "cpu")
@@ -98,14 +105,14 @@ class StandardPipelineRunner:
                 failure_reason="Encode-Plan fehlt.",
             )
 
-        video_map_count = self._count_video_output_maps(plan.vf_args)
+        video_map_count = self._count_video_output_maps(plan.vf_args, request.media_info)
         if video_map_count != 1:
             reason = (
                 "Standard-Encoding abgebrochen: unerwartetes Video-Mapping "
                 f"({video_map_count} Video-Outputs)."
             )
             if self._log:
-                self._log(reason, "error")
+                dispatch_log(self._log, reason, "error")
             return PipelineExecutionResult(
                 success=False,
                 failure_stage="Standard-Encoding",
@@ -115,7 +122,8 @@ class StandardPipelineRunner:
         codec = normalize_target_codec(request.codec or self._codec)
         crf = request.crf
         preset = request.preset or self._preset
-        encoder_options = dict(request.encoder_options or self._encoder_options)
+        planned_options = getattr(plan, "encoder_options", None)
+        encoder_options = deepcopy(request.encoder_options if planned_options is None else planned_options)
         output_args = ["-map_metadata", "0"] + _clear_reencoded_video_stat_tags()
         output_args += build_output_timestamp_args(request.container)
         enhancement_hdr = bool(encoder_options.get("_sdr_hdr_applied", False))
@@ -128,7 +136,7 @@ class StandardPipelineRunner:
                 encoder_options["_force_10bit"] = True
             if self._log:
                 prefix = "SDR→HDR Enhancement" if enhancement_hdr else "Standard-Encoding"
-                self._log(
+                dispatch_log(self._log, 
                     f"{prefix}: HDR10-Ausgabeparameter gesetzt "
                     "(BT.2020/PQ/10-bit/Limited).",
                     "info",
@@ -161,7 +169,7 @@ class StandardPipelineRunner:
         )
         return_code = self._progress_runner(cmd, request.input_path, request.duration_ms)
         if return_code != 0:
-            fallback = self._try_mov_text_fallback(
+            fallback = None if return_code in {124, 130} else self._try_mov_text_fallback(
                 request=request,
                 original_command=cmd,
                 output_args=output_args,
@@ -201,8 +209,10 @@ class StandardPipelineRunner:
 
         parent = Path(request.output_path).parent
         parent.mkdir(parents=True, exist_ok=True)
-        with tempfile.TemporaryDirectory(prefix="dragontools_comfyui_", dir=parent) as temp_dir:
-            temp_root = Path(temp_dir)
+        output_args = comfyui_output_args(request.container, output_args)
+        workspace = HDRPlusWorkspace(parent, "dragontools_comfyui_")
+        try:
+            temp_root = workspace.root
             hdr_video = temp_root / "hdrtvdm_video.mkv"
             manifest = temp_root / "hdrtvdm_manifest.json"
             video_args = _vid_args(codec, crf, preset, encoder_options)
@@ -218,31 +228,25 @@ class StandardPipelineRunner:
                 manifest_path=str(manifest),
             )
             if not rendered.success:
+                preserve = bool(getattr(rendered, 'preserve_artifacts', False))
+                if not preserve:
+                    workspace.mark_persisted()
                 return PipelineExecutionResult(
                     False,
                     failure_stage="ComfyUI/HDRTVDM",
-                    failure_reason=rendered.message or rendered.error or "AI-HDR-Konvertierung fehlgeschlagen.",
+                    failure_reason=(rendered.message or rendered.error or "AI-HDR-Konvertierung fehlgeschlagen.")
+                        + (f" Temporäre Auftragsdateien erhalten: {temp_root}" if preserve else ""),
                     tool="ComfyUI",
                     tool_output=rendered.error,
+                    failure_artifact_paths=(str(temp_root),) if preserve else (),
                 )
-            if self._log:
-                vram = f", Peak-VRAM {rendered.peak_vram_bytes / 1024**3:.2f} GiB" if rendered.peak_vram_bytes else ""
-                elapsed = f", {rendered.elapsed_s:.1f}s" if rendered.elapsed_s > 0 else ""
-                self._log(f"✅ ComfyUI/HDRTVDM: {rendered.frames} Frames verarbeitet{elapsed}{vram}.", "info")
-
-            mux_cmd = (
-                [self._tools.ffmpeg, "-y", "-loglevel", "error"]
-                + list(getattr(plan, "audio_input_args", []) or [])
-                + ["-i", request.input_path, "-i", str(hdr_video), "-map", "1:v:0", "-c:v", "copy"]
-                + list(plan.audio_args)
-                + list(plan.sn)
-                + output_args
-                + [request.output_path]
-            )
+            log_comfyui_completion(self._log, rendered)
+            mux_cmd = build_comfyui_mux_command(
+                self._tools.ffmpeg, request, hdr_video, rendered, output_args, plan.sn)
             return_code = self._progress_runner(mux_cmd, request.input_path, request.duration_ms)
             fallback_sidecars: tuple[str, ...] = ()
             if return_code != 0:
-                mov_streams = self._selected_mkv_mov_text_streams(request)
+                mov_streams = [] if return_code in {124, 130} else self._selected_mkv_mov_text_streams(request)
                 if mov_streams:
                     backup = self._export_mov_text_backup(request, mov_streams)
                     if not backup.complete:
@@ -258,19 +262,16 @@ class StandardPipelineRunner:
                         container=request.container, subtitle_rules=self._subtitle_rules,
                         exclude_mkv_stream_indices={int(stream.index) for stream in mov_streams},
                     )
-                    retry_cmd = (
-                        [self._tools.ffmpeg, "-y", "-loglevel", "error"]
-                        + list(getattr(plan, "audio_input_args", []) or [])
-                        + ["-i", request.input_path, "-i", str(hdr_video), "-map", "1:v:0", "-c:v", "copy"]
-                        + list(plan.audio_args)
-                        + list(fallback_sn)
-                        + output_args
-                        + [request.output_path]
-                    )
+                    retry_cmd = build_comfyui_mux_command(
+                        self._tools.ffmpeg, request, hdr_video, rendered, output_args, fallback_sn)
                     if self._log:
-                        self._log("⚠️ mov_text→SRT fehlgeschlagen; Originalspur als MP4-Sidecar gesichert. Mux wird ohne diese Spur wiederholt.", "warn")
+                        dispatch_log(self._log, "⚠️ mov_text→SRT fehlgeschlagen; Originalspur als MP4-Sidecar gesichert. Mux wird ohne diese Spur wiederholt.", "warn")
                     return_code = self._progress_runner(retry_cmd, request.input_path, request.duration_ms)
                     if return_code == 0:
+                        verified = self._verify_comfyui_mux(request, rendered, video_args, fallback_sn, temp_root)
+                        if verified is not None:
+                            return verified
+                        workspace.mark_persisted()
                         return self._finish_sidecars(
                             request,
                             initial_sidecars=fallback_sidecars,
@@ -281,12 +282,29 @@ class StandardPipelineRunner:
                 output = str(getattr(self._worker, "_last_stderr", "") or "").strip()
                 return PipelineExecutionResult(
                     False, failure_stage="ComfyUI-HDR-Mux",
-                    failure_reason=f"ffmpeg wurde mit Returncode {return_code} beendet.",
+                    failure_reason=f"ffmpeg wurde mit Returncode {return_code} beendet. HDR-Zwischenergebnis erhalten: {temp_root}",
                     tool=user_path_name(self._tools.ffmpeg),
                     command=subprocess.list2cmdline([str(part) for part in mux_cmd]),
                     tool_output=output,
+                    failure_artifact_paths=(str(temp_root),),
                 )
+            verified = self._verify_comfyui_mux(request, rendered, video_args, plan.sn, temp_root)
+            if verified is not None:
+                return verified
+            workspace.mark_persisted()
+        finally:
+            workspace.finish()
         return self._finish_sidecars(request)
+
+    def _verify_comfyui_mux(self, request, rendered, video_args, subtitle_args, temp_root):
+        evidence = verify_comfyui_mux(tools=self._tools, worker=self._worker, log=self._log,
+            output_path=request.output_path, container=request.container, fps=source_cfr(request.media_info),
+            rendered=rendered, encode_args=video_args, audio_args=request.plan.audio_args, subtitle_args=subtitle_args)
+        if evidence.success:
+            return None
+        return PipelineExecutionResult(False, failure_stage='ComfyUI-HDR-Mux-Verifikation',
+            failure_reason=f'{evidence.message} HDR-Zwischenergebnis erhalten: {temp_root}',
+            failure_artifact_paths=(str(temp_root),))
 
     def _selected_mkv_mov_text_streams(self, request: PipelineExecutionRequest):
         if str(request.container or "mkv").lower() in {"mp4", "m4v", "mov"}:
@@ -322,6 +340,10 @@ class StandardPipelineRunner:
         preset: str,
         encoder_options: dict,
     ) -> PipelineExecutionResult | None:
+        # Lifecycle cancellation/timeout codes must not trigger fresh exports
+        # or a second encode. A normal codec failure can still use the backup.
+        if getattr(self._worker, "abort_requested", False) and getattr(self._worker, "abort_type", None) == "sofort":
+            return None
         mov_streams = self._selected_mkv_mov_text_streams(request)
         if not mov_streams:
             return None
@@ -351,7 +373,7 @@ class StandardPipelineRunner:
             + [request.output_path]
         )
         if self._log:
-            self._log(
+            dispatch_log(self._log, 
                 "⚠️ mov_text→SRT konnte nicht erfolgreich abgeschlossen werden; "
                 "Originalspur wurde verlustfrei als Subtitle-only-MP4 gesichert. Encoding wird ohne diese interne Spur wiederholt.",
                 "warn",
@@ -389,34 +411,22 @@ class StandardPipelineRunner:
         initial_sidecars: tuple[str, ...] = (),
         externalized_subtitle_stream_indices: tuple[int, ...] = (),
     ) -> PipelineExecutionResult:
-        sidecars: tuple[str, ...] = tuple(initial_sidecars)
-        target_container = str(request.container).lower()
-        if any_sidecar_export_enabled(self._subtitle_rules, container=target_container):
+        def export_step():
+            target_container = str(request.container).lower()
+            if not any_sidecar_export_enabled(self._subtitle_rules, container=target_container):
+                return True, (), ""
             export = self._subtitle_service.export_sidecars_result(
-                input_path=request.input_path,
-                output_base=Path(request.output_path).with_suffix(""),
-                media_info=request.media_info,
-                file_override=request.override,
-                container=target_container,
-            )
-            sidecars = tuple(dict.fromkeys((*sidecars, *tuple(export.exported_paths))))
-            if not export.complete:
-                return PipelineExecutionResult(
-                    False, sidecar_paths=sidecars, failure_stage="Untertitel-Export",
-                    failure_reason=export.failure_summary() or "Sidecar-Export unvollständig.",
-                )
-        return PipelineExecutionResult.succeeded(
-            sidecar_paths=sidecars,
-            externalized_subtitle_stream_indices=externalized_subtitle_stream_indices,
-        )
+                input_path=request.input_path, output_base=Path(request.output_path).with_suffix(""),
+                media_info=request.media_info, file_override=request.override, container=target_container)
+            return export.complete, export.exported_paths, export.failure_summary()
+        return finalize_required_sidecars(export_step, initial_sidecars=initial_sidecars,
+            externalized_indices=externalized_subtitle_stream_indices)
 
     @staticmethod
-    def _count_video_output_maps(args: list[str]) -> int:
-        count = 0
-        for idx, arg in enumerate(args[:-1]):
-            if arg != "-map":
-                continue
-            target = str(args[idx + 1])
-            if target.startswith("0:v") or target == "[vout]":
-                count += 1
-        return count
+    def _count_video_output_maps(args: list[str], media_info=None) -> int:
+        selectors = [str(args[idx + 1]) for idx, arg in enumerate(args[:-1]) if arg == "-map"]
+        allowed = {"0:v:0", "[vout]"}
+        primary_index = primary_ffmpeg_video_index(media_info)
+        if primary_index is not None:
+            allowed.add(f"0:{primary_index}")
+        return len(selectors) if all(target in allowed for target in selectors) else 0

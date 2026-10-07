@@ -15,6 +15,7 @@ import sys
 from ..core.tool_paths import get_tool_paths
 from ..core.settings_conversion import DEFAULT_OUTPUT_DURATION_MAX_EXTRA_S, DEFAULT_OUTPUT_DURATION_MAX_PERCENT, DEFAULT_OUTPUT_DURATION_MIN_PERCENT, DEFAULT_OUTPUT_MIN_SIZE_KB, DEFAULT_REPAIR_DURATION_REMUX_ENABLED, DEFAULT_REPAIR_DURATION_TIMESTAMP_ENABLED, SET_KEY_OUTPUT_DURATION_MAX_EXTRA_S, SET_KEY_OUTPUT_DURATION_MAX_PERCENT, SET_KEY_OUTPUT_DURATION_MIN_PERCENT, SET_KEY_OUTPUT_MIN_SIZE_KB, SET_KEY_REPAIR_DURATION_REMUX_ENABLED, SET_KEY_REPAIR_DURATION_TIMESTAMP_ENABLED
 from ..core.settings_access import settings_bool, settings_int
+from ..core.settings_conversion import SET_KEY_CORRUPT_SOURCE_RPU_FALLBACK, DEFAULT_CORRUPT_SOURCE_RPU_FALLBACK
 from .av1_metadata_pipeline import AV1DolbyVisionPipeline, AV1HDR10PlusPipeline
 from .duration_repair_service import DurationRepairService
 from .dv_processing_pipeline import DVProcessingPipeline
@@ -139,6 +140,7 @@ class ConverterRuntimeBuilder:
             maximum=3600,
         )
         services.output_verifier = OutputVerifier(
+            worker=worker,
             ffprobe_path=tools.ffprobe,
             min_size_bytes=min_size_kb * 1024,
             duration_min_ratio=duration_min_percent / 100.0,
@@ -212,6 +214,8 @@ class ConverterRuntimeBuilder:
         services.source_visual_check = SourceVisualCheckService(
             ffmpeg_path=tools.ffmpeg,
             ffprobe_path=tools.ffprobe,
+            worker=worker,
+            abort_on_request=False,
         )
         quality_runner = QualityProcessRunner(
             worker=worker,
@@ -260,6 +264,9 @@ class ConverterRuntimeBuilder:
             temp_state=worker._temp_state,
             session_state=worker._session_state,
             logger=worker._logger,
+            corrupt_source_rpu_fallback=settings_bool(worker.settings,SET_KEY_CORRUPT_SOURCE_RPU_FALLBACK,
+                DEFAULT_CORRUPT_SOURCE_RPU_FALLBACK),
+            abort_check=lambda: bool(worker.abort_requested),
         )
         services.workflow_runner = ConversionWorkflowRunner(
             services.workflow_services,

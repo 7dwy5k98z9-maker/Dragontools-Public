@@ -64,7 +64,7 @@ def test_queue_action_collaborators_are_bounded_and_single_owner():
             assert method.name not in owners, f"{method.name} duplicated in {filename} and {owners[method.name]}"
             owners[method.name] = filename
 
-    assert len(owners) == 52
+    assert len(owners) == 55
 
 
 def test_queue_action_mixins_keep_unique_aggregation_surface():
@@ -118,6 +118,9 @@ def test_queue_action_mixins_keep_unique_aggregation_surface():
         "_postprocess_badge_parts",
         "_source_visual_settings_for_manual_check",
         "_show_source_visual_check",
+        "_source_visual_result_ready",
+        "_source_visual_failed",
+        "_source_visual_finished",
         "_allow_suspicious_source",
         "_override_label_text",
         "_set_file_list_item_text",
@@ -148,7 +151,7 @@ def test_queue_action_mixins_keep_unique_aggregation_surface():
 
 def test_source_visual_and_profile_dependencies_have_dedicated_owners():
     dependency_owners: dict[str, set[str]] = {
-        "SourceVisualCheckService": set(),
+        "SourceVisualCheckThread": set(),
         "profile_to_override": set(),
         "MediaInfoDialog": set(),
     }
@@ -159,10 +162,10 @@ def test_source_visual_and_profile_dependencies_have_dedicated_owners():
                 dependency_owners[node.id].add(path.name)
     source_visual_path = GUI_DIR / "convert_widget_source_visual_actions.py"
     source_tree = ast.parse(source_visual_path.read_text(encoding="utf-8"))
-    if any(isinstance(node, ast.Name) and node.id == "SourceVisualCheckService" for node in ast.walk(source_tree)):
-        dependency_owners["SourceVisualCheckService"].add(source_visual_path.name)
+    if any(isinstance(node, ast.Name) and node.id == "SourceVisualCheckThread" for node in ast.walk(source_tree)):
+        dependency_owners["SourceVisualCheckThread"].add(source_visual_path.name)
 
-    assert dependency_owners["SourceVisualCheckService"] == {"convert_widget_source_visual_actions.py"}
+    assert dependency_owners["SourceVisualCheckThread"] == {"convert_widget_source_visual_actions.py"}
     assert dependency_owners["profile_to_override"] == {"convert_widget_queue_override_actions.py"}
     assert dependency_owners["MediaInfoDialog"] == {"convert_widget_queue_context_actions.py"}
 

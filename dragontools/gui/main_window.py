@@ -6,7 +6,7 @@ import ctypes
 import sys
 import traceback
 
-from PyQt6.QtCore import QSettings, QTimer
+from PyQt6.QtCore import QSettings
 from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import QMainWindow, QMessageBox, QWidget
 
@@ -24,6 +24,7 @@ from .main_window_recovery import MainWindowRecoveryMixin
 from .windows_restart_guard import install_windows_restart_guard
 from .watch_folder_main_window_bridge import start_watch_folder_controller
 from .main_window_shutdown import prepare_main_window_close
+from .ui_helpers import schedule_window_callback
 
 
 class MainWindow(
@@ -68,13 +69,13 @@ class MainWindow(
         start_watch_folder_controller(self)
         install_windows_restart_guard(self)
         # Fenster beim Start immer sichtbar in den Vordergrund holen.
-        # QTimer.singleShot(0) stellt sicher, dass das Fenster erst vollständig
+        # Ein Event-Loop-Timer stellt sicher, dass das Fenster erst vollständig
         # initialisiert und vom Event-Loop gerendert ist, bevor raise_/
         # activateWindow() greifen – sonst kann der Fokus-Aufruf ins Leere laufen.
-        QTimer.singleShot(0, lambda: bring_to_front(self))
-        QTimer.singleShot(900, self._maybe_show_recovery_journals)
-        QTimer.singleShot(1600, self._maybe_show_replacement_reminders)
-        QTimer.singleShot(2800, self._check_for_updates_on_startup)
+        schedule_window_callback(self, 0, lambda: bring_to_front(self))
+        schedule_window_callback(self, 900, self._maybe_show_recovery_journals)
+        schedule_window_callback(self, 1600, self._maybe_show_replacement_reminders)
+        schedule_window_callback(self, 2800, self._check_for_updates_on_startup)
 
     def _set_icon(self):
         for c in (

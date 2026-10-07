@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import ast
+import os
 import re
 import sys
 import zipfile
@@ -7,6 +9,8 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+from dragontools.core.release_validation_privacy import _python_secret_candidates, _looks_like_secret_name, _looks_like_real_secret
 SKIP_DIRS = {
     ".git",
     ".venv",
@@ -57,8 +61,10 @@ def is_skipped(path: Path) -> bool:
     return any(part.casefold() in SKIP_DIRS or part.casefold().startswith(".pytest_tmp") for part in path.relative_to(ROOT).parts)
 
 
-def scan_text(label: str, text: str, findings: list[str]) -> None:
+def scan_text(label: str, text: str, findings: list[str], *, python_source: bool = False) -> None:
     for description, pattern in PRIVATE_PATTERNS:
+        if python_source and description == "möglicher Zugangsschlüssel":
+            continue
         if match := pattern.search(text):
             if description == "möglicher Zugangsschlüssel" and _is_allowed_placeholder(match.group(0)):
                 continue
@@ -84,13 +90,28 @@ def main() -> int:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
     findings: list[str] = []
-    for path in ROOT.rglob("*"):
+    paths = []
+    for directory, names, files in os.walk(ROOT):
+        names[:] = [name for name in names if name.casefold() not in SKIP_DIRS and not name.casefold().startswith(".pytest_tmp") and name.casefold() != "artifacts"]
+        paths.extend(Path(directory) / name for name in files)
+    for path in paths:
         if not path.is_file() or is_skipped(path):
             continue
         relative = path.relative_to(ROOT).as_posix()
         scan_text(f"Dateiname {relative}", relative, findings)
         if path.suffix.casefold() in TEXT_SUFFIXES:
-            scan_text(relative, path.read_text(encoding="utf-8", errors="replace"), findings)
+            source = path.read_text(encoding="utf-8", errors="replace")
+            python_source = path.suffix.casefold() == ".py"
+            scan_text(relative, source, findings, python_source=python_source)
+            if python_source:
+                try:
+                    tree = ast.parse(source, filename=relative)
+                except SyntaxError:
+                    findings.append(f"{relative}: Python-Syntax nicht prüfbar")
+                else:
+                    for name, value, line in _python_secret_candidates(tree):
+                        if _looks_like_secret_name(name) and _looks_like_real_secret(value, name):
+                            findings.append(f"{relative}:{line}: mögliches Python-Secret für {name!r}; Wert maskiert")
         elif path.suffix.casefold() == ".docx":
             with zipfile.ZipFile(path) as archive:
                 for name in archive.namelist():

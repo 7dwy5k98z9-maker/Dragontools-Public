@@ -55,7 +55,7 @@ class QualityTestThread(QThread):
     def run(self) -> None:
         try:
             self._run()
-            self.outcome = "cancelled" if self.abort_requested else "success"
+            self.outcome = "cancelled" if self.abort_requested else "error" if self._service.had_failures else "success"
         except Exception:
             self.outcome = "error"
             self.log_line.emit("❌ Unbehandelte Ausnahme im Qualitätstester:")

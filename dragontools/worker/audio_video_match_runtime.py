@@ -61,6 +61,13 @@ class AudioVideoMatchToolIO:
             raise RuntimeError(detail or f"{Path(cmd[0]).name} fehlgeschlagen")
         return result.stdout or b""
 
+    def is_aborted(self) -> bool:
+        return bool(self._is_aborted())
+
+    def raise_if_aborted(self) -> None:
+        if self.is_aborted():
+            raise RuntimeError("Abgebrochen")
+
     def log(self, message: str, severity: str = "info") -> None:
         prefix = {"error": "❌", "warn": "⚠️", "info": "ℹ️"}.get(severity, "ℹ️")
         self._callbacks.log_line(f"{prefix} {message}")

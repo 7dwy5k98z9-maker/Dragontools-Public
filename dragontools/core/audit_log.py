@@ -8,7 +8,8 @@ from typing import Any
 
 from .settings_app import APP_NAME, APP_ORG
 from .settings_storage import LOG_ROOT_KEYS
-from .settings_metadata import SENSITIVE_SETTINGS_KEYS
+from .settings_metadata import is_sensitive_settings_key
+from .diagnostic_redaction import redact_sensitive_text
 
 _LOG = logging.getLogger(__name__)
 
@@ -35,7 +36,11 @@ def append_audit_event(
         log_dir = settings_change_log_dir(settings, log_root=log_root)
         target = log_dir / f"settings_changes_{datetime.now().strftime('%Y-%m')}.txt"
         ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        suffix = f" | {details.strip()}" if details and str(details).strip() else ""
+        suffix = (
+            f" | {redact_sensitive_text(str(details).strip())}"
+            if details and str(details).strip()
+            else ""
+        )
         with open(target, "a", encoding="utf-8") as handle:
             handle.write(f"[{ts}] {action}{suffix}\n")
         return target
@@ -95,7 +100,7 @@ def log_qsettings_changes(
 
 
 def _display_value(key: str, value: Any) -> str:
-    if key in SENSITIVE_SETTINGS_KEYS:
+    if is_sensitive_settings_key(key):
         return "***" if value not in (None, "") else ""
     text = str(value)
     if len(text) > 90:

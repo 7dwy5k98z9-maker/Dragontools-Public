@@ -296,6 +296,6 @@ def test_converter_job_state_copies_mutable_config_maps():
     state.subtitle_rules["schema_version"] = 999
 
     assert config.encoder_options["encoder"] == "cpu"
-    # Nested override dictionaries intentionally retain historical shallow-copy semantics.
-    assert config.file_overrides["a.mkv"]["crf"] == 19
+    # Every worker owns its nested options; another child must retain its profile.
+    assert config.file_overrides["a.mkv"]["crf"] == 18
     assert config.subtitle_rules["schema_version"] == 4

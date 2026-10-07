@@ -37,9 +37,23 @@ class PipelineDecisionService:
         self._archive_service = archive_service
         self.last_selection: dict | None = None
 
-    def select_pipeline_context(self, input_path: str, media_info, file_override: dict | None = None) -> tuple[str, str]:
-        if self._codec in {TargetCodec.H265.value, TargetCodec.AV1.value}:
-            if self._codec == TargetCodec.AV1.value:
+    def select_pipeline_context(
+        self,
+        input_path: str,
+        media_info,
+        file_override: dict | None = None,
+        *,
+        effective_encoder_options: dict | None = None,
+        effective_codec: str | None = None,
+    ) -> tuple[str, str]:
+        codec = normalize_target_codec(effective_codec or self._codec)
+        encoder_options = (
+            self._encoder_options
+            if effective_encoder_options is None
+            else effective_encoder_options
+        )
+        if codec in {TargetCodec.H265.value, TargetCodec.AV1.value}:
+            if codec == TargetCodec.AV1.value:
                 dv_key = SET_KEY_AV1_PRESERVE_DV
                 hdr_key = SET_KEY_AV1_PRESERVE_HDRPLUS
             else:
@@ -48,10 +62,10 @@ class PipelineDecisionService:
             stored_dv = settings_bool(self._settings, dv_key, True)
             stored_hdrplus = settings_bool(self._settings, hdr_key, True)
             global_preserve_dv = _safe_bool(
-                self._encoder_options.get("preserve_dv", stored_dv), stored_dv
+                encoder_options.get("preserve_dv", stored_dv), stored_dv
             )
             global_preserve_hdrplus = _safe_bool(
-                self._encoder_options.get("preserve_hdrplus", stored_hdrplus), stored_hdrplus
+                encoder_options.get("preserve_hdrplus", stored_hdrplus), stored_hdrplus
             )
         else:
             global_preserve_dv = False
@@ -59,7 +73,7 @@ class PipelineDecisionService:
 
         selection = resolve_pipeline_context(
             media_info,
-            codec=self._codec,
+            codec=codec,
             file_override=(self._file_overrides.get(input_path) if file_override is None else file_override),
             global_preserve_dv=global_preserve_dv,
             global_preserve_hdrplus=global_preserve_hdrplus,
@@ -72,10 +86,10 @@ class PipelineDecisionService:
                 allowed=("mkv", "mp4"),
             ),
             hdr10plus_generator_enabled=_safe_bool(
-                self._encoder_options.get("hdr10plus_generator_enabled", False), False
+                encoder_options.get("hdr10plus_generator_enabled", False), False
             ),
             hdr10plus_generator_available=_safe_bool(
-                self._encoder_options.get("_hdr10plus_generator_available", False), False
+                encoder_options.get("_hdr10plus_generator_available", False), False
             ),
         )
         self.last_selection = dict(selection)

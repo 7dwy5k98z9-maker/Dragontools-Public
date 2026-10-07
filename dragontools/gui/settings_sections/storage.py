@@ -58,7 +58,7 @@ class StorageLoggingSection(SettingsSection):
         lg = QGridLayout(log_grp)
         lg.addWidget(QLabel(
             "Logs werden mit Jahr/Monat-Struktur gespeichert:\n"
-            "LogOrdner\\Logging\\2025\\08-August\\dd.mm.yyyy_HH-MM.txt\n"
+            "Basisordner\\Logging\\2025\\08-August\\dd.mm.yyyy_HH-MM.txt\n"
             "Die Einstellungen gelten für alle Codecs."
         ), 0, 0, 1, 4)
 
@@ -75,8 +75,9 @@ class StorageLoggingSection(SettingsSection):
         ), 1, 1)
         _ed_log = QLineEdit()
         d._log_edits[cfg.SET_KEY_LOG_ROOT] = _ed_log
-        d.row(lg, 2, "Logging-Ordner:", _ed_log,
-                  "Log-Ordner. Leer = Dokumente/DragonTools/Logging.",
+        d.row(lg, 2, "Log-Basisordner:", _ed_log,
+                  "Basisordner für Logs. DragonTools hängt automatisch 'Logging/Jahr/Monat' an. "
+                  "Leer = Dokumente/DragonTools.",
                   browse_fn=lambda _, e=_ed_log: d.browse(e))
         vl.addWidget(log_grp)
 
@@ -134,7 +135,8 @@ class StorageLoggingSection(SettingsSection):
     def load(self) -> None:
         d, s = self.dialog, self.settings
         try:
-            ensure_default_storage_dirs()
+            if self.is_visible("paths"):
+                ensure_default_storage_dirs()
         except OSError as exc:
             QMessageBox.warning(
                 d,
@@ -144,52 +146,63 @@ class StorageLoggingSection(SettingsSection):
             )
         for key, ed in d._path_edits.items():
             default_path = default_target_path_for_settings_key(key, create=False)
-            value = s.value(key, "", type=str).strip()
+            value = cfg.settings_text(s, key, "")
             ed.setPlaceholderText(default_path)
             ed.setText(value or default_path)
-        d.cb_tv.setChecked(s.value(cfg.SET_KEY_ACTIVE_ALL_TV, True, type=bool))
-        d.cb_anime.setChecked(s.value(cfg.SET_KEY_ACTIVE_ALL_ANIME, True, type=bool))
-        d.cb_filme.setChecked(s.value(cfg.SET_KEY_ACTIVE_ALL_FILME, True, type=bool))
+        d.cb_tv.setChecked(cfg.settings_bool(s, cfg.SET_KEY_ACTIVE_ALL_TV, True))
+        d.cb_anime.setChecked(cfg.settings_bool(s, cfg.SET_KEY_ACTIVE_ALL_ANIME, True))
+        d.cb_filme.setChecked(cfg.settings_bool(s, cfg.SET_KEY_ACTIVE_ALL_FILME, True))
 
         enabled = True
         for key in cfg.LOG_ENABLED_KEYS:
             if s.contains(key):
-                enabled = s.value(key, True, type=bool)
+                enabled = cfg.settings_bool(s, key, True)
                 break
         d._log_cbs[cfg.SET_KEY_LOG_ENABLED].setChecked(enabled)
 
         log_root = ""
         for key in cfg.LOG_ROOT_KEYS:
-            value = s.value(key, "", type=str)
-            if value and value.strip():
-                log_root = value.strip()
+            value = cfg.settings_text(s, key, "")
+            if value:
+                log_root = value
                 break
         d._log_edits[cfg.SET_KEY_LOG_ROOT].setText(log_root)
 
     def save(self) -> bool:
         d, s = self.dialog, self.settings
-        for key, ed in d._path_edits.items():
-            value = ed.text().strip() or default_target_path_for_settings_key(key)
-            try:
-                Path(value).mkdir(parents=True, exist_ok=True)
-            except OSError as exc:
-                QMessageBox.warning(
-                    d,
-                    "Zielpfad nicht anlegbar",
-                    f"Der Zielpfad kann nicht angelegt werden:\n{value}\n\n{exc}",
-                )
-                return False
-            s.setValue(key, value)
-        s.setValue(cfg.SET_KEY_ACTIVE_ALL_TV, d.cb_tv.isChecked())
-        s.setValue(cfg.SET_KEY_ACTIVE_ALL_ANIME, d.cb_anime.isChecked())
-        s.setValue(cfg.SET_KEY_ACTIVE_ALL_FILME, d.cb_filme.isChecked())
 
-        log_enabled = d._log_cbs[cfg.SET_KEY_LOG_ENABLED].isChecked()
-        log_root = d._log_edits[cfg.SET_KEY_LOG_ROOT].text().strip()
-        for key in cfg.LOG_ENABLED_KEYS:
-            s.setValue(key, log_enabled)
-        for key in cfg.LOG_ROOT_KEYS:
-            s.setValue(key, log_root)
+        if self.is_visible("paths"):
+            # Validate every filesystem target before mutating QSettings.  The
+            # outer SettingsDialog also provides a transaction, but keeping this
+            # section side-effect free on validation failure makes it safe when
+            # reused independently.
+            resolved_paths: dict[str, str] = {}
+            for key, ed in d._path_edits.items():
+                value = ed.text().strip() or default_target_path_for_settings_key(key)
+                try:
+                    Path(value).mkdir(parents=True, exist_ok=True)
+                except OSError as exc:
+                    QMessageBox.warning(
+                        d,
+                        "Zielpfad nicht anlegbar",
+                        f"Der Zielpfad kann nicht angelegt werden:\n{value}\n\n{exc}",
+                    )
+                    return False
+                resolved_paths[key] = value
+
+            for key, value in resolved_paths.items():
+                s.setValue(key, value)
+            s.setValue(cfg.SET_KEY_ACTIVE_ALL_TV, d.cb_tv.isChecked())
+            s.setValue(cfg.SET_KEY_ACTIVE_ALL_ANIME, d.cb_anime.isChecked())
+            s.setValue(cfg.SET_KEY_ACTIVE_ALL_FILME, d.cb_filme.isChecked())
+
+        if self.is_visible("logging"):
+            log_enabled = d._log_cbs[cfg.SET_KEY_LOG_ENABLED].isChecked()
+            log_root = d._log_edits[cfg.SET_KEY_LOG_ROOT].text().strip()
+            for key in cfg.LOG_ENABLED_KEYS:
+                s.setValue(key, log_enabled)
+            for key in cfg.LOG_ROOT_KEYS:
+                s.setValue(key, log_root)
         return True
 
     def cleanup_logs(self, *, all_logs: bool) -> None:

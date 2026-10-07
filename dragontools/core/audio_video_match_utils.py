@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from .audio_video_match_models import CutRegion
+import math
 
 def _safe_float(value, default: float = 0.0) -> float:
     try:
@@ -31,13 +32,23 @@ def parse_timecode(text: str, *, duration_s: float | None = None) -> float:
     if not value:
         return 0.0
     if value.endswith("%"):
-        return max(0.0, (duration_s or 0.0) * _safe_float(value[:-1], 0.0) / 100.0)
+        result = float(duration_s or 0.0) * _time_component(value[:-1]) / 100.0
+        if not math.isfinite(result) or result < 0:
+            raise ValueError("Ungültige Prozent-Zeitangabe.")
+        return result
     parts = value.split(":")
     if len(parts) == 3:
-        return _safe_float(parts[0]) * 3600.0 + _safe_float(parts[1]) * 60.0 + _safe_float(parts[2])
+        return _time_component(parts[0]) * 3600.0 + _time_component(parts[1]) * 60.0 + _time_component(parts[2])
     if len(parts) == 2:
-        return _safe_float(parts[0]) * 60.0 + _safe_float(parts[1])
-    return _safe_float(value, 0.0)
+        return _time_component(parts[0]) * 60.0 + _time_component(parts[1])
+    return _time_component(value)
+
+
+def _time_component(value):
+    number = float(value)
+    if not math.isfinite(number) or number < 0:
+        raise ValueError("Zeitangaben müssen endlich und nicht negativ sein.")
+    return number
 
 
 def parse_cut_regions(text: str, *, duration_s: float | None = None) -> list[CutRegion]:
@@ -56,6 +67,8 @@ def parse_cut_regions(text: str, *, duration_s: float | None = None) -> list[Cut
         if duration_s and duration_s > 0:
             start = _clamp(start, 0.0, duration_s)
             end = _clamp(end, 0.0, duration_s)
+        if end <= start:
+            raise ValueError(f"Bereich liegt außerhalb der Laufzeit: {item}")
         regions.append(CutRegion(start_s=start, end_s=end))
     regions.sort(key=lambda r: (r.start_s, r.end_s))
     return regions

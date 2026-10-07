@@ -6,6 +6,8 @@ import copy
 from dataclasses import dataclass
 from typing import Any
 
+from .codec_utils import normalize_target_codec
+
 
 @dataclass(frozen=True)
 class CodecProfileSuggestion:
@@ -184,7 +186,12 @@ def _h265_start_profile_set(
 
 
 def assistant_profiles_for_codec(codec: str) -> list[CodecProfileSuggestion]:
-    codec_key = str(codec or "h265").strip().lower()
+    try:
+        codec_key = normalize_target_codec(codec or "h265")
+    except ValueError:
+        # A stale/corrupt persisted codec must never silently expose H.265
+        # profiles.  The GUI already handles an empty suggestion list.
+        return []
     if codec_key == "h264":
         return [
             _cpu_simple(

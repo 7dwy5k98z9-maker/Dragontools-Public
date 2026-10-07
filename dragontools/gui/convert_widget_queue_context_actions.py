@@ -7,7 +7,9 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QMenu, QMessageBox
 
 from .media_info_dialog import MediaInfoDialog
+from .file_worker_pause import add_file_worker_pause_action
 from ..core.models import normalize_override_dict
+from ..core.encoder_profile_override import file_override_may_enable_encoder_option
 from ..core.path_syntax import display_name
 from ..rules.move_rules import planned_target_dir
 
@@ -23,6 +25,9 @@ class ConvertWidgetQueueContextActionsMixin:
         menu.addAction("\U0001F6C8 Medieninfo", lambda: self._show_media_info(path))
         menu.addAction("\U0001F9EA Regel-/Profil-Simulator", lambda: self._show_rule_test(path))
         selected_paths = self._context_selected_paths(path)
+        add_file_worker_pause_action(menu, path,
+            worker_provider=self._controller.active_worker,
+            refresh=self._refresh_queue_window, log=self._log, source_list=self._ui.file_list)
         if self._controller.is_file_active(path):
             menu.addSeparator()
             menu.addAction(
@@ -105,6 +110,7 @@ class ConvertWidgetQueueContextActionsMixin:
             planned_target=planned_target_dir(self._state.planned_targets.get(path)),
             subtitle_rules=self._get_subtitle_rules(),
             codec=self.default_codec,
+            preview_options=self._rule_test_preview_options(),
         )
         dlg.exec()
 
@@ -124,6 +130,38 @@ class ConvertWidgetQueueContextActionsMixin:
             encoder_options = dict(self._enc_settings.collect_enc_opts() or {})
         except Exception:
             encoder_options = {}
+
+        # Der Regel-/Preflight-Pfad muss dieselbe Generator-Capability sehen wie
+        # der Worker. Ein per-Datei-Override darf den global ausgeschalteten
+        # Generator aktivieren; deshalb wird bei irgendeinem aktiven Request der
+        # gleiche --version-Vertrag wie beim Worker geprüft.
+        generator_requested = bool(encoder_options.get("hdr10plus_generator_enabled", False)) or any(
+            normalize_override_dict(raw).get("generate_hdr10plus") is True
+            or file_override_may_enable_encoder_option(raw, "hdr10plus_generator_enabled")
+            for raw in dict(getattr(self._state, "file_overrides", {}) or {}).values()
+        )
+        generator_available = False
+        if generator_requested:
+            try:
+                from ..worker.hdr10plus_generator_client import (
+                    HDR10PlusGeneratorClient,
+                    generator_executable_available,
+                )
+
+                generator_path = str(getattr(self.tools, "hdr10plus_generator", "") or "")
+                if generator_executable_available(generator_path):
+                    probe = HDR10PlusGeneratorClient(
+                        generator_path,
+                        ffmpeg_path=getattr(self.tools, "ffmpeg", "ffmpeg"),
+                        ffprobe_path=getattr(self.tools, "ffprobe", "ffprobe"),
+                    ).probe_version()
+                    generator_available = bool(probe.success and probe.version)
+            except Exception as exc:
+                self._log(
+                    f"HDR10+-Generator konnte für Preflight nicht geprüft werden: {exc}",
+                    "warn",
+                )
+        encoder_options["_hdr10plus_generator_available"] = generator_available
         return {
             "default_crf": int(self.crf_spin.value()),
             "default_preset": str(self.preset_combo.currentText() or "medium"),

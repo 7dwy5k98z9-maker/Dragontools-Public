@@ -7,6 +7,7 @@ from fractions import Fraction
 
 from ..core.process_runner import tool_available
 from .packet_snapshot import PacketStreamSnapshot, read_snapshot
+from .verification_control import stopped
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,6 +76,8 @@ class PacketIntegrityVerifier:
         if video is None:
             messages.append("Paketprüfung findet keinen primären Videostream.")
         else:
+            if video.max_dts_s is not None and video.max_dts_s >= 1_000_000.0:
+                messages.append(f'Video-DTS weiterhin im Millionen-Sekunden-Bereich ({video.max_dts_s:.3f}s).')
             if video.max_pts_s is not None:
                 if video.max_pts_s >= 1_000_000.0:
                     messages.append(
@@ -111,7 +114,7 @@ class PacketIntegrityVerifier:
         # The child writes directly to disk; parse one packet at a time.
         with TemporaryFile(mode="w+", encoding="utf-8") as output:
             run = self._run_tool(command, label="ffprobe Paket-/SHA256-Prüfung", stdout_file=output)
-            if getattr(run, "returncode", 1) != 0:
+            if getattr(run, "returncode", 1) != 0 or stopped(run):
                 raise RuntimeError(str(getattr(run, "stderr", "") or "ffprobe fehlgeschlagen")[-4096:])
             # Compatibility with injected test/tool adapters returning text.
             if getattr(run, "stdout", ""):

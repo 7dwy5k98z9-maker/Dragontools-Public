@@ -62,7 +62,7 @@ def test_build_video_streams_speichert_frame_infos_im_model():
     track = _track("YUV", "4:2:0", "8")
     track.update(
         {
-            "Duration": "1441565",
+            "Duration": "1441.565",
             "FrameCount": "34563",
             "FrameRate": "23.976",
             "FrameRate_Mode": "Constant",

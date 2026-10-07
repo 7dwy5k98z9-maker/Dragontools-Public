@@ -67,7 +67,15 @@ def _hdr_summary(preview: dict[str, Any]) -> str:
     if not parts and video.get("is_hdr"):
         parts.append("HDR")
     if not parts:
-        parts.append("SDR")
+        if preview.get("sdr_hdr_requested"):
+            if preview.get("sdr_hdr_applied"):
+                parts.append("SDR → HDR")
+            elif preview.get("sdr_hdr_capability_known"):
+                parts.append("SDR → HDR nicht anwendbar")
+            else:
+                parts.append("SDR → HDR angefordert (Runtime-Prüfung)")
+        else:
+            parts.append("SDR")
     ignored = set(str(v).lower() for v in preview.get("ignored_hdr") or [])
     if "dv" in ignored:
         parts.append("DV ignoriert")

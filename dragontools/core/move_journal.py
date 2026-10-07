@@ -8,6 +8,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
 from .json_io import atomic_write_json as _atomic_write_json
+from .path_syntax import path_compare_key
+from .journal_runtime import recovery_may_run, register_journal
+from .move_journal_utils import resume_companion_proofs
+from .job_resume_selection import row_for_path
 from .move_journal_contracts import MOVE_JOURNAL_VERSION, JOURNAL_FILE_PREFIX, ARCHIVE_DIR_NAME, TERMINAL_OK, MoveJournalWriteError
 from .move_journal_storage import (move_journal_dir, active_move_journal_path, new_move_journal_path, list_move_journal_paths, read_move_journal_path, read_active_move_journals, read_active_move_journal, archive_move_journal_path, archive_active_move_journal)
 from .move_journal_resume import build_move_resume_plan, format_unfinished_move_summary
@@ -30,6 +34,9 @@ def recover_active_move_backups(root: str | Path | None = None) -> dict[str, int
         if not path_text:
             continue
         path = Path(path_text)
+        if not recovery_may_run(data, path):
+            totals['kept'] += 1
+            continue
         result = recover_interrupted_backups(data)
         for key in totals:
             totals[key] += int(result.get(key, 0) or 0)
@@ -44,12 +51,7 @@ def recover_active_move_backups(root: str | Path | None = None) -> dict[str, int
                 totals["failed"] += 1
                 continue
         if data.get("active") and not _has_retryable_files(data):
-            data["active"] = False
-            data["status"] = "completed"
-            data["finished_at"] = _now()
-            data["updated_at"] = data["finished_at"]
             try:
-                _atomic_write_json(path, data)
                 archive_move_journal_path(path, status="completed_after_crash")
             except OSError as exc:
                 _LOG.warning("Abgeschlossenes Move-Journal konnte nicht archiviert werden: %s (%s)", path, exc)
@@ -84,6 +86,7 @@ class MoveJournal:
     ) -> "MoveJournal":
         journal = cls(new_move_journal_path(root), on_write_error=on_write_error)
         now = _now()
+        restored_targets = _json_safe_dict(planned_targets or {})
         run_id = journal.path.stem.removeprefix(JOURNAL_FILE_PREFIX)
         journal.data = {
             "format": "DragonToolsMoveJournal",
@@ -98,7 +101,7 @@ class MoveJournal:
             "conflict_mode": str(conflict_mode or "skip"),
             "episode_replacement_mode": str(episode_replacement_mode or "auto"),
             "target_paths": _json_safe_dict(target_paths or {}),
-            "planned_targets": _json_safe_dict(planned_targets or {}),
+            "planned_targets": restored_targets,
             "sidecar_outputs_by_video": _json_safe_dict(sidecar_outputs_by_video or {}),
             "current_file": "",
             "files": {
@@ -109,6 +112,7 @@ class MoveJournal:
                     "message": "",
                     "phase": "queued",
                     "backup_pairs": [],
+                    "companion_proofs": resume_companion_proofs(restored_targets.get(str(path))),
                     "cleanup_pending": False,
                     "cleanup_message": "",
                     "started_at": "",
@@ -117,6 +121,7 @@ class MoveJournal:
                 for path in files
             },
         }
+        register_journal(journal.path)
         journal._write()
         return journal
 
@@ -153,7 +158,7 @@ class MoveJournal:
         with self._lock:
             row = self._row(source_path)
             row["backup_pairs"] = [
-                {"original": str(p.get("original") or ""), "backup": str(p.get("backup") or "")}
+                dict(p, original=str(p.get('original') or ''), backup=str(p.get('backup') or ''))
                 for p in pairs
                 if isinstance(p, dict)
             ]
@@ -175,6 +180,37 @@ class MoveJournal:
             row["status"] = "warn"
             row["message"] = str(message or "")
             self._touch()
+
+    def set_commit_proof(self, source_path, source_receipt, destination_receipt):
+        with self._lock:
+            row = self._row(source_path)
+            row['commit_proof'] = {'source': source_receipt, 'destination': destination_receipt}
+            self._touch()
+
+    def record_companion_proof(self, source_path, destination, source_receipt, destination_receipt):
+        with self._lock:
+            wanted = path_compare_key(str(source_path))
+            by_video = self.data.get('sidecar_outputs_by_video') or {}
+            for video, companions in by_video.items():
+                if any(path_compare_key(str(path)) == wanted for path in companions or []):
+                    row = row_for_path(self.data.get('files', {}), video)
+                    if not row:
+                        continue
+                    row.setdefault('companion_proofs', {})[str(source_path)] = {
+                        'destination': str(destination), 'source': source_receipt,
+                        'receipt': destination_receipt}
+                    self._touch()
+
+    def companion_proof_for(self, source_path, destination):
+        wanted = path_compare_key(str(source_path))
+        with self._lock:
+            for row in self.data.get('files', {}).values():
+                proofs = row.get('companion_proofs', {}) if isinstance(row, dict) else {}
+                for path, proof in proofs.items():
+                    if (path_compare_key(path) == wanted
+                            and path_compare_key(str(proof.get('destination'))) == path_compare_key(str(destination))):
+                        return _json_safe_dict(proof)
+        return None
 
     def clear_cleanup_pending(self, source_path: str) -> None:
         with self._lock:
@@ -229,17 +265,24 @@ class MoveJournal:
 
     def finish_run(self, *, status: str, keep_active: bool) -> None:
         with self._lock:
-            self.data["status"] = str(status or "incomplete")
-            self.data["active"] = bool(keep_active)
-            self.data["finished_at"] = _now()
-            self._touch()
-            if not keep_active:
-                self._archive_completed()
+            if keep_active:
+                self.data['status'] = str(status or 'incomplete')
+                self.data['active'] = True
+                self.data['finished_at'] = _now()
+                self._touch()
+                return
+            # Keep the on-disk run visible until the archive is durable.
+            self.data['status'] = str(status or 'completed')
+            self.data['finished_at'] = _now()
+            self._archive_completed()
+            self.data['active'] = False
 
     def _row(self, source_path: str) -> dict[str, Any]:
         files = self.data.setdefault("files", {})
+        wanted = path_compare_key(str(source_path))
+        key = next((stored for stored in files if path_compare_key(stored) == wanted), str(source_path))
         return files.setdefault(
-            str(source_path),
+            key,
             {
                 "status": "queued",
                 "target_dir": "",
@@ -273,12 +316,9 @@ class MoveJournal:
 
     def _archive_completed(self) -> None:
         try:
-            archive_dir = self.path.parent / ARCHIVE_DIR_NAME
-            archive_dir.mkdir(parents=True, exist_ok=True)
-            run_id = str(self.data.get("run_id") or datetime.now().strftime("%Y%m%d_%H%M%S"))
-            archive = _unique_archive_path(archive_dir / f"{run_id}_{self.data.get('status', 'completed')}.json")
-            _atomic_write_json(archive, self.data)
-            self.path.unlink(missing_ok=True)
+            from .journal_archive import archive_journal
+            archive = archive_journal(self.path, status=self.data.get('status', 'completed'),
+                data=self.data, write=_atomic_write_json)
         except (OSError, TypeError, ValueError) as exc:
             message = f"Move-Journal konnte nicht archiviert werden: {self.path} ({exc})"
             _LOG.exception(message)

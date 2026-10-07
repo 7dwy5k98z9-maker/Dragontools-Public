@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from typing import Any
+from copy import deepcopy
 
 from .merge_common import container_from_path
 
@@ -38,6 +39,8 @@ class MergePlanMixin:
 
         comparisons = (
             ("fps", "FPS ist nicht in allen Dateien identisch."),
+            ("video_structure", "Video-Track-Struktur/Codec-Header sind nicht in allen Dateien identisch."),
+            ("dynamic_hdr", "HDR/Dolby-Vision-Struktur ist nicht in allen Dateien identisch."),
             ("audio_structure", "Audio-Struktur ist nicht in allen Dateien identisch."),
             (
                 "subtitle_structure",
@@ -45,7 +48,7 @@ class MergePlanMixin:
             ),
         )
         for key, message in comparisons:
-            if any(info[key] != first[key] for info in infos[1:]):
+            if any(info.get(key) != first.get(key) for info in infos[1:]):
                 reasons.append(message)
 
         return not reasons, reasons
@@ -67,7 +70,7 @@ class MergePlanMixin:
             "tool": "mkvmerge",
             "lossless_possible": lossless_possible,
             "reasons": reasons,
-            "infos": infos,
+            "infos": deepcopy(infos),
             "files": [info["path"] for info in infos],
             "output_path": output_path,
         }

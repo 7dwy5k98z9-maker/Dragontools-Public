@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .media_library_utils import _AUDIO_CODECS, _SUBTITLE_CODECS, _VIDEO_CODECS
+from .media_library_video_flags import HDR_MARKERS, HDR10PLUS_MARKERS, DV_MARKERS, positive_dv_profile_sql
 
 
 def _stream_type_condition(alias: str, expected: str) -> str:
@@ -87,8 +88,8 @@ def _explicit_sdr(video_type: str) -> str:
 def _hdr_stream_exists(video_type: str) -> str:
     base = _video_exists_with_format_terms(
         video_type,
-        ("hdr", "bt2020", "pq", "hlg", "dolby", "smpte2084", "st2084"),
-        closing_extra="OR lower(coalesce(v.dv_profile, '')) <> ''",
+        HDR_MARKERS,
+        closing_extra="OR " + positive_dv_profile_sql("v"),
     )
     return base
 
@@ -96,15 +97,15 @@ def _hdr_stream_exists(video_type: str) -> str:
 def _hdr10plus_stream_exists(video_type: str) -> str:
     return _video_exists_with_format_terms(
         video_type,
-        ("hdr10+", "hdr10plus", "dynamic metadata", "2094-40", "st2094"),
+        HDR10PLUS_MARKERS,
     )
 
 
 def _dv_stream_exists(video_type: str) -> str:
     return _video_exists_with_format_terms(
         video_type,
-        ("dolby vision", "dovi", "dvhe"),
-        closing_extra="OR lower(coalesce(v.dv_profile, '')) <> ''",
+        DV_MARKERS,
+        closing_extra="OR " + positive_dv_profile_sql("v"),
     )
 
 

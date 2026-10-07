@@ -5,6 +5,7 @@ from __future__ import annotations
 from copy import deepcopy
 
 from ..core.conversion_artifacts import ConversionArtifactBundle, publish_bundle_to_worker
+from ..core.path_syntax import path_compare_key
 from .converter_config import ConverterConfig
 from .dv_result_contract import emit_dv_failure, mark_dv_terminal
 
@@ -21,6 +22,19 @@ def _converter_thread_class():
         from .converter_thread import ConverterThread as converter_thread_class
         ConverterThread = converter_thread_class
     return ConverterThread
+
+
+def _override_for_path(mapping, input_path: str) -> dict:
+    if not isinstance(mapping, dict):
+        return {}
+    exact = mapping.get(input_path)
+    if isinstance(exact, dict):
+        return deepcopy(exact)
+    wanted = path_compare_key(input_path)
+    for key, value in mapping.items():
+        if path_compare_key(str(key)) == wanted and isinstance(value, dict):
+            return deepcopy(value)
+    return {}
 
 
 class DV5EncodeFallbackRunner:
@@ -47,13 +61,13 @@ class DV5EncodeFallbackRunner:
         config.codec = "h265"
         config.strip_only = False
         config.file_overrides = {
-            input_path: deepcopy(getattr(self.worker, "file_overrides", {}).get(input_path, {}))
+            input_path: _override_for_path(getattr(self.worker, "file_overrides", {}), input_path)
         }
         options = dict(config.encoder_options or {})
         options["preserve_dv"] = True
-        # Profile 5 has no normal HDR10 base layer.  Let the established DV
-        # pipeline own the conversion instead of attempting an HDR10+-combo path.
-        options["preserve_hdrplus"] = False
+        # The established DV pipeline owns P5 picture conversion and dynamic
+        # metadata. Preserve the user's HDR10+ policy even if corrupt RPU
+        # extraction later requires the single retry with only DV disabled.
         config.encoder_options = options
         # The explicit DV-remux action is not a move/preflight action.  Keep the
         # fallback in the source location just like the remux result.
@@ -74,6 +88,12 @@ class DV5EncodeFallbackRunner:
         if hasattr(self.worker, "dv_crop_decision_requested"):
             child.dv_crop_decision_requested.connect(self.worker.dv_crop_decision_requested.emit)
         try:
+            # Controls requested while metadata analysis/child construction was
+            # running predate registration and were not forwarded by the parent.
+            if bool(getattr(self.worker, "abort_requested", False)):
+                child.request_abort(getattr(self.worker, "abort_type", None) or "sofort")
+            if bool(getattr(self.worker, "_paused", False)):
+                child.pause()
             self.worker.log(
                 "  🎨 DV5: Remux ist nicht zulässig – automatischer Wechsel in den normalen H.265-DV-Encodingpfad.",
                 "warn",
@@ -125,4 +145,3 @@ class DV5EncodeFallbackRunner:
                 self.worker,
                 ConversionArtifactBundle.from_worker(child, key),
             )
-

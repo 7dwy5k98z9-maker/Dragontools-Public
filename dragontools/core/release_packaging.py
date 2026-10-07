@@ -13,6 +13,10 @@ import shutil
 import uuid
 import zipfile
 from pathlib import Path, PurePosixPath
+from .release_private_paths import LOCAL_CREDENTIAL_DIRS, is_private_source_path, sanitize_user_path
+from .release_source_identity import capture_source_inventory, require_source_inventory
+from .release_archive_commit import publish_release_archive
+from .transaction_identity import path_receipt, object_identity, same_object
 
 
 FORBIDDEN_RELEASE_DIRS = frozenset({"__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache"})
@@ -43,15 +47,15 @@ PUBLIC_TEXT_SUFFIXES = frozenset({
     ".txt", ".xml", ".yaml", ".yml",
 })
 
-_PRIVATE_SERVER_BACKSLASH_PATTERN = "".join(('\\\\\\\\medien', 'speicher'))
-_PRIVATE_SERVER_FORWARD_PATTERN = "".join(('//medien', 'speicher'))
-_PRIVATE_WORKDIR_PATTERN = "".join(('Arbeitsordner ', 'codex'))
-_PRIVATE_ORG_PATTERN = "".join(('Mark', 'usTools'))
-_PRIVATE_AUTHOR_PATTERN = "".join(('Mark', 'us ', 'Tsch', 'erner'))
-_PRIVATE_FIRST_NAME_PATTERN = "".join(('\\bMark', 'us\\b|\\bMark', 'u\\b'))
+_PRIVATE_SERVER_BACKSLASH_PATTERN = r"\\\\medien" + "speicher"
+_PRIVATE_SERVER_FORWARD_PATTERN = r"//medien" + "speicher"
+_PRIVATE_WORKDIR_PATTERN = "Arbeitsordner " + "codex"
+_PRIVATE_ORG_PATTERN = "Mark" + "usTools"
+_PRIVATE_AUTHOR_PATTERN = "Mark" + "us Developer"
+_PRIVATE_FIRST_NAME_PATTERN = r"\bMark" + r"us\b|\bMark" + r"u\b"
 
 _PUBLIC_SANITIZERS: tuple[tuple[re.Pattern[str], str], ...] = (
-    (re.compile(r"C:\\Users\\[^\\\r\n]+", re.IGNORECASE), r"C:\\Users\\<USER>"),
+    (re.compile(r"C:\\Users\\<USER>\\\r\n]+", re.IGNORECASE), r"C:\\Users\\<USER>"),
     (re.compile(r"AppData\\Local\\Temp\\codex-[^\\\r\n]+", re.IGNORECASE), r"AppData\\Local\\Temp\\<TEMP>"),
     (re.compile(_PRIVATE_SERVER_BACKSLASH_PATTERN, re.IGNORECASE), r"\\\\<SERVER>"),
     (re.compile(_PRIVATE_SERVER_FORWARD_PATTERN, re.IGNORECASE), "//<SERVER>"),
@@ -62,7 +66,7 @@ _PUBLIC_SANITIZERS: tuple[tuple[re.Pattern[str], str], ...] = (
 )
 
 def sanitize_public_text(text: str) -> str:
-    result = str(text)
+    result = sanitize_user_path(str(text))
     for pattern, replacement in _PUBLIC_SANITIZERS:
         result = pattern.sub(replacement, result)
     return result
@@ -70,7 +74,7 @@ def sanitize_public_text(text: str) -> str:
 def _write_public_member(archive: zipfile.ZipFile, root: Path, path: Path, *, sanitize: bool) -> None:
     arcname = path.relative_to(root).as_posix()
     if sanitize and path.suffix.casefold() in PUBLIC_TEXT_SUFFIXES:
-        text = path.read_text(encoding="utf-8", errors="replace")
+        text = path.read_text(encoding="utf-8")
         archive.writestr(arcname, sanitize_public_text(text).encode("utf-8"))
         return
     archive.write(path, arcname=arcname)
@@ -146,6 +150,9 @@ def _validate_public_source_contract(root: Path) -> None:
         if missing_files:
             detail.append("Dateien: " + ", ".join(missing_files))
         raise FileNotFoundError("Öffentlicher Source-Release unvollständig: " + "; ".join(detail))
+    build = (root / 'build_v9.bat').read_text(encoding='utf-8')
+    if '-m extras.release_pyinstaller' in build and not (root / 'extras/release_pyinstaller.py').is_file():
+        raise FileNotFoundError('Source-Release: extras/release_pyinstaller.py fehlt für den nativen Builder.')
 
 
 def iter_public_source_files(root: str | Path) -> list[Path]:
@@ -170,6 +177,9 @@ def iter_public_source_files(root: str | Path) -> list[Path]:
 
         kept_dirs: list[str] = []
         for name in dirnames:
+            candidate_dir = current / name
+            if candidate_dir.is_symlink() or candidate_dir.is_junction():
+                raise RuntimeError(f"Verzeichnisverknüpfung im Source-Release nicht erlaubt: {candidate_dir}")
             if _is_ignored_release_dir(name):
                 continue
             rel_dir = current_rel / name if current_rel.parts else Path(name)
@@ -180,10 +190,12 @@ def iter_public_source_files(root: str | Path) -> list[Path]:
 
         for filename in filenames:
             path = current / filename
+            if path.is_symlink():
+                raise RuntimeError(f"Symlink im Source-Release nicht erlaubt: {path}")
             relative = path.relative_to(base)
             if canonical and not _public_source_path_allowed(relative):
                 continue
-            if is_forbidden_release_path(relative):
+            if is_forbidden_release_path(relative) or is_private_source_path(relative):
                 continue
             files.append(path)
 
@@ -193,7 +205,7 @@ def iter_public_source_files(root: str | Path) -> list[Path]:
 def _is_ignored_release_dir(name: str) -> bool:
     """True fuer lokale, generierte oder bewusst externe Release-Verzeichnisse."""
     normalized = name.casefold()
-    return normalized in IGNORED_RELEASE_DIRS or normalized.startswith(".pytest_tmp")
+    return normalized in IGNORED_RELEASE_DIRS or normalized in LOCAL_CREDENTIAL_DIRS or normalized.startswith(".pytest_tmp")
 
 
 def _is_excluded_local_tree(name: str) -> bool:
@@ -331,18 +343,36 @@ def create_source_release_zip(project_root: str | Path, target_zip: str | Path) 
     wurde.
     """
     root = Path(project_root).resolve()
-    target = Path(target_zip).resolve()
+    requested_target = Path(target_zip).absolute()
+    if requested_target.suffix.casefold() != ".zip" or requested_target.is_symlink():
+        raise ValueError("Source-Release-Ziel muss eine reguläre ZIP-Datei sein.")
+    target = requested_target.resolve()
     if not root.is_dir():
         raise NotADirectoryError(root)
 
     target.parent.mkdir(parents=True, exist_ok=True)
+    destination_receipt = path_receipt(target) if target.exists() else None
+    files = _iter_release_files(root, excluded_paths={target})
+    inventory = capture_source_inventory(files)
+
+    # Credentials must never reach a public source archive. Private names/paths
+    # may be sanitized below, but real secret findings are a hard release gate.
+    from .release_validation_privacy import _scan_private_markers
+    privacy_errors = [item for item in _scan_private_markers(root) if item.status == "error"]
+    if privacy_errors:
+        preview = "; ".join(item.detail for item in privacy_errors[:5])
+        raise RuntimeError(f"Source-Release wegen möglicher Secrets abgebrochen: {preview}")
+
+    require_source_inventory(inventory, _iter_release_files(root, excluded_paths={target}))
     temp = target.with_name(f".{target.name}.partial.{uuid.uuid4().hex}")
     excluded = {target, temp}
 
+    temp_identity = None
     try:
-        with zipfile.ZipFile(temp, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        with zipfile.ZipFile(temp, "x", compression=zipfile.ZIP_DEFLATED) as archive:
+            temp_identity = object_identity(temp)
             sanitize = _is_dragontools_project(root)
-            for path in _iter_release_files(root, excluded_paths=excluded):
+            for path in files:
                 _write_public_member(archive, root, path, sanitize=sanitize)
 
         with zipfile.ZipFile(temp, "r") as archive:
@@ -356,11 +386,13 @@ def create_source_release_zip(project_root: str | Path, target_zip: str | Path) 
             if bad_member is not None:
                 raise RuntimeError(f"CRC-Fehler im Release-ZIP: {bad_member}")
 
-        os.replace(temp, target)
+        require_source_inventory(inventory, _iter_release_files(root, excluded_paths=excluded))
+        publish_release_archive(temp, target, destination_receipt=destination_receipt)
         return target
     except Exception:
         try:
-            temp.unlink(missing_ok=True)
+            if same_object(temp, temp_identity):
+                temp.unlink(missing_ok=True)
         except OSError:
             pass
         raise

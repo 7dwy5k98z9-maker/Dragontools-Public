@@ -12,6 +12,7 @@ from defusedxml.common import DefusedXmlException
 
 from .lang_codes import mkv_language_tags
 from .media_library_nfo_parser import MAX_NFO_BYTES
+from .strict_numbers import positive_integer
 
 
 class NfoStreamMetadataError(ValueError):
@@ -87,7 +88,11 @@ def stage_stream_language_update(
     target = Path(target_nfo)
     kind = str(stream_type or "").strip().casefold()
     node_name = {"audio": "audio", "subtitle": "subtitle"}.get(kind)
-    if not node_name or int(ordinal or 0) <= 0:
+    try:
+        index = positive_integer(ordinal) - 1
+    except (ValueError, TypeError, OverflowError) as exc:
+        raise NfoStreamMetadataError('NFO-Stream konnte nicht eindeutig adressiert werden.') from exc
+    if not node_name:
         raise NfoStreamMetadataError("NFO-Stream konnte nicht eindeutig adressiert werden.")
 
     root = _parse_safe(source)
@@ -96,7 +101,6 @@ def stage_stream_language_update(
         return False, "NFO enthält keine Streamdetails; kein NFO-Sprachtag zu synchronisieren."
 
     streams = [child for child in list(details) if _local_name(child.tag) == node_name]
-    index = int(ordinal) - 1
     if index >= len(streams):
         raise NfoStreamMetadataError(
             f"NFO enthält nur {len(streams)} {node_name}-Stream(s); Track {ordinal} kann nicht sicher zugeordnet werden."
@@ -114,7 +118,7 @@ def stage_stream_language_update(
 
     target.parent.mkdir(parents=True, exist_ok=True)
     payload = StdET.tostring(root, encoding="utf-8", xml_declaration=True, short_empty_elements=False)
-    with target.open("wb") as handle:
+    with target.open("xb") as handle:
         handle.write(payload)
         handle.write(b"\n")
     return True, f"NFO-Sprachtag auf {legacy} aktualisiert."

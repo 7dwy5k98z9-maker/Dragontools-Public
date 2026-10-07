@@ -28,6 +28,7 @@ from .preflight_widgets import (
     _base_path_key,
 )
 from .preflight_view import build_preflight_view
+from .preflight_metadata_common import MetadataRequestGuard, metadata_job_identity
 from .preflight_metadata import (
     media_library_preflight_enabled,
     online_metadata_enabled,
@@ -57,7 +58,10 @@ class PreFlightDialog(QDialog):
         self._metadata_cancelled = False
         self._metadata_started = False
         self._metadata_single_timers: list[QTimer] = []
-        self._metadata_targets: dict[tuple[str, str], SeriesGroupWidget | FilmWidget] = {}
+        self._metadata_request_guard = MetadataRequestGuard()
+        self._metadata_targets: dict[
+            tuple[str, str], tuple[SeriesGroupWidget | FilmWidget, int]
+        ] = {}
         self._save_report_cb: QCheckBox | None = None
         try:
             settings = QSettings(APP_ORG, APP_NAME)
@@ -100,7 +104,9 @@ class PreFlightDialog(QDialog):
         online_enabled = self._online_metadata_enabled()
         library_enabled = media_library_preflight_enabled()
         jobs: list[tuple[str, str, Any]] = []
-        targets: dict[tuple[str, str], SeriesGroupWidget | FilmWidget] = {}
+        targets: dict[
+            tuple[str, str], tuple[SeriesGroupWidget | FilmWidget, int]
+        ] = {}
 
         for widget in self._widgets:
             job = widget.metadata_lookup_job()
@@ -110,7 +116,8 @@ class PreFlightDialog(QDialog):
             if kind == "movie" and not online_enabled and not library_enabled:
                 continue
             jobs.append(job)
-            targets[(kind, key)] = widget
+            request_generation = self._metadata_request_guard.begin(widget)
+            targets[(kind, key)] = (widget, request_generation)
             if isinstance(widget, SeriesGroupWidget):
                 widget.mark_metadata_lookup_started(online_enabled)
             else:
@@ -141,9 +148,11 @@ class PreFlightDialog(QDialog):
             return
         online_enabled = self._online_metadata_enabled()
         library_enabled = media_library_preflight_enabled()
-        kind, _key, _payload = job
+        kind, _expected_key, _payload = job
         if kind == "movie" and not online_enabled and not library_enabled:
             return
+        request_generation = self._metadata_request_guard.begin(widget)
+        expected_identity = metadata_job_identity(job)
         if isinstance(widget, SeriesGroupWidget):
             widget.mark_metadata_lookup_started(online_enabled)
         else:
@@ -171,7 +180,13 @@ class PreFlightDialog(QDialog):
                     if timer in self._metadata_single_timers:
                         self._metadata_single_timers.remove(timer)
                     return
-                if not self._metadata_cancelled:
+                current_identity = metadata_job_identity(widget.metadata_lookup_job())
+                result_identity = (str(result_kind), str(_result_key))
+                if (
+                    not self._metadata_cancelled
+                    and self._metadata_request_guard.is_current(widget, request_generation)
+                    and current_identity == expected_identity == result_identity
+                ):
                     apply_metadata_result(widget, suggestion)
 
         timer.timeout.connect(poll)
@@ -210,9 +225,15 @@ class PreFlightDialog(QDialog):
                     self._metadata_timer.deleteLater()
                     self._metadata_timer = None
                 return
-            widget = self._metadata_targets.get((kind, key))
-            if widget is not None and not self._metadata_cancelled:
-                apply_metadata_result(widget, suggestion)
+            target = self._metadata_targets.get((kind, key))
+            if target is not None and not self._metadata_cancelled:
+                widget, request_generation = target
+                current_identity = metadata_job_identity(widget.metadata_lookup_job())
+                if (
+                    self._metadata_request_guard.is_current(widget, request_generation)
+                    and current_identity == (str(kind), str(key))
+                ):
+                    apply_metadata_result(widget, suggestion)
 
     def _accept_with_validation(self) -> None:
         for widget in self._widgets:

@@ -4,21 +4,32 @@ from __future__ import annotations
 from dataclasses import replace
 from pathlib import Path
 import shutil
+import uuid
 
-from ..core.jellyfin_nfo import write_episode_nfo, write_movie_nfo
+from ..core.jellyfin_nfo import build_planned_fileinfo, write_episode_nfo, write_movie_nfo
 from ..core.online_metadata import OnlineMetadataAuthError, OnlineMetadataError
 from ..rules.move_rules import parse_series_match_details
 from .postprocess_config import config_from_settings
 from .log_dispatch import dispatch_log
 from .postprocess_metadata import PostProcessMetadataSession
-from .postprocess_models import NfoSettings, PostProcessItem, PostProcessRunResult
-from .nfo_commit import commit_nfo, plan_nfo_target, unique_nfo_backup_path
+from .postprocess_metadata_identity import metadata_lookup_path
+from .postprocess_models import NfoSettings, PostProcessItem, PostProcessRunResult, PreparedNfo
+from .nfo_commit import (
+    commit_nfo,
+    commit_prepared_nfo as install_prepared_nfo,
+    nfo_target_lock,
+    plan_nfo_target,
+    unique_nfo_backup_path,
+)
 from .trickplay_service import (
     TrickplayGenerator,
     normalize_trickplay_conflict_mode,
     trickplay_root_for_video,
     trickplay_sprite_dir_for_video,
 )
+from .postprocess_nfo_ownership import file_identity, validate_prepared_nfo, discard_owned_nfo
+from .postprocess_source_trickplay import prepare_source_trickplay, install_source_trickplay, discard_source_trickplay
+from .trickplay_paths import trickplay_result_status
 
 
 class PostProcessService:
@@ -32,9 +43,187 @@ class PostProcessService:
 
     def is_enabled(self) -> bool:
         try:
-            return config_from_settings(self.settings).enabled
+            return config_from_settings(self.settings).after_conversion_enabled
         except Exception:
             return False
+
+    def is_nfo_during_enabled(self) -> bool:
+        try:
+            cfg = config_from_settings(self.settings).nfo
+            return bool(cfg.enabled and cfg.timing == "during")
+        except Exception:
+            return False
+
+    def prepare_nfo_during_conversion(
+        self,
+        *,
+        input_path: str,
+        output_path: str,
+        final_output_path: str,
+        media_info=None,
+        media_contract=None,
+    ) -> PreparedNfo | None:
+        """Render an NFO while the video encode is running, but do not publish it yet."""
+        cfg = config_from_settings(self.settings).nfo
+        if not (cfg.enabled and cfg.timing == "during"):
+            return None
+
+        target = Path(final_output_path).with_suffix(".nfo")
+        try:
+            media_kind, suggestion, reason = self._resolve_nfo_suggestion(input_path, cfg)
+            if suggestion is None:
+                message = reason or "Kein passender Metadaten-Treffer gefunden."
+                self._warn(f"NFO übersprungen: {message}")
+                return PreparedNfo(
+                    staging_path="",
+                    target_path=str(target),
+                    conflict_mode=cfg.conflict_mode,
+                    kind=media_kind or "unknown",
+                    suggestion=None,
+                    include_fileinfo=cfg.include_fileinfo,
+                    status="skipped",
+                    message=message,
+                )
+
+            output = Path(output_path)
+            staging = output.with_name(
+                f".{output.stem}.__nfo_during__{uuid.uuid4().hex}.nfo"
+            )
+            planned = build_planned_fileinfo(media_info, media_contract) if cfg.include_fileinfo else None
+            self._render_prepared_nfo(
+                path=staging,
+                media_kind=media_kind,
+                suggestion=suggestion,
+                include_fileinfo=cfg.include_fileinfo,
+                planned_fileinfo=planned,
+            )
+            self._info(f"NFO während Konvertierung vorbereitet: {target.name}")
+            return PreparedNfo(
+                staging_path=str(staging),
+                target_path=str(target),
+                conflict_mode=cfg.conflict_mode,
+                kind=media_kind,
+                suggestion=suggestion,
+                include_fileinfo=cfg.include_fileinfo,
+                staging_identity=file_identity(staging),
+            )
+        except OnlineMetadataError as exc:
+            self._warn(f"NFO übersprungen: {exc}")
+            return PreparedNfo(
+                staging_path="",
+                target_path=str(target),
+                conflict_mode=cfg.conflict_mode,
+                kind="unknown",
+                suggestion=None,
+                include_fileinfo=cfg.include_fileinfo,
+                status="skipped",
+                message=str(exc),
+            )
+        except Exception as exc:
+            self._warn(f"NFO konnte während der Konvertierung nicht vorbereitet werden: {exc}")
+            return PreparedNfo(
+                staging_path="",
+                target_path=str(target),
+                conflict_mode=cfg.conflict_mode,
+                kind="unknown",
+                suggestion=None,
+                include_fileinfo=cfg.include_fileinfo,
+                status="error",
+                message=str(exc),
+            )
+
+    def refresh_prepared_nfo(
+        self,
+        prepared: PreparedNfo | None,
+        *,
+        media_info=None,
+        media_contract=None,
+        video_path: str | None = None,
+    ) -> PreparedNfo | None:
+        """Refresh technical fields at the verified-output boundary.
+
+        The pre-encode media contract is retained as a fallback, but once the
+        encoded candidate exists we probe that actual file.  This prevents the
+        fast "during" mode from publishing stale source/plan stream metadata.
+        """
+        if prepared is None or prepared.status != "prepared" or not prepared.staging_path:
+            return prepared
+        try:
+            validate_prepared_nfo(prepared, Path(video_path)) if video_path else None
+            planned = build_planned_fileinfo(media_info, media_contract) if prepared.include_fileinfo else None
+            self._render_prepared_nfo(
+                path=Path(prepared.staging_path),
+                media_kind=prepared.kind,
+                suggestion=prepared.suggestion,
+                include_fileinfo=prepared.include_fileinfo,
+                planned_fileinfo=planned,
+                video_path=video_path,
+            )
+            if prepared.staging_identity is not None:
+                prepared.staging_identity = file_identity(prepared.staging_path)
+        except Exception as exc:
+            prepared.status = "error"
+            prepared.message = str(exc)
+            self._warn(f"Vorbereitete NFO konnte nicht aktualisiert werden: {exc}")
+        return prepared
+
+    def commit_prepared_nfo(
+        self,
+        prepared: PreparedNfo | None,
+        *,
+        final_output_path: str,
+    ) -> PostProcessRunResult:
+        if prepared is None:
+            return PostProcessRunResult([], [])
+        target = Path(final_output_path).with_suffix(".nfo")
+        if prepared.status != "prepared" or not prepared.staging_path:
+            path = str(target) if prepared.status == "skipped" and target.exists() else ""
+            created = [path] if path else []
+            discard_owned_nfo(prepared)
+            return PostProcessRunResult(created, [{
+                "kind": "nfo",
+                "status": prepared.status,
+                "path": path,
+                "message": prepared.message,
+            }])
+
+        staging = Path(prepared.staging_path)
+        try:
+            validate_prepared_nfo(prepared, Path(final_output_path), require_target=True)
+            with nfo_target_lock(target):
+                plan = plan_nfo_target(target, prepared.conflict_mode)
+                if not plan.should_write:
+                    self._info(f"NFO vorhanden, wird übernommen: {plan.target.name}")
+                    return PostProcessRunResult([str(plan.target)], [{
+                        "kind": "nfo",
+                        "status": plan.status,
+                        "path": str(plan.target),
+                        "message": "Vorhandene NFO wurde beibehalten.",
+                    }])
+                installed, backup = install_prepared_nfo(plan, staging)
+                if backup is not None:
+                    self._info(f"Vorhandene NFO gesichert: {backup.name}")
+                self._info(f"NFO installiert: {installed.name}")
+                return PostProcessRunResult([str(installed)], [{
+                    "kind": "nfo",
+                    "status": plan.status,
+                    "path": str(installed),
+                    "message": "",
+                }])
+        except Exception as exc:
+            self._warn(f"Vorbereitete NFO konnte nicht installiert werden: {exc}")
+            return PostProcessRunResult([], [{
+                "kind": "nfo",
+                "status": "error",
+                "path": "",
+                "message": str(exc),
+            }])
+        finally:
+            discard_owned_nfo(prepared)
+
+    @staticmethod
+    def discard_prepared_nfo(prepared: PreparedNfo | None) -> None:
+        discard_owned_nfo(prepared)
 
     def run(self, *, input_path: str, output_path: str) -> list[str]:
         return self.run_result(input_path=input_path, output_path=output_path).created_paths
@@ -92,9 +281,10 @@ class PostProcessService:
         cfg = config_from_settings(self.settings)
         if not (cfg.trickplay.enabled and cfg.trickplay.source_mode == "source"):
             return PostProcessRunResult([], [])
-        return self._run_trickplay(
-            video_input=Path(input_path),
-            target_output=Path(output_path),
+        generator = TrickplayGenerator(ffmpeg_path=getattr(self.tools, 'ffmpeg', ''),
+            log=self.log, worker=self.worker)
+        return prepare_source_trickplay(
+            generator, source=Path(input_path), output=Path(output_path),
             settings=cfg.trickplay,
         )
 
@@ -106,6 +296,15 @@ class PostProcessService:
         return None
 
     def run_result(
+        self, *, input_path, output_path, prepared_source_trickplay=None,
+    ) -> PostProcessRunResult:
+        try:
+            return self._run_result(input_path=input_path, output_path=output_path,
+                prepared_source_trickplay=prepared_source_trickplay)
+        finally:
+            discard_source_trickplay(prepared_source_trickplay)
+
+    def _run_result(
         self,
         *,
         input_path: str,
@@ -117,16 +316,22 @@ class PostProcessService:
         if not output.exists():
             return PostProcessRunResult([], [])
         cfg = config_from_settings(self.settings)
-        if not cfg.enabled:
+        if not cfg.after_conversion_enabled:
             return PostProcessRunResult([], [])
 
         created: list[str] = []
-        nfo_path = self._create_nfo(input_path=input_path, output_path=output, cfg=cfg.nfo)
-        if nfo_path:
-            created.append(str(nfo_path))
+        if cfg.nfo.enabled and cfg.nfo.timing == "after":
+            nfo_path = self._create_nfo(input_path=input_path, output_path=output, cfg=cfg.nfo)
+            if nfo_path:
+                created.append(str(nfo_path))
 
         prepared = prepared_source_trickplay
-        if prepared is not None and cfg.trickplay.source_mode == "source":
+        if prepared is not None and prepared.prepared_trickplay is not None and cfg.trickplay.enabled:
+            result = install_source_trickplay(prepared, output=output, worker=self.worker,
+                info=self._info, warn=self._warn)
+            created.extend(result.created_paths)
+            self.last_items.extend(result.items)
+        elif prepared is not None and cfg.trickplay.source_mode == "source":
             final_root = trickplay_root_for_video(output)
             for item in prepared.items:
                 row = dict(item)
@@ -168,15 +373,7 @@ class PostProcessService:
                 "message": "Trickplay konnte nicht erstellt werden.",
             }])
 
-        status = "created"
-        if trickplay_mode == "skip" and sprite_exists:
-            status = "skipped"
-        elif trickplay_mode == "skip" and root_exists:
-            status = "created_variant"
-        elif trickplay_mode == "backup" and root_exists:
-            status = "backed_up"
-        elif trickplay_mode == "overwrite" and root_exists:
-            status = "replaced"
+        status = trickplay_result_status(trickplay_mode, root_exists=root_exists, variant_exists=sprite_exists)
         return PostProcessRunResult([str(root)], [{
             "kind": "trickplay",
             "status": status,
@@ -188,69 +385,46 @@ class PostProcessService:
         if not cfg.enabled:
             return None
         try:
-            parsed_series = parse_series_match_details(Path(input_path).name)
-            if parsed_series and parsed_series.get("series"):
-                try:
-                    resolution = self.metadata_session.resolve_episode(input_path, require_unambiguous=cfg.only_unambiguous)
-                    suggestion = resolution.suggestion
-                except OnlineMetadataAuthError as exc:
-                    self._warn(f"NFO übersprungen: {exc}")
-                    self._record("nfo", "skipped", "", str(exc))
-                    return None
-                if suggestion is None:
-                    reason = getattr(resolution, "reason", "") or "Keine passende Serienfolge gefunden."
-                    self._warn(f"NFO übersprungen: {reason}")
-                    self._record("nfo", "skipped", "", reason)
-                    return None
-                plan = plan_nfo_target(output_path.with_suffix(".nfo"), cfg.conflict_mode)
+            media_kind, suggestion, reason = self._resolve_nfo_suggestion(input_path, cfg)
+            if suggestion is None:
+                message = reason or "Kein passender Metadaten-Treffer gefunden."
+                self._warn(f"NFO übersprungen: {message}")
+                self._record("nfo", "skipped", "", message)
+                return None
+
+            nfo_target = output_path.with_suffix(".nfo")
+            # Conflict handling is a read-then-write transaction.  Keep the
+            # plan and commit under one keyed lock so two background jobs cannot
+            # both observe "missing" and violate conflict_mode=skip.
+            with nfo_target_lock(nfo_target):
+                plan = plan_nfo_target(nfo_target, cfg.conflict_mode)
                 if not plan.should_write:
                     self._info(f"NFO vorhanden, wird übernommen: {plan.target.name}")
-                    self._record("nfo", plan.status, str(plan.target), "Vorhandene NFO wurde beibehalten.")
+                    self._record(
+                        "nfo",
+                        plan.status,
+                        str(plan.target),
+                        "Vorhandene NFO wurde beibehalten.",
+                    )
                     return plan.target
-                target, backup = commit_nfo(
-                    plan,
-                    lambda candidate: write_episode_nfo(
-                        candidate, suggestion, video_path=output_path,
-                        ffprobe_path=getattr(self.tools, "ffprobe", ""),
-                        include_fileinfo=cfg.include_fileinfo,
-                    ),
-                )
+
+                def writer(candidate: Path) -> None:
+                    kwargs = {
+                        "video_path": output_path,
+                        "ffprobe_path": getattr(self.tools, "ffprobe", ""),
+                        "include_fileinfo": cfg.include_fileinfo,
+                    }
+                    if media_kind == "episode":
+                        write_episode_nfo(candidate, suggestion, **kwargs)
+                    else:
+                        write_movie_nfo(candidate, suggestion, **kwargs)
+
+                target, backup = commit_nfo(plan, writer)
                 if backup is not None:
                     self._info(f"Vorhandene NFO gesichert: {backup.name}")
                 self._info(f"NFO erstellt: {target.name}")
                 self._record("nfo", plan.status, str(target))
                 return target
-
-            try:
-                resolution = self.metadata_session.resolve_movie(input_path, require_unambiguous=cfg.only_unambiguous)
-                suggestion = resolution.suggestion
-            except OnlineMetadataAuthError as exc:
-                self._warn(f"NFO übersprungen: {exc}")
-                self._record("nfo", "skipped", "", str(exc))
-                return None
-            if suggestion is None:
-                reason = getattr(resolution, "reason", "") or "Kein passender Metadaten-Film gefunden."
-                self._warn(f"NFO übersprungen: {reason}")
-                self._record("nfo", "skipped", "", reason)
-                return None
-            plan = plan_nfo_target(output_path.with_suffix(".nfo"), cfg.conflict_mode)
-            if not plan.should_write:
-                self._info(f"NFO vorhanden, wird übernommen: {plan.target.name}")
-                self._record("nfo", plan.status, str(plan.target), "Vorhandene NFO wurde beibehalten.")
-                return plan.target
-            target, backup = commit_nfo(
-                plan,
-                lambda candidate: write_movie_nfo(
-                    candidate, suggestion, video_path=output_path,
-                    ffprobe_path=getattr(self.tools, "ffprobe", ""),
-                    include_fileinfo=cfg.include_fileinfo,
-                ),
-            )
-            if backup is not None:
-                self._info(f"Vorhandene NFO gesichert: {backup.name}")
-            self._info(f"NFO erstellt: {target.name}")
-            self._record("nfo", plan.status, str(target))
-            return target
         except OnlineMetadataError as exc:
             self._warn(f"NFO übersprungen: {exc}")
             self._record("nfo", "skipped", "", str(exc))
@@ -259,6 +433,50 @@ class PostProcessService:
             self._warn(f"NFO konnte nicht erstellt werden: {exc}")
             self._record("nfo", "error", "", str(exc))
             return None
+
+    def _resolve_nfo_suggestion(self, input_path: str, cfg: NfoSettings):
+        input_path = metadata_lookup_path(self.worker, input_path)
+        parsed_series = parse_series_match_details(Path(input_path).name)
+        if parsed_series and parsed_series.get("series"):
+            resolution = self.metadata_session.resolve_episode(
+                input_path,
+                require_unambiguous=cfg.only_unambiguous,
+            )
+            return (
+                "episode",
+                resolution.suggestion,
+                getattr(resolution, "reason", "") or "Keine passende Serienfolge gefunden.",
+            )
+        resolution = self.metadata_session.resolve_movie(
+            input_path,
+            require_unambiguous=cfg.only_unambiguous,
+        )
+        return (
+            "movie",
+            resolution.suggestion,
+            getattr(resolution, "reason", "") or "Kein passender Metadaten-Film gefunden.",
+        )
+
+    def _render_prepared_nfo(
+        self,
+        *,
+        path: Path,
+        media_kind: str,
+        suggestion,
+        include_fileinfo: bool,
+        planned_fileinfo,
+        video_path: str | None = None,
+    ) -> None:
+        kwargs = {
+            "video_path": video_path,
+            "ffprobe_path": getattr(self.tools, "ffprobe", ""),
+            "include_fileinfo": include_fileinfo,
+            "planned_fileinfo": planned_fileinfo,
+        }
+        if media_kind == "episode":
+            write_episode_nfo(path, suggestion, **kwargs)
+        else:
+            write_movie_nfo(path, suggestion, **kwargs)
 
     def _prepare_nfo_path(self, target: Path, cfg: NfoSettings) -> tuple[Path | None, str, bool]:
         # Legacy helper for tests/extensions. Backup mode now copies instead of
@@ -283,4 +501,3 @@ class PostProcessService:
             message=str(message or ""),
         )
         self.last_items.append(dict(item.__dict__))
-

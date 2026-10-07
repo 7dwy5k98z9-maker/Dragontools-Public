@@ -182,7 +182,13 @@ Der Grund ist die framegenaue Zuordnung zwischen Decoder → AI → finalem Enco
 
 DragonTools merkt sich die von ihm gestartete ComfyUI-`prompt_id`. Beim Benutzerabbruch wird gezielt dieser Job abgebrochen. Der Custom Node prüft ComfyUIs Interruptzustand zwischen Frames/Batches und beendet seine FFmpeg-Unterprozesse.
 
-Das video-only HDR-Zwischenergebnis und Manifest liegen in einem temporären DragonTools-Ordner neben dem Ziel und werden nach erfolgreichem Mux oder beim Verlassen des Jobs entfernt.
+Das video-only HDR-Zwischenergebnis und Manifest liegen in einem eigenen temporären DragonTools-Ordner neben dem Ziel. Ausgabe, Manifest und lokale Abbruchdatei dürfen weder denselben Pfad noch dieselbe Datei (auch als Hardlink) wie die Quelle bezeichnen.
+
+Eine erfolgreiche HTTP-Abbruchantwort bedeutet zunächst nur, dass ComfyUI den Abbruch angenommen hat. Wenn die Historie das Ende des konkreten Auftrags noch nicht bestätigt, bleiben dessen temporäre Dateien erhalten. DragonTools schreibt zusätzlich eine auftragsbezogene `.cancel`-Datei; die aktuelle Bridge prüft sie beim Start, zwischen Batches und beim Warten auf Decoder-/Encoder-Pipes. Das verhindert verspätete Schreibzugriffe auch bei einer unterbrochenen API-Verbindung. Der erhaltene Ordner wird in der Fehlermeldung genannt. Auch bei einem fehlgeschlagenen oder nicht verifizierten abschließenden Mux bleibt das HDR-Zwischenergebnis erhalten. Ein erneuter Queue-Lauf erhält einen neuen Ordner und verarbeitet die vollständige Quelldatei; eine Fortsetzung ab einem einzelnen AI-Frame wird nicht angeboten.
+
+Erst nach erfolgreicher Prüfung des abschließenden Mux wird der temporäre Ordner bereinigt. Die Prüfung liest die tatsächlich erzeugten Frames und kontrolliert Codec, Framezahl, Framerate, mindestens 10 Bit, PQ/BT.2020, den Container und die geplanten Audio-/Untertitelanzahlen. Die normale abschließende Medienvertragsprüfung bleibt zusätzlich aktiv. Ungültige oder nicht endliche Modellpixel führen zum Abbruch.
+
+Vorhandene Bild-Ton-Versätze werden aus der Quellzeitachse übernommen. Der ComfyUI-Mux normalisiert die beiden Eingänge gemeinsam auf den ermittelten Ursprung; für MP4/MOV bleiben AAC-Vorlauf und Edit-Lists erhalten. Zeitverändernde Filter wie FPS-Umstellung, `setpts`, Reverse oder Trim sind im CFR-AI-Pfad derzeit nicht zulässig. Crop, Scale und Burn-in bleiben möglich.
 
 ## 9. Reale RTX-4080-Abnahme
 

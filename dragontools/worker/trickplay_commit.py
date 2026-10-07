@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Callable
 
 from ..core.move_transaction import PathSwapTransaction, PathTransactionRollbackError
-from .trickplay_paths import unique_trickplay_backup_path
+from .trickplay_paths import has_valid_trickplay_sprites, unique_trickplay_backup_path
 
 LogFn = Callable[[str], None]
 
@@ -19,9 +19,36 @@ def commit_missing_variant(
     info: LogFn,
     warn: LogFn,
 ) -> Path | None:
-    if final_sprite_dir.exists():
+    if has_valid_trickplay_sprites(final_sprite_dir):
         shutil.rmtree(partial_root, ignore_errors=True)
         info(f"Trickplay vorhanden, wird übernommen: {final_root.name}")
+        return final_root
+    if final_sprite_dir.exists():
+        # An empty/zero-byte variant is not a valid cache hit.  Replace only
+        # after a complete new variant has been rendered, with rollback support
+        # so a failed install does not make the state even worse.
+        backup = unique_trickplay_backup_path(final_sprite_dir)
+        transaction = PathSwapTransaction(
+            source=partial_sprite_dir,
+            destination=final_sprite_dir,
+            backup_path=backup,
+            staging_path=partial_sprite_dir,
+        )
+        try:
+            transaction.commit()
+            try:
+                transaction.discard_backup()
+            except (OSError, shutil.Error) as exc:
+                warn(f"Ungültige alte Trickplay-Variante bleibt als Backup erhalten: {backup}: {exc}")
+        except PathTransactionRollbackError as exc:
+            warn(f"Ungültige Trickplay-Variante konnte nicht sicher ersetzt werden; Backup bleibt: {exc.backup_path}")
+            return None
+        except (OSError, shutil.Error, RuntimeError) as exc:
+            warn(f"Ungültige Trickplay-Variante konnte nicht ersetzt werden: {exc}")
+            return None
+        shutil.rmtree(partial_root, ignore_errors=True)
+        count = sum(1 for image in final_sprite_dir.glob("*.jpg") if image.is_file())
+        info(f"Trickplay ergänzt: {final_sprite_dir.parent.name} ({count} Kachelbild(er)).")
         return final_root
     try:
         final_sprite_dir.parent.mkdir(parents=True, exist_ok=True)

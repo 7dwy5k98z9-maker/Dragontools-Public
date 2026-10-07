@@ -98,10 +98,14 @@ def resolve_target_container(
     standard_container: str,
     dv_container: str,
 ) -> str:
-    std_container = str(standard_container or "mkv").strip().lower()
-    dv_target_container = str(dv_container or "mp4").strip().lower()
+    std_container = str(standard_container).strip().lower()
+    dv_target_container = str(dv_container).strip().lower()
     if std_container not in {"mkv", "mp4"}:
-        std_container = "mkv"
+        raise ValueError(
+            f"Ungültiger Standard-Ausgabecontainer: {standard_container!r}; erlaubt sind 'mkv' und 'mp4'."
+        )
     if dv_target_container not in {"mkv", "mp4"}:
-        dv_target_container = "mp4"
+        raise ValueError(
+            f"Ungültiger DV-Ausgabecontainer: {dv_container!r}; erlaubt sind 'mkv' und 'mp4'."
+        )
     return dv_target_container if pipeline in {Pipeline.DV, Pipeline.AV1_DV} else std_container

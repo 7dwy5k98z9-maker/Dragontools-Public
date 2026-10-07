@@ -7,10 +7,17 @@ from typing import Callable
 
 from ..core.timeout_settings import get_timeout
 from ..core.output_timestamps import build_output_timestamp_args
+from ..core.move_transaction import publish_staged_no_replace
 from .iso_disc_inspector import ISODiscInspector, quote_concat_path
 from .iso_makemkv_service import tool_exists
-from .iso_models import ISOExtractionResult, ISOUserAbortError
+from .iso_models import ISOExtractionResult, ISOUserAbortError, FFMPEG_FALLBACK_TITLE_ID
 from .tool_runner import run_tool
+from .output_verifier import OutputVerifier
+from .utility_output_workspace import VerifiedOutputWorkspace
+from .utility_copy_contract import probe_copy_source
+from .iso_output_publication import require_iso_not_aborted
+from ..core.transaction_identity import path_receipt, receipt_matches
+from ..core.callback_dispatch import best_effort_callback
 
 ProgressFn = Callable[[str, int, object], None]
 RunFFmpegFn = Callable[[list[str], str | None], tuple[int, list[str]]]
@@ -56,6 +63,8 @@ class ISOFFmpegFallbackService:
         )
         if result.aborted:
             raise ISOUserAbortError("Abgebrochen")
+        if result.timed_out:
+            raise RuntimeError('ISO-Fallback wurde wegen Zeitüberschreitung beendet.')
         return result.returncode, lines
 
     def extract(
@@ -80,7 +89,9 @@ class ISOFFmpegFallbackService:
         out_dir = Path(output_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
         output = self._inspector.unique_fallback_output(path, out_dir)
-        self._progress(path, 35, [0])
+        workspace = VerifiedOutputWorkspace(out_dir, self._log, prefix='.__dragontools_iso_ffmpeg_')
+        staging = workspace.root / 'fallback.mkv'
+        self._progress(path, 35, [FFMPEG_FALLBACK_TITLE_ID])
         self._log(
             "⚠️ FFmpeg-Fallback ist aktiv. "
             "Dieser Weg remuxt ohne Re-Encoding, ist aber bei Menüs, Playlists, Kapiteln, "
@@ -90,6 +101,11 @@ class ISOFFmpegFallbackService:
 
         temp_list: Path | None = None
         try:
+            sources = self._source_paths(candidate)
+            receipts = {source: path_receipt(source) for source in sources}
+            contract, duration_ms, chapter_count = self._source_contract(candidate)
+            self._require_source_receipts(receipts)
+            require_iso_not_aborted(self._worker)
             if candidate["mode"] == "concat":
                 files = list(candidate.get("files") or [])
                 if not files:
@@ -98,39 +114,53 @@ class ISOFFmpegFallbackService:
                     "w",
                     encoding="utf-8",
                     suffix=".ffconcat.txt",
-                    dir=str(out_dir),
+                    dir=str(workspace.root),
                     delete=False,
                 ) as handle:
                     temp_list = Path(handle.name)
                     for file in files:
                         handle.write(quote_concat_path(file) + "\n")
                 cmd = [
-                    ffmpeg, "-hide_banner", "-nostdin", "-y", "-fflags", "+genpts",
+                    ffmpeg, "-hide_banner", "-nostdin", "-n", "-fflags", "+genpts",
                     "-f", "concat", "-safe", "0", "-i", str(temp_list),
-                    "-map", "0", "-c", "copy", "-map_metadata", "0", str(output),
+                    "-map", "0", "-c", "copy", "-map_metadata", "0", str(staging),
                 ]
             else:
                 src = Path(candidate["path"])
                 cmd = [
-                    ffmpeg, "-hide_banner", "-nostdin", "-y", "-fflags", "+genpts",
-                    "-i", str(src), "-map", "0", "-c", "copy", "-map_metadata", "0", str(output),
+                    ffmpeg, "-hide_banner", "-nostdin", "-n", "-fflags", "+genpts",
+                    "-i", str(src), "-map", "0", "-c", "copy", "-map_metadata", "0", str(staging),
                 ]
 
-            cmd[-1:-1] = build_output_timestamp_args(output)
+            cmd[-1:-1] = build_output_timestamp_args("mkv")
             runner = run_ffmpeg or self.run
             rc, lines = runner(cmd, progress_path=path)
-            if rc != 0:
+            if isinstance(rc, bool) or not isinstance(rc, int) or rc != 0:
                 detail = "\n".join(lines[-8:]).strip()
                 error = f"FFmpeg-Fallback fehlgeschlagen (Exitcode {rc})." + (f"\n{detail}" if detail else "")
                 self._log(f"❌ FFmpeg-Fallback fehlgeschlagen (Exitcode {rc}).", "error")
                 return ISOExtractionResult(ok=False, error=error)
-            if not output.exists() or output.stat().st_size <= 0:
+            if not staging.exists() or staging.stat().st_size <= 0:
                 error = "FFmpeg-Fallback erzeugte keine gültige Ausgabedatei."
                 self._log(f"❌ {error}", "error")
                 return ISOExtractionResult(ok=False, error=error)
 
-            self._progress(path, 95, [0])
-            self._log(f"✅ FFmpeg-Fallback abgeschlossen: {output.name}", "success")
+            self._verify_stage(staging, contract, duration_ms, chapter_count)
+            workspace.mark_verified(staging)
+            require_iso_not_aborted(self._worker)
+            self._require_source_receipts(receipts)
+            if not receipt_matches(staging, workspace.verified[staging]):
+                raise OSError("Geprüfte ISO-Fallback-Ausgabe wurde verändert.")
+            try:
+                publish_staged_no_replace(staging, output)
+            except FileExistsError:
+                error = f"FFmpeg-Fallback-Ziel wurde zwischenzeitlich belegt: {output.name}"
+                self._log(f"❌ {error}", "error")
+                return ISOExtractionResult(ok=False, error=error)
+
+            workspace.published = True
+            best_effort_callback(self._progress, path, 95, [FFMPEG_FALLBACK_TITLE_ID])
+            best_effort_callback(self._log, f"✅ FFmpeg-Fallback abgeschlossen: {output.name}", "success")
             return ISOExtractionResult(ok=True, extracted_files=[str(output)])
         except ISOUserAbortError:
             raise
@@ -139,8 +169,39 @@ class ISOFFmpegFallbackService:
             self._log(f"❌ {error}", "error")
             return ISOExtractionResult(ok=False, error=error)
         finally:
-            if temp_list is not None:
-                try:
-                    temp_list.unlink(missing_ok=True)
-                except OSError:
-                    pass
+            workspace.__exit__()
+
+    def _verify_stage(self, staging, contract, duration_ms, chapter_count):
+        verifier = OutputVerifier(ffprobe_path=str(getattr(self._tools, "ffprobe", "") or ""), min_size_bytes=1024, worker=self._worker)
+        verification = verifier.verify(str(staging), "mkv",
+            source_has_audio=bool(contract.audio_stream_count), expected_contract=contract,
+            expected_duration_ms=duration_ms)
+        if verification.ok and getattr(verification, 'chapter_count', chapter_count) != chapter_count:
+            raise RuntimeError("ISO-Fallback verändert die Kapitelanzahl.")
+        if not verification.ok:
+            detail = "; ".join(verification.messages or []) or "unbekannter Verifikationsfehler"
+            error = f"FFmpeg-Fallback-Ausgabe ungültig: {detail}"
+            self._log(f"❌ {error}", "error")
+            raise RuntimeError(error)
+
+    @staticmethod
+    def _source_paths(candidate):
+        return [Path(path) for path in candidate['files']] if candidate['mode'] == 'concat' else [Path(candidate['path'])]
+
+    @staticmethod
+    def _require_source_receipts(receipts):
+        for source, receipt in receipts.items():
+            if not receipt_matches(source, receipt):
+                raise OSError("ISO-Fallback-Quelldatei wurde während der Verarbeitung verändert.")
+
+    def _source_contract(self, candidate):
+        proofs = [probe_copy_source(path, self._tools, self._worker) for path in self._source_paths(candidate)]
+        if not proofs:
+            raise RuntimeError("ISO-Fallback besitzt keinen Quellvertrag.")
+        first = proofs[0][0]
+        if any(proof[0] != first for proof in proofs[1:]):
+            raise RuntimeError("DVD-Teildateien besitzen unterschiedliche Medienverträge; Fallback abgelehnt.")
+        if len(proofs) > 1 and any(proof[2] for proof in proofs):
+            raise RuntimeError("Kapitel mehrerer DVD-Teildateien können nicht sicher zusammengefügt werden.")
+        duration_ms = int(sum(proof[1] for proof in proofs) * 1000) or None
+        return first, duration_ms, sum(proof[2] for proof in proofs)

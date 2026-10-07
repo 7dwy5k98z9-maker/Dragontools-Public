@@ -5,9 +5,12 @@ from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any
 
+from .online_metadata_identity import validate_tmdb_episode
 from .online_metadata_common import (
     EpisodeMetadataSuggestion,
     OnlineMetadataError,
+    OnlineMetadataNotFoundError,
+    OnlineMetadataResponseError,
     _actors_from_credits,
     _credit_names,
     _float_or_none,
@@ -158,17 +161,20 @@ class TmdbSuggestionMixin:
                 append_to_response="credits,external_ids",
                 force_refresh=force_refresh,
             )
-        except OnlineMetadataError:
+        except OnlineMetadataNotFoundError:
             return None
 
+        validate_tmdb_episode(details, season, episode)
         episode_id = _int_or_none(details.get("id"))
         if episode_id is None:
-            return None
+            raise OnlineMetadataResponseError(
+                "TMDB-Episodendetail enthält keine gültige ID."
+            )
         show_name = str(record.get("name") or query).strip() or query
         original_show_name = (
             str(record.get("original_name") or show_name).strip() or show_name
         )
-        first_air_year = _year_from_date(record.get("first_air_date")) or query_year
+        first_air_year = _year_from_date(record.get("first_air_date"))
         title, title_is_fallback = normalize_episode_metadata_title(
             details.get("name"),
             episode,
@@ -188,6 +194,7 @@ class TmdbSuggestionMixin:
             except OnlineMetadataError:
                 refreshed = None
             if isinstance(refreshed, dict) and refreshed:
+                validate_tmdb_episode(refreshed, season, episode)
                 details = refreshed
                 episode_id = _int_or_none(details.get("id")) or episode_id
                 title, title_is_fallback = normalize_episode_metadata_title(

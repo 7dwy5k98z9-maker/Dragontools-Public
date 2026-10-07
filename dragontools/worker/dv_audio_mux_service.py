@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ..core.audio_titles import build_audio_title
+from .audio_metadata_args import audio_output_forced
 
 
 @dataclass(frozen=True)
@@ -31,7 +32,7 @@ class DVAudioMuxService:
         self._log = log
 
     def build_audio_meta(self, mi, ov: dict, container: str) -> list[dict]:
-        from ..rules.audio_plan import compute_audio_track_plan
+        from ..rules.audio_plan import compute_audio_track_plan, output_default_for_decision
 
         plan = compute_audio_track_plan(
             audio_streams=mi.audio_streams,
@@ -42,8 +43,7 @@ class DVAudioMuxService:
         meta: list[dict] = []
         for decision in plan:
             chosen = decision.stream
-            meta.append(
-                {
+            item = {
                     "mux_order": decision.out_idx,
                     "lang": (getattr(chosen, "language", None) or "und").lower(),
                     "orig_title": getattr(chosen, "title", None) or "",
@@ -54,8 +54,11 @@ class DVAudioMuxService:
                     "source_codec": getattr(chosen, "codec", ""),
                     "source_channels": getattr(chosen, "channels", 0),
                     "source_bitrate": getattr(chosen, "bitrate", 0),
+                    "forced": audio_output_forced(decision),
                 }
-            )
+            if hasattr(chosen, "default"):
+                item["default"] = output_default_for_decision(decision)
+            meta.append(item)
 
         return meta
 

@@ -13,6 +13,24 @@ if errorlevel 1 (
 )
 echo [INFO] Arbeitsverzeichnis: %CD%
 
+REM Oeffentliche Arbeitskopie: PDF-Pruefung ist standardmaessig aktiv.
+set "CHECK_PDF_PRIVACY=True"
+:BUILD_ARGUMENTS
+if "%~1"=="" goto :BUILD_ARGUMENTS_DONE
+if /I "%~1"=="--private" (
+  set "CHECK_PDF_PRIVACY=False"
+  shift
+  goto :BUILD_ARGUMENTS
+)
+if /I "%~1"=="--public" (
+  set "CHECK_PDF_PRIVACY=True"
+  shift
+  goto :BUILD_ARGUMENTS
+)
+echo [FEHLER] Unbekanntes Build-Argument: %~1. Erlaubt: --private oder --public.
+goto :BUILD_FAILED
+:BUILD_ARGUMENTS_DONE
+
 REM Dragon Tools V9 - kanonischer PyInstaller-CLI-Build.
 REM Die konkrete Version wird ausschliesslich aus dragontools\core\version.py gelesen.
 REM Der alte Dateiname build_v9_angepasst.bat bleibt als Kompatibilitaets-Wrapper erhalten.
@@ -76,6 +94,32 @@ for %%F in (
   )
 )
 
+REM PDF-Pruefung nur fuer oeffentliche Builds; Reparatur vor jeder Dist-Aenderung.
+if "%CHECK_PDF_PRIVACY%"=="True" (
+  echo [INFO] Oeffentlicher Build: Pruefe PDF-Pruefung inklusive Versionsgrenzen ...
+  "%PYTHON_EXE%" -B -c "from pypdf import PdfReader; from importlib.metadata import version; major=int(version('pypdf').split('.')[0]); print('[INFO] pypdf:', version('pypdf')); raise SystemExit(0 if 5 <= major < 7 else 2)"
+  if errorlevel 1 (
+    echo [INFO] Installiere/repariere pypdf fuer die PDF-Datenschutzpruefung ...
+    "%PYTHON_EXE%" -m pip --version >nul 2>nul
+    if errorlevel 1 (
+      echo [FEHLER] pip ist in der verwendeten Build-Umgebung nicht verfuegbar.
+      goto :BUILD_FAILED
+    )
+    "%PYTHON_EXE%" -m pip install "pypdf>=5,<7"
+    if errorlevel 1 (
+      echo [FEHLER] pypdf konnte nicht installiert werden. Pruefe pip und die Internetverbindung.
+      goto :BUILD_FAILED
+    )
+  )
+  "%PYTHON_EXE%" -B -c "from pypdf import PdfReader; from importlib.metadata import version; major=int(version('pypdf').split('.')[0]); raise SystemExit(0 if 5 <= major < 7 else 2)"
+  if errorlevel 1 (
+    echo [FEHLER] PDF-Pruefung ist nach der Installation weiterhin nicht verfuegbar.
+    goto :BUILD_FAILED
+  )
+) else (
+  echo [INFO] Privater Build: PDF-Datenschutzpruefung wird ausgelassen.
+)
+
 REM faster-whisper/CTranslate2 werden fuer die offizielle EXE mitgebuendelt.
 REM Nicht nur die Importierbarkeit, sondern auch die freigegebenen Versionen
 REM werden geprueft. Fehlt ein Paket oder liegt es ausserhalb der Constraints,
@@ -136,7 +180,7 @@ for %%F in (
   )
 )
 
-REM Public-Build: externe Werkzeuge werden separat installiert.
+REM Public-Build: externe Medienwerkzeuge werden separat installiert.
 REM Vor dem Source-Release-Check alte App-Bundles entfernen.
 REM validate_release(..., mode='source') prueft einen vorhandenen dist-Build ebenfalls.
 REM Ein Build aus einem aelteren Quellstand darf deshalb den neuen Build nicht blockieren.
@@ -184,7 +228,7 @@ REM Alte Test-/Bytecode-Artefakte beseitigen, danach ausschliesslich den aktuell
 REM Source-Stand pruefen. Der neue dist-Build wird erst nach PyInstaller separat validiert.
 "%PYTHON_EXE%" -B -c "from dragontools.core.release_packaging import clean_forbidden_release_artifacts; removed=clean_forbidden_release_artifacts('.'); print('[INFO] Release-Caches entfernt:', len(removed))"
 if errorlevel 1 goto :BUILD_FAILED
-"%PYTHON_EXE%" -B -c "from dragontools.core.release_validation import validate_release, format_release_checks; c=validate_release('.', mode='source'); print(format_release_checks(c)); raise SystemExit(1 if any(x.status == 'error' for x in c) else 0)"
+"%PYTHON_EXE%" -B -c "from dragontools.core.release_validation import validate_release, format_release_checks; c=validate_release('.', mode='source', check_pdf_privacy=%CHECK_PDF_PRIVACY%); print(format_release_checks(c)); raise SystemExit(1 if any(x.status == 'error' for x in c) else 0)"
 if errorlevel 1 (
   echo [FEHLER] Source-Release-Pruefung fehlgeschlagen.
   goto :BUILD_FAILED
@@ -193,7 +237,7 @@ if errorlevel 1 (
 REM Versionsinfo fuer reproduzierbare Build-Logs.
 "%PYTHON_EXE%" -c "import sys, PyInstaller, PyQt6, cv2, numpy, cryptography, defusedxml, ctranslate2; print('[INFO] App:', '%BUILD_NAME%'); print('[INFO] Python:', sys.version.split()[0]); print('[INFO] PyInstaller:', PyInstaller.__version__); print('[INFO] PyQt6:', getattr(PyQt6, '__version__', 'installiert')); print('[INFO] OpenCV:', cv2.__version__); print('[INFO] NumPy:', numpy.__version__); print('[INFO] CTranslate2:', getattr(ctranslate2, '__version__', 'installiert')); print('[INFO] cryptography:', cryptography.__version__); print('[INFO] defusedxml:', getattr(defusedxml, '__version__', 'installiert'))"
 
-"%PYTHON_EXE%" -m PyInstaller ^
+"%PYTHON_EXE%" -m extras.release_pyinstaller ^
   --onedir ^
   --noconsole ^
   --noconfirm ^
@@ -202,6 +246,8 @@ REM Versionsinfo fuer reproduzierbare Build-Logs.
   --icon "icon\Feuerdrache.ico" ^
   --splash "Bilder\splash_pyinstaller.png" ^
   --contents-directory "Daten" ^
+  --collect-submodules dragontools ^
+  --exclude-module dragontools.tests ^
   --exclude-module PyQt5 ^
   --exclude-module PySide6 ^
   --exclude-module PySide2 ^
@@ -215,8 +261,12 @@ REM Versionsinfo fuer reproduzierbare Build-Logs.
   --collect-data cryptography ^
   --hidden-import faster_whisper ^
   --hidden-import ctranslate2 ^
-  --collect-all faster_whisper ^
-  --collect-all ctranslate2 ^
+  --collect-submodules faster_whisper ^
+  --collect-binaries faster_whisper ^
+  --collect-data faster_whisper ^
+  --collect-submodules ctranslate2 ^
+  --collect-binaries ctranslate2 ^
+  --collect-data ctranslate2 ^
   --copy-metadata faster-whisper ^
   --copy-metadata ctranslate2 ^
   --add-data "icon\Feuerdrache.ico;icon" ^
@@ -236,25 +286,12 @@ if errorlevel 1 (
   goto :BUILD_FAILED
 )
 
-REM Qt 6 verwendet unter Windows die ICU-Systembibliothek aus System32.
-REM PyInstaller kann auf Entwicklungsrechnern stattdessen eine gleichnamige,
-REM inkompatible ICU-Kopie aus einer fremden Tool-/Poppler-Umgebung einsammeln.
-REM Diese Kopie ueberschattet die Windows-DLL und fuehrt beim Start zu:
-REM   DLL load failed while importing QtCore: Prozedur wurde nicht gefunden.
-REM Nur die beiden automatisch in die Wurzel des Datenordners gelegten Kopien
-REM entfernen; Qt- oder Anwendungsdateien in Unterordnern bleiben unangetastet.
-for %%F in (
-  "%DATA_ROOT%\icuuc.dll"
-  "%DATA_ROOT%\icudt78.dll"
-) do (
-  if exist %%F (
-    echo [INFO] Entferne inkompatible, von PyInstaller eingesammelte ICU-Kopie: %%~F
-    del /Q %%F
-  )
-  if exist %%F (
-    echo [FEHLER] Inkompatible ICU-Kopie konnte nicht aus dem Build entfernt werden: %%~F
-    goto :BUILD_FAILED
-  )
+REM Gleiche Qt-/ICU-Policy wie im nativen CI-Smoke. Nur nachgewiesen
+REM inkompatible ICU-Kopien entfernen; kompatible DLLs und andere Artefakte bleiben.
+"%PYTHON_EXE%" -m dragontools.core.release_qt_icu "%DATA_ROOT%"
+if errorlevel 1 (
+  echo [FEHLER] Qt-/ICU-Vertrag des Builds ist nicht erfuellt.
+  goto :BUILD_FAILED
 )
 
 REM Der Abschlusscheck verwendet exakt denselben dynamischen Buildnamen.
@@ -282,7 +319,7 @@ if exist "%DATA_ROOT%\Python" (
   goto :BUILD_FAILED
 )
 
-REM Public-Vertrag: leerer Werkzeugordner, Installationshinweise und Inhaltspruefung.
+REM Public-Vertrag: Installationshinweise und Inhaltspruefung.
 if not exist "%DATA_ROOT%\Programme" mkdir "%DATA_ROOT%\Programme"
 copy /Y "TOOLS_INSTALLIEREN.txt" "%DIST_ROOT%\TOOLS_INSTALLIEREN.txt" >nul
 if errorlevel 1 goto :BUILD_FAILED

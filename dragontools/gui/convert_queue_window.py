@@ -13,6 +13,7 @@ from PyQt6.QtWidgets import (
 from .convert_widget_file_queue import FileListWidget
 from .queue_ordering import MOVE_BACK, MOVE_DOWN, MOVE_FRONT, MOVE_UP, reorder_selected_paths
 from .ui_helpers import restore_window_geometry, save_window_geometry
+from .file_worker_pause import show_file_worker_menu
 
 
 class QueueWindowListWidget(FileListWidget):
@@ -52,6 +53,7 @@ class ConvertQueueWindow(QWidget):
         on_closed,
     ):
         super().__init__(parent_widget, Qt.WindowType.Window)
+        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
         self.source_list = source_list
         self.is_queue_blocking_move_active = is_queue_blocking_move_active
         self.active_worker = active_worker
@@ -74,6 +76,12 @@ class ConvertQueueWindow(QWidget):
         self.file_list.set_active_path_checker(self._is_path_active)
         self.file_list.setMinimumHeight(420)
         self.file_list.order_changed.connect(self._on_order_changed)
+        self.file_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.file_list.customContextMenuRequested.connect(
+            lambda pos: show_file_worker_menu(self.file_list, pos,
+                worker_provider=self.active_worker, refresh=self.refresh_from_owner,
+                allow_control=lambda: not self.is_queue_blocking_move_active(), source_list=self.source_list)
+        )
         root.addWidget(self.file_list)
 
         buttons = QHBoxLayout()

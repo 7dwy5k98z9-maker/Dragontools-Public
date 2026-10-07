@@ -97,7 +97,7 @@ class OnlineMetadataDialogViewMixin:
         self.tvdb_enabled_cb = QCheckBox("TheTVDB verwenden")
         self.tvdb_api_key_edit = self._secret_edit("TheTVDB API-Key")
         self.tvdb_pin_edit = self._secret_edit("Subscriber PIN, falls vorhanden")
-        self.tvdb_token_edit = self._secret_edit("Optional: vorhandenes Bearer-Token")
+        self.tvdb_token_edit = self._secret_edit("Optional: vorhandenes/automatisch verwaltetes Bearer-Token")
         grid.addWidget(self.tvdb_enabled_cb, 0, 0, 1, 3)
         grid.addWidget(QLabel("API-Key:"), 1, 0)
         grid.addWidget(self.tvdb_api_key_edit, 1, 1, 1, 2)
@@ -106,8 +106,10 @@ class OnlineMetadataDialogViewMixin:
         grid.addWidget(QLabel("Bearer-Token:"), 3, 0)
         grid.addWidget(self.tvdb_token_edit, 3, 1, 1, 2)
         hint = QLabel(
-            "Dragon Tools erzeugt bei Bedarf automatisch ein temporäres Bearer-Token aus API-Key und PIN. "
-            "Ein manuell eingetragenes Bearer-Token wird direkt verwendet."
+            "Ein manuell eingetragenes Bearer-Token wird gespeichert und zunächst direkt verwendet. "
+            "Sobald TheTVDB es ablehnt, erzeugt Dragon Tools über API-Key und ggf. PIN automatisch "
+            "ein neues Token und speichert dieses wieder in den Einstellungen. "
+            "Für die automatische Erneuerung muss daher ein gültiger API-Key hinterlegt sein."
         )
         hint.setWordWrap(True)
         grid.addWidget(hint, 4, 0, 1, 3)

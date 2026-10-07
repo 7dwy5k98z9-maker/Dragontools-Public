@@ -42,6 +42,8 @@ from .converter_config import ConverterConfig
 from .worker_contracts import RemoveFileStatus, normalize_worker_path
 from .worker_events import log_event
 from .converter_thread_bootstrap import bootstrap_converter_thread
+from .live_queue_overrides import set_file_override
+from .log_dispatch import dispatch_log
 
 
 # ------------------------------------------------------------------
@@ -96,20 +98,15 @@ class ConverterThread(QThread):
     # Live-Queue Methoden
     # ==================================================================
     def add_file(self, path: str) -> bool:
-        ok = self._queue.add_file(path, self.log)
-        if ok:
-            self._session_state.all_input_files.append(path)
-        return ok
+        return self._queue.add_file(path, self.log,
+            before_enqueue=lambda _owned_path: self._session_state.all_input_files.append(path))
 
     def add_file_with_override(self, path: str, override: dict) -> bool:
         """Live-add a file with its override installed before it can become current."""
-        with self._files_lock:
-            self._job_state.file_overrides[path] = dict(override or {})
-        ok = self.add_file(path)
-        if not ok:
-            with self._files_lock:
-                self._job_state.file_overrides.pop(path, None)
-        return ok
+        def register(owned_path):
+            set_file_override(self._job_state.file_overrides, owned_path, override)
+            self._session_state.all_input_files.append(path)
+        return self._queue.add_file(path, self.log, before_enqueue=register)
 
     def remove_file(self, path: str) -> RemoveFileStatus:
         return self._queue.remove_file(path, self.log)
@@ -136,15 +133,15 @@ class ConverterThread(QThread):
             done_n = {normalize_worker_path(p) for p in self._queue.done_files}
 
             if current_n == path_n:
-                self.log(f"⛔ Override für '{name}' abgelehnt - Datei wird gerade verarbeitet.", "warn")
-                return False
-
-            if path_n in done_n:
-                self.log(f"⛔ Override für '{name}' abgelehnt - Datei bereits abgeschlossen.", "warn")
-                return False
-
-            self._job_state.file_overrides[path] = override
-
+                reason = "Datei wird gerade verarbeitet."
+            elif path_n in done_n:
+                reason = "Datei bereits abgeschlossen."
+            else:
+                reason = ""
+                set_file_override(self._job_state.file_overrides, path, override)
+        if reason:
+            self.log(f"⛔ Override für '{name}' abgelehnt - {reason}", "warn")
+            return False
         self.log(f"🛠️ Override für '{name}' gesetzt.", "info")
         return True
 
@@ -210,7 +207,7 @@ class ConverterThread(QThread):
 
     def log(self, msg, level="info"):
         self.worker_event.emit(log_event(str(msg), severity=level))
-        getattr(self._logger, level, self._logger.info)(msg)
+        dispatch_log(self._logger, msg, level)
 
     def emit_file_progress(self, path, pct, eta=None):
         self._services.result.emit_file_progress(path, pct, eta)

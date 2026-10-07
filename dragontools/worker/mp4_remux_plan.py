@@ -3,17 +3,24 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from copy import deepcopy
 from pathlib import Path
 from typing import Any, Callable
 
-from ..core.audio_titles import build_audio_title
+from .audio_metadata_args import audio_metadata_args, audio_output_title, audio_output_forced
+from .utility_output_workspace import VerifiedOutputWorkspace
+from ..core.lang_codes import mkv_language_tags
+from ..core.media_metadata import normalize_video_codec
 from ..core.output_timestamps import build_output_timestamp_args
 from ..rules.audio_plan import (
     audio_filter_chain,
     audio_input_args_for_plan,
     compute_audio_track_plan,
+    output_default_for_decision,
 )
 from ..rules.subtitle_rules import build_mp4_subtitle_storage_plan, compute_subtitle_plan
+from .media_contract import _audio_codec_family, _subtitle_codec_family
+from .media_contract_types import ExpectedAudioTrack, ExpectedMediaContract, ExpectedSubtitleTrack
 
 
 @dataclass(frozen=True)
@@ -26,6 +33,17 @@ class MP4RemuxPlan:
     audio_plan: tuple[Any, ...]
     expected_audio_tracks: int
     expected_subtitle_tracks: int
+    expected_contract: ExpectedMediaContract | None = None
+    workspace: Any = None
+
+
+def _subtitle_disposition(stream) -> str:
+    flags: list[str] = []
+    if bool(getattr(stream, "default", False)):
+        flags.append("default")
+    if bool(getattr(stream, "forced", False)):
+        flags.append("forced")
+    return "+".join(flags) if flags else "0"
 
 
 class MP4RemuxPlanner:
@@ -47,7 +65,7 @@ class MP4RemuxPlanner:
         self.apply_audio_rules = bool(apply_audio_rules)
         self.export_subtitles = bool(export_subtitles)
         self.ignore_subtitles = bool(ignore_subtitles)
-        self.subtitle_rules = dict(subtitle_rules or {})
+        self.subtitle_rules = deepcopy(subtitle_rules or {})
         self.faststart = bool(faststart)
         self._log = log
         self._log_audio = log_audio
@@ -73,7 +91,7 @@ class MP4RemuxPlanner:
                 "HDR10+ erkannt. Der normale MP4-Remux erhält dynamische HDR10+-Metadaten nicht sicher. "
                 "Bitte den Standard-Converter mit HDR10+-Erhalt verwenden."
             )
-        codec = (primary.codec or "").lower()
+        codec = normalize_video_codec(primary.codec or "")
         if codec in {"h264", "hevc", "h265"}:
             return True, codec
         return False, (
@@ -134,28 +152,16 @@ class MP4RemuxPlanner:
                 )
             for note in getattr(decision, "processing_notes", ()) or ():
                 self._log(f"Audio Spur {out_idx + 1}: {note}", "info")
-            if chosen.language:
-                args += [f"-metadata:s:a:{out_idx}", f"language={chosen.language.lower()}"]
-            title = build_audio_title(
-                language=getattr(chosen, "language", None),
-                codec=(decision.target_codec if decision.needs_transcode else chosen.codec),
-                channels=(
-                    decision.target_channels
-                    if decision.needs_transcode
-                    else getattr(chosen, "channels", None)
-                ),
-                bitrate_bps=(
-                    decision.target_bitrate
-                    if decision.needs_transcode
-                    else getattr(chosen, "bitrate", None)
-                ),
-            )
-            args += [f"-metadata:s:a:{out_idx}", f"title={title}"]
+            args += audio_metadata_args(decision)
         return args
 
     def build_subtitle_args_with_count(self, media_info) -> tuple[list[str], int]:
         if not self.export_subtitles or self.ignore_subtitles:
             return ["-sn"], 0
+        internal = self._internal_subtitles(media_info)
+        return self._subtitle_args(internal), len(internal)
+
+    def _internal_subtitles(self, media_info):
         subtitle_plan = compute_subtitle_plan(
             list(getattr(media_info, "subtitle_streams", []) or []),
             audio_streams=list(getattr(media_info, "audio_streams", []) or []),
@@ -170,24 +176,27 @@ class MP4RemuxPlanner:
             preserve_burn_candidate=True,
         )
         internal = list(storage.internal_streams or [])
-        if not internal:
-            return ["-sn"], 0
+        return internal
+
+    @staticmethod
+    def _subtitle_args(internal) -> list[str]:
         args: list[str] = []
         for out_idx, stream in enumerate(internal):
             args += ["-map", f"0:{stream.index}", f"-c:s:{out_idx}", "mov_text"]
             if getattr(stream, "language", None):
                 args += [
                     f"-metadata:s:s:{out_idx}",
-                    f"language={str(stream.language).lower()}",
+                    f"language={mkv_language_tags(stream.language)[0]}",
                 ]
             title = str(getattr(stream, "title", "") or "").replace("\n", " ").strip()
             if title:
-                args += [f"-metadata:s:s:{out_idx}", f"title={title}"]
+                args += [f"-metadata:s:s:{out_idx}", f"title={title}",
+                         f"-metadata:s:s:{out_idx}", f"handler_name={title}"]
             args += [
                 f"-disposition:s:{out_idx}",
-                "forced" if bool(getattr(stream, "forced", False)) else "0",
+                _subtitle_disposition(stream),
             ]
-        return args, len(internal)
+        return args if internal else ["-sn"]
 
     def build_subtitle_args(self, media_info) -> list[str]:
         # Kompatibilitätsfassade für bestehende Tests/Plugins.
@@ -197,15 +206,17 @@ class MP4RemuxPlanner:
         source = Path(input_path)
         destination = Path(output_path)
         destination.parent.mkdir(parents=True, exist_ok=True)
-        staging = destination
-        if destination.resolve() == source.resolve():
-            staging = destination.with_name(f"{destination.stem}.__mp4_remux_tmp__.mp4")
-
         audio_plan = self.build_audio_plan(media_info)
-        subtitle_args, expected_subtitle_tracks = self.build_subtitle_args_with_count(media_info)
+        internal_subtitles = self._internal_subtitles(media_info) if self.export_subtitles and not self.ignore_subtitles else []
+        subtitle_args = self._subtitle_args(internal_subtitles)
+        primary_index = getattr(media_info.primary_video, "index", None)
+        if isinstance(primary_index, bool) or not isinstance(primary_index, int) or primary_index < 0:
+            raise ValueError("Primärvideo besitzt keinen bestätigten FFmpeg-Streamindex.")
+        if getattr(media_info, 'ffmpeg_stream_indices_trusted', True) is False:
+            raise ValueError("FFmpeg-Streamindizes der Quelle sind nicht bestätigt.")
         command: list[str] = [
             self.ffmpeg_path,
-            "-y",
+            "-n",
             "-loglevel",
             "error",
             *audio_input_args_for_plan(audio_plan),
@@ -216,7 +227,7 @@ class MP4RemuxPlanner:
             "-map_chapters",
             "0",
             "-map",
-            "0:v:0",
+            f"0:{primary_index}",
             "-c:v",
             "copy",
             *self.build_audio_args(audio_plan),
@@ -224,6 +235,9 @@ class MP4RemuxPlanner:
         ]
         if self.faststart:
             command += ["-movflags", "+faststart"]
+        expected_contract = self._expected_contract(media_info, audio_plan, internal_subtitles)
+        workspace = VerifiedOutputWorkspace(destination.parent, self._log, prefix='.__dragontools_mp4_remux_')
+        staging = workspace.root / 'remux.mp4'
         command += [*build_output_timestamp_args("mp4"), str(staging)]
         return MP4RemuxPlan(
             source=source,
@@ -233,7 +247,50 @@ class MP4RemuxPlanner:
             duration_s=float(getattr(media_info, "duration_s", 0.0) or 0.0),
             audio_plan=tuple(audio_plan or ()),
             expected_audio_tracks=len(tuple(audio_plan or ())),
-            expected_subtitle_tracks=expected_subtitle_tracks,
+            expected_subtitle_tracks=len(internal_subtitles),
+            expected_contract=expected_contract,
+            workspace=workspace,
+        )
+
+
+    @staticmethod
+    def _expected_contract(media_info, audio_plan, internal_subtitles):
+        primary = media_info.primary_video
+        return ExpectedMediaContract(
+            container="mp4",
+            video_codec=normalize_video_codec(getattr(primary, "codec", "") or ""),
+            video_stream_count=1,
+            audio_tracks=tuple(
+                ExpectedAudioTrack(
+                    codec=_audio_codec_family(
+                        decision.target_codec if decision.needs_transcode else getattr(decision.stream, "codec", "")
+                    ),
+                    channels=int(
+                        decision.target_channels if decision.needs_transcode else getattr(decision.stream, "channels", 0) or 0
+                    ),
+                    language=str(getattr(decision.stream, "language", "") or ""),
+                    default=bool(output_default_for_decision(decision)),
+                    title=audio_output_title(decision),
+                    forced=audio_output_forced(decision),
+                )
+                for decision in (audio_plan or ())
+            ),
+            subtitle_tracks=tuple(
+                ExpectedSubtitleTrack(
+                    codec=_subtitle_codec_family("mov_text"),
+                    language=str(getattr(stream, "language", "") or ""),
+                    forced=bool(getattr(stream, "forced", False)),
+                    default=bool(getattr(stream, "default", False)),
+                    title=str(getattr(stream, "title", "") or "").replace("\n", " ").strip(),
+                )
+                for stream in internal_subtitles
+            ),
+            min_video_bit_depth=(int(getattr(primary, "bit_depth", 0) or 0) or None),
+            require_hdr=bool(getattr(media_info, "is_hdr", False)),
+            expected_width=(int(getattr(primary, "width", 0) or 0) or None),
+            expected_height=(int(getattr(primary, "height", 0) or 0) or None),
+            attachment_stream_count=0,
+            data_stream_count=0,
         )
 
 

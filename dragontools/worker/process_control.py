@@ -29,17 +29,16 @@ from __future__ import annotations
 import os
 import subprocess
 
+from .log_dispatch import dispatch_log
+from ..core.owned_process import terminate_owned_job
+from ..core.owned_process_pause import suspend_owned_process_tree, resume_owned_process_tree
+
 
 TASKKILL_TIMEOUT_SECONDS = 5.0
 
 
 def _log_process_control(log, message: str, level: str = "warn") -> None:
-    if not callable(log):
-        return
-    try:
-        log(message, level)
-    except TypeError:
-        log(message)
+    dispatch_log(log, message, level)
 
 
 def _windows_process_suspend_resume(pid: int, *, resume: bool) -> int | None:
@@ -93,6 +92,9 @@ def suspend_process(
         return True
     try:
         if os.name == "nt":
+            owned_result = suspend_owned_process_tree(proc)
+            if owned_result is not None:
+                return owned_result
             status = _windows_process_suspend_resume(proc.pid, resume=False)
             if status is None:
                 _log_process_control(
@@ -108,7 +110,10 @@ def suspend_process(
                 return False
         else:
             import signal
-            os.kill(proc.pid, signal.SIGSTOP)
+            if bool(getattr(proc, "_dragontools_process_group", False)):
+                os.killpg(os.getpgid(proc.pid), signal.SIGSTOP)
+            else:
+                os.kill(proc.pid, signal.SIGSTOP)
         return True
     except (OSError, ValueError, TypeError, AttributeError) as exc:
         _log_process_control(log, f"{label}: Pausieren fehlgeschlagen: {exc}")
@@ -122,10 +127,15 @@ def resume_process(
     label: str = "Prozess",
 ) -> bool:
     """Setzt einen suspendierten *proc* fort und liefert den Erfolgsstatus."""
-    if proc is None or proc.poll() is not None:
+    if proc is None:
         return True
     try:
         if os.name == "nt":
+            owned_result = resume_owned_process_tree(proc)
+            if owned_result is not None:
+                return owned_result
+            if proc.poll() is not None:
+                return True
             status = _windows_process_suspend_resume(proc.pid, resume=True)
             if status is None:
                 _log_process_control(
@@ -140,8 +150,13 @@ def resume_process(
                 )
                 return False
         else:
+            if proc.poll() is not None:
+                return True
             import signal
-            os.kill(proc.pid, signal.SIGCONT)
+            if bool(getattr(proc, "_dragontools_process_group", False)):
+                os.killpg(os.getpgid(proc.pid), signal.SIGCONT)
+            else:
+                os.kill(proc.pid, signal.SIGCONT)
         return True
     except (OSError, ValueError, TypeError, AttributeError) as exc:
         _log_process_control(log, f"{label}: Fortsetzen fehlgeschlagen: {exc}")
@@ -174,27 +189,25 @@ def _taskkill_tree(
             **kwargs,
         )
         if completed.returncode == 0:
-            if callable(log):
-                log(f"{label}: Prozessbaum per taskkill /T /F beendet (PID {pid}).", "warn")
+            _log_process_control(log, f"{label}: Prozessbaum per taskkill /T /F beendet (PID {pid}).", "warn")
             return True
-        if callable(log):
-            log(
-                f"{label}: taskkill lieferte Exit-Code {completed.returncode} fuer PID {pid}; "
-                "Python-Kill-Fallback bleibt aktiv.",
-                "warn",
-            )
+        _log_process_control(
+            log,
+            f"{label}: taskkill lieferte Exit-Code {completed.returncode} fuer PID {pid}; "
+            "Python-Kill-Fallback bleibt aktiv.",
+            "warn",
+        )
         return False
     except subprocess.TimeoutExpired:
-        if callable(log):
-            log(
-                f"{label}: taskkill-Timeout nach {max(0.1, float(timeout)):.1f}s fuer PID {pid}; "
-                "Python-Kill-Fallback bleibt aktiv.",
-                "warn",
-            )
+        _log_process_control(
+            log,
+            f"{label}: taskkill-Timeout nach {max(0.1, float(timeout)):.1f}s fuer PID {pid}; "
+            "Python-Kill-Fallback bleibt aktiv.",
+            "warn",
+        )
         return False
     except (OSError, ValueError, TypeError, subprocess.SubprocessError) as exc:
-        if callable(log):
-            log(f"{label}: taskkill fehlgeschlagen fuer PID {pid}: {exc}", "warn")
+        _log_process_control(log, f"{label}: taskkill fehlgeschlagen fuer PID {pid}: {exc}", "warn")
         return False
 
 
@@ -241,21 +254,27 @@ def terminate_process_tree(
 
     if proc is None:
         if callable(log):
-            log(f"{label}: kein laufender Prozess für Sofort-Abbruch.", "info")
+            _log_process_control(log, f"{label}: kein laufender Prozess für Sofort-Abbruch.", "info")
         return False
 
     if proc.poll() is not None:
         if callable(log):
-            log(f"{label}: Prozess ist bereits beendet.", "info")
+            _log_process_control(log, f"{label}: Prozess ist bereits beendet.", "info")
         with lock:
             _clear_registered_unlocked(proc)
         return False
 
     if callable(log):
-        log(f"{label}: Sofort-Abbruch - terminate() wird gesendet.", "warn")
+        _log_process_control(log, f"{label}: Sofort-Abbruch - terminate() wird gesendet.", "warn")
 
     if os.name == "nt":
-        _taskkill_tree(proc.pid, log=log, label=label)
+        try:
+            tree_stopped = terminate_owned_job(proc)
+        except OSError as exc:
+            _log_process_control(log, f"{label}: Job-Abbruch fehlgeschlagen: {exc}", "warn")
+            tree_stopped = False
+        if not tree_stopped:
+            _taskkill_tree(proc.pid, log=log, label=label)
         try:
             proc.wait(timeout=terminate_timeout + kill_timeout)
         except subprocess.TimeoutExpired:
@@ -264,7 +283,7 @@ def terminate_process_tree(
                 proc.wait(timeout=kill_timeout)
             except (OSError, subprocess.SubprocessError) as exc:
                 if callable(log):
-                    log(f"{label}: Python-Kill-Fallback fehlgeschlagen: {exc}", "error")
+                    _log_process_control(log, f"{label}: Python-Kill-Fallback fehlgeschlagen: {exc}", "error")
     else:
         import signal
 
@@ -283,22 +302,22 @@ def terminate_process_tree(
             proc.wait(timeout=terminate_timeout)
             if callable(log):
                 scope = "Prozessgruppe" if use_group else "Prozess"
-                log(f"{label}: {scope} per SIGTERM beendet.", "warn")
+                _log_process_control(log, f"{label}: {scope} per SIGTERM beendet.", "warn")
         except subprocess.TimeoutExpired:
             if callable(log):
-                log(f"{label}: SIGTERM Timeout - SIGKILL wird gesendet.", "warn")
+                _log_process_control(log, f"{label}: SIGTERM Timeout - SIGKILL wird gesendet.", "warn")
             try:
                 _send(signal.SIGKILL)
                 proc.wait(timeout=kill_timeout)
                 if callable(log):
                     scope = "Prozessgruppe" if use_group else "Prozess"
-                    log(f"{label}: {scope} per SIGKILL beendet.", "warn")
+                    _log_process_control(log, f"{label}: {scope} per SIGKILL beendet.", "warn")
             except (OSError, subprocess.SubprocessError) as exc:
                 if callable(log):
-                    log(f"{label}: Prozess konnte nicht gekillt werden: {exc}", "error")
+                    _log_process_control(log, f"{label}: Prozess konnte nicht gekillt werden: {exc}", "error")
         except (OSError, subprocess.SubprocessError) as exc:
             if callable(log):
-                log(f"{label}: Prozess konnte nicht beendet werden: {exc}", "error")
+                _log_process_control(log, f"{label}: Prozess konnte nicht beendet werden: {exc}", "error")
 
     ended = proc.poll() is not None
     if ended:

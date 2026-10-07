@@ -25,6 +25,7 @@ THIRD_PARTY_TOOL_DIRS = (
     Path(THIRD_PARTY_DIR) / "dovi_tool",
     Path(THIRD_PARTY_DIR) / "hdr10plus_tool",
     Path(THIRD_PARTY_DIR) / "rmts",
+    Path(THIRD_PARTY_DIR) / "Tesseract-OCR",
 )
 PROGRAMME_TOOL_DIRS = (
     Path(PROGRAMME_DIR) / "FFmpeg",
@@ -36,6 +37,7 @@ PROGRAMME_TOOL_DIRS = (
     Path(PROGRAMME_DIR) / "dovi_tool",
     Path(PROGRAMME_DIR) / "hdr10plus_tool",
     Path(PROGRAMME_DIR) / "rmts",
+    Path(PROGRAMME_DIR) / "Tesseract-OCR",
 )
 MKV_DIR = f"{PROGRAMME_DIR}/mkvtoolnix"
 RMTS_DIR = f"{PROGRAMME_DIR}/rmts"

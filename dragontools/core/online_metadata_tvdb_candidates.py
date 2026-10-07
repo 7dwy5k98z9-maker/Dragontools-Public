@@ -5,8 +5,11 @@ from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any
 
+from .online_metadata_tvdb_helpers import _tvdb_record_id
 from .online_metadata_common import (
     EpisodeMetadataSuggestion,
+    OnlineMetadataNotFoundError,
+    OnlineMetadataResponseError,
     _float_or_none,
     _int_or_none,
     compare_metadata_text,
@@ -57,16 +60,18 @@ def _collect_records(client, request: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def _record_rank(client, record: dict[str, Any], *, query: str, year: int | None) -> tuple[float, int, float]:
-    title = (
-        _tvdb_localized_title(record, client.config.language)
-        or _tvdb_localized_title(record, client.config.fallback_language)
-        or _tvdb_text(record, "name_translated", "name")
+    names = (
+        _tvdb_localized_title(record, client.config.language),
+        _tvdb_localized_title(record, client.config.fallback_language),
+        _tvdb_text(record, "name_translated", "name"),
+        _tvdb_text(record, "originalName", "original_name", "originalTitle", "original_title"),
     )
-    title_score = SequenceMatcher(
-        None,
-        compare_metadata_text(query),
-        compare_metadata_text(title),
-    ).ratio()
+    query_key = compare_metadata_text(query)
+    title_score = max(
+        (SequenceMatcher(None, query_key, compare_metadata_text(name)).ratio()
+         for name in names if str(name or "").strip()),
+        default=0.0,
+    )
     candidate_year = _year_from_tvdb_record(record)
     year_score = int(year is not None and candidate_year is not None and int(year) == int(candidate_year))
     return title_score, year_score, float(record.get("score") or 0.0)
@@ -81,7 +86,7 @@ def _build_suggestion(
     series_builder,
     force_refresh: bool = False,
 ) -> EpisodeMetadataSuggestion | None:
-    series_id = _int_or_none(record.get("tvdb_id") or record.get("id") or record.get("seriesId"))
+    series_id = _tvdb_record_id(record)
     if series_id is None:
         return None
     series = series_builder(
@@ -93,7 +98,7 @@ def _build_suggestion(
         selected = client.resolve_episode_record(
             series_id, request["season"], request["episode"], force_refresh=force_refresh
         )
-    except OnlineMetadataError:
+    except OnlineMetadataNotFoundError:
         selected = None
     if selected is None:
         return None
@@ -104,7 +109,9 @@ def _build_suggestion(
         or selected.get("episode_id")
     )
     if episode_id is None:
-        return None
+        raise OnlineMetadataResponseError(
+            "TheTVDB-Episodendatensatz enthält keine gültige ID."
+        )
     title, title_is_fallback = normalize_episode_metadata_title(
         _tvdb_text(selected, "name_translated", "name", "title"),
         request["episode"],

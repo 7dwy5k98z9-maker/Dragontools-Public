@@ -53,3 +53,18 @@ def test_real_qsettings_policy_protects_before_persisting(monkeypatch):
     secret_settings.write_secret(settings, "secret", "token")
 
     assert settings.values["secret"] == "dpapi:v1:token"
+
+
+def test_read_secret_state_distinguishes_unreadable_protected_blob(monkeypatch):
+    settings = FakeSettings({"secret": "dpapi:v1:opaque"})
+    monkeypatch.setattr(
+        secret_settings,
+        "_dpapi_unprotect",
+        lambda _value: (_ for _ in ()).throw(secret_settings.SecretProtectionError("wrong user")),
+    )
+
+    state = secret_settings.read_secret_state(settings, "secret", "")
+
+    assert state.value == ""
+    assert state.protected is True
+    assert state.readable is False

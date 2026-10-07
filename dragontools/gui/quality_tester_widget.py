@@ -16,6 +16,7 @@ from .quality_file_compare_dialog import QualityFileCompareDialog
 from .quality_tester_execution import QualityTesterExecutionMixin
 from .quality_tester_files import QualityTesterFilesMixin
 from .quality_tester_run_config import QualityTesterRunConfigMixin
+from .dialog_ownership import exec_owned_dialog
 
 
 class _QualityFileTable(FileDropTable):
@@ -162,8 +163,10 @@ class QualityTesterWidget(
 
     def _open_file_compare_dialog(self) -> None:
         dialog = QualityFileCompareDialog(parent=self)
-        dialog.exec()
+        exec_owned_dialog(dialog)
 
     def iter_shutdown_workers(self):
         """Explicit tab lifecycle contract; implementation lives in the execution mixin."""
-        return QualityTesterExecutionMixin.iter_shutdown_workers(self)
+        own = QualityTesterExecutionMixin.iter_shutdown_workers(self)
+        dialogs = self.findChildren(QualityFileCompareDialog)
+        return own + tuple(worker for dialog in dialogs for worker in dialog.iter_shutdown_workers())

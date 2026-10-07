@@ -10,6 +10,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ..core.audit_log import log_qsettings_changes, snapshot_qsettings
+from ..core.settings_access import save_settings_transaction
 from ..core.settings_app import APP_NAME, APP_ORG
 from ..core.version import APP_VERSION
 from .info_button import InfoButton
@@ -96,7 +97,7 @@ class SettingsDialog(QDialog):
         scroll.setWidgetResizable(True)
         inner = QWidget()
         layout = QVBoxLayout(inner)
-        for section in self._sections:
+        for section in self._active_sections():
             section.build(layout)
         scroll.setWidget(inner)
         root.addWidget(scroll)
@@ -119,8 +120,21 @@ class SettingsDialog(QDialog):
         if directory:
             edit.setText(directory)
 
+    def _active_sections(self):
+        """Return only section objects that own at least one visible UI area.
+
+        Focused settings dialogs are used throughout the main menu. Saving a
+        single area must not re-save unrelated hidden sections (and, in the
+        worst case, normalize or clear values the user never opened).
+        """
+        visible = set(self._visible_sections)
+        return tuple(
+            section for section in self._sections
+            if visible.intersection(section.section_keys)
+        )
+
     def _load(self) -> None:
-        for section in self._sections:
+        for section in self._active_sections():
             section.load()
 
     def done(self, result: int) -> None:
@@ -133,9 +147,22 @@ class SettingsDialog(QDialog):
 
     def _save(self) -> None:
         before_settings = snapshot_qsettings(self.settings)
-        for section in self._sections:
-            if not section.save():
+        try:
+            if not save_settings_transaction(
+                self.settings,
+                (section.save for section in self._active_sections()),
+            ):
                 return
+        except Exception as exc:
+            QMessageBox.critical(
+                self,
+                "Einstellungen nicht gespeichert",
+                "Die Einstellungen konnten nicht vollständig gespeichert werden. "
+                "Alle bereits vorgenommenen Änderungen dieses Speichervorgangs wurden zurückgesetzt.\n\n"
+                f"{exc}",
+            )
+            logging.getLogger(__name__).exception("Transaktionales Speichern der Einstellungen fehlgeschlagen.")
+            return
         try:
             log_qsettings_changes(
                 "Globale Einstellungen gespeichert",

@@ -5,7 +5,7 @@ from __future__ import annotations
 from .online_metadata_types import (
     TMDB_API_BASE, TMDB_TIMEOUT_S, TVDB_API_BASE, TVDB_TIMEOUT_S,
     METADATA_PROVIDERS, METADATA_SINGLE_PROVIDERS,
-    OnlineMetadataError, OnlineMetadataAuthError, OnlineMetadataConfig,
+    OnlineMetadataError, OnlineMetadataAuthError, OnlineMetadataNotFoundError, OnlineMetadataResponseError, OnlineMetadataConfig,
     ParsedMovieQuery, ParsedSeriesQuery, MovieMetadataSuggestion,
     SeriesMetadataSuggestion, EpisodeMetadataSuggestion,
     _metadata_provider_value, _metadata_single_provider_value,

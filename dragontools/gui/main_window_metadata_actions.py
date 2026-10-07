@@ -8,13 +8,23 @@ from .online_metadata_action_workers import (
     OnlineMetadataConnectionTestThread,
     OnlineMetadataMovieSearchThread,
 )
+from .qt_receiver_state import receiver_is_alive
 
 
 
 
 def _metadata_action_running(window) -> bool:
     thread = getattr(window, "_metadata_action_thread", None)
-    return bool(thread is not None and thread.isRunning())
+    return bool(thread is not None and receiver_is_alive(thread))
+
+
+def _metadata_result_is_current(window, thread):
+    return (
+        receiver_is_alive(window) and receiver_is_alive(thread)
+        and getattr(window, "_metadata_action_thread", None) is thread
+        and getattr(window, "_metadata_cancelled_thread", None) is not thread
+        and not getattr(thread, "isInterruptionRequested", lambda: False)()
+    )
 
 
 def _start_metadata_action_thread(window, thread, *, status_text: str) -> bool:
@@ -27,19 +37,18 @@ def _start_metadata_action_thread(window, thread, *, status_text: str) -> bool:
         thread.deleteLater()
         return False
     window._metadata_action_thread = thread
+    window._metadata_cancelled_thread = None
     try:
         window.statusBar().showMessage(status_text)
     except Exception:
         logging.getLogger(__name__).debug("Unterdrückte Best-Effort-Ausnahme in _start_metadata_action_thread.", exc_info=True)
 
     def cleanup() -> None:
-        if getattr(window, "_metadata_action_thread", None) is thread:
+        if receiver_is_alive(window) and getattr(window, "_metadata_action_thread", None) is thread:
             window._metadata_action_thread = None
-        try:
             window.statusBar().clearMessage()
-        except Exception:
-            logging.getLogger(__name__).debug("Unterdrückte Best-Effort-Ausnahme in cleanup.", exc_info=True)
-        thread.deleteLater()
+        if receiver_is_alive(thread):
+            thread.deleteLater()
 
     thread.finished.connect(cleanup)
     thread.start()
@@ -48,7 +57,9 @@ def _start_metadata_action_thread(window, thread, *, status_text: str) -> bool:
 
 def stop_metadata_action_thread(window, *, timeout_ms: int = 8000) -> bool:
     thread = getattr(window, "_metadata_action_thread", None)
-    if thread is None or not thread.isRunning():
+    if thread is not None:
+        window._metadata_cancelled_thread = thread
+    if thread is None or not receiver_is_alive(thread) or not thread.isRunning():
         return True
     thread.requestInterruption()
     return bool(thread.wait(max(0, int(timeout_ms))))
@@ -89,6 +100,8 @@ class MainWindowMetadataActionsMixin:
         thread = OnlineMetadataConnectionTestThread(config, self)
 
         def completed(results_obj, errors_obj) -> None:
+            if not _metadata_result_is_current(self, thread):
+                return
             results = [str(item) for item in list(results_obj or [])]
             errors = [str(item) for item in list(errors_obj or [])]
             if errors:
@@ -135,6 +148,8 @@ class MainWindowMetadataActionsMixin:
         thread = OnlineMetadataMovieSearchThread(config, query.title, query.year, self)
 
         def completed(suggestion, error_text: str) -> None:
+            if not _metadata_result_is_current(self, thread):
+                return
             if error_text:
                 QMessageBox.warning(self, "Metadaten-Suche fehlgeschlagen", str(error_text))
                 return

@@ -18,6 +18,8 @@ def build_workflow_services(
     temp_state,
     session_state,
     logger,
+    corrupt_source_rpu_fallback=True,
+    abort_check=None,
 ) -> WorkflowServices:
     """Verdrahtet Workflow-Komponenten ohne Zugriff auf private Worker-Felder."""
     config = WorkflowConfig(
@@ -28,6 +30,7 @@ def build_workflow_services(
         encoder_options=dict(job.encoder_options),
         strip_only=job.strip_only,
         subtitle_rules=dict(job.subtitle_rules or {}),
+        corrupt_source_rpu_fallback=bool(corrupt_source_rpu_fallback),
     )
     planning = WorkflowPlanningService(
         config=config,
@@ -77,4 +80,5 @@ def build_workflow_services(
         output_commit=output_commit,
         cleanup_service=services.cleanup,
         result_service=services.result,
+        abort_check=abort_check,
     )

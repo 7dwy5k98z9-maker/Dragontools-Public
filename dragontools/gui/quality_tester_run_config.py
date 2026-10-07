@@ -5,9 +5,12 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QDialog, QMessageBox, QTableWidgetItem
 
 from .quality_tester_run_dialog import _QualityRunDialog
+from .dialog_ownership import exec_owned_dialog
 
 
 class QualityTesterRunConfigMixin:
+    RUN_COL_ACTIVE, RUN_COL_NAME, RUN_COL_CODEC, RUN_COL_ENCODER, RUN_COL_QUALITY, RUN_COL_PRESET, RUN_COL_PIXFMT, RUN_COL_SCALE, RUN_COL_EXTRA = range(9)
+
     def _add_default_runs(self) -> None:
         self._add_run_row({
             "active": "ja",
@@ -107,7 +110,7 @@ class QualityTesterRunConfigMixin:
 
     def _add_run_dialog(self) -> None:
         dlg = _QualityRunDialog(parent=self)
-        if dlg.exec() == QDialog.DialogCode.Accepted:
+        if exec_owned_dialog(dlg) == QDialog.DialogCode.Accepted:
             self._add_run_row(dlg.values())
 
     def _row_to_dict(self, row: int) -> dict:
@@ -156,7 +159,7 @@ class QualityTesterRunConfigMixin:
             return
         current = self._row_to_dict(row)
         dlg = _QualityRunDialog(current, parent=self)
-        if dlg.exec() != QDialog.DialogCode.Accepted:
+        if exec_owned_dialog(dlg) != QDialog.DialogCode.Accepted:
             return
         updated = dlg.values()
         updated["active"] = current.get("active", "ja")

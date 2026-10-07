@@ -5,9 +5,13 @@ from typing import TYPE_CHECKING
 
 from ..core.error_report import write_conversion_error_report
 from .workflow_models import PipelineExecutionRequest, WorkflowConfig
+from .mp4_default_flags import finalize_mp4_defaults
 
 if TYPE_CHECKING:
     from .workflow_engine import WorkflowContext
+
+
+from .dv_source_rpu_fallback import is_corrupt_source_rpu_failure as _is_corrupt_source_rpu_failure
 
 
 class WorkflowServices:
@@ -37,6 +41,7 @@ class WorkflowServices:
         output_commit,
         cleanup_service,
         result_service,
+        abort_check=None,
     ) -> None:
         self._config = config
         self._temp_state = temp_state
@@ -48,6 +53,7 @@ class WorkflowServices:
         self._output_commit = output_commit
         self._cleanup_service = cleanup_service
         self._result_service = result_service
+        self._abort_check = abort_check or (lambda: False)
 
     @property
     def _strip_only(self) -> bool:
@@ -67,9 +73,54 @@ class WorkflowServices:
 
     def build_plan(self, ctx: "WorkflowContext", override: dict) -> None:
         self._planning.build_plan(ctx, override)
+        start_nfo = getattr(self._output_commit, "start_nfo_during_conversion", None)
+        if callable(start_nfo):
+            start_nfo(ctx)
 
+
+    def _execute_without_dv(
+        self,
+        ctx: "WorkflowContext",
+        execution_override: dict,
+    ):
+        """Replan and execute one recovery attempt with only DV disabled.
+
+        Other dynamic-HDR policy is deliberately left untouched.  In
+        particular, an HDR10+ source (or an explicitly requested HDR10+
+        generation path) may still select the HDR10+ pipeline after DV is
+        disabled for a corrupt source RPU.
+        """
+        if getattr(self,'_abort_check',lambda: False)():
+            from .workflow_models import PipelineExecutionResult
+            return PipelineExecutionRequest.from_context(ctx, execution_override), PipelineExecutionResult(
+                False,failure_reason='Abgebrochen vor DV-Fallback.',failure_stage='DV-Fallback Cancel')
+        execution_override["preserve_dv"] = False
+        self._temp_state.reset_diagnostics()
+        self._planning.build_plan(ctx, execution_override)
+        request = PipelineExecutionRequest.from_context(ctx, execution_override)
+        ctx.strategy_name = request.pipeline
+        return request, self._pipeline_executor.execute(request)
+
+    def _dv_disabled_by_crop(self, request, result) -> bool:
+        return bool(
+            request.pipeline == "dv"
+            and (
+                result.failure_reason == "DV_DISABLED_BY_USER_CROP"
+                or self._temp_state.failure_reason == "DV_DISABLED_BY_USER_CROP"
+            )
+        )
+
+    def _corrupt_source_rpu_requires_fallback(self, request, result) -> bool:
+        return bool(
+            request.pipeline in {"dv", "av1_dv"}
+            and bool(getattr(self._config,'corrupt_source_rpu_fallback',True))
+            and _is_corrupt_source_rpu_failure(result, self._temp_state)
+        )
 
     def _apply_pipeline_result_state(self, ctx: "WorkflowContext", result) -> None:
+        # Recovery ownership must reach cleanup before any fallible reporting.
+        if bool(getattr(result, "preserve_failed_output", False)):
+            ctx.keep_failed_output = True
         ctx.sidecar_paths = list(result.sidecar_paths)
         ctx.pipeline_verified_hdr10plus = bool(result.verified_hdr10plus)
         ctx.pipeline_verified_dolby_vision = bool(result.verified_dolby_vision)
@@ -88,11 +139,10 @@ class WorkflowServices:
         if failure_archive_path:
             ctx.replacement_archived_path = failure_archive_path
             self._logger.warn(f"📦 DV/HDR10+-Diagnosearchiv: {failure_archive_path}")
-        if bool(getattr(result, "preserve_failed_output", False)):
-            ctx.keep_failed_output = True
 
     def process(self, ctx: "WorkflowContext", override: dict) -> None:
-        request = PipelineExecutionRequest.from_context(ctx, override)
+        execution_override = dict(override or {})
+        request = PipelineExecutionRequest.from_context(ctx, execution_override)
         ctx.strategy_name = "strip_only" if request.strip_only else request.pipeline
 
         if request.pipeline == "standard" and getattr(ctx.analysis, "has_dv", False):
@@ -102,22 +152,27 @@ class WorkflowServices:
             )
 
         result = self._pipeline_executor.execute(request)
-        if (
-            not result.success
-            and request.pipeline == "dv"
-            and (result.failure_reason == "DV_DISABLED_BY_USER_CROP" or self._temp_state.failure_reason == "DV_DISABLED_BY_USER_CROP")
-        ):
+        if not result.success and self._dv_disabled_by_crop(request, result):
             self._logger.info(
                 "ℹ️ DV wurde im Crop-Konfliktdialog deaktiviert – Datei wird mit gleicher "
                 "Konfiguration ohne Dolby-Vision-Erhalt neu geplant."
             )
-            fallback_override = dict(override or {})
-            fallback_override["preserve_dv"] = False
-            self._temp_state.reset_diagnostics()
-            self._planning.build_plan(ctx, fallback_override)
-            request = PipelineExecutionRequest.from_context(ctx, fallback_override)
-            ctx.strategy_name = request.pipeline
-            result = self._pipeline_executor.execute(request)
+            request, result = self._execute_without_dv(ctx, execution_override)
+        elif not result.success and self._corrupt_source_rpu_requires_fallback(request, result):
+            diagnostic = str(
+                getattr(result, "tool_output", "")
+                or getattr(self._temp_state, "stderr", "")
+                or "Invalid RPU last byte"
+            ).strip().splitlines()[-1]
+            self._logger.warn(
+                "⚠️ Dolby Vision wird für diese Datei deaktiviert: dovi_tool meldet bei "
+                f"der Quell-RPU-Extraktion eine beschädigte/inkompatible RPU ({diagnostic}). "
+                "Fallback: Datei wird ohne Dolby Vision neu geplant; HDR10+-Policy bleibt unverändert."
+            )
+            # Direct per-file policy has the highest precedence over an assigned
+            # encoder profile, so even a profile with preserve_dv=True cannot
+            # re-enable DV during this one recovery attempt.
+            request, result = self._execute_without_dv(ctx, execution_override)
 
         self._apply_pipeline_result_state(ctx, result)
         if result.success:
@@ -127,14 +182,14 @@ class WorkflowServices:
                 if externalized_subs:
                     self._planning.refresh_media_contract(
                         ctx,
-                        override,
+                        execution_override,
                         crop_filter=ctx.effective_crop_filter,
                         externalized_subtitle_stream_indices=externalized_subs,
                     )
                 else:
                     self._planning.refresh_media_contract(
                         ctx,
-                        override,
+                        execution_override,
                         crop_filter=ctx.effective_crop_filter,
                     )
             else:
@@ -143,10 +198,11 @@ class WorkflowServices:
                 if externalized_subs:
                     self._planning.refresh_media_contract(
                         ctx,
-                        override,
+                        execution_override,
                         crop_filter=getattr(ctx, "effective_crop_filter", None),
                         externalized_subtitle_stream_indices=externalized_subs,
                     )
+            self._finalize_container_metadata(ctx)
             return
 
         failure_reason = result.failure_reason or self._temp_state.failure_reason
@@ -169,6 +225,15 @@ class WorkflowServices:
         if detail:
             message += f": {detail}"
         raise RuntimeError(message)
+
+    @staticmethod
+    def _finalize_container_metadata(ctx) -> None:
+        try:
+            finalize_mp4_defaults(ctx.output_path, getattr(ctx, 'expected_media_contract', None),
+                input_path=ctx.input_path)
+        except (OSError, ValueError, RuntimeError):
+            ctx.keep_failed_output = True
+            raise
 
     def verify(self, ctx: "WorkflowContext") -> None:
         self._verification.verify(ctx)
@@ -216,6 +281,11 @@ class WorkflowServices:
         self._result_service.fail(ctx, reason)
 
     def cleanup(self, ctx: "WorkflowContext") -> None:
+        # Covers analysis/encode/verification failures before the normal output
+        # commit path had a chance to install or discard a prepared NFO.
+        discard_nfo = getattr(self._output_commit, "discard_prepared_nfo", None)
+        if callable(discard_nfo):
+            discard_nfo(ctx)
         self._cleanup_service.cleanup_temp_artifacts(
             burn_sub_tmp=self._temp_state.burn_sub_tmp,
             base_dir=ctx.base_dir,

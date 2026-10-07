@@ -11,9 +11,13 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+from copy import deepcopy
 
 from .json_io import atomic_write_json
 from .path_defaults import app_documents_dir
+from .transaction_identity import path_receipt
+from .replace_recovery import recover_replace_intent
+from .journal_runtime import register_journal, recovery_may_run
 
 _LOG = logging.getLogger(__name__)
 FORMAT_VERSION = 1
@@ -51,6 +55,8 @@ class ReplaceJournal:
         backup: str | Path | None,
         mode: str,
         root: str | Path | None = None,
+        source_receipt: dict | None = None,
+        staging_receipt: dict | None = None,
     ) -> "ReplaceJournal":
         folder = replace_journal_dir(root)
         stamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
@@ -62,6 +68,8 @@ class ReplaceJournal:
             "active": True,
             "status": "prepared",
             "mode": str(mode),
+            'source_receipt': deepcopy(source_receipt) if source_receipt is not None else (path_receipt(source) if Path(source).exists() else None),
+            'staging_receipt': deepcopy(staging_receipt) if staging_receipt is not None else (path_receipt(staging) if Path(staging).exists() else None),
             "source": str(source),
             "destination": str(destination),
             "staging": str(staging),
@@ -73,6 +81,7 @@ class ReplaceJournal:
         }
         journal = cls(path, data)
         journal._write(fatal=True)
+        register_journal(path)
         return journal
 
     def set_status(self, status: str, *, message: str = "", fatal: bool = False) -> None:
@@ -101,75 +110,23 @@ class ReplaceJournal:
 
 
 def recover_active_replace_journals(root: str | Path | None = None) -> dict[str, int]:
-    """Rekonstruiert unterbrochene Replace-Transaktionen konservativ.
-
-    Same-path: Backup vorhanden + Ziel fehlt -> Original wird restauriert.
-    Commit bereits sichtbar -> Backup wird entfernt.
-    Containerwechsel: Ziel installiert + Quelle noch vorhanden -> Cleanup wird erneut versucht.
-    """
-    totals = {"restored": 0, "completed": 0, "cleaned_sources": 0, "pending": 0, "failed": 0}
+    """Recover only the source and output whose full receipts were persisted."""
+    totals = {'restored': 0, 'completed': 0, 'cleaned_sources': 0, 'pending': 0, 'failed': 0}
     for path in list_replace_journals(root):
         try:
-            data = json.loads(path.read_text(encoding="utf-8"))
+            data = json.loads(path.read_text(encoding='utf-8-sig'))
             if not isinstance(data, dict):
-                raise ValueError("ungueltiges Journalformat")
-            mode = str(data.get("mode") or "")
-            source = Path(str(data.get("source") or ""))
-            dest = Path(str(data.get("destination") or ""))
-            staging = Path(str(data.get("staging") or ""))
-            backup_text = str(data.get("backup") or "")
-            backup = Path(backup_text) if backup_text else None
-
-            if mode == "same_path":
-                if backup is not None and backup.exists() and not dest.exists():
-                    os.replace(str(backup), str(dest))
-                    totals["restored"] += 1
-                    path.unlink(missing_ok=True)
-                    continue
-                if dest.exists() and backup is not None and backup.exists() and not staging.exists():
-                    _remove_path(backup)
-                    totals["completed"] += 1
-                    path.unlink(missing_ok=True)
-                    continue
-                if dest.exists() and (backup is None or not backup.exists()):
-                    totals["completed"] += 1
-                    path.unlink(missing_ok=True)
-                    continue
-                # Intent wurde geschrieben, Mutation begann aber offenbar nicht.
-                if dest.exists() and staging.exists():
-                    totals["completed"] += 1
-                    path.unlink(missing_ok=True)
-                    continue
-                totals["pending"] += 1
+                raise ValueError('Ungültiges Replace-Journalformat.')
+            if not recovery_may_run(data, path):
+                totals['pending'] += 1
                 continue
-
-            if mode == "container_change":
-                if dest.exists() and not staging.exists():
-                    if source.exists() and source.resolve() != dest.resolve():
-                        try:
-                            _remove_path(source)
-                            totals["cleaned_sources"] += 1
-                        except (OSError, shutil.Error):
-                            data["status"] = "cleanup_pending"
-                            data["updated_at"] = _now()
-                            atomic_write_json(path, data)
-                            totals["pending"] += 1
-                            continue
-                    totals["completed"] += 1
-                    path.unlink(missing_ok=True)
-                    continue
-                # Noch kein Commit: Original ist unangetastet; Journal kann geschlossen werden.
-                if source.exists() and staging.exists() and not dest.exists():
-                    totals["completed"] += 1
-                    path.unlink(missing_ok=True)
-                    continue
-                totals["pending"] += 1
-                continue
-
-            totals["pending"] += 1
-        except (OSError, ValueError, json.JSONDecodeError, shutil.Error) as exc:
-            _LOG.warning("Replace-Recovery fehlgeschlagen fuer %s: %s", path, exc)
-            totals["failed"] += 1
+            if recover_replace_intent(data, totals):
+                path.unlink(missing_ok=True)
+            else:
+                totals['pending'] += 1
+        except (OSError, ValueError, shutil.Error) as exc:
+            _LOG.warning('Replace-Recovery fehlgeschlagen für %s: %s', path, exc)
+            totals['failed'] += 1
     return totals
 
 

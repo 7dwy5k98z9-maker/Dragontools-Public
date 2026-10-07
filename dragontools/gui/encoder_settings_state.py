@@ -21,3 +21,4 @@ class EncoderSettingsState:
     preserve_dv: bool = True
     preserve_hdrplus: bool = True
     encoder_options: dict = field(default_factory=dict)
+    profile_options: dict = field(default_factory=dict)

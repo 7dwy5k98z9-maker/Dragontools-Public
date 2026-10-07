@@ -12,6 +12,7 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from .version import APP_VERSION
+from .jellyfin_paths import path_key
 
 _TRANSIENT_STATUS_CODES = frozenset({408, 425, 429, 500, 502, 503, 504})
 _DEFAULT_BACKOFF_SECONDS = (0.5, 1.0)
@@ -122,7 +123,7 @@ class JellyfinClient:
             path = str(raw or "").strip()
             if not path:
                 continue
-            key = path.replace("\\", "/").rstrip("/").casefold()
+            key = path_key(path)
             if key in seen:
                 continue
             seen.add(key)
@@ -139,7 +140,7 @@ class JellyfinClient:
             update_type = str(raw.get("UpdateType") or "").strip().title()
             if not path or update_type not in {"Created", "Modified", "Deleted"}:
                 continue
-            key = (path.casefold(), update_type)
+            key = (path_key(path), update_type)
             if key in seen:
                 continue
             seen.add(key)

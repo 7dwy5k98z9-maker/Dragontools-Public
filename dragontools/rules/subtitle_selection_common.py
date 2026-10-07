@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-from ..core.lang_codes import language_aliases, language_matches
+from ..core.lang_codes import canonical_lang, language_aliases, language_matches
 from ..core.models import AudioStream, SubtitleStream
 from .subtitle_rule_config import (
     COMPATIBLE_SUBTITLE_CODECS,
@@ -100,8 +100,64 @@ def has_audio_language(audio_streams: list[AudioStream] | None, language: str) -
     return bool(audio_streams) and any(language_matches(stream.language, language) for stream in audio_streams)
 
 
-def build_custom_track_map(ov: dict) -> dict[int, dict]:
-    return {int(entry["index"]): dict(entry) for entry in list(ov.get("subtitle_tracks", []) or [])}
+def _subtitle_stream_matches_identity(stream: SubtitleStream, identity: dict) -> bool:
+    expected_language = canonical_lang(str(identity.get("language") or ""))
+    expected_codec = str(identity.get("codec") or "").strip().lower()
+    expected_title = str(identity.get("title") or "").strip().casefold()
+
+    if expected_language and canonical_lang(getattr(stream, "language", None)) != expected_language:
+        return False
+    if expected_codec and str(getattr(stream, "codec", "") or "").strip().lower() != expected_codec:
+        return False
+    if expected_title and str(getattr(stream, "title", None) or "").strip().casefold() != expected_title:
+        return False
+    if "forced" in identity and bool(getattr(stream, "forced", False)) != bool(identity.get("forced")):
+        return False
+    if "default" in identity and bool(getattr(stream, "default", False)) != bool(identity.get("default")):
+        return False
+    return bool(
+        expected_language or expected_codec or expected_title
+        or "forced" in identity or "default" in identity
+    )
+
+
+def build_custom_track_map(
+    ov: dict,
+    subtitle_streams: list[SubtitleStream] | None = None,
+) -> dict[int, dict]:
+    """Resolve custom subtitle entries against the current stream inventory.
+
+    New overrides carry source identity metadata. If ffmpeg stream indices were
+    reordered after preflight, resolve by identity instead of applying keep or
+    burn-in to whatever track now owns the stale index. Ambiguous/stale entries
+    fail closed. Legacy entries without identity remain index-based.
+    """
+    streams = list(subtitle_streams or [])
+    stream_map = {int(stream.index): stream for stream in streams}
+    result: dict[int, dict] = {}
+    for entry in list(ov.get("subtitle_tracks", []) or []):
+        if not isinstance(entry, dict):
+            continue
+        try:
+            stored_index = int(entry.get("index"))
+        except (TypeError, ValueError, OverflowError):
+            continue
+        resolved_index = stored_index
+        identity = entry.get("source_identity")
+        if isinstance(identity, dict) and identity and streams:
+            current = stream_map.get(stored_index)
+            if current is None or not _subtitle_stream_matches_identity(current, identity):
+                candidates = [
+                    stream for stream in streams
+                    if _subtitle_stream_matches_identity(stream, identity)
+                ]
+                if len(candidates) != 1:
+                    continue
+                resolved_index = int(candidates[0].index)
+        normalized = dict(entry)
+        normalized["index"] = resolved_index
+        result[resolved_index] = normalized
+    return result
 
 
 def match_by_language(streams: list[SubtitleStream], languages: set[str]) -> list[SubtitleStream]:

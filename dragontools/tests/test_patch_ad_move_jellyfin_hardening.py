@@ -78,7 +78,7 @@ def test_jellyfin_fallback_is_logged_as_warning_not_success() -> None:
 
     assert "result.fallback_used" in source
     assert "if fallback_used:" in source
-    assert 'log(f"⚠️ {message}", "warn")' in source
+    assert 'dispatch_log(log, f"⚠️ {message}", "warn")' in source
 
 
 def test_full_scan_guard_and_scheduled_task_detection_are_release_smoke_covered() -> None:

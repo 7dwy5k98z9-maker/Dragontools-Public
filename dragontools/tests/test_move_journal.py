@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from dragontools.core.transaction_identity import path_receipt
 
 import pytest
 
@@ -105,6 +106,10 @@ def test_interrupted_backup_is_cleaned_when_new_target_exists(tmp_path):
         str(source): data["files"][str(source)]
     }
 
+    row = next(iter(data['files'].values()))
+    row['commit_proof'] = {'destination': path_receipt(dest)}
+    row['backup_pairs'][0]['receipt'] = path_receipt(backup)
+
     result = recover_interrupted_backups(data)
 
     assert result["restored"] == 0
@@ -130,6 +135,9 @@ def test_running_move_is_completed_after_crash_when_target_exists_and_source_is_
             }
         }
     }
+
+    row = next(iter(data['files'].values()))
+    row['commit_proof'] = {'destination': path_receipt(dest)}
 
     result = recover_interrupted_backups(data)
 
@@ -233,6 +241,10 @@ def test_recovery_can_cleanup_directory_backup_after_committed_directory_move(tm
         }
     }
 
+    row = next(iter(data['files'].values()))
+    row['commit_proof'] = {'destination': path_receipt(dest)}
+    row['backup_pairs'][0]['receipt'] = path_receipt(backup)
+
     result = recover_interrupted_backups(data)
 
     assert result["cleaned"] == 1
@@ -327,7 +339,8 @@ def test_recovery_keeps_backup_when_restore_fails(tmp_path, monkeypatch):
     def fail_replace(_source, _destination):
         raise OSError("simulierter Restorefehler")
 
-    monkeypatch.setattr(journal_module.os, "replace", fail_replace)
+    import dragontools.core.move_journal_recovery as recovery_module
+    monkeypatch.setattr(recovery_module, 'publish_staged_no_replace', fail_replace)
     result = journal_module.recover_interrupted_backups(data)
 
     assert result["restored"] == 0
@@ -433,6 +446,7 @@ def test_resume_plan_uses_committed_video_for_companion_only_recovery(tmp_path):
         "sidecar_outputs_by_video": {str(source): [str(sidecar)]},
     }
 
+    data['files'][str(source)]['commit_proof'] = {'destination': path_receipt(dest)}
     plan = build_move_resume_plan(data)
 
     assert plan["files"] == [str(dest)]

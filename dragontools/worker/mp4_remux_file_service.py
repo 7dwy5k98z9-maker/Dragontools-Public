@@ -7,9 +7,13 @@ from pathlib import Path
 from typing import Callable
 
 from ..core.output_replace import commit_staged_output
+from ..core.move_transaction import publish_staged_no_replace
 from ..core.sidecar_transaction import SidecarCommitError, SidecarCommitTransaction
+from ..core.transaction_identity import path_receipt, receipt_matches
+from ..core.callback_dispatch import best_effort_callback
 from .mp4_remux_plan import MP4RemuxPlanner
 from .subtitle_sidecar_service import SubtitleExportResult
+from .mp4_default_flags import finalize_mp4_defaults
 
 
 class MP4RemuxFileService:
@@ -55,9 +59,15 @@ class MP4RemuxFileService:
         current_index: int,
         total_files: int,
         user_abort_error: type[RuntimeError],
+        expected_source_receipt=None,
     ) -> bool:
-        plan = self._planner.build(input_path, output_path, media_info)
-        self._logger.file_start(
+        if self._output_verifier is None:
+            return self._fail(input_path, "MP4-Ausgabeprüfung fehlt; Veröffentlichung ist gesperrt.")
+        prepared = self._prepare_plan(input_path, output_path, media_info, expected_source_receipt)
+        if prepared is None:
+            return False
+        plan, source_receipt, reason = prepared
+        best_effort_callback(self._logger.file_start,
             current_index,
             total_files,
             input_path,
@@ -70,9 +80,6 @@ class MP4RemuxFileService:
         for warning in getattr(media_info, "analysis_warnings", []) or []:
             self._log(f"Analysewarnung: {warning}", "warn")
 
-        compatible, reason = self._planner.video_compatibility(media_info)
-        if not compatible:
-            return self._fail(input_path, reason)
         self._log(f"Analyse: {media_info.analysis_source}", "info")
         self._log(f"MP4-Video-Copy freigegeben: {reason}", "info")
 
@@ -80,36 +87,21 @@ class MP4RemuxFileService:
         size_before = plan.source.stat().st_size if plan.source.exists() else 0
         remux_complete = False
         preserve_for_recovery = False
+        expected_chapter_count: int | None = None
         exported_sidecars: list[str] = []
         sidecar_tx: SidecarCommitTransaction | None = None
         try:
-            try:
-                self._run_ffmpeg(
-                    list(plan.command),
-                    plan.duration_s,
-                    input_path,
-                )
-            except user_abort_error:
-                return self._fail(input_path, "Abgebrochen", log_error=False)
-            except Exception as exc:
-                self._log(f"MP4-Remux fehlgeschlagen: {exc}", "error")
-                return self._fail(input_path, str(exc), log_error=False)
+            if hasattr(self._output_verifier, "source_chapter_count"):
+                expected_chapter_count = int(self._output_verifier.source_chapter_count(str(plan.source)))
+            if not self._render_and_verify(plan, input_path, user_abort_error, expected_chapter_count):
+                return False
 
-            if self._abort_requested():
-                return self._fail(input_path, "Abgebrochen", log_error=False)
-            if not plan.staging.exists() or plan.staging.stat().st_size <= 0:
-                return self._fail(input_path, "Ausgabedatei wurde nicht erzeugt.")
-
-            if self._output_verifier is not None:
-                verification = self._output_verifier.verify(
-                    output_path=str(plan.staging),
-                    expected_duration_ms=(int(plan.duration_s * 1000) if plan.duration_s > 0 else None),
-                    expected_audio_tracks=plan.expected_audio_tracks,
-                    expected_subtitle_tracks=plan.expected_subtitle_tracks,
-                )
-                if not verification.ok:
-                    details = "; ".join(verification.messages) or "unbekannter Verifikationsfehler"
-                    return self._fail(input_path, f"MP4-Ausgabevalidierung fehlgeschlagen: {details}")
+            staging_receipt = path_receipt(plan.staging)
+            preserve_for_recovery = True
+            if plan.workspace is not None:
+                plan.workspace.mark_verified(plan.staging)
+            if not receipt_matches(plan.source, source_receipt):
+                return self._fail(input_path, "Originalquelle wurde während der Verarbeitung verändert; bleibt erhalten.")
 
             if self._should_export_sidecars():
                 export_result = self._export_sidecars(
@@ -134,30 +126,24 @@ class MP4RemuxFileService:
                     return self._fail(input_path, str(exc))
 
             if self._abort_requested():
-                preserve_for_recovery = not self._rollback_sidecars(sidecar_tx)
+                self._rollback_sidecars(sidecar_tx)
                 return self._fail(input_path, "Abgebrochen vor finalem MP4-Commit", log_error=False)
 
-            if plan.staging != plan.destination:
-                try:
-                    commit_staged_output(
-                        source=plan.source,
-                        staging=plan.staging,
-                        destination=plan.destination,
-                        log=self._log,
-                        min_size=1,
-                        abort_check=self._abort_requested,
-                    )
-                except Exception as exc:
-                    preserve_for_recovery = not self._rollback_sidecars(sidecar_tx)
-                    return self._fail(
-                        input_path,
-                        f"Finales MP4-Replace fehlgeschlagen: {exc}",
-                    )
+            try:
+                self._publish_output(plan, source_receipt, staging_receipt)
+            except Exception as exc:
+                self._rollback_sidecars(sidecar_tx)
+                return self._fail(
+                    input_path,
+                    f"Finales MP4-Replace fehlgeschlagen: {exc}",
+                )
 
             remux_complete = True
-            self._finish_sidecars(sidecar_tx, exported_sidecars)
+            if plan.workspace is not None:
+                plan.workspace.published = True
+            best_effort_callback(self._finish_sidecars, sidecar_tx, exported_sidecars)
             size_after = plan.destination.stat().st_size if plan.destination.exists() else 0
-            self._logger.file_done(
+            best_effort_callback(self._logger.file_done,
                 input_path,
                 str(plan.destination),
                 size_before,
@@ -166,13 +152,98 @@ class MP4RemuxFileService:
                 overwritten=(plan.destination.resolve() == plan.source.resolve()),
                 start_ts=start_ts,
             )
-            self._emit_file_progress(input_path, 100, None)
+            best_effort_callback(self._emit_file_progress, input_path, 100, None)
             self._emit_file_result(input_path, True, str(plan.destination))
             return True
         finally:
+            if plan.workspace is not None:
+                plan.workspace.__exit__()
+            if not remux_complete and preserve_for_recovery:
+                best_effort_callback(self._log, f"Geprüftes MP4-Zwischenergebnis bleibt erhalten: {plan.staging}", "warn")
             if not remux_complete and not preserve_for_recovery:
-                self._cleanup_partial(plan.staging)
-                self._cleanup_sidecars(exported_sidecars)
+                if plan.workspace is None:
+                    self._cleanup_partial(plan.staging)
+                    self._cleanup_sidecars(exported_sidecars)
+
+    def _prepare_plan(self, input_path, output_path, media_info, expected_source_receipt):
+        source_receipt = expected_source_receipt if expected_source_receipt is not None else path_receipt(input_path)
+        if not receipt_matches(input_path, source_receipt):
+            self._fail(input_path, "Originalquelle wurde seit der Analyse verändert; bleibt erhalten.")
+            return None
+        compatible, reason = self._planner.video_compatibility(media_info)
+        if not compatible:
+            self._fail(input_path, reason)
+            return None
+        plan = self._planner.build(input_path, output_path, media_info)
+        return plan, source_receipt, reason
+
+    def _publish_output(self, plan, source_receipt, staging_receipt):
+        if not receipt_matches(plan.source, source_receipt) or not receipt_matches(plan.staging, staging_receipt):
+            raise OSError("Quelle oder geprüfte MP4-Ausgabe wurde vor dem Commit verändert.")
+        if plan.destination.resolve() == plan.source.resolve():
+            commit_staged_output(
+                source=plan.source,
+                staging=plan.staging,
+                destination=plan.destination,
+                log=self._log,
+                min_size=1,
+                abort_check=self._abort_requested,
+                expected_source_receipt=source_receipt,
+                expected_staging_receipt=staging_receipt,
+            )
+        else:
+            if self._abort_requested():
+                raise RuntimeError("Abgebrochen vor finalem MP4-Commit")
+            # New outputs must never overwrite a path that appeared
+            # after resolve_mp4_output_path() selected the destination.
+            publish_staged_no_replace(plan.staging, plan.destination)
+
+    def _render_and_verify(self, plan, input_path, user_abort_error, expected_chapter_count) -> bool:
+        """Confirm execution and the media contract before sidecar/commit mutation."""
+        try:
+            return_code = self._run_ffmpeg(
+                list(plan.command),
+                plan.duration_s,
+                input_path,
+            )
+        except user_abort_error:
+            return self._fail(input_path, "Abgebrochen", log_error=False)
+        except Exception as exc:
+            self._log(f"MP4-Remux fehlgeschlagen: {exc}", "error")
+            return self._fail(input_path, str(exc), log_error=False)
+
+        if isinstance(return_code, bool) or not isinstance(return_code, int) or return_code != 0:
+            return self._fail(input_path, f"MP4-Remux ohne bestätigten Tool-Erfolg (Returncode {return_code}).")
+
+        if self._abort_requested():
+            return self._fail(input_path, "Abgebrochen", log_error=False)
+        if not plan.staging.exists() or plan.staging.stat().st_size <= 0:
+            return self._fail(input_path, "Ausgabedatei wurde nicht erzeugt.")
+
+        if self._output_verifier is not None:
+            if not self._finalize_metadata(plan, input_path):
+                return False
+            verification = self._output_verifier.verify(
+                output_path=str(plan.staging),
+                expected_duration_ms=(int(plan.duration_s * 1000) if plan.duration_s > 0 else None),
+                expected_audio_tracks=plan.expected_audio_tracks,
+                expected_subtitle_tracks=plan.expected_subtitle_tracks,
+                expected_contract=plan.expected_contract,
+                expected_chapter_count=expected_chapter_count,
+            )
+            if not verification.ok:
+                details = "; ".join(verification.messages) or "unbekannter Verifikationsfehler"
+                return self._fail(input_path, f"MP4-Ausgabevalidierung fehlgeschlagen: {details}")
+
+        return True
+
+    def _finalize_metadata(self, plan, input_path):
+        try:
+            finalize_mp4_defaults(plan.staging, plan.expected_contract, input_path=input_path,
+                abort_check=self._abort_requested)
+            return True
+        except (OSError, ValueError, RuntimeError) as exc:
+            return self._fail(input_path, f'MP4-Spurmetadaten konnten nicht abgeschlossen werden: {exc}')
 
     def _should_export_sidecars(self) -> bool:
         return self._export_subtitles_enabled and not self._ignore_subtitles

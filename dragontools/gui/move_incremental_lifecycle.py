@@ -8,6 +8,8 @@ from PyQt6.QtCore import QSettings
 from PyQt6.QtWidgets import QMessageBox
 
 from ..core.callback_dispatch import invoke_callback
+from ..worker.log_dispatch import dispatch_log
+from .move_lifecycle_helpers import claim_move_finish, owned_move_callback
 from ..core.move_source_probe import probe_companions, probe_move_source
 from ..core.settings_app import APP_NAME, APP_ORG
 from ..core.settings_storage import (
@@ -43,7 +45,7 @@ class IncrementalMoveLifecycle:
     ) -> None:
         self._state = state
         self._ui = ui
-        self._log = log
+        self._log = lambda message, level='info': dispatch_log(log, message, level)
         self._parent = parent
         self._get_target_paths = get_target_paths
         self._set_start_enabled = set_start_enabled
@@ -123,6 +125,20 @@ class IncrementalMoveLifecycle:
         self._log("\n".join(lines), "warn")
 
     def start(self, files: list[str]) -> None:
+        if self._state.move_thread is not None:
+            return
+        try:
+            self._start_owned(files)
+        except Exception:
+            worker = self._state.move_thread
+            self._state.move_thread = None
+            self._state.incremental_move_active = False
+            retire_move_thread(self._state, worker)
+            self._ui.move_finished_btn.setEnabled(True)
+            self._refresh_queue()
+            self._log(traceback.format_exc(), 'error')
+
+    def _start_owned(self, files: list[str]) -> None:
         state = self._state
         ui = self._ui
         conversion_thread = state.thread
@@ -158,7 +174,8 @@ class IncrementalMoveLifecycle:
         state.move_thread = move_thread
         move_thread.log_line.connect(lambda message: invoke_callback(self._log, message))
         move_thread.request_user.connect(
-            lambda request_id, payload: invoke_callback(self._on_move_req, request_id, payload)
+            lambda request_id, payload: owned_move_callback(state, move_thread,
+                self._on_move_req, request_id, dict(payload, _request_worker=move_thread))
         )
         move_thread.file_counted.connect(
             lambda done, total: self._log(f"📦 Zwischenverschieben: {done}/{total}", "info")
@@ -170,6 +187,10 @@ class IncrementalMoveLifecycle:
         move_thread.start()
 
     def finish(self, move_thread=None) -> None:
+        move_thread = move_thread or self._state.move_thread
+        if not claim_move_finish(move_thread):
+            return
+        owns_ui = self._state.move_thread is move_thread
         try:
             state = self._state
             ui = self._ui
@@ -185,6 +206,9 @@ class IncrementalMoveLifecycle:
             if move_ok:
                 dispatch_after_move(move_log, self._log)
 
+            if not owns_ui:
+                retire_move_thread(state, move_thread)
+                return
             state.incremental_move_active = False
             if state.move_thread is move_thread:
                 state.move_thread = None
@@ -200,7 +224,8 @@ class IncrementalMoveLifecycle:
                 ui.pause_btn.setText("⏸ Pause")
             self._refresh_queue()
         except Exception:
-            self._state.incremental_move_active = False
+            if owns_ui:
+                self._state.incremental_move_active = False
             if self._state.move_thread is move_thread:
                 self._state.move_thread = None
             retire_move_thread(self._state, move_thread)

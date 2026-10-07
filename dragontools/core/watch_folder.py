@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Mapping
 
+from .watch_folder_observations import WatchObservationState, file_signature
+
 from .path_syntax import is_video_file, normalize_user_path, path_compare_key, strip_long_path_prefix, to_long_path
 
 _ALLOWED_CODECS = {"h265", "h264", "av1"}
@@ -76,16 +78,6 @@ class WatchFolderCandidate:
     auto_start: bool
 
 
-@dataclass
-class _Observation:
-    signature: str
-    stable_since: float
-
-
-def _signature(size: int, mtime_ns: int) -> str:
-    return f"{int(size)}:{int(mtime_ns)}"
-
-
 def _iter_rule_files(rule: WatchFolderRule):
     root = to_long_path(rule.path)
     if not root or not os.path.isdir(root):
@@ -118,8 +110,7 @@ class WatchFolderScanner:
 
     def __init__(self, *, stable_seconds: int = 60, processed_state: Mapping[str, str] | None = None) -> None:
         self.stable_seconds = max(0, int(stable_seconds))
-        self._processed: dict[str, str] = dict(processed_state or {})
-        self._observations: dict[str, _Observation] = {}
+        self._state = WatchObservationState(processed_state)
 
     def set_stable_seconds(self, seconds: int) -> None:
         self.stable_seconds = max(0, int(seconds))
@@ -157,19 +148,8 @@ class WatchFolderScanner:
                     stat = os.stat(to_long_path(path))
                 except OSError:
                     continue
-                signature = _signature(stat.st_size, stat.st_mtime_ns)
-                if self._processed.get(key) == signature:
-                    self._observations.pop(key, None)
-                    continue
-
-                observation = self._observations.get(key)
-                if observation is None or observation.signature != signature:
-                    self._observations[key] = _Observation(signature, stamp)
-                    if stable_seconds > 0:
-                        continue
-                    observation = self._observations[key]
-
-                if stamp - observation.stable_since < stable_seconds:
+                signature = file_signature(stat)
+                if not self._state.ready(key, signature, stamp, stable_seconds):
                     continue
                 ready.append(WatchFolderCandidate(
                     rule_id=rule.rule_id,
@@ -180,27 +160,22 @@ class WatchFolderScanner:
                     auto_start=rule.auto_start,
                 ))
 
-        for key in list(self._observations):
-            if key not in seen:
-                self._observations.pop(key, None)
+        self._state.prune(seen)
         return ready
 
     def acknowledge(self, candidate: WatchFolderCandidate) -> None:
         key = path_compare_key(candidate.path)
         if not key:
             return
-        self._processed[key] = str(candidate.signature)
-        self._observations.pop(key, None)
+        self._state.acknowledge(key, str(candidate.signature))
 
     def acknowledge_current(self, candidate: WatchFolderCandidate) -> str:
         """Acknowledge the post-processing on-disk signature when available.
 
-        Overwrite-in-place workflows (notably Strip-Only) replace the watched
-        source with a new file.  Acknowledging only the *pre*-conversion
-        signature would make the next scan treat DragonTools' own output as a
-        fresh input and enqueue it again.  Use the current size/mtime after a
-        successful job so the produced file is considered handled.  If the
-        source was moved away, fall back to the original candidate signature.
+        This is safe only when DragonTools deliberately replaced the watched
+        pathname in-place.  For conversions that write elsewhere, a newer
+        on-disk signature may belong to an external writer and must remain
+        eligible for the next scan.
         """
         key = path_compare_key(candidate.path)
         if not key:
@@ -211,13 +186,28 @@ class WatchFolderScanner:
         except OSError:
             pass
         else:
-            signature = _signature(stat.st_size, stat.st_mtime_ns)
-        self._processed[key] = signature
-        self._observations.pop(key, None)
+            signature = file_signature(stat)
+        self._state.acknowledge(key, signature)
         return signature
 
+    def acknowledge_success(
+        self, candidate: WatchFolderCandidate, *, output_path: str = ""
+    ) -> str:
+        """Persist exactly the signature that a successful job actually owns.
+
+        When the committed output has the same pathname as the watched source,
+        DragonTools itself changed that signature and the final on-disk state
+        must be acknowledged to prevent Strip-Only/overwrite feedback loops.
+        If output lives elsewhere, only the originally queued signature was
+        processed; a newer source signature must remain visible for requeue.
+        """
+        if output_path and path_compare_key(output_path) == path_compare_key(candidate.path):
+            return self.acknowledge_current(candidate)
+        self.acknowledge(candidate)
+        return str(candidate.signature)
+
     def processed_state(self) -> dict[str, str]:
-        return dict(self._processed)
+        return self._state.processed()
 
 
 __all__ = ["WatchFolderRule", "WatchFolderCandidate", "WatchFolderScanner"]

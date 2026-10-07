@@ -2,14 +2,22 @@
 """Sidecar- und Trickplay-Verschiebung als eigener Service."""
 from __future__ import annotations
 
-import filecmp
+import errno
+import os
 import shutil
 from pathlib import Path
 from typing import Callable
 
 from .move_file_service import new_move_result
+from .transaction_identity import (path_receipt, receipt_matches, object_identity,
+    same_object, validate_destination_name, renamed_receipt_matches)
+from .callback_dispatch import best_effort_callback
 from .move_conflicts import same_path
-from .move_transaction import PathSwapTransaction, PathTransactionRollbackError, remove_path
+from .move_copy_verification import verify_staged_path_copy
+from .move_transaction import (
+    PathSwapTransaction, PathTransactionRollbackError, copy_path_to_staging,
+    publish_staged_no_replace, remove_path, unique_staging_path,
+)
 
 
 class MoveSidecarService:
@@ -24,13 +32,17 @@ class MoveSidecarService:
         log: Callable[[str, str], None],
         append_report: Callable[[dict | None, str, str | None], None],
         set_last_result: Callable[[dict], None],
+        journal=None,
     ) -> None:
         self.filme_path = filme_path
         self.trickplay_conflict_mode = trickplay_conflict_mode
         self.nfo_movie_target_name = nfo_movie_target_name
         self._move_file = move_file
         self._overwrite_file = overwrite_file or move_file
-        self._log = log
+        self._log = lambda message, level="info": best_effort_callback(log, message, level)
+        self._staged_receipts = {}
+        self._journal = journal
+        self._companion_proofs = {}
         self._append_report = append_report
         self._set_last_result = set_last_result
 
@@ -47,7 +59,7 @@ class MoveSidecarService:
         """Verschiebt Companion-Dateien idempotent und liefert einen Gesamtstatus.
 
         Ein fehlender Quell-Sidecar gilt bei einer Wiederaufnahme als bereits
-        abgeschlossen, wenn der erwartete Zielpfad existiert. Damit kann ein
+        abgeschlossen, wenn ein gespeicherter Commit-Beleg die unveränderte Zieldatei nachweist. Damit kann ein
         Crash nach einzelnen Sidecar-Commits sicher fortgesetzt werden.
         """
         summary = {
@@ -58,7 +70,6 @@ class MoveSidecarService:
             "failed": 0,
             "results": [],
         }
-        staged_keys = {self._path_key(path) for path in (staged_paths or [])}
         for sidecar in self._ordered_sidecars(sidecars):
             summary["total"] += 1
             sidecar_p = Path(sidecar)
@@ -70,6 +81,7 @@ class MoveSidecarService:
                 dest_video_path=dest_video_path,
             )
             dest_path = Path(target_dir) / dest_name
+            source_receipt = path_receipt(sidecar_p) if sidecar_p.exists() else None
 
             # Companion-first staging copies sidecars into the final location
             # before the video is installed, but intentionally keeps the source
@@ -78,15 +90,16 @@ class MoveSidecarService:
             same_location = bool(
                 sidecar_p.exists() and dest_path.exists() and same_path(sidecar_p, dest_path)
             )
-            if same_location or (
-                dest_path.exists()
-                and (
-                    self._path_key(dest_path) in staged_keys
-                    or (sidecar_p.exists() and self._paths_equivalent(sidecar_p, dest_path))
-                )
-            ):
+            equivalent_copy = bool(
+                sidecar_p.exists()
+                and dest_path.exists()
+                and self._paths_equivalent(sidecar_p, dest_path)
+            )
+            if same_location or (dest_path.exists() and equivalent_copy):
+                cleanup_ok = True
                 if not same_location:
-                    self._remove_committed_source(sidecar_p)
+                    self._record_companion(sidecar_p, dest_path, source_receipt)
+                    cleanup_ok = self._remove_verified_source(sidecar_p, dest_path, source_receipt)
                 result = {
                     "kind": "sidecar",
                     "sidecar_type": sidecar_type,
@@ -94,23 +107,33 @@ class MoveSidecarService:
                     "source_path": str(sidecar_p),
                     "target_dir": str(target_dir),
                     "dest_path": str(dest_path),
-                    "ok": True,
+                    "ok": cleanup_ok,
                     "already_present": True,
                     "staged_before_video": True,
+                    "cleanup_pending": not cleanup_ok,
                     "conflict": False,
                     "deleted_existing": False,
                     "replaced_existing": False,
                     "renamed": False,
                     "skipped_conflict": False,
                 }
-                summary["already_present"] += 1
                 summary["results"].append(result)
                 self._append_report(result, "sidecar", sidecar_type)
-                self._log(f"  ✅ Sidecar vor Video-Commit bereitgestellt: {dest_name}", "info")
+                if cleanup_ok:
+                    summary["already_present"] += 1
+                    self._log(f"  ✅ Sidecar vor Video-Commit bereitgestellt: {dest_name}", "info")
+                else:
+                    summary["ok"] = False
+                    summary["failed"] += 1
+                    self._log(
+                        f"  ⚠️ Sidecar-Ziel ist korrekt, aber die Quelle konnte nicht bereinigt werden: {sidecar_p.name}",
+                        "warn",
+                    )
                 continue
 
             if not sidecar_p.exists():
-                if dest_path.exists():
+                proof = self._companion_proof(sidecar_p, dest_path)
+                if dest_path.exists() and renamed_receipt_matches(dest_path, proof.get('receipt')):
                     result = {
                         "kind": "sidecar",
                         "sidecar_type": sidecar_type,
@@ -259,16 +282,23 @@ class MoveSidecarService:
                 )
                 continue
 
+            stage = unique_staging_path(dest)
+            stage_identity = None
+            source_receipt = path_receipt(source)
             try:
                 dest.parent.mkdir(parents=True, exist_ok=True)
-                if source.is_dir():
-                    shutil.copytree(str(source), str(dest), copy_function=shutil.copy2)
-                else:
-                    shutil.copy2(str(source), str(dest))
+                copy_path_to_staging(source, stage)
+                stage_identity = object_identity(stage)
+                verify_staged_path_copy(source, stage)
+                if not receipt_matches(source, source_receipt):
+                    raise OSError('Companion-Quelle wurde nach der Prüfung verändert.')
+                publish_staged_no_replace(stage, dest)
+                self._staged_receipts[self._path_key(dest)] = path_receipt(dest)
+                self._record_companion(source, dest, source_receipt)
             except (OSError, shutil.Error) as exc:
                 try:
-                    if dest.exists() or dest.is_symlink():
-                        remove_path(dest)
+                    if same_object(stage, stage_identity):
+                        remove_path(stage)
                 except (OSError, shutil.Error):
                     pass
                 row["status"] = "error"
@@ -284,6 +314,7 @@ class MoveSidecarService:
                 continue
 
             row["status"] = "copied"
+            row['receipt'] = self._staged_receipts[self._path_key(dest)]
             summary["copied"] += 1
             summary["protected_paths"].append(str(dest))
             summary["staged_paths"].append(str(dest))
@@ -300,15 +331,29 @@ class MoveSidecarService:
 
     def rollback_stage(self, stage_result: dict | None) -> None:
         """Remove only copies created by :meth:`stage_before_video`."""
-        for path_text in reversed(list((stage_result or {}).get("staged_paths") or [])):
+        state = stage_result or {}
+        receipt_by_dest = {
+            self._path_key(row.get("dest_path", "")): row.get('receipt')
+            for row in (state.get("results") or [])
+            if isinstance(row, dict) and row.get("status") == "copied" and row.get("dest_path")
+        }
+        for path_text in reversed(list(state.get("staged_paths") or [])):
             path = Path(path_text)
             try:
-                if path.exists() or path.is_symlink():
-                    remove_path(path)
+                if not (path.exists() or path.is_symlink()):
+                    continue
+                if not receipt_matches(path, receipt_by_dest.get(self._path_key(path))):
                     self._log(
-                        f"  ↩️ Vorbereiteter Companion nach fehlgeschlagenem Video-Move entfernt: {path.name}",
+                        f"⚠️ Vorbereiteter Companion wurde nach dem Staging verändert; "
+                        f"Rollback löscht ihn nicht automatisch: {path.name}",
                         "warn",
                     )
+                    continue
+                remove_path(path)
+                self._log(
+                    f"  ↩️ Vorbereiteter Companion nach fehlgeschlagenem Video-Move entfernt: {path.name}",
+                    "warn",
+                )
             except (OSError, shutil.Error) as exc:
                 self._log(
                     f"⚠️ Vorbereiteter Companion konnte nicht zurückgerollt werden: {path.name} – {exc}",
@@ -331,110 +376,21 @@ class MoveSidecarService:
         import os
         return os.path.normcase(os.path.abspath(str(path)))
 
-    @classmethod
-    def _paths_equivalent(cls, source: Path, dest: Path) -> bool:
+    @staticmethod
+    def _paths_equivalent(source: Path, dest: Path) -> bool:
         try:
-            if source.is_file() and dest.is_file():
-                if source.stat().st_size != dest.stat().st_size:
-                    return False
-                return filecmp.cmp(source, dest, shallow=False)
-            if source.is_dir() and dest.is_dir():
-                source_files = {
-                    p.relative_to(source): p
-                    for p in source.rglob("*")
-                    if p.is_file()
-                }
-                dest_files = {
-                    p.relative_to(dest): p
-                    for p in dest.rglob("*")
-                    if p.is_file()
-                }
-                if source_files.keys() != dest_files.keys():
-                    return False
-                for rel, source_file in source_files.items():
-                    dest_file = dest_files[rel]
-                    if source_file.stat().st_size != dest_file.stat().st_size:
-                        return False
-                    if not filecmp.cmp(source_file, dest_file, shallow=False):
-                        return False
-                return True
+            verify_staged_path_copy(source, dest)
+            return True
         except OSError:
             return False
-        return False
 
     def move_trickplay(self, src_p: Path, dst_p: Path) -> tuple[bool, dict]:
-        result = new_move_result(str(src_p), str(dst_p.parent), dest_name=dst_p.name)
-        transaction: PathSwapTransaction | None = None
-        try:
-            dst_p.parent.mkdir(parents=True, exist_ok=True)
-            result["target_dir"] = str(dst_p.parent)
-            result["dest_path"] = str(dst_p)
-            if dst_p.exists() and same_path(src_p, dst_p):
-                result["ok"] = True
-                self._log(f"ℹ️ Trickplay liegt bereits im Zielordner: {dst_p.name}", "info")
-                return True, result
-
-            if not dst_p.exists():
-                shutil.move(str(src_p), str(dst_p))
-                result["ok"] = True
-                return True, result
-
-            mode = self.trickplay_conflict_mode
-            result["conflict"] = True
-            result["conflict_paths"] = [str(dst_p)]
-            if mode == "skip":
-                result["ok"] = True
-                result["skipped_conflict"] = True
-                self._log(f"  🧩 Trickplay im Ziel vorhanden, wird behalten: {dst_p.name}", "info")
-                try:
-                    remove_path(src_p)
-                except (OSError, shutil.Error) as exc:
-                    self._log(f"⚠️ Nicht benötigte Trickplay-Quelle konnte nicht entfernt werden: {exc}", "warn")
-                return True, result
-
-            if mode not in {"backup", "overwrite"}:
-                raise ValueError(f"Unbekannter Trickplay-Konfliktmodus: {mode}")
-
-            backup_mode = mode == "backup"
-            backup_p = self.unique_trickplay_backup_path(dst_p) if backup_mode else self.unique_overwrite_backup_path(dst_p)
-            transaction = PathSwapTransaction(src_p, dst_p, backup_p)
-            transaction.stage()
-            transaction.commit()
-            self._remove_committed_source(src_p)
-            result["ok"] = True
-            result["dest_path"] = str(dst_p)
-
-            if backup_mode:
-                result["backed_up_existing"] = True
-                result["backed_up_existing_count"] = 1
-                self._log(f"  🧩 Vorhandene Trickplaybilder gesichert: {backup_p.name}", "info")
-            else:
-                result["replaced_existing"] = True
-                result["replaced_existing_count"] = 1
-                try:
-                    transaction.discard_backup()
-                except (OSError, shutil.Error) as cleanup_exc:
-                    self._log(
-                        f"⚠️ Altes Trickplay-Backup konnte nach erfolgreichem Commit nicht entfernt werden: {cleanup_exc}",
-                        "warn",
-                    )
-                self._log(f"  🧩 Vorhandene Trickplaybilder transaktional ersetzt: {dst_p.name}", "info")
-            return True, result
-        except (OSError, shutil.Error, PathTransactionRollbackError, ValueError, RuntimeError) as exc:
-            self._log(f"❌ Fehler beim Verschieben der Trickplaybilder: {exc}", "error")
-            if transaction is not None:
-                transaction.cleanup_staging(best_effort=True)
-                if transaction.backup_created and not dst_p.exists():
-                    try:
-                        transaction.rollback()
-                        self._log(f"↩️ Vorhandene Trickplaybilder wiederhergestellt: {dst_p.name}", "warn")
-                    except (OSError, shutil.Error) as rollback_exc:
-                        self._log(
-                            "❌ Trickplay-Rollback unvollständig; Backup bleibt erhalten: "
-                            f"{transaction.backup_path} – {rollback_exc}",
-                            "error",
-                        )
-            return False, result
+        from .move_trickplay_transfer import move_trickplay_path
+        return move_trickplay_path(src_p, dst_p, mode=self.trickplay_conflict_mode,
+            log=self._log, record_companion=self._record_companion,
+            remove_verified_source=self._remove_verified_source,
+            overwrite_backup_path=self.unique_overwrite_backup_path,
+            trickplay_backup_path=self.unique_trickplay_backup_path)
 
     @staticmethod
     def sidecar_type(sidecar_p: Path) -> str:
@@ -460,7 +416,9 @@ class MoveSidecarService:
         if sidecar_p.suffix.lower() == ".nfo" and self.is_film_target(target_dir):
             configured = str(self.nfo_movie_target_name or "").strip()
             if configured != "stem":
-                return configured or "movie.nfo"
+                name = configured or "movie.nfo"
+                validate_destination_name(name)
+                return name
 
         return self._rebase_companion_name(
             sidecar_p.name,
@@ -521,9 +479,30 @@ class MoveSidecarService:
         token = uuid.uuid4().hex[:10]
         return dst_p.with_name(f"{dst_p.name}.__dragontools_backup__{token}")
 
-    def _remove_committed_source(self, src_p: Path) -> None:
+    def _remove_committed_source(self, src_p: Path) -> bool:
         try:
             if src_p.exists() or src_p.is_symlink():
                 remove_path(src_p)
+            return True
         except (OSError, shutil.Error) as exc:
             self._log(f"⚠️ Ziel ist vollständig vorhanden, Quelle konnte aber nicht entfernt werden: {exc}", "warn")
+            return False
+
+    def _record_companion(self, source, destination, source_receipt, *, destination_receipt=None):
+        receipt = destination_receipt or path_receipt(destination)
+        self._companion_proofs[self._path_key(source)] = {'destination': str(destination),
+            'source': source_receipt, 'receipt': receipt}
+        callback = getattr(self._journal, 'record_companion_proof', None)
+        if callable(callback):
+            callback(str(source), str(destination), source_receipt, receipt)
+
+    def _companion_proof(self, source, destination):
+        callback = getattr(self._journal, 'companion_proof_for', None)
+        proof = callback(str(source), str(destination)) if callable(callback) else self._companion_proofs.get(self._path_key(source))
+        return proof if isinstance(proof, dict) else {}
+
+    def _remove_verified_source(self, source, destination, source_receipt):
+        proof = self._companion_proof(source, destination)
+        if not (receipt_matches(source, source_receipt) and receipt_matches(destination, proof.get('receipt'))):
+            return False
+        return self._remove_committed_source(source)

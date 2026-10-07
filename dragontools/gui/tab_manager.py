@@ -33,7 +33,7 @@ _KEY_PREFIX = "tabs/visible/"
 
 def _open_external(exe_path: str) -> None:
     """Startet ein externes Programm ohne es einzubetten."""
-    if not exe_path or not Path(exe_path).exists():
+    if not exe_path or not Path(exe_path).is_file():
         return
     try:
         if sys.platform == "win32":
@@ -55,7 +55,7 @@ def _find_bundled_exe(name: str) -> str | None:
         EXE_DIR / name,
     ]
     for c in candidates:
-        if c.exists():
+        if c.is_file():
             return str(c)
     return None
 
@@ -160,40 +160,13 @@ class TabManagerDialog(QDialog):
         v.addWidget(bb)
 
     def _launch(self, exe_name: str) -> None:
-        from ..core.tool_paths import find_tool_in_settings, get_tool_paths
-        # Mapping: exe_name → TOOL_KEYS-Schlüssel + mögliche Exe-Namen
-        tool_map = {
-            "HandBrake.exe":        ("handbrake", ["HandBrake.exe"]),
-            "Resolve.exe":          ("davinci_resolve", ["Resolve.exe", "resolve"]),
-            "RenameMyTVSeries.exe": ("rmts", ["RenameMyTVSeries.exe", "rmts.exe"]),
-            "mkvtoolnix-gui.exe":   ("mkv", ["mkvtoolnix-gui.exe"]),
-        }
-        # 1) Konfigurierter Ordner aus Einstellungen (settings_dialog)
-        if exe_name in tool_map:
-            tool_key, exe_names = tool_map[exe_name]
-            result = find_tool_in_settings(tool_key, *exe_names)
-            if result and Path(result).exists():
-                _open_external(result); return
-        if exe_name == "Resolve.exe":
-            resolved = get_tool_paths().davinci_resolve
-            if resolved and Path(resolved).is_file():
-                _open_external(resolved); return
-        # 2) Legacy direkt gespeicherter Pfad
-        stored = self._settings.value(f"tools/external/{exe_name}", "", type=str)
-        if stored and Path(stored).exists():
-            _open_external(stored); return
-        # 3) Im Bundle suchen
-        found = _find_bundled_exe(exe_name)
-        if found:
-            _open_external(found); return
-        # 4) Nutzer fragen (letzter Ausweg)
-        path, _ = QFileDialog.getOpenFileName(
-            self, f"{exe_name} wählen", "",
-            f"Programm ({exe_name});;Alle Dateien (*)"
+        from ..core.tool_paths import get_tool_paths
+        from .external_program_launch import launch_external_program
+
+        launch_external_program(
+            self, exe_name, tools=get_tool_paths(), find_bundled=_find_bundled_exe,
+            open_external=_open_external, choose=QFileDialog.getOpenFileName,
         )
-        if path:
-            self._settings.setValue(f"tools/external/{exe_name}", path)
-            _open_external(path)
 
     def _open_url(self, url: str) -> None:
         """Öffnet eine URL im Standard-Browser."""

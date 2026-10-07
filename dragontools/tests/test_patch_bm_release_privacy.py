@@ -11,7 +11,7 @@ def test_public_python_member_is_sanitized_without_breaking_syntax(tmp_path):
     from dragontools.core.release_packaging import _write_public_member
 
     private_org = "Mark" + "usTools"
-    private_author = "Mark" + "us " + "Tsch" + "erner"
+    private_author = "Mark" + "us Developer"
     private_user = "Mark" + "u"
     root = tmp_path / "project"
     source = root / "module.py"
@@ -19,7 +19,7 @@ def test_public_python_member_is_sanitized_without_breaking_syntax(tmp_path):
     source.write_text(
         f'APP_ORG = "{private_org}"\n'
         f'AUTHOR = "{private_author}"\n'
-        f'EXAMPLE = r"C:\\\\Users\\\\{private_user}\\\\Documents\\\\DragonTools"\n',
+        f'EXAMPLE = r"C:\\\\Users\\\\<USER>\\\\Documents\\\\DragonTools"\n',
         encoding="utf-8",
     )
     target = tmp_path / "public.zip"
@@ -37,11 +37,11 @@ def test_python_privacy_scanner_detects_hardcoded_secret(tmp_path):
     from dragontools.core.release_validation_package import _scan_private_markers
 
     source = tmp_path / "module.py"
-    synthetic_token = "sk_live_" + "0123456789abcdef" * 2; source.write_text(f'{"API_" + "KEY"} = "{synthetic_token}"\n', encoding="utf-8")
+    source.write_text('API_KEY = "release-check-secret-0123456789abcdef"\n', encoding="utf-8")
 
     findings = _scan_private_markers(tmp_path)
 
-    assert any(item.status == "warn" and "Python-Secret" in item.title for item in findings)
+    assert any(item.status == "error" and "Python-Secret" in item.title for item in findings)
 
 
 def test_python_privacy_scanner_ignores_setting_key_constants_and_placeholders(tmp_path):

@@ -60,7 +60,10 @@ def export_backup(
 
     if secret_mode not in {SECRET_MODE_EXCLUDED, SECRET_MODE_ENCRYPTED}:
         raise ValueError(f"Unbekannter Secret-Modus: {secret_mode}")
-    normal_settings, sensitive_settings = partition_settings(settings)
+    normal_settings, sensitive_settings = partition_settings(
+        settings,
+        include_sensitive_values=(secret_mode == SECRET_MODE_ENCRYPTED),
+    )
 
     secret_manifest: dict[str, Any] = {"mode": secret_mode}
     encrypted_payload: bytes | None = None

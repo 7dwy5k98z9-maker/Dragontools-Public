@@ -20,11 +20,11 @@ def test_hdr10plus_client_streams_generator_progress_into_dragontools_log(tmp_pa
         callback = kwargs.get("stderr_line")
         assert callable(callback)
         callback("HDR10+ scan: 24000/172800 frames (13.9%) | 6.6 fps | elapsed 01:00:00 | ETA 06:13:38")
-        output.write_text('{"SceneInfo":[]}', encoding="utf-8")
+        output.write_text('{"SceneInfo":[{"SequenceFrameIndex":0}]}', encoding="utf-8")
         return ToolRunResult(
             command=list(command),
             returncode=0,
-            stdout=json.dumps({"success": True, "frames": 172800, "scenes": 100}),
+            stdout=json.dumps({"success": True, "frames": 1, "scenes": 1}),
         )
 
     result = HDR10PlusGeneratorClient(

@@ -2,9 +2,11 @@
 """TheTVDB series/episode data loading and per-client batch reuse."""
 from __future__ import annotations
 
+from copy import deepcopy
 from typing import Any
 
-from .online_metadata_common import OnlineMetadataError
+from .online_metadata_common import OnlineMetadataError, OnlineMetadataNotFoundError
+from .online_metadata_tvdb_pagination import load_episode_pages
 from .online_metadata_tvdb_helpers import (
     _episode_title_is_fallback,
     _episodes_from_tvdb_response,
@@ -33,7 +35,7 @@ class TvdbEpisodeDataMixin:
                 return None
             if force_refresh and fresh is not None and key not in fresh:
                 return None
-            return dict(cache[key])
+            return deepcopy(cache[key])
 
         params = {"meta": "translations"} if include_translations else {}
         if lock is None:
@@ -52,10 +54,10 @@ class TvdbEpisodeDataMixin:
                 f"/series/{int(series_id)}/extended", params, force_refresh=force_refresh
             )
             if cache is not None:
-                cache[key] = dict(payload)
+                cache[key] = deepcopy(payload)
             if force_refresh and fresh is not None:
                 fresh.add(key)
-            return dict(payload)
+            return deepcopy(payload)
 
     def series_episodes(
         self,
@@ -76,7 +78,7 @@ class TvdbEpisodeDataMixin:
                 return None
             if force_refresh and fresh_keys is not None and cache_key not in fresh_keys:
                 return None
-            return [dict(item) for item in cache[cache_key]]
+            return deepcopy(cache[cache_key])
 
         if lock is None:
             existing = cached_value()
@@ -94,10 +96,10 @@ class TvdbEpisodeDataMixin:
                 series_id, season_type=season_type, lang=lang, force_refresh=force_refresh
             )
             if cache is not None:
-                cache[cache_key] = [dict(item) for item in episodes]
+                cache[cache_key] = deepcopy(episodes)
             if force_refresh and fresh_keys is not None:
                 fresh_keys.add(cache_key)
-            return [dict(item) for item in episodes]
+            return deepcopy(episodes)
 
     def _load_series_episodes(
         self,
@@ -114,10 +116,8 @@ class TvdbEpisodeDataMixin:
         last_error: OnlineMetadataError | None = None
         for endpoint in endpoints:
             try:
-                return _episodes_from_tvdb_response(
-                    self._request_json(endpoint, {}, force_refresh=force_refresh)
-                )
-            except OnlineMetadataError as exc:
+                return load_episode_pages(self._request_json, endpoint, force_refresh=force_refresh)
+            except OnlineMetadataNotFoundError as exc:
                 last_error = exc
         if last_error:
             raise last_error

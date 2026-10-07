@@ -50,7 +50,7 @@ def test_recovery_completes_sidecar_when_video_commit_is_visible(tmp_path):
     source = tmp_path / "film.__tmp__.de.srt"
     destination = tmp_path / "film.de.srt"
     backup = tmp_path / "film.de.srt.dragontools_backup"
-    _write(video_dest, "FINAL-VIDEO")
+    _write(video_staging, "FINAL-VIDEO")
     _write(source, "NEW")
     _write(destination, "OLD")
 
@@ -61,6 +61,7 @@ def test_recovery_completes_sidecar_when_video_commit_is_visible(tmp_path):
         root=tmp_path,
     )
 
+    os.rename(video_staging, video_dest)  # Actual verified candidate installation.
     result = recover_active_sidecar_journals(tmp_path)
 
     assert result["completed"] == 1

@@ -124,6 +124,9 @@ class ConversionController:
     def workers_for_shutdown(self) -> tuple:
         return self._lifecycle.workers_for_shutdown()
 
+    def persist_file_override(self, path: str, override: dict | None) -> None:
+        self._job_journal_tracker.persist_file_override(path, override)
+
     def get_start_files(self) -> list[str]:
         return self._start_coordinator.get_start_files()
 

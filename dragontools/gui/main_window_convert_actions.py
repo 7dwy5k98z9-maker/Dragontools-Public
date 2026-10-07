@@ -73,77 +73,18 @@ class MainWindowConvertActionsMixin:
         )
 
     def _open_log_zoom_window(self) -> None:
-        """Öffnet das aktuelle GUI-Log in einem größeren separaten Fenster."""
-        from PyQt6.QtWidgets import (
-            QDialog, QVBoxLayout, QTextEdit, QDialogButtonBox,
-        )
-        from PyQt6.QtCore import Qt
-        from .ui_helpers import install_persistent_window_geometry
+        """Öffnet das Log des aktiven Tabs; sonst das erste verfügbare Log."""
+        from .log_zoom_window import open_log_zoom_window
 
-        # Aktives ConvertWidget ermitteln um log_edit zu finden
-        source_log: QTextEdit | None = None
-        for i in range(self.tabs.count()):
-            w = self.tabs.widget(i)
-            if w is not None and hasattr(w, "log_edit"):
-                source_log = w.log_edit
-                break
-
-        dlg = QDialog(self)
-        dlg.setWindowTitle("📋 Logging-Fenster")
-        dlg.setMinimumSize(900, 600)
-        dlg.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
-        install_persistent_window_geometry(dlg, "log_zoom_window")
-
-        layout = QVBoxLayout(dlg)
-        layout.setContentsMargins(8, 8, 8, 8)
-
-        log_view = QTextEdit()
-        log_view.setReadOnly(True)
-        log_view.setLineWrapMode(QTextEdit.LineWrapMode.NoWrap)
-        log_view.setStyleSheet(
-            "font-family: Consolas, monospace; font-size: 11px;"
-        )
-
-        # Aktuellen Inhalt übernehmen
-        if source_log is not None:
-            initial_text = source_log.toPlainText()
-            log_view.setPlainText(initial_text)
-            # Ans Ende scrollen
-            sb = log_view.verticalScrollBar()
-            sb.setValue(sb.maximum())
-
-            # Neue Einträge live weiterleiten solange Fenster offen.
-            # textChanged ist pyqtSignal() ohne Argument – daher kein 'line'-Parameter.
-            # _prev_len trackt wieviel Text schon im Zoom-Fenster ist; nur das Delta
-            # wird angehängt (kein teures setPlainText für den gesamten Log).
-            _prev_len = [len(initial_text)]
-
-            def _on_new_log() -> None:
-                if not dlg.isVisible():
-                    return
-                current = source_log.toPlainText()
-                new_part = current[_prev_len[0]:]
-                _prev_len[0] = len(current)
-                if not new_part:
-                    return
-                cursor = log_view.textCursor()
-                from PyQt6.QtGui import QTextCursor
-                cursor.movePosition(QTextCursor.MoveOperation.End)
-                log_view.setTextCursor(cursor)
-                log_view.insertPlainText(new_part)
-                sb2 = log_view.verticalScrollBar()
-                sb2.setValue(sb2.maximum())
-
-            source_log.textChanged.connect(_on_new_log)
-            dlg.finished.connect(lambda _: source_log.textChanged.disconnect(_on_new_log))
-
-        layout.addWidget(log_view)
-
-        btn_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
-        btn_box.rejected.connect(dlg.reject)
-        layout.addWidget(btn_box)
-
-        dlg.show()
+        current = self.tabs.widget(self.tabs.currentIndex())
+        source = getattr(current, "log_edit", None) if current is not None else None
+        if source is None:
+            for index in range(self.tabs.count()):
+                widget = self.tabs.widget(index)
+                source = getattr(widget, "log_edit", None) if widget is not None else None
+                if source is not None:
+                    break
+        open_log_zoom_window(self, source)
 
     def _delete_selected_file(self):
         """Entfernt die markierte Datei aus dem aktiven Konverter-Widget."""

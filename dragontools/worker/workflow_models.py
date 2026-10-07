@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from copy import deepcopy
 from typing import Any
 
 
@@ -21,6 +22,7 @@ class WorkflowConfig:
     encoder_options: dict
     strip_only: bool
     subtitle_rules: dict | None = None
+    corrupt_source_rpu_fallback: bool = True
 
 
 @dataclass(frozen=True)
@@ -48,6 +50,12 @@ class PipelineExecutionRequest:
     preserve_hdrplus: bool = False
     generate_hdr10plus: bool = False
     generate_hdr10plus_postprocess: bool = False
+
+    def __post_init__(self) -> None:
+        # Frozen attributes alone do not isolate nested profile/track mappings.
+        # Copy data at the shared boundary, including direct construction/replace.
+        object.__setattr__(self, "override", deepcopy(self.override))
+        object.__setattr__(self, "encoder_options", deepcopy(self.encoder_options))
 
     @classmethod
     def from_context(cls, ctx: Any, override: dict[str, Any]) -> "PipelineExecutionRequest":

@@ -36,6 +36,7 @@ _HLG_TRANSFERS = {
     "aribstdb67hlg",
 }
 _BT2020_PRIMARIES = {"bt2020", "rec2020"}
+_BT2020_MATRICES = {"bt2020", "bt2020nc", "bt2020ncl", "rec2020", "rec2020nc"}
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,6 +58,15 @@ def media_transfer(media_info) -> str:
 def media_primaries(media_info) -> str:
     video = getattr(media_info, "primary_video", None)
     return str(getattr(video, "color_primaries", None) or "").strip()
+
+
+def media_matrix(media_info) -> str:
+    video = getattr(media_info, "primary_video", None)
+    return str(
+        getattr(video, "color_space", None)
+        or getattr(media_info, "matrix_coefficients", None)
+        or ""
+    ).strip()
 
 
 def is_pq_transfer(value: object) -> bool:
@@ -88,9 +98,9 @@ def source_is_hdr10_pq_compatible(media_info) -> tuple[bool, str]:
 
     ``MediaInfo.is_hdr`` is deliberately not used because it also groups HLG,
     Dolby Vision and some BT.2020-only sources together.  Automatic generation
-    requires an explicit PQ/ST-2084 transfer characteristic.  If primaries are
-    present they must be BT.2020; missing primaries are tolerated because PQ is
-    the decisive transfer signal and some otherwise valid sources omit the tag.
+    requires an explicit PQ/ST-2084 transfer characteristic and explicit
+    BT.2020 primaries. Missing color metadata is rejected rather than guessed,
+    because generator eligibility must match the generator's own preflight.
     """
     if media_info is None:
         return False, "Medienanalyse fehlt."
@@ -102,9 +112,23 @@ def source_is_hdr10_pq_compatible(media_info) -> tuple[bool, str]:
         return False, "Quelle verwendet keine PQ/ST2084-Transferfunktion."
 
     primaries = media_primaries(media_info)
-    if primaries and not is_bt2020_primaries(primaries):
+    if not primaries:
+        return False, "PQ-Quelle enthält keine eindeutigen BT.2020-Primärfarben."
+    if not is_bt2020_primaries(primaries):
         return False, f"PQ-Quelle ist nicht als BT.2020 getaggt ({primaries})."
-    return True, "PQ/ST2084-Quelle ist für HDR10+-Analyse geeignet."
+
+    matrix = media_matrix(media_info)
+    if matrix and _norm(matrix) not in _BT2020_MATRICES:
+        return False, f"PQ/BT.2020-Quelle verwendet eine unerwartete Matrix ({matrix})."
+
+    video = getattr(media_info, "primary_video", None)
+    bit_depth = getattr(video, "bit_depth", None)
+    try:
+        if bit_depth not in (None, "") and int(bit_depth) < 10:
+            return False, f"PQ/BT.2020-Quelle ist nur {int(bit_depth)}-Bit; mindestens 10-Bit ist erforderlich."
+    except (TypeError, ValueError):
+        pass
+    return True, "PQ/ST2084/BT.2020-Quelle ist für HDR10+-Analyse geeignet."
 
 
 def decide_hdr10plus_generation(
@@ -146,7 +170,16 @@ def decide_hdr10plus_generation(
     pq_ok, pq_reason = source_is_hdr10_pq_compatible(media_info)
     if not pq_ok:
         transfer = media_transfer(media_info)
-        code = "SOURCE_HLG" if is_hlg_transfer(transfer) else "SOURCE_NOT_PQ"
+        if is_hlg_transfer(transfer):
+            code = "SOURCE_HLG"
+        elif not is_pq_transfer(transfer):
+            code = "SOURCE_NOT_PQ"
+        elif not media_primaries(media_info) or not is_bt2020_primaries(media_primaries(media_info)):
+            code = "SOURCE_NOT_BT2020"
+        elif media_matrix(media_info) and _norm(media_matrix(media_info)) not in _BT2020_MATRICES:
+            code = "SOURCE_MATRIX_UNEXPECTED"
+        else:
+            code = "SOURCE_BIT_DEPTH_UNEXPECTED"
         return HDR10PlusGenerationDecision(False, code, pq_reason)
 
     if bool(getattr(media_info, "has_dv", False)):
@@ -177,6 +210,9 @@ def apply_dv_preservation_guard(
     return decision
 
 
+from .hdr10plus_json_validation import hdr10plus_summary_frame_count, validate_hdr10plus_json_payload
+
+
 __all__ = [
     "HDR10PlusGenerationDecision",
     "apply_dv_preservation_guard",
@@ -184,7 +220,10 @@ __all__ = [
     "is_bt2020_primaries",
     "is_hlg_transfer",
     "is_pq_transfer",
+    "hdr10plus_summary_frame_count",
+    "media_matrix",
     "media_primaries",
     "media_transfer",
     "source_is_hdr10_pq_compatible",
+    "validate_hdr10plus_json_payload",
 ]

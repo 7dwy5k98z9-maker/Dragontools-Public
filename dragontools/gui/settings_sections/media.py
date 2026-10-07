@@ -57,17 +57,24 @@ class MediaPostprocessSection(SettingsSection):
         d._section_widgets["postprocess"] = pp_grp
         ppg = QGridLayout(pp_grp)
         desc = QLabel(
-            "Optionale Zusatzdateien nach erfolgreicher Konvertierung. "
+            "Optionale Jellyfin-Zusatzdateien. NFOs können bereits während der Konvertierung vorbereitet "
+            "oder erst danach aus der fertigen Datei erzeugt werden. "
             "Beim späteren Verschieben werden NFO- und Trickplay-Daten zusammen mit dem Video verschoben."
         )
         desc.setWordWrap(True)
         ppg.addWidget(desc, 0, 0, 1, 3)
 
-        d.nfo_enabled_cb = QCheckBox("Jellyfin-NFO nach erfolgreicher Konvertierung erstellen")
-        ppg.addWidget(d.nfo_enabled_cb, 1, 0, 1, 2)
+        ppg.addWidget(QLabel("Jellyfin-NFO:"), 1, 0)
+        d.nfo_timing_combo = QComboBox()
+        d.nfo_timing_combo.addItem("Gar nicht erstellen", "off")
+        d.nfo_timing_combo.addItem("Während der Konvertierung vorbereiten", "during")
+        d.nfo_timing_combo.addItem("Nach erfolgreicher Konvertierung erstellen", "after")
+        ppg.addWidget(d.nfo_timing_combo, 1, 1)
         ppg.addWidget(InfoButton(
-            "Erstellt eine Film- oder Folgen-NFO aus der konfigurierten Online-Metadatenquelle. "
-            "Filme werden beim Verschieben in Filmordner automatisch zu movie.nfo umbenannt."
+            "Während der Konvertierung werden Online-Metadaten und die geplanten Video-/Audio-/Untertitelspuren "
+            "bereits vorbereitet. Die NFO wird aber erst nach erfolgreicher Video-Verifikation endgültig installiert, "
+            "damit bei einem fehlgeschlagenen Encode keine falsche NFO liegen bleibt. "
+            "Der Modus 'Nach erfolgreicher Konvertierung' liest die technischen Daten wie bisher aus der fertigen Datei."
         ), 1, 2)
         d.nfo_only_unambiguous_cb = QCheckBox("Nur bei eindeutigem Treffer erstellen")
         ppg.addWidget(d.nfo_only_unambiguous_cb, 2, 0, 1, 2)
@@ -77,7 +84,8 @@ class MediaPostprocessSection(SettingsSection):
         d.nfo_fileinfo_cb = QCheckBox("Technische Dateiinfos eintragen")
         ppg.addWidget(d.nfo_fileinfo_cb, 3, 0, 1, 2)
         ppg.addWidget(InfoButton(
-            "Schreibt Video-/Audio-/Untertitel-Details aus ffprobe in den fileinfo-Bereich der NFO."
+            "Während der Konvertierung werden die geplanten finalen Video-/Audio-/Untertitelspuren verwendet. "
+            "Im Modus 'nach Konvertierung' werden die Daten per ffprobe aus der fertigen Datei gelesen."
         ), 3, 2)
         ppg.addWidget(QLabel("Film-NFO im Ziel:"), 4, 0)
         d.nfo_movie_name_combo = QComboBox()
@@ -241,15 +249,41 @@ class MediaPostprocessSection(SettingsSection):
         svg.addWidget(d.source_visual_min_hits_spin, 6, 1)
         svg.addWidget(InfoButton("Verhindert, dass sehr kurze Dateien wegen einzelner Prüfpunkte blockiert werden."), 6, 2)
         vl.addWidget(source_grp)
+        dv_group = QGroupBox('Dolby Vision – Quell-RPU')
+        dv_layout = QGridLayout(dv_group)
+        d.corrupt_rpu_fallback_cb = QCheckBox(
+            'Bei defekter Dolby-Vision-RPU ohne Dolby Vision weiterverarbeiten')
+        dv_layout.addWidget(d.corrupt_rpu_fallback_cb,0,0)
+        dv_layout.addWidget(InfoButton(
+            'Standard: aktiviert. Gilt nur für die betroffene Datei; HDR10+ bleibt erhalten. '
+            'Bei deaktivierter Option wird die Verarbeitung vor dem Encode mit Fehler beendet. '
+            'Vor dem HEVC-Encode wird die RPU-Länge anhand von Metadaten grob geprüft; '
+            'kleine Abweichungen sind erlaubt. Der exakte Abgleich nach dem Encode '
+            'sowie Track-/Toolfehler bleiben verbindlich.'),0,1)
+        svg.addWidget(dv_group,7,0,1,3)
 
 
     def load(self) -> None:
         d, s = self.dialog, self.settings
+        d.corrupt_rpu_fallback_cb.setChecked(cfg.settings_bool(s,
+            cfg.SET_KEY_CORRUPT_SOURCE_RPU_FALLBACK,cfg.DEFAULT_CORRUPT_SOURCE_RPU_FALLBACK))
         d.media_library_enabled_cb.setChecked(s.value(cfg.SET_KEY_MEDIA_LIBRARY_ENABLED, cfg.DEFAULT_MEDIA_LIBRARY_ENABLED, type=bool))
         d.media_library_preflight_cb.setChecked(s.value(cfg.SET_KEY_MEDIA_LIBRARY_PREFLIGHT_ENABLED, cfg.DEFAULT_MEDIA_LIBRARY_PREFLIGHT_ENABLED, type=bool))
         d.media_library_db_edit.setText(s.value(cfg.SET_KEY_MEDIA_LIBRARY_DB_PATH, str(default_media_library_db_path()), type=str))
 
-        d.nfo_enabled_cb.setChecked(s.value(cfg.SET_KEY_NFO_ENABLED, cfg.DEFAULT_NFO_ENABLED, type=bool))
+        nfo_enabled = s.value(cfg.SET_KEY_NFO_ENABLED, cfg.DEFAULT_NFO_ENABLED, type=bool)
+        has_timing = bool(getattr(s, "contains", lambda _key: False)(cfg.SET_KEY_NFO_TIMING))
+        nfo_timing = (
+            s.value(cfg.SET_KEY_NFO_TIMING, cfg.DEFAULT_NFO_TIMING, type=str)
+            if has_timing
+            else (cfg.DEFAULT_NFO_TIMING if nfo_enabled else "off")
+        )
+        if not nfo_enabled:
+            nfo_timing = "off"
+        if nfo_timing not in {"off", "during", "after"}:
+            nfo_timing = cfg.DEFAULT_NFO_TIMING if nfo_enabled else "off"
+        idx = d.nfo_timing_combo.findData(nfo_timing)
+        d.nfo_timing_combo.setCurrentIndex(idx if idx >= 0 else 0)
         d.nfo_only_unambiguous_cb.setChecked(s.value(cfg.SET_KEY_NFO_ONLY_UNAMBIGUOUS, cfg.DEFAULT_NFO_ONLY_UNAMBIGUOUS, type=bool))
         d.nfo_fileinfo_cb.setChecked(s.value(cfg.SET_KEY_NFO_FILEINFO_ENABLED, cfg.DEFAULT_NFO_FILEINFO_ENABLED, type=bool))
         nfo_name = s.value(cfg.SET_KEY_NFO_MOVIE_TARGET_NAME, cfg.DEFAULT_NFO_MOVIE_TARGET_NAME, type=str)
@@ -291,33 +325,40 @@ class MediaPostprocessSection(SettingsSection):
 
     def save(self) -> bool:
         d, s = self.dialog, self.settings
-        s.setValue(cfg.SET_KEY_MEDIA_LIBRARY_ENABLED, d.media_library_enabled_cb.isChecked())
-        s.setValue(cfg.SET_KEY_MEDIA_LIBRARY_PREFLIGHT_ENABLED, d.media_library_preflight_cb.isChecked())
-        s.setValue(cfg.SET_KEY_MEDIA_LIBRARY_DB_PATH, d.media_library_db_edit.text().strip() or str(default_media_library_db_path()))
-        s.setValue(cfg.SET_KEY_NFO_ENABLED, d.nfo_enabled_cb.isChecked())
-        s.setValue(cfg.SET_KEY_NFO_ONLY_UNAMBIGUOUS, d.nfo_only_unambiguous_cb.isChecked())
-        s.setValue(cfg.SET_KEY_NFO_FILEINFO_ENABLED, d.nfo_fileinfo_cb.isChecked())
-        s.setValue(cfg.SET_KEY_NFO_MOVIE_TARGET_NAME, d.nfo_movie_name_combo.currentData() or cfg.DEFAULT_NFO_MOVIE_TARGET_NAME)
-        s.setValue(cfg.SET_KEY_NFO_CONFLICT_MODE, d.nfo_conflict_combo.currentData() or cfg.DEFAULT_NFO_CONFLICT_MODE)
-        s.setValue(cfg.SET_KEY_TRICKPLAY_ENABLED, d.trickplay_enabled_cb.isChecked())
-        trickplay_conflict = d.trickplay_conflict_combo.currentData() or cfg.DEFAULT_TRICKPLAY_CONFLICT_MODE
-        s.setValue(cfg.SET_KEY_TRICKPLAY_CONFLICT_MODE, trickplay_conflict)
-        s.setValue(cfg.SET_KEY_TRICKPLAY_ONLY_MISSING, trickplay_conflict == "skip")
-        s.setValue(cfg.SET_KEY_TRICKPLAY_SOURCE_MODE, d.trickplay_source_combo.currentData() or cfg.DEFAULT_TRICKPLAY_SOURCE_MODE)
-        s.setValue(cfg.SET_KEY_TRICKPLAY_WIDTH, d.trickplay_width_spin.value())
-        s.setValue(cfg.SET_KEY_TRICKPLAY_TILE_COLUMNS, d.trickplay_cols_spin.value())
-        s.setValue(cfg.SET_KEY_TRICKPLAY_TILE_ROWS, d.trickplay_rows_spin.value())
-        s.setValue(cfg.SET_KEY_TRICKPLAY_INTERVAL_S, d.trickplay_interval_spin.value())
-        s.setValue(cfg.SET_KEY_TRICKPLAY_JPEG_QUALITY, d.trickplay_jpeg_quality_spin.value())
-        s.setValue(cfg.SET_KEY_TRICKPLAY_QSCALE, d.trickplay_qscale_spin.value())
-        s.setValue(cfg.SET_KEY_TRICKPLAY_HWACCEL, d.trickplay_hwaccel_combo.currentData() or cfg.DEFAULT_TRICKPLAY_HWACCEL)
-        s.setValue(cfg.SET_KEY_TRICKPLAY_MAX_JOBS, d.trickplay_max_jobs_spin.value())
-        s.setValue(cfg.SET_KEY_SOURCE_VISUAL_CHECK_ENABLED, d.source_visual_enabled_cb.isChecked())
-        s.setValue(cfg.SET_KEY_SOURCE_VISUAL_CHECK_INTERVAL_PERCENT, d.source_visual_interval_spin.value())
-        s.setValue(cfg.SET_KEY_SOURCE_VISUAL_CHECK_SAMPLE_DURATION_S, d.source_visual_duration_spin.value())
-        s.setValue(cfg.SET_KEY_SOURCE_VISUAL_CHECK_FPS, d.source_visual_fps_spin.value())
-        s.setValue(cfg.SET_KEY_SOURCE_VISUAL_CHECK_BLOCK_PERCENT, d.source_visual_block_spin.value())
-        s.setValue(cfg.SET_KEY_SOURCE_VISUAL_CHECK_MIN_HITS, d.source_visual_min_hits_spin.value())
+        if self.is_visible('source_visual'):
+            s.setValue(cfg.SET_KEY_CORRUPT_SOURCE_RPU_FALLBACK,d.corrupt_rpu_fallback_cb.isChecked())
+        if self.is_visible("media_library"):
+            s.setValue(cfg.SET_KEY_MEDIA_LIBRARY_ENABLED, d.media_library_enabled_cb.isChecked())
+            s.setValue(cfg.SET_KEY_MEDIA_LIBRARY_PREFLIGHT_ENABLED, d.media_library_preflight_cb.isChecked())
+            s.setValue(cfg.SET_KEY_MEDIA_LIBRARY_DB_PATH, d.media_library_db_edit.text().strip() or str(default_media_library_db_path()))
+        if self.is_visible("postprocess"):
+            nfo_timing = d.nfo_timing_combo.currentData() or "off"
+            s.setValue(cfg.SET_KEY_NFO_TIMING, nfo_timing)
+            s.setValue(cfg.SET_KEY_NFO_ENABLED, nfo_timing != "off")
+            s.setValue(cfg.SET_KEY_NFO_ONLY_UNAMBIGUOUS, d.nfo_only_unambiguous_cb.isChecked())
+            s.setValue(cfg.SET_KEY_NFO_FILEINFO_ENABLED, d.nfo_fileinfo_cb.isChecked())
+            s.setValue(cfg.SET_KEY_NFO_MOVIE_TARGET_NAME, d.nfo_movie_name_combo.currentData() or cfg.DEFAULT_NFO_MOVIE_TARGET_NAME)
+            s.setValue(cfg.SET_KEY_NFO_CONFLICT_MODE, d.nfo_conflict_combo.currentData() or cfg.DEFAULT_NFO_CONFLICT_MODE)
+            s.setValue(cfg.SET_KEY_TRICKPLAY_ENABLED, d.trickplay_enabled_cb.isChecked())
+            trickplay_conflict = d.trickplay_conflict_combo.currentData() or cfg.DEFAULT_TRICKPLAY_CONFLICT_MODE
+            s.setValue(cfg.SET_KEY_TRICKPLAY_CONFLICT_MODE, trickplay_conflict)
+            s.setValue(cfg.SET_KEY_TRICKPLAY_ONLY_MISSING, trickplay_conflict == "skip")
+            s.setValue(cfg.SET_KEY_TRICKPLAY_SOURCE_MODE, d.trickplay_source_combo.currentData() or cfg.DEFAULT_TRICKPLAY_SOURCE_MODE)
+            s.setValue(cfg.SET_KEY_TRICKPLAY_WIDTH, d.trickplay_width_spin.value())
+            s.setValue(cfg.SET_KEY_TRICKPLAY_TILE_COLUMNS, d.trickplay_cols_spin.value())
+            s.setValue(cfg.SET_KEY_TRICKPLAY_TILE_ROWS, d.trickplay_rows_spin.value())
+            s.setValue(cfg.SET_KEY_TRICKPLAY_INTERVAL_S, d.trickplay_interval_spin.value())
+            s.setValue(cfg.SET_KEY_TRICKPLAY_JPEG_QUALITY, d.trickplay_jpeg_quality_spin.value())
+            s.setValue(cfg.SET_KEY_TRICKPLAY_QSCALE, d.trickplay_qscale_spin.value())
+            s.setValue(cfg.SET_KEY_TRICKPLAY_HWACCEL, d.trickplay_hwaccel_combo.currentData() or cfg.DEFAULT_TRICKPLAY_HWACCEL)
+            s.setValue(cfg.SET_KEY_TRICKPLAY_MAX_JOBS, d.trickplay_max_jobs_spin.value())
+        if self.is_visible("source_visual"):
+            s.setValue(cfg.SET_KEY_SOURCE_VISUAL_CHECK_ENABLED, d.source_visual_enabled_cb.isChecked())
+            s.setValue(cfg.SET_KEY_SOURCE_VISUAL_CHECK_INTERVAL_PERCENT, d.source_visual_interval_spin.value())
+            s.setValue(cfg.SET_KEY_SOURCE_VISUAL_CHECK_SAMPLE_DURATION_S, d.source_visual_duration_spin.value())
+            s.setValue(cfg.SET_KEY_SOURCE_VISUAL_CHECK_FPS, d.source_visual_fps_spin.value())
+            s.setValue(cfg.SET_KEY_SOURCE_VISUAL_CHECK_BLOCK_PERCENT, d.source_visual_block_spin.value())
+            s.setValue(cfg.SET_KEY_SOURCE_VISUAL_CHECK_MIN_HITS, d.source_visual_min_hits_spin.value())
         return True
 
     def browse_database(self) -> None:

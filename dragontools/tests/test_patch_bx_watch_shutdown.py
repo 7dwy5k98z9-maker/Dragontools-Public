@@ -47,7 +47,11 @@ def test_abort_latches_watch_gate_even_without_current_worker():
 def test_close_stops_intake_before_attempting_worker_shutdown(monkeypatch):
     import dragontools.gui.main_window_shutdown as module
     calls = []
-    monkeypatch.setattr(module, 'stop_watch_folder_controller', lambda _: calls.append('watch') or True)
+    def stop_watch(_window, *, timeout_ms):
+        assert timeout_ms == 0
+        calls.append('watch')
+        return True
+    monkeypatch.setattr(module, 'stop_watch_folder_controller', stop_watch)
     monkeypatch.setattr(module, 'shutdown_loaded_widgets',
                         lambda *_args, **_kwargs: calls.append('workers') or SimpleNamespace(ok=False, still_running=['encoder']))
     monkeypatch.setattr(module.QMessageBox, 'warning', lambda *_: None)

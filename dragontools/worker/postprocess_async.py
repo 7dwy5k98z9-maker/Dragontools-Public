@@ -12,6 +12,7 @@ from .postprocess_metadata import PostProcessMetadataSession
 from .postprocess_models import PostProcessRunResult
 from .postprocess_runner import PostProcessService
 from .job_process_owner import JobProcessOwner
+from .postprocess_lifecycle import PostprocessLifecycle
 
 
 def postprocess_max_workers(settings) -> int:
@@ -50,9 +51,9 @@ class AsyncPostProcessCoordinator:
             max_workers=postprocess_max_workers(settings),
             thread_name_prefix="DragonPostprocess",
         )
-        self._futures: list[Future] = []
-        self._lock = threading.Lock()
-        self._shutdown = False
+        self._lifecycle = PostprocessLifecycle()
+        self._futures = self._lifecycle.futures
+        self._lock = self._lifecycle.condition
 
     def submit(
         self,
@@ -67,7 +68,7 @@ class AsyncPostProcessCoordinator:
     ) -> bool:
         """Schedule one job without ever duplicating a successfully submitted job."""
         with self._lock:
-            if self._shutdown:
+            if self._lifecycle.shutdown:
                 self._warn("Post-Processing konnte nicht gestartet werden: Coordinator ist bereits beendet.")
                 return False
             try:
@@ -82,70 +83,66 @@ class AsyncPostProcessCoordinator:
                 if prepared_source_trickplay is not None:
                     run_kwargs["prepared_source_trickplay"] = prepared_source_trickplay
                 future = self._executor.submit(service.run_result, **run_kwargs)
-                self._futures.append(future)
+                self._lifecycle.scheduled(future)
             except Exception as exc:
                 self._warn(f"Post-Processing konnte nicht gestartet werden: {exc}")
                 return False
 
-        # Announce the pending state *before* attaching the callback.
-        # ``Future.add_done_callback`` executes immediately when an already
-        # completed Future is registered, so attaching first can otherwise
-        # produce the invalid order ✅ -> 🧩 and leave GUI/parallel state stuck.
-        self._emit_pending_no_throw(
-            result_service=result_service,
-            input_path=input_path,
-            output_path=output_path,
-        )
-
-        # Attach the callback before any other non-essential operation. Once
-        # this point is reached the Future owns the job and callers must not
-        # start a second synchronous postprocess for the same file.
         try:
-            future.add_done_callback(
-                lambda done: self._complete_no_throw(
-                    done,
-                    input_path=input_path,
-                    output_path=output_path,
-                    existing_sidecars=existing_sidecars,
-                    sidecar_outputs=sidecar_outputs,
-                    postprocess_outputs=postprocess_outputs,
-                    result_service=result_service,
-                )
+            # Announce the pending state *before* attaching the callback.
+            # ``Future.add_done_callback`` executes immediately when an already
+            # completed Future is registered, so attaching first can otherwise
+            # produce the invalid order ✅ -> 🧩 and leave GUI/parallel state stuck.
+            self._emit_pending_no_throw(
+                result_service=result_service,
+                input_path=input_path,
+                output_path=output_path,
             )
-        except Exception as exc:
-            # add_done_callback() normally cannot fail for a valid Future. If
-            # it does, the Future may already be running, so returning False
-            # would risk a duplicate synchronous fallback. A tiny waiter thread
-            # preserves exactly-once completion without resubmitting the job.
-            self._warn(f"Post-Processing-Callback konnte nicht registriert werden: {exc}")
-            threading.Thread(
-                target=lambda: self._wait_and_complete(
-                    future,
-                    input_path=input_path,
-                    output_path=output_path,
-                    existing_sidecars=existing_sidecars,
-                    sidecar_outputs=sidecar_outputs,
-                    postprocess_outputs=postprocess_outputs,
-                    result_service=result_service,
-                ),
-                name="DragonPostprocessCompletion",
-                daemon=True,
-            ).start()
+
+            # Attach the callback before any other non-essential operation. Once
+            # this point is reached the Future owns the job and callers must not
+            # start a second synchronous postprocess for the same file.
+            try:
+                future.add_done_callback(
+                    lambda done: self._complete_no_throw(
+                        done,
+                        input_path=input_path,
+                        output_path=output_path,
+                        existing_sidecars=existing_sidecars,
+                        sidecar_outputs=sidecar_outputs,
+                        postprocess_outputs=postprocess_outputs,
+                        result_service=result_service,
+                    )
+                )
+            except Exception as exc:
+                # add_done_callback() normally cannot fail for a valid Future. If
+                # it does, the Future may already be running, so returning False
+                # would risk a duplicate synchronous fallback. A tiny waiter thread
+                # preserves exactly-once completion without resubmitting the job.
+                self._warn(f"Post-Processing-Callback konnte nicht registriert werden: {exc}")
+                threading.Thread(
+                    target=lambda: self._wait_and_complete(
+                        future,
+                        input_path=input_path,
+                        output_path=output_path,
+                        existing_sidecars=existing_sidecars,
+                        sidecar_outputs=sidecar_outputs,
+                        postprocess_outputs=postprocess_outputs,
+                        result_service=result_service,
+                    ),
+                    name="DragonPostprocessCompletion",
+                    daemon=True,
+                ).start()
+
+        finally:
+            self._lifecycle.registered()
 
         # Logging is intentionally last and fail-soft.
         self._info(f"✳️ Post-Processing im Hintergrund gestartet: {Path(output_path).name}")
         return True
 
     def wait_for_all(self) -> None:
-        with self._lock:
-            futures = list(self._futures)
-            if self._shutdown:
-                return
-            self._shutdown = True
-        if futures:
-            self._info(f"✳️ Warte auf {len(futures)} Post-Processing-Auftrag/Aufträge ...")
-            wait(futures)
-        self._executor.shutdown(wait=True)
+        self._lifecycle.drain(self._executor)
 
     def _wait_and_complete(self, future: Future, **kwargs) -> None:
         try:
@@ -161,6 +158,12 @@ class AsyncPostProcessCoordinator:
             # _complete() owns a finally-block that already attempts the file
             # completion signal exactly once. Do not emit a second result here.
             self._warn(f"Post-Processing-Abschlussfehler abgefangen: {exc}")
+        finally:
+            self._retire_future(future)
+
+    def _retire_future(self, future: Future) -> None:
+        """Release a job only after terminal bookkeeping and delivery finish."""
+        self._lifecycle.retire(future)
 
     def _complete(
         self,
@@ -196,7 +199,8 @@ class AsyncPostProcessCoordinator:
         try:
             details = [dict(item) for item in (getattr(result, "items", []) or [])]
             if postprocess_outputs is not None:
-                postprocess_outputs[input_path] = details
+                existing = [dict(item) for item in (postprocess_outputs.get(input_path, []) or [])]
+                postprocess_outputs[input_path] = existing + details
 
             sidecars = list(existing_sidecars or [])
             for path in list(getattr(result, "created_paths", []) or []):
@@ -239,6 +243,9 @@ class AsyncPostProcessCoordinator:
             return
         try:
             result_service.emit_file_progress(input_path, 100)
+        except Exception as exc:
+            self._warn(f"Post-Processing-Fortschritt konnte nicht gemeldet werden: {exc}")
+        try:
             result_service.emit_file_result(input_path, output_path, status)
         except Exception as exc:
             self._warn(f"Post-Processing-Abschluss konnte nicht gemeldet werden: {exc}")

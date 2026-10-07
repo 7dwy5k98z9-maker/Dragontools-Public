@@ -84,7 +84,7 @@ jobs:
       - name: Build source-free DragonTools smoke executable
         shell: pwsh
         run: |
-          python -m PyInstaller `
+          python -m extras.release_pyinstaller `
             --noconfirm `
             --clean `
             --onedir `
@@ -95,6 +95,8 @@ jobs:
             --distpath "$PWD/dist-smoke" `
             --workpath "$PWD/build/smoke-main" `
             --specpath "$PWD/build/smoke-main" `
+            --collect-submodules dragontools `
+            --exclude-module dragontools.tests `
             --hidden-import cv2 `
             --collect-submodules cv2 `
             --collect-binaries cv2 `
@@ -104,10 +106,19 @@ jobs:
             --collect-data cryptography `
             --hidden-import faster_whisper `
             --hidden-import ctranslate2 `
-            --collect-all faster_whisper `
-            --collect-all ctranslate2 `
+            --collect-submodules faster_whisper `
+            --collect-binaries faster_whisper `
+            --collect-data faster_whisper `
+            --collect-submodules ctranslate2 `
+            --collect-binaries ctranslate2 `
+            --collect-data ctranslate2 `
+            --copy-metadata faster-whisper `
+            --copy-metadata ctranslate2 `
             --add-data "dragontools/config;dragontools/config" `
             DragonToolsV9.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m dragontools.core.release_qt_icu "$PWD/dist-smoke/DragonToolsSmoke/Daten"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Execute frozen import smoke
         shell: pwsh
         run: |

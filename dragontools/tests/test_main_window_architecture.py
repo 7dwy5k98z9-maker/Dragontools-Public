@@ -67,7 +67,7 @@ def test_main_window_legacy_method_surface_is_preserved_across_owners():
         "__init__", "_set_icon", "_init_tabs", "_make_placeholder", "_on_tab_activate",
         "_ensure_tab_loaded", "_tab_label", "_create_tab_widget", "_on_tab_close",
         "_close_current_tab", "_reopen_last_tab", "_reopen_all_tabs", "_reopen_tab",
-        "_set_tab_visible_setting", "_toggle_tab", "_open_tab_manager", "_apply_tab_visibility",
+        "_set_tab_visible_setting", "set_tab_visible_setting", "_toggle_tab", "_open_tab_manager", "_apply_tab_visibility",
         "_maybe_show_recovery_journals", "_maybe_show_unfinished_job_journal",
         "_show_unfinished_move_journal", "_maybe_show_replacement_reminders",
         "_open_unfinished_job_journal", "_open_unfinished_move_journal",

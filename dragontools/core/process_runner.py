@@ -19,13 +19,25 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from .analysis_process import run_owned_analysis
+
 
 def tool_available(tool_path: str) -> bool:
-    """True, wenn ein Toolpfad existiert oder über PATH auflösbar ist."""
+    """True, wenn ein Tool eine Datei ist oder über PATH auflösbar ist.
+
+    Ein existierendes Verzeichnis ist kein ausführbares Tool.  Die frühere
+    ``Path.exists()``-Prüfung meldete z.B. versehentlich den konfigurierten
+    Tool-Ordner als verfügbar und verschob den Fehler bis zum ``Popen``.
+    """
     value = str(tool_path or "").strip()
     if not value:
         return False
-    return Path(value).exists() or bool(shutil.which(value))
+    try:
+        if Path(value).is_file():
+            return True
+    except OSError:
+        pass
+    return bool(shutil.which(value))
 
 
 def subprocess_no_window_kwargs() -> dict:
@@ -68,15 +80,9 @@ def run_analysis_tool(
         das Tool nicht gestartet werden konnte.
     """
     try:
-        result = subprocess.run(
+        result = run_owned_analysis(
             cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            stdin=subprocess.DEVNULL,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            **subprocess_no_window_kwargs(),
+            no_window_kwargs=subprocess_no_window_kwargs(),
             timeout=timeout,
         )
         if result.returncode != 0 and not allow_error:
@@ -95,4 +101,3 @@ def run_analysis_tool(
         raise RuntimeError(
             f"Analyse-Tool konnte nicht gestartet oder ausgeführt werden: {e}"
         ) from e
-

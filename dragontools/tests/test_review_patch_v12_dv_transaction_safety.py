@@ -147,7 +147,8 @@ def test_abort_after_source_trickplay_blocks_destructive_dv_replace(tmp_path):
     assert runner.run(str(source)) is False
     assert source.exists()
     assert replaced == []
-    assert cleaned == [True]
+    assert cleaned == []
+    assert staging.is_file(), 'the verified candidate remains recoverable after late cancellation'
     assert worker._failure_details[str(source)]["strategy"] == "abort_before_commit"
 
 

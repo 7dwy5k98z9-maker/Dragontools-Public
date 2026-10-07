@@ -153,13 +153,23 @@ def parse_dolby_vision_from_ffprobe_stream(stream: dict) -> dict[str, Any]:
     expose a DV codec tag, so both forms are handled.
     """
     result = _default_dv_info()
+    if not isinstance(stream, dict):
+        return result
+
+    tags_raw = stream.get("tags") or {}
+    tags = tags_raw if isinstance(tags_raw, dict) else {}
+    dv_relevant_tags = {
+        key: value
+        for key, value in tags.items()
+        if any(marker in str(key).casefold() for marker in ("dovi", "dolby", "dv_profile", "dv_level"))
+    }
     stream_text = _join_values(
         (
             stream.get("codec_tag_string"),
             stream.get("codec_tag"),
             stream.get("profile"),
             stream.get("codec_long_name"),
-            stream.get("tags"),
+            dv_relevant_tags,
         )
     )
     codec_tag, tag_profile, tag_level = _extract_dv_tag(stream_text)
@@ -172,7 +182,12 @@ def parse_dolby_vision_from_ffprobe_stream(stream: dict) -> dict[str, Any]:
     elif any(marker in stream_text.lower() for marker in _DV_TEXT_MARKERS):
         result["dolby_vision"] = True
 
-    for side_data in stream.get("side_data_list") or []:
+    side_data_list = stream.get("side_data_list") or []
+    if not isinstance(side_data_list, list):
+        side_data_list = []
+    for side_data in side_data_list:
+        if not isinstance(side_data, dict):
+            continue
         sd_type = _text(side_data.get("side_data_type")).lower()
         if not ("dovi" in sd_type or "dolby vision" in sd_type):
             continue
@@ -222,7 +237,20 @@ def merge_dolby_vision_info(
         result["dv_profile_major"] = profile
         result["dv_profile"] = str(profile)
 
-    result["dv_codec_tag"] = mediainfo_info.get("dv_codec_tag") or ffprobe_info.get("dv_codec_tag")
+    mi_tag = mediainfo_info.get("dv_codec_tag")
+    fp_tag = ffprobe_info.get("dv_codec_tag")
+    mi_tag_profile = _extract_dv_tag(str(mi_tag or ""))[1]
+    fp_tag_profile = _extract_dv_tag(str(fp_tag or ""))[1]
+    if profile is None:
+        result["dv_codec_tag"] = fp_tag or mi_tag
+    elif fp_tag and fp_tag_profile == profile:
+        result["dv_codec_tag"] = fp_tag
+    elif mi_tag and mi_tag_profile == profile:
+        result["dv_codec_tag"] = mi_tag
+    else:
+        # A codec tag for a conflicting profile is worse than no tag: it makes
+        # the merged metadata internally contradictory (e.g. P8 + dvhe.07.06).
+        result["dv_codec_tag"] = None
     result["dv_level"] = ffprobe_info.get("dv_level") or mediainfo_info.get("dv_level")
     result["dv_format_raw"] = mediainfo_info.get("dv_format_raw")
     result["hdr_format_profile_raw"] = mediainfo_info.get("hdr_format_profile_raw")
@@ -277,12 +305,6 @@ def detect_hdr_from_mediainfo_track(video_track: dict) -> tuple[bool, bool, str 
         or video_track.get("transfer_characteristics_Original")
         or video_track.get("TransferCharacteristics")
     ).lower()
-    primaries = _text(
-        video_track.get("colour_primaries")
-        or video_track.get("colour_primaries_Original")
-        or video_track.get("ColorPrimaries")
-    ).lower()
-
     has_hdr10plus = contains_hdr10plus_marker(hdr_fields)
     hdr_fields_low = hdr_fields.lower()
     is_hdr_base = (
@@ -292,38 +314,53 @@ def detect_hdr_from_mediainfo_track(video_track: dict) -> tuple[bool, bool, str 
         or transfer in {"smpte2084", "pq", "arib-std-b67", "hlg"}
         or "smpte2084" in transfer
         or "st 2084" in transfer
-        or "bt2020" in primaries
-        or "bt.2020" in primaries
     )
     return is_hdr_base, has_hdr10plus, dv_profile_compat
 
 
 def detect_hdr_from_ffprobe_stream(stream: dict) -> tuple[bool, bool, str | None]:
     """Detect HDR, HDR10+ and Dolby Vision from structured ffprobe fields."""
+    if not isinstance(stream, dict):
+        return False, False, None
+
     transfer = _text(stream.get("color_transfer")).lower()
-    primaries = _text(stream.get("color_primaries")).lower()
     dv_info = parse_dolby_vision_from_ffprobe_stream(stream)
     dv_profile = dv_info["dv_profile"] if dv_info["dv_profile"] is not None else ("Ja" if dv_info["dolby_vision"] else None)
 
+    side_data_list = stream.get("side_data_list") or []
+    if not isinstance(side_data_list, list):
+        side_data_list = []
     has_hdr10plus = any(
         contains_hdr10plus_marker(side_data.get("side_data_type"))
         or contains_hdr10plus_marker(side_data)
-        for side_data in (stream.get("side_data_list") or [])
+        for side_data in side_data_list
+        if isinstance(side_data, dict)
     )
     is_hdr = (
         dv_profile is not None
         or has_hdr10plus
         or transfer in {"smpte2084", "arib-std-b67"}
         or "smpte2084" in transfer
-        or primaries in {"bt2020", "bt.2020"}
     )
     return is_hdr, has_hdr10plus, dv_profile
 
 
 def detect_hdr10plus_from_ffprobe_frames(payload: dict) -> bool:
     """Detect frame-level ST-2094-40 metadata from a short ffprobe probe."""
-    for frame in payload.get("frames") or []:
-        for side_data in frame.get("side_data_list") or []:
+    if not isinstance(payload, dict):
+        return False
+    frames = payload.get("frames") or []
+    if not isinstance(frames, list):
+        return False
+    for frame in frames:
+        if not isinstance(frame, dict):
+            continue
+        side_data_list = frame.get("side_data_list") or []
+        if not isinstance(side_data_list, list):
+            continue
+        for side_data in side_data_list:
+            if not isinstance(side_data, dict):
+                continue
             if contains_hdr10plus_marker(side_data.get("side_data_type")) or contains_hdr10plus_marker(side_data):
                 return True
     return False

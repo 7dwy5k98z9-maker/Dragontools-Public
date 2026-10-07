@@ -32,7 +32,10 @@ from .ui_helpers import install_persistent_window_geometry
 
 def _s_to_min(seconds: int) -> int:
     """Sekunden → ganze Minuten (aufgerundet auf 1 Minute mindestens)."""
-    return max(1, round(seconds / 60))
+    # Integer-ceil instead of round(): 61 s must remain at least 2 min in the
+    # UI, otherwise opening + saving the dialog silently shortens the timeout.
+    seconds = max(0, int(seconds))
+    return max(1, (seconds + 59) // 60)
 
 
 def _min_to_s(minutes: int) -> int:
@@ -69,6 +72,7 @@ class TimeoutSettingsDialog(QDialog):
         # key → Widget-Mapping (für Load/Save)
         self._spinboxes: dict[str, QSpinBox] = {}
         self._enabled_cbs: dict[str, QCheckBox] = {}
+        self._timeout_seconds: dict[str, int] = {}
 
         self._init_ui()
         self._load()
@@ -201,6 +205,9 @@ class TimeoutSettingsDialog(QDialog):
             spin.setAlignment(Qt.AlignmentFlag.AlignRight)
             spin.setToolTip(f"Timeout für '{td.label}' in Minuten (1–600)")
             self._spinboxes[td.key] = spin
+            spin.valueChanged.connect(
+                lambda minutes, key=td.key: self._timeout_seconds.__setitem__(key, _min_to_s(minutes))
+            )
             grid.addWidget(spin, row, 2)
 
             # Einheit
@@ -228,8 +235,7 @@ class TimeoutSettingsDialog(QDialog):
             )
             # Lambda mit default-Argument um Closure-Problem zu vermeiden
             reset_btn.clicked.connect(
-                lambda checked, k=td.key, s=spin, c=active_cb, d=td.default_s:
-                    (s.setValue(_s_to_min(d)), c.setChecked(True))
+                lambda checked, key=td.key: self._reset_timeout(key)
             )
             grid.addWidget(reset_btn, row, 5)
 
@@ -251,7 +257,7 @@ class TimeoutSettingsDialog(QDialog):
         for td in TIMEOUT_DEFS:
             spin = self._spinboxes.get(td.key)
             if spin is not None:
-                spin.setValue(_s_to_min(get_timeout_value(td.key)))
+                self._set_timeout_value(td.key, get_timeout_value(td.key))
             cb = self._enabled_cbs.get(td.key)
             if cb is not None:
                 cb.setChecked(is_timeout_enabled(td.key))
@@ -263,11 +269,21 @@ class TimeoutSettingsDialog(QDialog):
         for td in TIMEOUT_DEFS:
             spin = self._spinboxes.get(td.key)
             if spin is not None:
-                values[td.key] = _min_to_s(spin.value())
+                values[td.key] = self._timeout_seconds.get(td.key, _min_to_s(spin.value()))
             cb = self._enabled_cbs.get(td.key)
             if cb is not None:
                 enabled[td.key] = cb.isChecked()
-        save_all_timeouts(values, enabled)
+        try:
+            save_all_timeouts(values, enabled)
+        except (OSError, TypeError, ValueError) as exc:
+            QMessageBox.critical(
+                self,
+                "Timeouts nicht gespeichert",
+                "Die Timeout-Einstellungen konnten nicht sicher gespeichert werden. "
+                "Die bisherigen Werte bleiben erhalten.\n\n"
+                f"{exc}",
+            )
+            return
         self.accept()
 
     def _reset_all(self) -> None:
@@ -282,9 +298,21 @@ class TimeoutSettingsDialog(QDialog):
         )
         if reply == QMessageBox.StandardButton.Yes:
             for td in TIMEOUT_DEFS:
-                spin = self._spinboxes.get(td.key)
-                if spin is not None:
-                    spin.setValue(_s_to_min(td.default_s))
-                cb = self._enabled_cbs.get(td.key)
-                if cb is not None:
-                    cb.setChecked(True)
+                self._reset_timeout(td.key)
+
+    def _set_timeout_value(self, key: str, seconds: int) -> None:
+        spin = self._spinboxes[key]
+        previous = spin.blockSignals(True)
+        try:
+            spin.setValue(_s_to_min(seconds))
+        finally:
+            spin.blockSignals(previous)
+        self._timeout_seconds[key] = seconds
+        spin.setToolTip(
+            f"Gespeicherter Wert: {seconds} Sekunden. Eine unveränderte Eingabe behält diesen Wert."
+        )
+
+    def _reset_timeout(self, key: str) -> None:
+        td = next(item for item in TIMEOUT_DEFS if item.key == key)
+        self._set_timeout_value(key, td.default_s)
+        self._enabled_cbs[key].setChecked(True)

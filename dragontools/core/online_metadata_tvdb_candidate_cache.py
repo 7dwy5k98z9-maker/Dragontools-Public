@@ -2,8 +2,10 @@
 """Session-level TheTVDB candidate-search cache for mass renaming."""
 from __future__ import annotations
 
+from copy import deepcopy
 from typing import Any
 
+from .online_metadata_tvdb_helpers import _tvdb_record_id
 from .online_metadata_common import OnlineMetadataError, _int_or_none, compare_metadata_text
 
 
@@ -28,7 +30,7 @@ def collect_candidate_records(client, request: dict[str, Any]) -> list[dict[str,
         if cache is None:
             return None
         value = cache.get(cache_key)
-        return None if value is None else [dict(item) for item in value]
+        return None if value is None else deepcopy(value)
 
     if lock is not None:
         with lock:
@@ -40,20 +42,24 @@ def collect_candidate_records(client, request: dict[str, Any]) -> list[dict[str,
 
     records: list[dict[str, Any]] = []
     seen_ids: set[int] = set()
+    errors: list[OnlineMetadataError] = []
+    successful_calls = 0
 
     def collect(term: str, year: int | None) -> None:
+        nonlocal successful_calls
         found: list[dict[str, Any]] = []
         for language in _search_languages(client):
             try:
-                found = client.search_series(term, year=year, language=language)
-            except OnlineMetadataError:
-                found = []
+                current = client.search_series(term, year=year, language=language)
+            except OnlineMetadataError as exc:
+                errors.append(exc)
+                continue
+            successful_calls += 1
+            found = current
             if found:
                 break
         for record in found or []:
-            record_id = _int_or_none(
-                record.get("tvdb_id") or record.get("id") or record.get("seriesId")
-            )
+            record_id = _tvdb_record_id(record)
             if record_id is None or record_id in seen_ids:
                 continue
             seen_ids.add(record_id)
@@ -67,8 +73,11 @@ def collect_candidate_records(client, request: dict[str, Any]) -> list[dict[str,
     for term in search_terms[2:]:
         collect(term, None)
 
-    if cache is not None:
-        payload = [dict(item) for item in records]
+    if successful_calls == 0 and errors:
+        raise errors[-1]
+
+    if cache is not None and not errors:
+        payload = deepcopy(records)
         if lock is not None:
             with lock:
                 cache[cache_key] = payload

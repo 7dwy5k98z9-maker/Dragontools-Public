@@ -5,7 +5,9 @@ from __future__ import annotations
 from PyQt6.QtCore import QTimer
 
 from ..core.encoder_profile_override import profile_to_override
-from ..core.models import normalize_override_dict
+from .watch_folder_intake import apply_watch_profile_overrides
+from .conversion_queue_admission import prepare_live_paths
+from ..core.preflight_metadata_identity import with_planned_metadata
 from ..core.path_syntax import path_compare_key
 from ..core.callback_dispatch import invoke_callback, is_callback_like
 
@@ -20,6 +22,7 @@ class ConvertWidgetWatchMixin:
     def _watch_intake_is_blocked(self) -> bool:
         shutdown_control = getattr(self, "shut_cb", None)
         return bool(getattr(self._state, "watch_intake_blocked", False)
+                    or (bool(getattr(self._state, "start_reserved", False)) and getattr(self._state, "thread", None) is None)
                     or (shutdown_control is not None and shutdown_control.isChecked()))
 
     def enqueue_watch_folder_files(
@@ -36,6 +39,10 @@ class ConvertWidgetWatchMixin:
             self._log("Watch-Folder wartet: Queue ist während des Verschiebens gesperrt.", "warn")
             return []
 
+        profile_override = self._watch_profile_override(profile_key)
+        if profile_key and not profile_override:
+            return []
+
         eligible = getattr(self, "_watch_auto_start_eligible", set())
         self._watch_auto_start_eligible = eligible
         owners = getattr(self, "_watch_owned_items", {})
@@ -50,13 +57,10 @@ class ConvertWidgetWatchMixin:
             elif self.file_list.add_path(path):
                 added.append(path)
 
-        profile_override = self._watch_profile_override(profile_key)
-        for path in added:
-            if profile_override:
-                override = dict(self._state.file_overrides.get(path) or {})
-                override["encoder_profile"] = dict(profile_override)
-                self._state.file_overrides[path] = normalize_override_dict(override)
+        if profile_override:
+            apply_watch_profile_overrides(self._state.file_overrides, added, profile_override)
 
+        added = prepare_live_paths(self.file_list, added, lambda paths: self._maybe_preflight_new_files(paths))
         rejected = self._watch_live_add(added)
         accepted = [path for path in added if path not in rejected]
         for path in accepted:
@@ -70,7 +74,6 @@ class ConvertWidgetWatchMixin:
             self._file_queue.refresh_labels(accepted)
             self._file_queue.sync_total_files()
             self._file_queue.sync_queue_order()
-            self._maybe_preflight_new_files(accepted)
             for path in accepted:
                 self.update_queue_label(path)
                 self._log(f"👁 Watch-Folder → Queue: {path}", "info")
@@ -112,13 +115,16 @@ class ConvertWidgetWatchMixin:
         rejected: set[str] = set()
         for path in paths:
             try:
-                override = self._state.file_overrides.get(path, {})
+                values = with_planned_metadata(self._state.file_overrides, getattr(self._state, "planned_targets", {}))
+                override = values.get(path, {})
                 add_with_override = getattr(thread, "add_file_with_override", None)
                 ok = add_with_override(path, override) if callable(add_with_override) else thread.add_file(path)
                 if ok is not False and override and not callable(add_with_override) and hasattr(thread, "update_override"):
                     thread.update_override(path, override)
                 if ok is False:
                     rejected.add(path)
+                elif override:
+                    self._state.file_overrides[path] = override
             except Exception as exc:
                 self._log(f"Watch-Folder: Live-Hinzufügen fehlgeschlagen: {exc}", "warn")
                 rejected.add(path)
@@ -162,7 +168,7 @@ class ConvertWidgetWatchMixin:
         if not key:
             return {}
         if key not in self.profile_manager.data:
-            self._log(f"Watch-Folder-Profil nicht gefunden: {key}; globales Profil wird verwendet.", "warn")
+            self._log(f"Watch-Folder-Profil nicht gefunden: {key}; Übergabe bleibt angehalten.", "warn")
             return {}
         override = profile_to_override(
             key, self.profile_manager.get(key), default_codec=self.default_codec
@@ -182,6 +188,6 @@ class ConvertWidgetWatchMixin:
         callback = callbacks.pop(path_compare_key(input_path), None)
         if is_callback_like(callback):
             try:
-                invoke_callback(callback, input_path, status == "✅")
+                invoke_callback(callback, input_path, status == "✅", _output_path)
             except Exception as exc:
                 self._log(f"Watch-Folder: Abschlussstatus konnte nicht zurückgemeldet werden: {exc}", "warn")

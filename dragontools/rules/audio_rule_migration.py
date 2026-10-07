@@ -103,9 +103,6 @@ def _migrate_mono_and_stereo(channel_rules: dict[str, Any], messages: list[str])
     else:
         channel_rules["stereo"] = _merged_channel_rule("stereo", channel_rules["stereo"])
     channel_rules["stereo"]["max_channels"] = 2
-    if not raw_stereo_has_copy_range and safe_int(channel_rules["stereo"].get("max_bitrate_k"), 256) == 256:
-        channel_rules["stereo"]["max_bitrate_k"] = 192
-        messages.append("Stereo-Zielbitrate auf 192 kbps migriert")
     if not raw_stereo_has_copy_range:
         messages.append("Stereo-Kopierbereich 192-256 kbps ergänzt")
     _normalize_stereo_copy_range(channel_rules["stereo"])

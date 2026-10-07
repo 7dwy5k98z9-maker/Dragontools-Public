@@ -12,6 +12,7 @@ from .dv_remux_job import DVRemuxJobRunner
 from .dv_remux_policy import decide_dv_remux
 from .dv_result_contract import emit_dv_failure, mark_dv_terminal
 from .worker_events import progress_event, result_event
+from .worker_contracts import file_override_for_path
 
 
 class DVRemuxFileDispatcher:
@@ -27,7 +28,7 @@ class DVRemuxFileDispatcher:
         for warning in getattr(media_info, "analysis_warnings", []) or []:
             w.log(f"Analyse-Warnung: {warning}", "warn")
         dur_ms = w._process_runner.probe_ms(input_path)
-        return name, media_info, dur_ms, w.file_overrides.get(input_path)
+        return name, media_info, dur_ms, file_override_for_path(w.file_overrides, input_path)
 
     def emit_success(
         self,

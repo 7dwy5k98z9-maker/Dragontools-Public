@@ -29,7 +29,7 @@ def find_series_dir_candidates(base: str | None, series_name: str, year: int | N
     safe_series = sanitize_win_segment(series_name, fallback="Unbekannt")
     # Für den Vergleich den Roh-Namen normalisieren. sanitize_win_segment()
     # bleibt ausschließlich für einen tatsächlich erzeugbaren Windows-Pfad.
-    wanted_year = _dir_year_suffix(str(series_name or "")) or (int(year) if year else None)
+    wanted_year = (int(year) if year else None) or _dir_year_suffix(str(series_name or ""))
     needle = _normalize_for_dir_match(_strip_dir_year_suffix(str(series_name or "")))
     exact_dir = bp / safe_series
     candidates: list[Path] = []
@@ -46,11 +46,9 @@ def find_series_dir_candidates(base: str | None, series_name: str, year: int | N
 
     candidates.sort(key=lambda p: p.name.lower())
     if wanted_year:
-        year_matches = [p for p in candidates if _dir_year_suffix(p.name) == wanted_year]
-        if year_matches:
-            candidates = year_matches
+        candidates = [p for p in candidates if _dir_year_suffix(p.name) == wanted_year]
     if exact_dir.exists() and exact_dir.is_dir() and (
-        not wanted_year or not candidates or _dir_year_suffix(exact_dir.name) == wanted_year
+        not wanted_year or _dir_year_suffix(exact_dir.name) == wanted_year
     ):
         candidates = [p for p in candidates if p.resolve() != exact_dir.resolve()]
         candidates.insert(0, exact_dir)

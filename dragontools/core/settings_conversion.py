@@ -127,6 +127,9 @@ DEFAULT_COMFYUI_START_WAIT_SECONDS = 30
 SET_KEY_HDR10PLUS_GENERATOR_ENABLED = "hdr10plus_generator/enabled"
 DEFAULT_HDR10PLUS_GENERATOR_ENABLED = False
 
+SET_KEY_CORRUPT_SOURCE_RPU_FALLBACK = 'dv/corrupt_source_rpu_fallback'
+DEFAULT_CORRUPT_SOURCE_RPU_FALLBACK = True
+
 __all__ = [
     name for name in globals()
     if name.startswith(("SET_KEY_", "DEFAULT_", "PROFILE_"))

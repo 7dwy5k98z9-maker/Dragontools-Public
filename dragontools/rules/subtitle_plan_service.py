@@ -23,8 +23,15 @@ def compute_subtitle_plan_service(
 ) -> SubtitlePlan:
     ov = normalize_override_dict(file_override)
     subtitle_mode = ov.get("subtitle_mode", "auto")
-    custom_track_map = _build_custom_track_map(ov) if subtitle_mode == "custom" else {}
     legacy = ov.get("_legacy") or {}
+    # Current-format custom mode is authoritative even with an intentionally
+    # empty track list ("keep/burn nothing").  Legacy burn_mode overrides did
+    # not have subtitle_tracks and must retain their compatibility path.
+    legacy_burn_mode = str(legacy.get("burn_mode") or "auto").lower()
+    custom_tracks_declared = bool(ov.get("subtitle_tracks")) or (
+        subtitle_mode == "custom" and legacy_burn_mode == "auto"
+    )
+    custom_track_map = _build_custom_track_map(ov, subtitle_streams) if subtitle_mode == "custom" else {}
     legacy_override = SubtitleOverride(
         burn_mode=legacy.get("burn_mode", "auto"),
         burn_stream_index=legacy.get("burn_stream_index"),
@@ -33,6 +40,7 @@ def compute_subtitle_plan_service(
         subtitle_streams,
         audio_streams=audio_streams,
         subtitle_mode=subtitle_mode,
+        custom_tracks_declared=custom_tracks_declared,
         custom_track_map=custom_track_map,
         legacy_override=legacy_override,
         subtitle_rules=subtitle_rules,
@@ -59,7 +67,10 @@ def compute_subtitle_plan_service(
     )
 
 
-def _initial_selection(streams, *, audio_streams, subtitle_mode, custom_track_map, legacy_override, subtitle_rules, media_duration_s):
+def _initial_selection(
+    streams, *, audio_streams, subtitle_mode, custom_tracks_declared,
+    custom_track_map, legacy_override, subtitle_rules, media_duration_s,
+):
     state = {
         "burn_sub": None,
         "keep_streams": [],
@@ -69,7 +80,11 @@ def _initial_selection(streams, *, audio_streams, subtitle_mode, custom_track_ma
         "burn_event_rate": None,
         "protected_forced_stream": None,
     }
-    if subtitle_mode == "custom" and custom_track_map:
+    # A current-format custom override is authoritative even if every stored
+    # source identity became stale/ambiguous. Falling through to AUTO here
+    # could silently select or burn an unrelated subtitle track after stream
+    # reordering. Empty resolved maps therefore mean "select nothing".
+    if subtitle_mode == "custom" and custom_tracks_declared:
         state["burn_sub"] = next((s for s in streams if custom_track_map.get(int(s.index), {}).get("burn_in")), None)
         state["keep_streams"] = [
             s for s in streams

@@ -24,6 +24,7 @@ from .ui_helpers import install_persistent_window_geometry
 class ConvertWidgetOverrideDialogHelper(ConvertOverrideGroupBuilderMixin):
     def __init__(self, owner):
         self.owner = owner
+        self._guard_queue_edit_allowed = owner._guard_queue_edit_allowed
         self._encoder_override = EncoderOverrideDialogHelper(
             owner,
             guard_queue_edit_allowed=owner._guard_queue_edit_allowed,
@@ -208,6 +209,9 @@ class ConvertWidgetOverrideDialogHelper(ConvertOverrideGroupBuilderMixin):
     def _persist_override_result(self, paths: list[str], state, ov: dict, controls: dict) -> None:
         """Übernimmt validierte Dialogwerte in den Datei-Override-Zustand."""
         ow = self.owner
+        guard = getattr(self, "_guard_queue_edit_allowed", None)
+        if callable(guard) and not guard("Datei-Einstellungen anwenden"):
+            return
         processing_combo = controls["processing_combo"]
         ac = controls["audio_mode_combo"]
         bc = controls["subtitle_mode_combo"]
@@ -303,6 +307,9 @@ class ConvertWidgetOverrideDialogHelper(ConvertOverrideGroupBuilderMixin):
                 rejected.append(path)
                 continue
             state.file_overrides[path] = target_override
+            controller = getattr(ow, "_controller", None)
+            if controller is not None and hasattr(controller, "persist_file_override"):
+                controller.persist_file_override(path, target_override)
             getattr(state, "preflight_rows_by_path", {}).pop(path, None)
             ow.update_queue_label(path)
             applied.append(path)

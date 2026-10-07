@@ -8,6 +8,9 @@ from ..core.media_metadata import normalize_video_codec
 from .converter_utils import _parse_crop
 from .hdr10_color import source_has_hdr10_base
 from .media_contract_types import ExpectedAudioTrack, ExpectedMediaContract, ExpectedSubtitleTrack
+from ..rules.subtitle_storage import mkv_internal_subtitle_streams
+from ..rules.audio_plan import output_default_for_decision
+from .audio_metadata_args import audio_output_title, audio_output_forced
 
 
 def _build_audio_tracks(media_info, file_override, container, *, audio_planner, audio_codec_family):
@@ -21,6 +24,11 @@ def _build_audio_tracks(media_info, file_override, container, *, audio_planner, 
             codec=audio_codec_family(decision.target_codec),
             channels=max(0, int(decision.target_channels or 0)),
             language=canonical_lang(getattr(decision.stream, "language", None)),
+            default=output_default_for_decision(decision),
+            title=audio_output_title(decision),
+            # Matroska represents forced audio; MP4's forced timed-text flag
+            # does not establish an equivalent audio disposition.
+            forced=(audio_output_forced(decision) if str(container).lower() == "mkv" else None),
         )
         for decision in plan
     )
@@ -59,7 +67,7 @@ def _internal_subtitles(
             if int(stream.index) not in excluded
         ]
     if not strip_only:
-        return [stream for stream in plan.keep_streams if int(stream.index) not in excluded]
+        return mkv_internal_subtitle_streams(plan.keep_streams, subtitle_rules=subtitle_rules, excluded_indices=excluded)
 
     candidates = ([plan.burn_sub] if plan.burn_sub is not None else []) + list(plan.keep_streams)
     seen: set[int] = set()
@@ -69,7 +77,7 @@ def _internal_subtitles(
         if index not in seen:
             seen.add(index)
             streams.append(stream)
-    return [stream for stream in streams if int(stream.index) not in excluded]
+    return mkv_internal_subtitle_streams(streams, subtitle_rules=subtitle_rules, excluded_indices=excluded)
 
 
 def _build_subtitle_tracks(
@@ -108,6 +116,7 @@ def _build_subtitle_tracks(
             ),
             language=canonical_lang(getattr(stream, "language", None)),
             forced=bool(getattr(stream, "forced", False)),
+            default=bool(getattr(stream, "default", False)),
         )
         for stream in streams
     )
@@ -173,6 +182,33 @@ def _video_requirements(
     return require_hdr, require_dv, require_hdr10plus, min_depth
 
 
+def _profile_major(value) -> int | None:
+    if value in (None, "", "Ja"):
+        return None
+    try:
+        return int(str(value).strip().split(".", 1)[0])
+    except (TypeError, ValueError):
+        return None
+
+
+def _expected_dv_profile(media_info, *, pipeline: str, strip_only: bool, require_dv: bool) -> int | None:
+    if not require_dv:
+        return None
+    if strip_only:
+        return (
+            _profile_major(getattr(media_info, "dv_profile_major", None))
+            or _profile_major(getattr(media_info, "dv_profile", None))
+            or _profile_major(getattr(media_info, "dolby_vision_profile", None))
+        )
+    pipeline_name = str(getattr(pipeline, "value", pipeline) or "").strip().lower()
+    if pipeline_name == "dv":
+        # HEVC DV processing normalizes Profile 5/7/8 to Profile 8.x.
+        return 8
+    if pipeline_name == "av1_dv":
+        return 10
+    return None
+
+
 def build_media_contract(
     *,
     media_info,
@@ -225,6 +261,12 @@ def build_media_contract(
         generate_hdr10plus=generate_hdr10plus,
         force_hdr_output=force_hdr_output,
     )
+    expected_dv_profile = _expected_dv_profile(
+        media_info,
+        pipeline=pipeline,
+        strip_only=strip_only,
+        require_dv=require_dv,
+    )
     return ExpectedMediaContract(
         container=str(container or "").lower(),
         video_codec=target_codec,
@@ -234,6 +276,7 @@ def build_media_contract(
         min_video_bit_depth=min_depth,
         require_hdr=require_hdr,
         require_dolby_vision=require_dv,
+        expected_dolby_vision_profile=expected_dv_profile,
         require_hdr10plus=require_hdr10plus,
         expected_width=width,
         expected_height=height,

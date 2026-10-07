@@ -11,9 +11,11 @@ from pathlib import Path
 from typing import Callable, Iterable
 
 from ..core.process_runner import subprocess_no_window_kwargs as _no_window_kwargs
-from ..core.callback_dispatch import invoke_callback, is_callback_like
+from ..core.owned_process import close_owned_job, spawn_owned_process
 from .log_dispatch import dispatch_log
+from .tool_binary_output import BinaryOutputCapture
 from .tool_output_buffer import ToolOutputBuffer
+from .tool_text_output import (_dispatch_callbacks, _start_text_drain, _join_threads, _finish_text_drains)
 from .tool_process_lifecycle import (
     ProcessLifecycle,
     TimeoutMode,
@@ -25,6 +27,7 @@ from .tool_process_lifecycle import (
 
 LogFn = Callable[[str, str], None]
 LineFn = Callable[[str], None]
+MAX_BINARY_OUTPUT_BYTES = 64 * 1024 * 1024
 
 
 def _cmd_for_log(cmd: Iterable[object]) -> str:
@@ -81,74 +84,28 @@ class ToolBytesResult:
         return self.returncode == 0
 
 
-def _dispatch_callbacks(
-    callback_queue: "queue.SimpleQueue[tuple[LineFn, str]]",
-    *,
-    label: str,
-    log: LogFn | None,
-) -> None:
-    deadline = time.monotonic() + 0.02
-    for _ in range(32):
-        if time.monotonic() >= deadline:
-            return
-        try:
-            callback, text = callback_queue.get_nowait()
-        except queue.Empty:
-            return
-        try:
-            invoke_callback(callback, text)
-        except Exception as exc:
-            dispatch_log(log, f"{label}: Ausgabe-Callback fehlgeschlagen: {exc}", "warn")
-
-
-def _start_text_drain(
-    stream,
-    target: list[str],
-    callback: LineFn | None,
-    callback_queue: "queue.SimpleQueue[tuple[LineFn, str]]",
-    lifecycle: ProcessLifecycle,
-    stop: threading.Event,
-) -> threading.Thread:
-    def _drain() -> None:
-        if stream is None:
-            return
-        try:
-            for line in iter(lambda: stream.readline(65536), ''):
-                if stop.is_set():
-                    return
-                text = line.rstrip()
-                target.append(line)
-                lifecycle.note_activity()
-                if is_callback_like(callback):
-                    while not stop.is_set():
-                        try:
-                            callback_queue.put((callback, text), timeout=0.1)
-                            break
-                        except queue.Full:
-                            continue
-        except (OSError, ValueError):
-            return
-
-    thread = threading.Thread(target=_drain, daemon=True)
-    thread.start()
-    return thread
-
-
-def _join_threads(*threads: threading.Thread | None, timeout: float) -> None:
-    for thread in threads:
-        if thread is not None:
-            thread.join(timeout=timeout)
-
-
-def _finish_text_drains(threads, callback_queue, *, label, log, timeout=5.0):
-    deadline = time.monotonic() + timeout
-    while any(thread is not None and thread.is_alive() for thread in threads) or not callback_queue.empty():
-        _dispatch_callbacks(callback_queue, label=label, log=log)
-        if time.monotonic() >= deadline:
-            return False
-        _join_threads(*threads, timeout=0.01)
+def _finalize_text_capture(lifecycle, rc, stop, threads, callback_queue, stdout_lines, stderr_lines, label, log):
+    if lifecycle.proc is not None and lifecycle.proc.poll() is None:
+        lifecycle.terminate()
+    close_owned_job(lifecycle.proc)
+    stop.set()
+    _close_process_streams(lifecycle.proc)
+    _join_threads(*threads, timeout=0.5)
     _dispatch_callbacks(callback_queue, label=label, log=log)
-    return True
+    stdout_text, stderr_text = stdout_lines.text(), stderr_lines.text()
+    if stdout_lines.read_error or stderr_lines.read_error:
+        if rc == 0:
+            rc = 75
+        stderr_text += f"\nTool-Ausgabe unvollständig: {stdout_lines.read_error or stderr_lines.read_error}"
+    if stdout_lines.truncated and rc == 0:
+        rc = 75
+        stderr_text += "\nStandardausgabe überschreitet Speichergrenze; Ausgabe nicht vollständig."
+    if stderr_lines.truncated:
+        stderr_text = "[Diagnoseausgabe gekürzt]\n" + stderr_text
+    stdout_lines.release()
+    stderr_lines.release()
+    lifecycle.finish(rc)
+    return rc, stdout_text, stderr_text
 
 
 def run_tool(
@@ -189,7 +146,7 @@ def run_tool(
 
     lifecycle.mark_starting()
     try:
-        proc = subprocess.Popen(
+        proc = spawn_owned_process(
             command,
             stdout=stdout_file if stdout_file is not None else subprocess.PIPE,
             stderr=subprocess.STDOUT if merge_stderr else subprocess.PIPE,
@@ -231,33 +188,34 @@ def run_tool(
                 rc = proc.wait(timeout=1)
             except (subprocess.TimeoutExpired, OSError):
                 rc = proc.poll()
+        if proc.poll() is not None:
+            close_owned_job(proc)
         drained = _finish_text_drains((stdout_thread, stderr_thread), callback_queue, label=label, log=log)
         if not drained and rc == 0:
             rc = 75
             stderr_lines.append("Tool-Ausgabe konnte nicht vollständig gelesen werden.")
         _dispatch_callbacks(callback_queue, label=label, log=log)
         rc = int(rc if rc is not None else 124)
-    except FileNotFoundError:
+    except FileNotFoundError as exc:
         rc = 127
-        stderr_lines.append(f"Tool nicht gefunden: {command[0]}")
-    finally:
-        stop.set()
-        _close_process_streams(lifecycle.proc)
-        _join_threads(
-            stdout_thread if stdout_thread is not None and stdout_thread.is_alive() else None,
-            stderr_thread if stderr_thread is not None and stderr_thread.is_alive() else None,
-            timeout=0.5,
+        stderr_lines.append(
+            f"Tool oder Arbeitsverzeichnis nicht gefunden: {command[0]} ({exc})"
         )
-        _dispatch_callbacks(callback_queue, label=label, log=log)
-        lifecycle.finish(rc)
-        stdout_text, stderr_text = stdout_lines.text(), stderr_lines.text()
-        if stdout_lines.truncated and rc == 0:
-            rc = 75
-            stderr_text += "\nStandardausgabe überschreitet Speichergrenze; Ausgabe nicht vollständig."
-        if stderr_lines.truncated:
-            stderr_text = "[Diagnoseausgabe gekürzt]\n" + stderr_text
-        stdout_lines.release()
-        stderr_lines.release()
+    except PermissionError as exc:
+        rc = 126
+        stderr_lines.append(f"Tool konnte wegen fehlender Berechtigung nicht gestartet werden: {exc}")
+    except OSError as exc:
+        # Popen can fail for invalid executables, broken network paths or OS
+        # resource errors before a child process exists.  Convert those start
+        # failures into the same structured result contract as tool exit codes
+        # instead of crashing the worker thread.
+        rc = 126
+        stderr_lines.append(f"Tool konnte nicht gestartet werden: {exc}")
+    finally:
+        rc, stdout_text, stderr_text = _finalize_text_capture(
+            lifecycle, rc, stop, (stdout_thread, stderr_thread), callback_queue,
+            stdout_lines, stderr_lines, label, log,
+        )
 
     return ToolRunResult(
         command=command,
@@ -269,6 +227,27 @@ def run_tool(
         timeout_s=timeout_s,
         timeout_mode=timeout_mode,
     )
+
+
+def _wait_binary_tool(proc, lifecycle, capture):
+    while True:
+        rc = lifecycle.handle_abort()
+        if rc is not None:
+            return rc
+        lifecycle.handle_pause()
+        polled = proc.poll()
+        if polled is not None:
+            return int(polled)
+        rc = lifecycle.handle_timeout(display="seconds")
+        if rc is not None:
+            return rc
+        if capture.overflow(MAX_BINARY_OUTPUT_BYTES):
+            lifecycle.terminate()
+            return 75
+        try:
+            return proc.wait(timeout=0.2)
+        except subprocess.TimeoutExpired:
+            continue
 
 
 def run_tool_bytes(
@@ -296,57 +275,41 @@ def run_tool_bytes(
     rc: int | None = None
     stdout = b""
     stderr = b""
-
+    capture = None
     lifecycle.mark_starting()
     try:
-        proc = subprocess.Popen(
-            command,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            stdin=subprocess.DEVNULL,
-            cwd=str(cwd) if cwd else None,
-            **_no_window_kwargs(),
-            **_process_group_kwargs(),
+        capture = BinaryOutputCapture()
+        proc = spawn_owned_process(
+            command, stdout=capture.stdout, stderr=capture.stderr,
+            stdin=subprocess.DEVNULL, cwd=str(cwd) if cwd else None,
+            **_no_window_kwargs(), **_process_group_kwargs(),
         )
         lifecycle.register(proc)
-        while True:
-            rc = lifecycle.handle_abort()
-            if rc is not None:
-                break
-            # Binary-producing tools must obey the exact same pause semantics
-            # as text tools. Paused time is excluded from the absolute timeout.
-            lifecycle.handle_pause()
-            # A process may finish exactly while a pause is being released.
-            # Observe that completion before evaluating the timeout; otherwise
-            # a successful tool can be mislabeled rc=124 at the deadline.
-            polled = proc.poll()
-            if polled is not None:
-                stdout, stderr = proc.communicate()
-                rc = int(polled)
-                break
-            rc = lifecycle.handle_timeout(display="seconds")
-            if rc is not None:
-                break
-            try:
-                stdout, stderr = proc.communicate(timeout=0.2)
-                rc = proc.returncode
-                break
-            except subprocess.TimeoutExpired:
-                continue
-
-        if rc in {124, 130}:
-            try:
-                tail_out, tail_err = proc.communicate(timeout=2)
-                stdout = stdout or tail_out or b""
-                stderr = stderr or tail_err or b""
-            except (subprocess.TimeoutExpired, OSError, ValueError):
-                pass
-    except FileNotFoundError:
+        rc = _wait_binary_tool(proc, lifecycle, capture)
+    except FileNotFoundError as exc:
         rc = 127
-        stderr = f"Tool nicht gefunden: {command[0]}".encode("utf-8", errors="replace")
+        stderr = f"Tool oder Arbeitsverzeichnis nicht gefunden: {command[0]} ({exc})".encode("utf-8", errors="replace")
+    except PermissionError as exc:
+        rc = 126
+        stderr = f"Tool konnte wegen fehlender Berechtigung nicht gestartet werden: {exc}".encode("utf-8", errors="replace")
+    except OSError as exc:
+        rc = 126
+        stderr = f"Tool konnte nicht gestartet werden: {exc}".encode("utf-8", errors="replace")
     finally:
-        _close_process_streams(lifecycle.proc)
-        lifecycle.finish(rc)
+        try:
+            if lifecycle.proc is not None:
+                if lifecycle.proc.poll() is None:
+                    lifecycle.terminate()
+                close_owned_job(lifecycle.proc)
+                stdout, error_output, truncated = capture.read(MAX_BINARY_OUTPUT_BYTES)
+                stderr += error_output
+                if truncated and rc == 0:
+                    rc = 75
+            lifecycle.finish(rc)
+        finally:
+            close_owned_job(lifecycle.proc)
+            if capture is not None:
+                capture.close()
 
     return ToolBytesResult(
         command=command,

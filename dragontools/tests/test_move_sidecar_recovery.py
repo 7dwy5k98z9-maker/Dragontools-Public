@@ -22,6 +22,9 @@ def test_missing_source_sidecar_is_success_when_expected_target_exists(tmp_path)
     target.mkdir(parents=True)
     (target / source.name).write_text("already moved", encoding="utf-8")
     service, reports = _service(tmp_path)
+    from dragontools.core.transaction_identity import path_receipt
+    service._companion_proofs[service._path_key(source)] = {
+        'destination': str(target / source.name), 'receipt': path_receipt(target / source.name)}
 
     result = service.move_sidecars("episode.mkv", str(target), [str(source)])
 

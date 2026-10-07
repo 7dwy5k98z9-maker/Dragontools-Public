@@ -23,6 +23,18 @@ from .bitmap_subtitle_ocr_service import BitmapSubtitleOcrService
 LogFn = Callable[[str, str], None] | None
 
 
+
+_TRACK_BOUND_ACTIONS = {
+    ACTION_DETECT_STREAM_LANGUAGE,
+    ACTION_FIX_TRACK_TITLE,
+    ACTION_OCR_BITMAP_SUBTITLE,
+}
+
+
+def _file_signature(path: Path) -> tuple[int, ...]:
+    stat = path.stat()
+    return (stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns)
+
 class MediaLibraryFixService:
     """Execute one media-library repair at a time.
 
@@ -62,6 +74,17 @@ class MediaLibraryFixService:
         path = Path(issue.path)
         if not path.is_file():
             return self._outcome(issue, "error", "Mediendatei wurde nicht gefunden.")
+        if issue.action in _TRACK_BOUND_ACTIONS:
+            try:
+                current_signature = _file_signature(path)
+            except OSError as exc:
+                return self._outcome(issue, "error", f"Quelldatei konnte nicht geprüft werden: {exc}")
+            if not issue.source_signature or tuple(issue.source_signature) != current_signature:
+                return self._outcome(
+                    issue,
+                    "skipped",
+                    "Mediendatei wurde seit der Problemprüfung geändert; Fix neu auswählen.",
+                )
         try:
             if issue.action == ACTION_GENERATE_NFO:
                 return self._generate_nfo(issue)

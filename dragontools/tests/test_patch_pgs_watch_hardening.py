@@ -98,7 +98,7 @@ def test_pgs_ocr_failure_is_warning_only_and_does_not_fail_sidecar_result(monkey
 
 
 def test_watchfolder_cleanup_is_bound_to_finished_thread_source():
-    source = Path("dragontools/gui/watch_folder_controller.py").read_text(encoding="utf-8")
+    source = (Path(__file__).resolve().parents[2] / "dragontools/gui/watch_folder_controller.py").read_text(encoding="utf-8")
     assert "thread.finished.connect(lambda t=thread: self._thread_finished(t))" in source
     assert "if thread is self._thread:" in source
 
@@ -148,6 +148,10 @@ def test_dv_mkv_source_direct_pgs_uses_source_track_without_sup_file(tmp_path):
 
     class Runner:
         def run_abortable_capture(self, cmd, *, timeout_s=None):
+            if "-select_streams" in cmd:
+                return 0, '{"streams":[{"index":9}]}', ""
+            if "-J" in cmd:
+                return 0, '{"tracks":[{"id":4,"type":"subtitles"}]}', ""
             seen["cmd"] = list(cmd)
             output.write_bytes(b"mkv")
             return 0, "", ""
@@ -164,6 +168,6 @@ def test_dv_mkv_source_direct_pgs_uses_source_track_without_sup_file(tmp_path):
     assert muxer.mux_mkv(str(video), [], str(output), [track]) is True
     cmd = seen["cmd"]
     assert "--subtitle-tracks" in cmd
-    assert "9" in cmd
+    assert cmd[cmd.index("--subtitle-tracks") + 1] == "4"
     assert str(source) in cmd
     assert not any(str(part).endswith(".sup") for part in cmd)

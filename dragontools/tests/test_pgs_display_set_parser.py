@@ -299,7 +299,7 @@ def test_mkvextract_runtime_failure_falls_back_to_ffmpeg(monkeypatch, tmp_path: 
 
 
 def test_packet_probe_honors_abort_before_extracting_pgs() -> None:
-    worker = SimpleNamespace(abort_requested=True)
+    worker = SimpleNamespace(abort_requested=True, abort_type="sofort")
     service = BitmapSubtitleOcrService(settings=_Settings(), tools=_Tools(), worker=worker)
     with pytest.raises(RuntimeError, match="abgebrochen"):
         service._probe_packets("Movie.mkv", 2, "ffprobe", "pgs")

@@ -140,6 +140,13 @@ class ConverterDetectionHelper:
                     errors="replace", **_no_window_kwargs(),
                     timeout=max(20, probe_duration_s + 45),
                 )
+                if getattr(r, "returncode", 0) != 0:
+                    worker.log(
+                        f"⚠️ Auto-Crop-Probe bei Offset {offset}s fehlgeschlagen "
+                        f"(rc={getattr(r, 'returncode', '?')}); Ergebnis wird ignoriert.",
+                        "warn",
+                    )
+                    continue
                 raw_parts.append((r.stderr or "") + (r.stdout or ""))
         except Exception as e:
             worker.log(
@@ -227,6 +234,13 @@ class ConverterDetectionHelper:
                     errors="replace", **_no_window_kwargs(),
                     timeout=max(20, probe_duration_s + 20),
                 )
+                if getattr(r, "returncode", 0) != 0:
+                    worker.log(
+                        f"⚠️ IMAX-Auto-Probe bei Offset {offset}s fehlgeschlagen "
+                        f"(rc={getattr(r, 'returncode', '?')}); Ergebnis wird ignoriert.",
+                        "warn",
+                    )
+                    continue
                 raw = (r.stderr or "") + (r.stdout or "")
                 crop = _best_crop_from_output(raw, source_w=source_w, source_h=source_h)
                 if not crop:

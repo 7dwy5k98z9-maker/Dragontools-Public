@@ -31,9 +31,14 @@ def _deactivate_paths(conn: sqlite3.Connection, paths: Iterable[str | Path]) -> 
     changed = 0
     now = _now()
     for path in unique:
+        key = path_compare_key(path)
         cur = conn.execute(
-            "UPDATE media_items SET exists_flag=0, active=0, updated_at=? WHERE path=?",
-            (now, path),
+            """
+            UPDATE media_items
+               SET exists_flag=0, active=0, updated_at=?
+             WHERE path=? OR (path_key<>'' AND path_key=?)
+            """,
+            (now, path, key),
         )
         changed += int(cur.rowcount or 0)
     return changed

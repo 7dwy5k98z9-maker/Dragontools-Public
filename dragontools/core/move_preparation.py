@@ -5,6 +5,10 @@ from __future__ import annotations
 import os
 from pathlib import Path
 from typing import Callable, Iterable
+from .transaction_identity import path_receipt, receipt_matches, validate_destination_name
+from .move_result import new_move_result
+from .movie_replacement_preparation import (validate_movie_replacement,approve_movie_replacement,
+    movie_commit_artifacts)
 
 from .move_conflicts import (
     find_episode_identity_conflicts,
@@ -35,10 +39,7 @@ class MovePreparationService:
         self._describe_episode_replacement = describe_episode_replacement
 
     def prepare(self, src, dst_dir, *, dest_name: str | None = None) -> dict:
-        # Late import avoids a hard module cycle while keeping the result contract
-        # owned by move_file_service.
-        from .move_file_service import new_move_result
-
+        validate_destination_name(dest_name)
         result = new_move_result(src, dst_dir, dest_name=dest_name)
         dp = Path(dst_dir)
         dp.mkdir(parents=True, exist_ok=True)
@@ -50,6 +51,7 @@ class MovePreparationService:
         prepared = {
             "ready": True,
             "source_path": str(src_p),
+            'source_receipt': path_receipt(src_p) if src_p.exists() else None,
             "target_dir": str(dp),
             "dest_path": str(dst_p),
             "result": result,
@@ -65,6 +67,12 @@ class MovePreparationService:
             return prepared
 
         conflicts = find_target_conflicts(dst_p, src_p)
+        movie_error,movie_conflicts=validate_movie_replacement(src_p,dst_p,conflicts)
+        if movie_error:
+            prepared['ready']=False
+            result['error']=movie_error
+            return prepared
+        prepared['approved_conflicts'] = {str(path): path_receipt(path) for path in conflicts}
         if not conflicts:
             return prepared
         result["conflict"] = True
@@ -74,6 +82,8 @@ class MovePreparationService:
             if not self._allow_episode_replacement(result, dst_p, episode_conflicts):
                 prepared["ready"] = False
                 return prepared
+            artifacts = find_episode_replacement_artifacts(dst_p, episode_conflicts)
+            prepared['approved_artifacts'] = {str(path): path_receipt(path) for path in artifacts}
             prepared["episode_replacement_preapproved"] = True
             prepared["replacement_mode"] = "delete_first"
             return prepared
@@ -88,6 +98,7 @@ class MovePreparationService:
             prepared["ready"] = False
         elif mode in {"delete_first", "overwrite"}:
             prepared["replacement_mode"] = mode
+            approve_movie_replacement(prepared,src_p,dst_p,movie_conflicts)
         elif mode == "rename":
             dst_p = resolve_rename_path(dst_p, src_p)
             result["renamed"] = True
@@ -118,6 +129,12 @@ class MovePreparationService:
         dst_p: Path,
         protected_paths: Iterable[str | os.PathLike] | None = None,
     ) -> dict:
+        approved = prepared.get('approved_conflicts', {})
+        current = find_target_conflicts(dst_p, src_p)
+        if any(not receipt_matches(path, approved.get(str(path))) for path in current):
+            self._invalidate(prepared, [str(path) for path in current],
+                'Vorbereitetes Move-Ziel hat sich geändert; Altbestand bleibt erhalten.')
+            return {'ok': False, 'transaction_conflicts': [], 'replacement_mode': None}
         if bool(prepared.get("renamed")):
             late_conflicts = find_target_conflicts(dst_p, src_p)
             if late_conflicts:
@@ -141,6 +158,11 @@ class MovePreparationService:
 
         replacement_mode = prepared.get("replacement_mode")
         transaction_conflicts = list(conflicts)
+        try:
+            transaction_conflicts.extend(movie_commit_artifacts(prepared,src_p,dst_p,protected_paths))
+        except ValueError as exc:
+            self._invalidate(prepared,[str(p) for p in conflicts],str(exc))
+            return {'ok':False,'transaction_conflicts':[],'replacement_mode':None}
         if episode_conflicts:
             replacement_mode = "delete_first"
             protected = self._path_keys(protected_paths)
@@ -149,6 +171,11 @@ class MovePreparationService:
                 for path in find_episode_replacement_artifacts(dst_p, episode_conflicts)
                 if os.path.normcase(os.path.abspath(str(path))) not in protected
             ]
+            approved_artifacts = prepared.get('approved_artifacts', {})
+            if any(not receipt_matches(path, approved_artifacts.get(str(path))) for path in artifacts):
+                self._invalidate(prepared, [str(path) for path in artifacts],
+                    'Companion-Altbestand hat sich nach der Bestätigung geändert.')
+                return {'ok': False, 'transaction_conflicts': [], 'replacement_mode': None}
             result = prepared["result"]
             self._describe_episode_replacement(result, dst_p, episode_conflicts, artifacts)
             for artifact in artifacts:

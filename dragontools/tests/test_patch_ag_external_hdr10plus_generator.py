@@ -186,12 +186,12 @@ def test_generator_version_contract_and_exact_cli_command_with_unicode_paths(tmp
 
     def fake_analyze(command, **_kwargs):
         calls.append(list(command))
-        Path(command[command.index("--output") + 1]).write_text('{"SceneInfo":[]}', encoding="utf-8")
+        Path(command[command.index("--output") + 1]).write_text('{"SceneInfo":[{"SequenceFrameIndex":0}]}', encoding="utf-8")
         return ToolRunResult(
             command=list(command), returncode=0,
             stdout=json.dumps({
                 "success": True, "version": "1.2.3", "input": str(source),
-                "output": str(output), "frames": 143812, "scenes": 1247,
+                "output": str(output), "frames": 1, "scenes": 1,
                 "transfer": "smpte2084",
             }),
         )
@@ -199,7 +199,7 @@ def test_generator_version_contract_and_exact_cli_command_with_unicode_paths(tmp
     client = HDR10PlusGeneratorClient(str(exe), run_tool_fn=fake_analyze)
     result = client.analyze(source, output)
     assert result.success is True
-    assert result.frames == 143812 and result.scenes == 1247
+    assert result.frames == 1 and result.scenes == 1
     assert calls[-1] == [str(exe), "analyze", "--input", str(source), "--output", str(output)]
 
 
@@ -214,7 +214,7 @@ def test_generator_analyze_uses_inactivity_timeout_not_absolute_runtime_limit(tm
 
     def fake_run(command, **kwargs):
         captured.update(kwargs)
-        Path(command[command.index("--output") + 1]).write_text('{"SceneInfo":[]}', encoding="utf-8")
+        Path(command[command.index("--output") + 1]).write_text('{"SceneInfo":[{"SequenceFrameIndex":0}]}', encoding="utf-8")
         return ToolRunResult(
             command=list(command),
             returncode=0,
@@ -352,7 +352,7 @@ def test_generated_hdrplus_pipeline_order_and_temp_cleanup(tmp_path):
         events.append("generate")
         assert Path(final_hevc).is_file()
         captured_temp.append(Path(metadata_json).parent)
-        Path(metadata_json).write_text('{"SceneInfo":[]}', encoding="utf-8")
+        Path(metadata_json).write_text('{"SceneInfo":[{"SequenceFrameIndex":0}]}', encoding="utf-8")
         return True
 
     def inject(encoded, metadata, injected):
@@ -406,7 +406,7 @@ def test_dv_generated_metadata_is_injected_before_dv_rpu(tmp_path):
         def analyze(self, encoded, output):
             events.append("generate")
             assert Path(encoded) == files.enc_hevc
-            Path(output).write_text('{"SceneInfo":[]}', encoding="utf-8")
+            Path(output).write_text('{"SceneInfo":[{"SequenceFrameIndex":0}]}', encoding="utf-8")
             return HDR10PlusGeneratorResult(True, 0)
 
     class Hdr:

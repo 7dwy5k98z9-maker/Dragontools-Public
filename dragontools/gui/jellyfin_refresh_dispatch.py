@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import QSettings, QThread, pyqtSignal
+from ..worker.log_dispatch import dispatch_log
 
 from ..core.jellyfin_api import JellyfinApiError
 from ..core.jellyfin_refresh_service import (
@@ -39,6 +40,20 @@ _ACTIVE_WORKERS: set[QThread] = set()
 _SHUTTING_DOWN = False
 
 
+def active_jellyfin_workers():
+    return tuple(_ACTIVE_WORKERS)
+
+
+def begin_jellyfin_shutdown():
+    global _SHUTTING_DOWN
+    _SHUTTING_DOWN = True
+
+
+def finish_jellyfin_shutdown(ok):
+    global _SHUTTING_DOWN
+    _SHUTTING_DOWN = bool(ok)
+
+
 def stop_jellyfin_workers(*, timeout_ms=8000) -> bool:
     from .application_shutdown import shutdown_workers
     global _SHUTTING_DOWN
@@ -55,7 +70,7 @@ class _JellyfinRefreshWorker(QThread):
     def __init__(self, config: JellyfinRefreshConfig, updates: list[dict[str, str]]) -> None:
         super().__init__()
         self._config = config
-        self._updates = list(updates)
+        self._updates = [dict(update) for update in updates]
 
     def run(self) -> None:
         try:
@@ -144,11 +159,11 @@ def _start_worker(config: JellyfinRefreshConfig, updates: list[dict[str, str]], 
         if log is None or _SHUTTING_DOWN:
             return
         if fallback_used:
-            log(f"⚠️ {message}", "warn")
+            dispatch_log(log, f"⚠️ {message}", "warn")
         elif ok:
-            log(f"✅ {message}", "info")
+            dispatch_log(log, f"✅ {message}", "info")
         else:
-            log(f"⚠️ Jellyfin-Aktualisierung fehlgeschlagen: {message}", "warn")
+            dispatch_log(log, f"⚠️ Jellyfin-Aktualisierung fehlgeschlagen: {message}", "warn")
 
     def _retire() -> None:
         _ACTIVE_WORKERS.discard(worker)
@@ -157,8 +172,12 @@ def _start_worker(config: JellyfinRefreshConfig, updates: list[dict[str, str]], 
     worker.completed.connect(_completed)
     worker.finished.connect(_retire)
     if log is not None:
-        log("🔄 Jellyfin wird im Hintergrund aktualisiert …", "info")
-    worker.start()
+        dispatch_log(log, "🔄 Jellyfin wird im Hintergrund aktualisiert …", "info")
+    try:
+        worker.start()
+    except Exception:
+        _retire()
+        raise
     return True
 
 
@@ -173,7 +192,7 @@ def dispatch_after_move(move_log: list, log=None, *, settings: QSettings | None 
         return _start_worker(config, updates, log)
     except Exception as exc:
         if log is not None:
-            log(f"⚠️ Jellyfin-Aktualisierung übersprungen: {exc}", "warn")
+            dispatch_log(log, f"⚠️ Jellyfin-Aktualisierung übersprungen: {exc}", "warn")
         return False
 
 
@@ -193,5 +212,5 @@ def dispatch_after_rename(
         return _start_worker(config, updates, log)
     except Exception as exc:
         if log is not None:
-            log(f"⚠️ Jellyfin-Aktualisierung übersprungen: {exc}", "warn")
+            dispatch_log(log, f"⚠️ Jellyfin-Aktualisierung übersprungen: {exc}", "warn")
         return False

@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 from subprocess import Popen
 import threading
 from typing import Any
+from copy import deepcopy
 
 from .converter_config import ConverterConfig
 from ..core.conversion_artifacts import ArtifactRegistry
@@ -47,9 +48,9 @@ class ConverterJobState:
             scale_mode=config.scale_mode,
             overwrite_original=bool(config.overwrite_original),
             strip_only=bool(config.strip_only),
-            encoder_options=dict(config.encoder_options or {}),
-            file_overrides=dict(config.file_overrides or {}),
-            subtitle_rules=dict(config.subtitle_rules or {}),
+            encoder_options=deepcopy(config.encoder_options or {}),
+            file_overrides=deepcopy(config.file_overrides or {}),
+            subtitle_rules=deepcopy(config.subtitle_rules or {}),
             tv_path=config.tv_path,
             anime_path=config.anime_path,
             filme_path=config.filme_path,

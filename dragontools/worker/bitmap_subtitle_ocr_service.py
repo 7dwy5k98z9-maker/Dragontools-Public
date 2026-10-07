@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 import tempfile
 from typing import Callable
@@ -16,10 +17,15 @@ from ..core.bitmap_subtitle_ocr import (
     serialize_srt,
     merge_adjacent_duplicate_cues,
     write_pending_draft,
+    source_signature,
 )
 from ..core.media_library_fix_queue import MediaLibraryFixIssue
 from ..core.pgs_display_set import parse_pgs_sup_file
-from ..core.process_runner import run_analysis_tool, tool_available
+from ..core.process_runner import tool_available
+from .tool_runner import run_tool
+from .log_dispatch import dispatch_log
+from .bitmap_subtitle_packet_probe import BitmapSubtitlePacketProbe
+from ..subtitle.output_safety import stopped
 from ..core.settings_media_library import (
     DEFAULT_MEDIA_LIBRARY_OCR_LANGUAGES,
     DEFAULT_MEDIA_LIBRARY_OCR_MIN_CONFIDENCE,
@@ -29,6 +35,49 @@ from ..core.settings_media_library import (
 
 
 LogFn = Callable[[str, str], None] | None
+
+
+def _write_srt_exclusive(target: Path, content: str) -> Path:
+    """Write *content* without ever replacing a pre-existing sidecar.
+
+    The final path is reserved with ``open("x")``.  If writing fails, only
+    the inode created by this call is removed; a racing/existing user file is
+    never unlinked.
+    """
+    target.parent.mkdir(parents=True, exist_ok=True)
+    identity: tuple[int, int] | None = None
+    try:
+        with target.open("x", encoding="utf-8", newline="\n") as handle:
+            stat = os.fstat(handle.fileno())
+            identity = (stat.st_dev, stat.st_ino)
+            handle.write(content)
+    except Exception:
+        if identity is not None:
+            try:
+                current = target.lstat()
+                if (current.st_dev, current.st_ino) == identity:
+                    target.unlink()
+            except OSError:
+                pass
+        raise
+    try:
+        if not target.is_file() or target.stat().st_size <= 0:
+            raise RuntimeError("PGS→SRT hat keine gültige SRT-Datei erzeugt.")
+    except Exception:
+        if identity is not None:
+            try:
+                current = target.lstat()
+                if (current.st_dev, current.st_ino) == identity:
+                    target.unlink()
+            except OSError:
+                pass
+        raise
+    return target
+
+
+def run_analysis_tool(cmd, *, allow_error=True, timeout=None, worker=None, log=None):
+    return run_tool(cmd, label="Bitmap-Untertitel OCR", timeout_s=timeout,
+                    worker=worker, log=log)
 
 
 class BitmapSubtitleOcrService:
@@ -47,6 +96,19 @@ class BitmapSubtitleOcrService:
             SET_KEY_MEDIA_LIBRARY_OCR_LANGUAGES,
             DEFAULT_MEDIA_LIBRARY_OCR_LANGUAGES,
         )
+
+    def _run_analysis(self, cmd, *, allow_error=True, timeout=None):
+        if self._abort_requested():
+            raise RuntimeError("OCR wurde abgebrochen.")
+        result = run_analysis_tool(cmd, allow_error=allow_error, timeout=timeout,
+                                   worker=self.worker, log=self.log)
+        if stopped(result, self.worker):
+            raise RuntimeError("OCR wurde abgebrochen oder hat das Zeitlimit überschritten.")
+        return result
+
+    def _packet_probe(self):
+        return BitmapSubtitlePacketProbe(tools=self.tools, run=self._run_analysis,
+                                         log=self._log, available=tool_available)
 
     def create_draft(self, issue: MediaLibraryFixIssue) -> BitmapOcrDraft:
         if Path(issue.path).suffix.casefold() != ".mkv":
@@ -102,6 +164,7 @@ class BitmapSubtitleOcrService:
             forced=issue.forced,
             cues=cues,
             min_confidence=self.min_confidence,
+            expected_source_signature=getattr(issue, "source_signature", None),
         )
 
     def create_srt(self, issue: MediaLibraryFixIssue, target_path: str | Path) -> Path:
@@ -146,17 +209,19 @@ class BitmapSubtitleOcrService:
                     confidence=confidence,
                     uncertain=confidence < self.min_confidence,
                 ))
+        if self._abort_requested():
+            raise RuntimeError("OCR wurde abgebrochen.")
+        signature = getattr(issue, "source_signature", None)
+        if signature and tuple(signature) != source_signature(issue.path):
+            raise ValueError("OCR-Quelldatei wurde während der Verarbeitung verändert.")
         normalized = merge_adjacent_duplicate_cues(cues)
         if not normalized:
             raise RuntimeError("PGS→SRT hat keinen verwertbaren OCR-Text erzeugt.")
         target = Path(target_path)
-        if target.exists() or target.is_symlink():
-            raise FileExistsError(f"SRT-Zieldatei existiert bereits: {target.name}")
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(serialize_srt(normalized), encoding="utf-8", newline="\n")
-        if not target.is_file() or target.stat().st_size <= 0:
-            raise RuntimeError("PGS→SRT hat keine gültige SRT-Datei erzeugt.")
-        return target
+        try:
+            return _write_srt_exclusive(target, serialize_srt(normalized))
+        except FileExistsError as exc:
+            raise FileExistsError(f"SRT-Zieldatei existiert bereits: {target.name}") from exc
 
     def _probe_packets(
         self, path: str, stream_index: int, ffprobe: str, codec: str = ""
@@ -179,191 +244,23 @@ class BitmapSubtitleOcrService:
             )
         return self._probe_packets_ffprobe(path, stream_index, ffprobe)
 
-    def _probe_packets_ffprobe(
-        self, path: str, stream_index: int, ffprobe: str
-    ) -> list[BitmapSubtitlePacket]:
-        cmd = [
-            ffprobe,
-            "-v", "error",
-            "-select_streams", str(int(stream_index)),
-            "-show_packets",
-            "-show_entries", "packet=pts_time,duration_time",
-            "-of", "json",
-            str(path),
-        ]
-        result = run_analysis_tool(cmd, allow_error=True, timeout=180)
-        if result.returncode != 0:
-            return []
-        try:
-            data = json.loads(result.stdout or "{}")
-        except json.JSONDecodeError:
-            return []
-        raw: list[tuple[float, float | None]] = []
-        for item in data.get("packets") or []:
-            try:
-                start = float(item.get("pts_time"))
-            except (TypeError, ValueError):
-                continue
-            try:
-                duration = float(item.get("duration_time"))
-            except (TypeError, ValueError):
-                duration = None
-            raw.append((start, duration if duration and duration > 0 else None))
-        raw.sort(key=lambda item: item[0])
-        packets: list[BitmapSubtitlePacket] = []
-        for index, (start, duration) in enumerate(raw):
-            next_start = raw[index + 1][0] if index + 1 < len(raw) else None
-            if duration is not None:
-                end = start + min(duration, 30.0)
-            elif next_start is not None and next_start > start:
-                end = min(next_start, start + 8.0)
-            else:
-                end = start + 4.0
-            packets.append(BitmapSubtitlePacket(start, max(start + 0.10, end)))
-        return normalize_packets(packets)
+    def _probe_packets_ffprobe(self, path, stream_index, ffprobe):
+        return self._packet_probe().probe_packets_ffprobe(path, stream_index, ffprobe)
 
-    def _probe_pgs_display_sets(
-        self, path: str, stream_index: int, ffprobe: str
-    ) -> list[BitmapSubtitlePacket]:
-        if Path(path).suffix.casefold() != ".mkv":
-            return []
-        with tempfile.TemporaryDirectory(prefix="dragon_pgs_timing_") as tmp:
-            sup_path = Path(tmp) / "timing.sup"
-            extraction = self._extract_pgs_sup(path, stream_index, sup_path, ffprobe)
-            if not extraction:
-                return []
-            try:
-                parsed = parse_pgs_sup_file(sup_path)
-            except (OSError, ValueError, TypeError) as exc:
-                self._log(f"PGS-Display-Set-Parser fehlgeschlagen: {exc}", "warn")
-                return []
+    def _probe_pgs_display_sets(self, path, stream_index, ffprobe):
+        return self._packet_probe().probe_pgs_display_sets(path, stream_index, ffprobe,
+            extract_sup=self._extract_pgs_sup)
 
-        stats = parsed.stats
-        if parsed.warnings:
-            # Keep logs useful on corrupt streams without flooding one line per
-            # recovery point. The complete counts still make damage visible.
-            self._log(
-                f"PGS-Parser: {len(parsed.warnings)} Strukturwarnung(en), "
-                f"{stats.malformed_segments} fehlerhafte Segmente, {stats.resync_count} Resync(s).",
-                "warn",
-            )
-        self._log(
-            f"PGS-Parser ({extraction}): {stats.display_sets} Display Sets, "
-            f"{stats.visible_events} sichtbar, {stats.clear_events} Clear, "
-            f"{len(parsed.cues)} OCR-Cues.",
-            "info",
-        )
-        return normalize_packets(
-            BitmapSubtitlePacket(cue.start_s, cue.end_s) for cue in parsed.cues
-        )
+    def _extract_pgs_sup(self, path, stream_index, target, ffprobe):
+        return self._packet_probe().extract_pgs_sup(path, stream_index, target, ffprobe,
+            resolve_track=self._mkv_track_id_for_stream)
 
-    def _extract_pgs_sup(
-        self, path: str, stream_index: int, target: Path, ffprobe: str
-    ) -> str | None:
-        """Extract one PGS track for timing analysis.
-
-        MKVToolNix is preferred because it copies the Matroska subtitle track
-        without passing packets through FFmpeg's SUP muxer. FFmpeg remains a
-        compatibility fallback when MKVToolNix is unavailable or identification
-        fails.
-        """
-        mkvmerge = str(getattr(self.tools, "mkvmerge", "") or "").strip()
-        mkvextract = str(getattr(self.tools, "mkvextract", "") or "").strip()
-        if (mkvmerge and mkvextract and tool_available(mkvmerge) and tool_available(mkvextract)):
-            track_id = self._mkv_track_id_for_stream(path, stream_index, ffprobe, mkvmerge)
-            if track_id is not None:
-                try:
-                    result = run_analysis_tool(
-                        [mkvextract, "tracks", str(path), f"{track_id}:{target}"],
-                        allow_error=True,
-                        timeout=300,
-                    )
-                except RuntimeError as exc:
-                    self._log(f"PGS-Timing: mkvextract fehlgeschlagen, FFmpeg-Fallback folgt: {exc}", "warn")
-                    result = None
-                if result is not None and result.returncode == 0 and self._valid_sup(target):
-                    return "MKVToolNix"
-                try:
-                    target.unlink(missing_ok=True)
-                except OSError:
-                    pass
-
-        ffmpeg = str(getattr(self.tools, "ffmpeg", "") or "ffmpeg")
-        try:
-            result = run_analysis_tool(
-                [
-                    ffmpeg, "-y", "-hide_banner", "-loglevel", "error",
-                    "-fflags", "+discardcorrupt", "-err_detect", "ignore_err",
-                    "-i", str(path), "-map", f"0:{int(stream_index)}",
-                    "-c:s", "copy", "-f", "sup", str(target),
-                ],
-                allow_error=True,
-                timeout=300,
-            )
-        except RuntimeError as exc:
-            self._log(f"PGS-Timing: FFmpeg-SUP-Extraktion fehlgeschlagen: {exc}", "warn")
-            return None
-        if self._valid_sup(target):
-            # A non-zero FFmpeg return code may occur after useful packets were
-            # already written. The native parser can decide whether the partial
-            # SUP still contains usable display sets.
-            return "FFmpeg" if result.returncode == 0 else "FFmpeg-partiell"
-        try:
-            target.unlink(missing_ok=True)
-        except OSError:
-            pass
-        return None
-
-    def _mkv_track_id_for_stream(
-        self, path: str, stream_index: int, ffprobe: str, mkvmerge: str
-    ) -> int | None:
-        try:
-            probe = run_analysis_tool(
-                [
-                    ffprobe, "-v", "error", "-select_streams", "s",
-                    "-show_entries", "stream=index", "-of", "json", str(path),
-                ],
-                allow_error=True,
-                timeout=60,
-            )
-        except RuntimeError:
-            return None
-        if probe.returncode != 0:
-            return None
-        try:
-            stream_rows = json.loads(probe.stdout or "{}").get("streams") or []
-            subtitle_indices = [int(row["index"]) for row in stream_rows if "index" in row]
-            subtitle_ordinal = subtitle_indices.index(int(stream_index))
-        except (ValueError, TypeError, KeyError, json.JSONDecodeError):
-            return None
-
-        try:
-            identify = run_analysis_tool(
-                [mkvmerge, "-J", str(path)], allow_error=True, timeout=60
-            )
-        except RuntimeError:
-            return None
-        if identify.returncode != 0:
-            return None
-        try:
-            tracks = json.loads(identify.stdout or "{}").get("tracks") or []
-            subtitle_tracks = [
-                row for row in tracks
-                if str(row.get("type") or "").casefold() == "subtitles"
-            ]
-            return int(subtitle_tracks[subtitle_ordinal]["id"])
-        except (IndexError, ValueError, TypeError, KeyError, json.JSONDecodeError):
-            return None
+    def _mkv_track_id_for_stream(self, path, stream_index, ffprobe, mkvmerge):
+        return self._packet_probe().mkv_track_id_for_stream(path, stream_index, ffprobe, mkvmerge)
 
     @staticmethod
-    def _valid_sup(path: Path) -> bool:
-        try:
-            if not path.is_file() or path.stat().st_size < 13:
-                return False
-            with path.open("rb") as handle:
-                return handle.read(2) == b"PG"
-        except OSError:
-            return False
+    def _valid_sup(path):
+        return BitmapSubtitlePacketProbe.valid_sup(path)
 
     def _render_subtitle_image(
         self,
@@ -404,7 +301,7 @@ class BitmapSubtitleOcrService:
             "-frames:v", "1",
             str(target),
         ]
-        result = run_analysis_tool(cmd, allow_error=True, timeout=90)
+        result = self._run_analysis(cmd, allow_error=True, timeout=90)
         if result.returncode == 0 and self._valid_image(target):
             return True
 
@@ -423,7 +320,7 @@ class BitmapSubtitleOcrService:
             "-frames:v", "1",
             str(target),
         ]
-        result = run_analysis_tool(fallback, allow_error=True, timeout=90)
+        result = self._run_analysis(fallback, allow_error=True, timeout=90)
         return result.returncode == 0 and self._valid_image(target)
 
     def _ocr_image(self, image: Path, tesseract: str) -> tuple[str, float]:
@@ -435,7 +332,7 @@ class BitmapSubtitleOcrService:
             "--psm", "11",
             "tsv",
         ]
-        result = run_analysis_tool(cmd, allow_error=True, timeout=60)
+        result = self._run_analysis(cmd, allow_error=True, timeout=60)
         if result.returncode != 0:
             return "", 0.0
         return parse_tesseract_tsv(result.stdout or "")
@@ -444,7 +341,7 @@ class BitmapSubtitleOcrService:
         requested = {item.strip() for item in self.languages.split("+") if item.strip()}
         if not requested:
             raise RuntimeError("Keine Tesseract-OCR-Sprache konfiguriert.")
-        result = run_analysis_tool([tesseract, "--list-langs"], allow_error=True, timeout=30)
+        result = self._run_analysis([tesseract, "--list-langs"], allow_error=True, timeout=30)
         if result.returncode != 0:
             return
         installed = {
@@ -466,7 +363,12 @@ class BitmapSubtitleOcrService:
             return False
 
     def _abort_requested(self) -> bool:
-        return bool(self.worker is not None and getattr(self.worker, "abort_requested", False))
+        if self.worker is None:
+            return False
+        state = getattr(self.worker, "_control_state", None)
+        requested = bool(getattr(state, "abort_requested", False)) if state is not None else bool(getattr(self.worker, "abort_requested", False))
+        abort_type = getattr(state, "abort_type", None) if state is not None else getattr(self.worker, "abort_type", None)
+        return bool(requested and abort_type == "sofort")
 
     def _setting_int(self, key: str, default: int, *, minimum: int, maximum: int) -> int:
         try:
@@ -483,8 +385,7 @@ class BitmapSubtitleOcrService:
         return value or default
 
     def _log(self, message: str, level: str = "info") -> None:
-        if callable(self.log):
-            self.log(message, level)
+        dispatch_log(self.log, message, level)
 
 
 __all__ = ["BitmapSubtitleOcrService"]

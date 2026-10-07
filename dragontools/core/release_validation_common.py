@@ -25,6 +25,10 @@ def _looks_like_app_data_dir(path: Path) -> bool:
     return path.name.lower() == "daten" and (path.parent / f"DragonToolsV{APP_VERSION}.exe").exists()
 
 
+def _looks_like_app_bundle_root(path: Path) -> bool:
+    return (path / f"DragonToolsV{APP_VERSION}.exe").is_file() and (path / "Daten").is_dir()
+
+
 def _resolve_app_dirs(root: Path | None = None) -> tuple[Path, Path]:
     """Returns ``(app_dir, data_dir)`` for a PyInstaller onedir bundle."""
     if root is not None:

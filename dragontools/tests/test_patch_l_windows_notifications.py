@@ -131,11 +131,15 @@ def test_patch_l_is_wired_to_result_and_windows_backend_sources() -> None:
     root = Path(__file__).resolve().parents[1]
     file_events = (root / "gui" / "conversion_result_file_events.py").read_text(encoding="utf-8")
     finalizer = (root / "gui" / "conversion_run_finalizer.py").read_text(encoding="utf-8")
+    reporting = (root / "gui" / "conversion_run_reporting.py").read_text(encoding="utf-8")
     backend = (root / "gui" / "windows_notification_backend.py").read_text(encoding="utf-8")
     settings = (root / "gui" / "settings_sections" / "notifications.py").read_text(encoding="utf-8")
 
     assert "notifications.on_file_result" in file_events
-    assert "notifications.on_run_finished" in finalizer
+    assert "notify_completion(" in finalizer
+    assert "notifications.on_run_finished" in reporting
+    assert "notify_finalization_error(" in finalizer
+    assert "notifications.on_internal_error" in reporting
     assert 'sys.platform != "win32"' in backend
     assert "QSystemTrayIcon" in backend and "showMessage" in backend
     assert "Windows-Benachrichtigungen aktivieren" in settings

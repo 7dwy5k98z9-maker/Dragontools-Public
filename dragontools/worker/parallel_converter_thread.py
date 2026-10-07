@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+from copy import deepcopy
 
 from PyQt6.QtCore import QObject, pyqtSignal
 
@@ -13,11 +14,14 @@ from .converter_thread import ConverterThread
 from .parallel_child_result_coordinator import ParallelChildResultCoordinator
 from .parallel_converter_compat import ParallelConverterCompatibilityMixin
 from .parallel_converter_control import ParallelConverterControlMixin
+from .parallel_converter_shutdown import ParallelConverterShutdownMixin
+from .parallel_file_control import ParallelFileControlMixin
 from .parallel_converter_lifecycle import ParallelConverterLifecycleMixin
 from .parallel_converter_queue import ParallelConverterQueueMixin
 from .parallel_converter_state import ParallelQueueState, ParallelResultState, ParallelWorkerRegistry
 from .parallel_worker_launcher import ParallelWorkerLauncher
 from .dv_postprocess_gate import DVPostprocessGate
+from .parallel_queue_coordination import coordinated_change, canonical_owned_input
 
 
 class ParallelConverterThread(
@@ -25,6 +29,8 @@ class ParallelConverterThread(
     ParallelConverterQueueMixin,
     ParallelConverterControlMixin,
     ParallelConverterLifecycleMixin,
+    ParallelConverterShutdownMixin,
+    ParallelFileControlMixin,
     QObject,
 ):
     """Qt-facing coordinator for multiple normal ConverterThread instances."""
@@ -50,6 +56,7 @@ class ParallelConverterThread(
         super().__init__(parent)
         if not isinstance(config, ConverterConfig):
             raise TypeError("config muss eine ConverterConfig-Instanz sein.")
+        config = deepcopy(config)
         self.config = config
         self._queue_state = ParallelQueueState(list(files))
         self._result_state = ParallelResultState()
@@ -59,9 +66,9 @@ class ParallelConverterThread(
         self.scale_mode = config.scale_mode
         self.overwrite_original = config.overwrite_original
         self.strip_only = config.strip_only
-        self.encoder_options = dict(config.encoder_options or {})
-        self.file_overrides = dict(config.file_overrides or {})
-        self.subtitle_rules = dict(config.subtitle_rules or {})
+        self.encoder_options = deepcopy(config.encoder_options or {})
+        self.file_overrides = deepcopy(config.file_overrides or {})
+        self.subtitle_rules = deepcopy(config.subtitle_rules or {})
         self.tv_path = config.tv_path
         self.anime_path = config.anime_path
         self.filme_path = config.filme_path
@@ -125,6 +132,9 @@ class ParallelConverterThread(
             event_emit=self.worker_event.emit,
             relay_crop_decision=self._relay_dv_crop_decision,
             on_file_progress=self._on_child_file_progress,
+            on_owned_file_progress=lambda child, path, pct, eta: self._on_child_file_progress(
+                path, pct, eta, child=child
+            ),
             on_file_result=self._on_child_file_result,
             on_encode_stage_complete=self._on_child_encode_stage_complete,
             dv_postprocess_gate=self._dv_postprocess_gate,
@@ -132,11 +142,16 @@ class ParallelConverterThread(
             on_finished=self._on_child_finished,
         )
 
-    def _on_child_file_progress(self, path: str, pct: int, eta_s) -> None:
+    @coordinated_change
+    def _on_child_file_progress(self, path: str, pct: int, eta_s, *, child=None) -> None:
+        path = canonical_owned_input(self._queue_state, child, path)
+        if path is None:
+            return
         self._file_progress_pct[path] = int(pct)
         self.file_progress.emit(path, pct, eta_s)
         self._emit_aggregate_progress()
 
+    @coordinated_change
     def _on_child_encode_stage_complete(
         self,
         child: ConverterThread,
@@ -154,6 +169,7 @@ class ParallelConverterThread(
             finish_if_done=self._finish_if_done,
         )
 
+    @coordinated_change
     def _on_child_file_result(
         self,
         child: ConverterThread,
@@ -173,6 +189,7 @@ class ParallelConverterThread(
             finish_if_done=self._finish_if_done,
         )
 
+    @coordinated_change
     def _on_child_finished(self, child: ConverterThread) -> None:
         self._child_results.on_finished(
             child,
@@ -186,8 +203,7 @@ class ParallelConverterThread(
         )
 
     def _sync_child_maps(self, child: ConverterThread, input_path: str | None = None) -> None:
-        self._result_state.sync_from_child(child, input_path)
-        self._sync_replace_service()
+        self._registry.sync_child_maps(child, input_path)
 
     def _mark_child_unreported_files_failed(self, child: ConverterThread) -> None:
         self._child_results.mark_unreported_files_failed(

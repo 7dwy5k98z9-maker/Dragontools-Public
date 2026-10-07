@@ -114,7 +114,7 @@ def planned_target_dir(entry: Any) -> str | None:
         text = str(entry).strip()
         return text or None
     if isinstance(entry, dict):
-        target = entry.get("target")
+        target = entry.get("target", entry.get('target_dir'))
         if isinstance(target, (str, Path)):
             text = str(target).strip()
             return text or None

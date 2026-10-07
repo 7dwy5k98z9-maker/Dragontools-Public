@@ -8,6 +8,8 @@ def _module_paths(package: str, names: str) -> tuple[Path, ...]:
 
 
 REFACTOR_SMOKE_MODULES = (
+    *_module_paths('core', 'renamer_file_commit renamer_identity_review'),
+    *_module_paths('gui', 'qt_receiver_state movie_renamer_browser_mapping movie_renamer_browser_runtime movie_renamer_resolve_runtime'),
     *_module_paths(
         "core",
         "models file_override_normalization media_analyzer_metadata media_analyzer_result media_duration output_timestamps "
@@ -119,5 +121,58 @@ REFACTOR_SMOKE_MODULES = (
         "duration_timestamp_service duration_repair_service dv_result_contract dv_remux_file_dispatcher "
         "parallel_converter_thread dv5_encode_fallback parallel_worker_launcher",
     ),
+
+    *_module_paths("gui", "utility_worker_start"),
+    *_module_paths("core", "online_metadata_identity online_metadata_tvdb_localization online_metadata_tvdb_pagination"),
+    *_module_paths("core", "media_library_analysis_merge media_library_scan_analysis media_library_scan_plan media_library_publication media_library_video_flags"),
+    *_module_paths("worker", "iso_output_publication iso_title_parser utility_media_analysis utility_output_workspace utility_copy_contract"),
+    # All review-added production responsibilities are required source/frozen imports.
+    *_module_paths("core",
+        "analysis_process audio_sync_validation audio_video_match_identity audio_video_sampling_plan "
+        "audio_video_stream_timing comfyui_timing crash_state_files diagnostic_privacy exclusive_text file_update_lock "
+        "hdr10plus_json_validation jellyfin_paths job_resume_selection journal_archive journal_runtime "
+        "media_library_analysis_merge media_library_publication media_library_scan_analysis media_library_scan_plan "
+        "media_library_video_flags media_stream_selection media_track_pairing move_directory_transfer "
+        "move_trickplay_transfer online_metadata_identity online_metadata_tvdb_localization "
+        "online_metadata_tvdb_pagination owned_process owned_process_pause preflight_metadata_identity process_status "
+        "quality_extra_args recovery_file release_archive_commit release_document_privacy release_private_paths "
+        "release_requirement_bounds release_source_identity renamer_file_commit renamer_identity_review replace_recovery "
+        "rules_preview_context settings_backup_payload sidecar_recovery strict_numbers transaction_identity "
+        "watch_folder_observations"
+    ),
+    *_module_paths("gui",
+        "application_worker_sources conversion_queue_admission conversion_run_reporting dialog_ownership "
+        "encoder_profile_application encoder_profile_options external_program_launch file_worker_pause log_zoom_window "
+        "movie_renamer_browser_mapping movie_renamer_browser_runtime movie_renamer_resolve_runtime qt_receiver_state "
+        "quality_worker_lifecycle shutdown_worker_state utility_worker_start watch_folder_intake "
+        "watch_folder_queue_ownership"
+    ),
+    *_module_paths("rules",
+        "subtitle_output_plan"
+    ),
+    *_module_paths("subtitle",
+        "matroska_tracks media_verification output_safety tag_edit_verification"
+    ),
+    *_module_paths("worker",
+        "audio_metadata_args audio_video_output_contract bitmap_subtitle_packet_probe comfyui_job_monitor "
+        "comfyui_mux_plan comfyui_render_plan comfyui_video_contract converter_progress_eta duration_timestamp_plan "
+        "dv_filter_graph dv_level5_values dv_matroska_track_selection dv_mux_input_validation dv_remux_output_paths "
+        "dv_remux_transaction_state dv_source_rpu_fallback encode_color_plan hdr10plus_generator_frame_contract "
+        "hdr_metadata_file_ownership hdr_metadata_picture_policy hdrplus_mp4_audio_service hdrplus_recovery_archive "
+        "hdrplus_source_selection hdrplus_workspace iso_output_publication iso_title_parser live_queue_overrides "
+        "owned_probe parallel_child_controls parallel_converter_shutdown parallel_file_control parallel_launch_ownership "
+        "parallel_queue_coordination postprocess_metadata_identity postprocess_nfo_ownership postprocess_source_trickplay "
+        "quality_output_validation required_sidecar_step subtitle_export_models subtitle_movtext_plan "
+        "subtitle_ocr_sidecars subtitle_sidecar_exporter tool_binary_output tool_text_output "
+        "trickplay_sprite_verification utility_copy_contract utility_media_analysis utility_output_workspace "
+        "verification_control worker_result_accounting"
+    ),
+
+    *_module_paths("core", "release_frozen_runtime release_qt_icu"),
+    *_module_paths("gui", "release_frozen_widgets preflight_metadata_commands"),
+    *_module_paths("core", "move_result movie_identity movie_replacement_preparation"),
+    *_module_paths("worker", "dv_source_rpu_check"),
+    *_module_paths("worker", "encode_geometry_plan postprocess_lifecycle"),
+    *_module_paths("worker", "mp4box_track_args mp4_default_flags mkv_audio_track_args"),
 
 )

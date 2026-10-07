@@ -50,11 +50,16 @@ def _normalize_title(value: str | None) -> str:
     import re
     import unicodedata
 
-    text = unicodedata.normalize("NFKD", value or "")
+    # Keep the historic accent-insensitive behaviour for Latin titles while
+    # preserving letters/digits from every Unicode script.  The previous
+    # ``[^a-z0-9]`` filter collapsed Japanese/Chinese/Cyrillic titles to an
+    # empty key, which made indexed library lookups impossible.
+    from .movie_identity import normalize_movie_title
+    text = unicodedata.normalize("NFKD", normalize_movie_title(value or ""))
     text = "".join(ch for ch in text if not unicodedata.combining(ch))
     text = text.casefold()
     text = re.sub(r"\(\d{4}\)", " ", text)
-    text = re.sub(r"[^a-z0-9]+", " ", text)
+    text = "".join(ch if ch.isalnum() else " " for ch in text)
     return re.sub(r"\s+", " ", text).strip()
 
 

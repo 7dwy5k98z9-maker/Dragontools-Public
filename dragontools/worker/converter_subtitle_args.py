@@ -1,6 +1,16 @@
 from __future__ import annotations
 
 from ..core.models import normalize_override_dict
+from ..core.lang_codes import mkv_language_tags
+
+
+def _subtitle_disposition(stream) -> str:
+    flags: list[str] = []
+    if bool(getattr(stream, "default", False)):
+        flags.append("default")
+    if bool(getattr(stream, "forced", False)):
+        flags.append("forced")
+    return "+".join(flags) if flags else "0"
 
 
 def build_subtitle_args(worker, input_path, mi, ov, *, container: str, subtitle_rules: dict, exclude_mkv_stream_indices: set[int] | None = None):
@@ -15,7 +25,7 @@ def build_subtitle_args(worker, input_path, mi, ov, *, container: str, subtitle_
     keep = list(plan.keep_streams)
     for warning in getattr(plan, "burn_warnings", ()) or ():
         worker.log(f"⚠️ {warning}", "warn")
-    if str(container or "mkv").lower() == "mp4":
+    if str(container or "mkv").lower() in {"mp4", "m4v", "mov"}:
         return _mp4_args(worker, plan, burn_sub, subtitle_rules)
     return _mkv_args(worker, burn_sub, keep, subtitle_rules=subtitle_rules, exclude_stream_indices=exclude_mkv_stream_indices)
 
@@ -33,11 +43,11 @@ def _mp4_args(worker, plan, burn_sub, rules):
     for out_idx, stream in enumerate(storage.internal_streams):
         args += ["-map", f"0:{stream.index}", f"-c:s:{out_idx}", "mov_text"]
         if getattr(stream, "language", None):
-            args += [f"-metadata:s:s:{out_idx}", f"language={str(stream.language).lower()}"]
+            args += [f"-metadata:s:s:{out_idx}", f"language={mkv_language_tags(stream.language)[0]}"]
         title = str(getattr(stream, "title", "") or "").replace("\n", " ").strip()
         if title:
             args += [f"-metadata:s:s:{out_idx}", f"title={title}"]
-        args += [f"-disposition:s:{out_idx}", "forced" if bool(getattr(stream, "forced", False)) else "0"]
+        args += [f"-disposition:s:{out_idx}", _subtitle_disposition(stream)]
         worker._logger.decision(f"Sub #{stream.index} ({stream.language}, {stream.codec}, forced={stream.forced})→mov_text intern")
     for stream in storage.external_streams:
         worker._logger.decision(f"Sub #{stream.index} ({stream.language}, {stream.codec})→Sidecar (MP4-Kompatibilität)")
@@ -54,15 +64,10 @@ def _mkv_args(worker, burn_sub, keep, *, subtitle_rules: dict | None = None, exc
     """
     if burn_sub:
         worker._logger.decision(f"Sub #{burn_sub.index} ({burn_sub.language},forced={burn_sub.forced})→burn-in")
-    excluded = {int(i) for i in (exclude_stream_indices or set())}
     mov_text_codecs = {"mov_text", "tx3g"}
-    from ..rules.subtitle_storage import pgs_original_storage
-    pgs_sidecar = pgs_original_storage(subtitle_rules) == "sidecar"
-    internal = [
-        stream for stream in keep
-        if int(stream.index) not in excluded
-        and not (pgs_sidecar and str(getattr(stream, "codec", "") or "").strip().lower() in {"hdmv_pgs_subtitle", "pgs"})
-    ]
+    from ..rules.subtitle_storage import mkv_internal_subtitle_streams
+    internal = mkv_internal_subtitle_streams(keep, subtitle_rules=subtitle_rules,
+        excluded_indices=exclude_stream_indices or ())
 
     if not internal:
         if not burn_sub:
@@ -82,9 +87,9 @@ def _mkv_args(worker, burn_sub, keep, *, subtitle_rules: dict | None = None, exc
             args += [f"-c:s:{out_idx}", "copy"]
             worker._logger.decision(f"Sub #{stream.index} ({stream.language},forced={stream.forced})→stream copy")
         if getattr(stream, "language", None):
-            args += [f"-metadata:s:s:{out_idx}", f"language={str(stream.language).lower()}"]
+            args += [f"-metadata:s:s:{out_idx}", f"language={mkv_language_tags(stream.language)[0]}"]
         title = str(getattr(stream, "title", "") or "").replace("\n", " ").strip()
         if title:
             args += [f"-metadata:s:s:{out_idx}", f"title={title}"]
-        args += [f"-disposition:s:{out_idx}", "forced" if bool(getattr(stream, "forced", False)) else "0"]
+        args += [f"-disposition:s:{out_idx}", _subtitle_disposition(stream)]
     return (burn_sub if burn_sub else []), args

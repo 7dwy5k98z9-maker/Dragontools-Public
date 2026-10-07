@@ -90,7 +90,7 @@ class FileListWidget(FileListQueueIndexMixin, QListWidget):
         if not is_video_file(path):
             return False
         key = path_compare_key(path)
-        if key in self._path_items:
+        if key in self._path_items and self.item_for_path(path) is not None:
             return False
 
         item = QListWidgetItem(display_name(path))

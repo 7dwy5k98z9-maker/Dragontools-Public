@@ -1,25 +1,25 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+from copy import deepcopy
 import hashlib
 import json
 from typing import Any
 from urllib.parse import urlencode
 from urllib.request import Request
 
-from .online_metadata_cache import read_metadata_cache, write_metadata_cache
+from .online_metadata_cache import read_metadata_cache, write_metadata_cache, reset_metadata_session
 from .online_metadata_common import TMDB_API_BASE, TMDB_TIMEOUT_S
 from .online_metadata_http import request_json
 from .online_metadata_retry import retry_online_metadata_call
+from .online_metadata_types import OnlineMetadataResponseError
+from .online_metadata_identity import provider_id
 from .version import APP_VERSION
 
 
 class TmdbTransportMixin:
     def enable_fresh_session(self) -> None:
-        """Bypass the persistent cache once per request for this client session."""
-        with self._request_cache_lock:
-            self._fresh_session_enabled = True
-            self._request_session_cache.clear()
+        reset_metadata_session(self, '_renamer_batch_lock', ('_renamer_search_cache', '_renamer_season_cache'))
 
     """HTTP, authentication and cache plumbing for the TMDB client."""
 
@@ -48,7 +48,12 @@ class TmdbTransportMixin:
         with self._request_cache_lock:
             session_value = self._request_session_cache.get(cache_key)
             if session_value is not None and not force_refresh:
-                return session_value
+                try:
+                    self._validate_tmdb_payload(endpoint, session_value)
+                except OnlineMetadataResponseError:
+                    self._request_session_cache.pop(cache_key, None)
+                else:
+                    return deepcopy(session_value)
 
         # A final rename/NFO metadata session must see current provider data.
         # It therefore ignores the persistent multi-day cache on the first
@@ -61,9 +66,14 @@ class TmdbTransportMixin:
                 cache_days=self.config.cache_days,
             )
             if cached is not None:
-                with self._request_cache_lock:
-                    self._request_session_cache[cache_key] = cached
-                return cached
+                try:
+                    self._validate_tmdb_payload(endpoint, cached)
+                except OnlineMetadataResponseError:
+                    cached = None
+                if cached is not None:
+                    with self._request_cache_lock:
+                        self._request_session_cache[cache_key] = deepcopy(cached)
+                    return deepcopy(cached)
 
         query = urlencode(clean_params)
         url = f"{TMDB_API_BASE}{endpoint}"
@@ -73,6 +83,7 @@ class TmdbTransportMixin:
             lambda: self._http_get(url, headers, TMDB_TIMEOUT_S),
             provider="TMDB",
         )
+        self._validate_tmdb_payload(endpoint, data)
         write_metadata_cache(
             self.cache_dir,
             cache_key,
@@ -80,12 +91,29 @@ class TmdbTransportMixin:
             enabled=self.config.cache_enabled,
         )
         with self._request_cache_lock:
-            self._request_session_cache[cache_key] = data
-        return data
+            self._request_session_cache[cache_key] = deepcopy(data)
+        return deepcopy(data)
+
+    @staticmethod
+    def _validate_tmdb_payload(endpoint: str, data: Any) -> None:
+        if not isinstance(data, dict):
+            raise OnlineMetadataResponseError(
+                f"TMDB-Antwort hat ein unerwartetes JSON-Format "
+                f"({type(data).__name__} statt Objekt)."
+            )
+        if endpoint.startswith("/search/") and not isinstance(data.get("results"), list):
+            raise OnlineMetadataResponseError(
+                "TMDB-Suchantwort enthält keine gültige Ergebnisliste."
+            )
+        if endpoint.startswith(("/movie/", "/tv/", "/collection/")):
+            if provider_id(data.get("id")) is None:
+                raise OnlineMetadataResponseError(
+                    f"TMDB-Detailantwort für {endpoint} enthält keine ID."
+                )
 
     def _cache_key(self, endpoint: str, params: dict[str, str]) -> str:
         safe_params = {key: value for key, value in params.items() if key != "api_key"}
-        raw = json.dumps({"endpoint": endpoint, "params": safe_params}, sort_keys=True)
+        raw = json.dumps({"provider": "tmdb", "endpoint": endpoint, "params": safe_params}, sort_keys=True)
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
     def _urllib_get(

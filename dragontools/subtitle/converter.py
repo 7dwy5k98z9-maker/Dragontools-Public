@@ -6,10 +6,11 @@ SRT ↔ ASS ↔ TXT Konvertierung.
 from __future__ import annotations
 import re
 from pathlib import Path
+from ..core.exclusive_text import write_exclusive_text
 
 _SRT_BLOCK = re.compile(
     r"(\d+)\r?\n"
-    r"(\d{2}:\d{2}:\d{2},\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2},\d{3})\r?\n"
+    r"(\d{1,2}:\d{2}:\d{2}[,.]\d{1,3})\s*-->\s*(\d{1,2}:\d{2}:\d{2}[,.]\d{1,3})(?:[^\S\n]+[^\n]*)?\r?\n"
     r"([\s\S]*?)(?=\r?\n\r?\n|\Z)",
     re.MULTILINE
 )
@@ -29,9 +30,36 @@ _ASS_TAG_RE = re.compile(r"\{[^}]*\}")
 
 
 def _read_text(path: str | Path) -> str:
-    return Path(path).read_text(encoding="utf-8", errors="replace").replace(
-        "\r\n", "\n"
-    ).replace("\r", "\n").lstrip("\ufeff")
+    data = Path(path).read_bytes()
+    try:
+        text = data.decode("utf-16" if data.startswith((b"\xff\xfe", b"\xfe\xff")) else "utf-8-sig")
+    except UnicodeError as exc:
+        raise ValueError("Untertitel-Kodierung ist ungültig; UTF-8 oder UTF-16 mit BOM erforderlich.") from exc
+    return text.replace("\r\n", "\n").replace("\r", "\n")
+
+
+def _srt_matches(text):
+    matches = list(_SRT_BLOCK.finditer(text))
+    cursor = 0
+    for match in matches:
+        if text[cursor:match.start()].strip():
+            raise ValueError("SRT enthält einen ungültigen Untertitel-Cue.")
+        start, end = _normalize_srt_timestamp(match[2]), _normalize_srt_timestamp(match[3])
+        _validate_time_span(start, end)
+        cursor = match.end()
+    if not matches or text[cursor:].strip():
+        raise ValueError("SRT enthält einen ungültigen Untertitel-Cue.")
+    return matches
+
+
+def _validate_time_span(start, end):
+    def milliseconds(value):
+        hours, minutes, seconds = value.replace(',', '.').split(':')
+        if int(minutes) >= 60 or float(seconds) >= 60:
+            raise ValueError("Ungültiger Untertitelzeitstempel.")
+        return int(hours)*3600000 + int(minutes)*60000 + round(float(seconds)*1000)
+    if milliseconds(end) <= milliseconds(start):
+        raise ValueError("Untertitel-Ende liegt nicht nach dem Beginn.")
 
 
 def _normalize_srt_timestamp(value: str) -> str:
@@ -39,6 +67,8 @@ def _normalize_srt_timestamp(value: str) -> str:
     if not m:
         raise ValueError(f"Ungültiger Zeitstempel: {value!r}")
     h, minute, second, _sep, fraction = m.groups()
+    if int(minute) >= 60 or int(second) >= 60:
+        raise ValueError(f"Ungültiger Zeitstempel: {value!r}")
     ms = int(fraction.ljust(3, "0")[:3])
     return f"{int(h):02d}:{int(minute):02d}:{int(second):02d},{ms:03d}"
 
@@ -63,10 +93,10 @@ def _ass_ts_to_srt(t: str) -> str:
 
 def build_ass_style(font_family: str = "Arial", font_size: int = 22) -> str:
     """Build a safe ASS Default style for 1080p script coordinates."""
-    family = str(font_family or "Arial").replace(",", " ").strip() or "Arial"
+    family = re.sub(r"[\x00-\x1f,]", " ", str(font_family or "Arial")).strip() or "Arial"
     try:
         size = int(font_size)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         size = 22
     size = max(8, min(200, size))
     return (
@@ -94,9 +124,9 @@ def _ass_header(style: str | None = None) -> str:
 
 def _srt_text_to_ass(text: str, style: str | None = None) -> str:
     events = []
-    for m in _SRT_BLOCK.finditer(text):
-        start = _srt_ts_to_ass(m.group(2))
-        end = _srt_ts_to_ass(m.group(3))
+    for m in _srt_matches(text):
+        start = _srt_ts_to_ass(_normalize_srt_timestamp(m.group(2)))
+        end = _srt_ts_to_ass(_normalize_srt_timestamp(m.group(3)))
         content = m.group(4).strip().replace("\n", "\\N")
         content = _TAG_RE.sub("", content)
         events.append(f"Dialogue: 0,{start},{end},Default,,0,0,0,,{content}")
@@ -125,6 +155,7 @@ def _parse_timestamped_txt(text: str) -> list[tuple[str, str, str]]:
         match = _TXT_TIMECODE_LINE.match(line)
         if match:
             flush()
+            _validate_time_span(match.group("start"), match.group("end"))
             current = (
                 _normalize_srt_timestamp(match.group("start")),
                 _normalize_srt_timestamp(match.group("end")),
@@ -140,21 +171,21 @@ def _parse_timestamped_txt(text: str) -> list[tuple[str, str, str]]:
 def srt_to_txt(srt_path: str | Path, output_path: str | Path | None = None) -> str:
     text = _read_text(srt_path)
     lines = []
-    for m in _SRT_BLOCK.finditer(text):
+    for m in _srt_matches(text):
         content = m.group(4).strip()
         content = _TAG_RE.sub("", content)
         if content:
-            lines.append(f"{m.group(2)} --> {m.group(3)}\n{content}")
+            lines.append(f"{_normalize_srt_timestamp(m.group(2))} --> {_normalize_srt_timestamp(m.group(3))}\n{content}")
     result = "\n\n".join(lines)
     if output_path:
-        Path(output_path).write_text(result, encoding="utf-8")
+        write_exclusive_text(output_path, result)
     return result
 
 def srt_to_ass(srt_path: str | Path, output_path: str | Path | None = None,
                style: str | None = None) -> str:
     result = _srt_text_to_ass(_read_text(srt_path), style)
     if output_path:
-        Path(output_path).write_text(result, encoding="utf-8")
+        write_exclusive_text(output_path, result)
     return result
 
 
@@ -171,7 +202,7 @@ def txt_to_srt(txt_path: str | Path, output_path: str | Path | None = None) -> s
     ]
     result = "\n\n".join(blocks)
     if output_path:
-        Path(output_path).write_text(result, encoding="utf-8")
+        write_exclusive_text(output_path, result)
     return result
 
 
@@ -179,32 +210,43 @@ def txt_to_ass(txt_path: str | Path, output_path: str | Path | None = None,
                style: str | None = None) -> str:
     result = _srt_text_to_ass(txt_to_srt(txt_path), style)
     if output_path:
-        Path(output_path).write_text(result, encoding="utf-8")
+        write_exclusive_text(output_path, result)
     return result
 
 
 def ass_to_txt(ass_path: str | Path, output_path: str | Path | None = None) -> str:
     text = _read_text(ass_path)
     lines = []
+    fields = ["layer", "start", "end", "style", "name", "marginl", "marginr", "marginv", "effect", "text"]
+    in_events = "[Events]" not in text
     for raw_line in text.split("\n"):
+        raw_line = raw_line.strip()
+        if raw_line.startswith("["):
+            in_events = raw_line.casefold() == "[events]"
+        if in_events and raw_line.startswith("Format:"):
+            fields = [item.strip().lower() for item in raw_line[7:].split(",")]
+        if not in_events:
+            continue
         if not raw_line.startswith("Dialogue:"):
             continue
-        parts = raw_line[len("Dialogue:"):].strip().split(",", 9)
-        if len(parts) < 10:
-            continue
-        try:
-            start = _ass_ts_to_srt(parts[1])
-            end = _ass_ts_to_srt(parts[2])
-        except ValueError:
-            continue
-        content = parts[9].replace("\\N", "\n").replace("\\n", "\n")
+        if not {"start", "end", "text"} <= set(fields) or fields[-1] != "text":
+            raise ValueError("ASS enthält ein nicht unterstütztes Events-Format.")
+        parts = raw_line[len("Dialogue:"):].strip().split(",", len(fields)-1)
+        if len(parts) != len(fields):
+            raise ValueError("ASS enthält einen ungültigen Untertitel-Cue.")
+        event = dict(zip(fields, parts))
+        start, end = _ass_ts_to_srt(event["start"]), _ass_ts_to_srt(event["end"])
+        _validate_time_span(start, end)
+        content = event["text"].replace("\\N", "\n").replace("\\n", "\n")
         content = _ASS_TAG_RE.sub("", content)
         content = _TAG_RE.sub("", content).strip()
         if content:
             lines.append(f"{start} --> {end}\n{content}")
     result = "\n\n".join(lines)
+    if not result:
+        raise ValueError("ASS enthält keine erkennbaren Untertitel-Cues.")
     if output_path:
-        Path(output_path).write_text(result, encoding="utf-8")
+        write_exclusive_text(output_path, result)
     return result
 
 
@@ -216,8 +258,8 @@ def subtitle_to_txt(subtitle_path: str | Path, output_path: str | Path | None = 
     if suffix in {".ass", ".ssa"}:
         return ass_to_txt(path, output_path)
     if suffix == ".txt":
-        result = path.read_text(encoding="utf-8", errors="replace").strip()
+        result = _read_text(path).strip()
         if output_path:
-            Path(output_path).write_text(result, encoding="utf-8")
+            write_exclusive_text(output_path, result)
         return result
     raise ValueError(f"TXT-Export unterstuetzt dieses Format nicht: {suffix or 'ohne Endung'}")

@@ -9,6 +9,8 @@ from .duration_timing_parsing import nearest_common_rate_loose
 
 
 def derive_frame_rate_from_source_duration(info: MediaTimingInfo, expected_duration_s: float | None) -> None:
+    if (info.frame_rate_mode or '').upper() == 'VFR':
+        return  # A matching average cannot establish constant cadence.
     if not expected_duration_s or expected_duration_s <= 0 or not info.video_frame_count or info.video_frame_count <= 0:
         return
     raw_fps = float(info.video_frame_count) / float(expected_duration_s)

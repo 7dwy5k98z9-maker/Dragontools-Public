@@ -178,6 +178,12 @@ def _apply_nfo_scan_result(
     result: dict[str, Any],
 ) -> int:
     media_id = int(row["id"])
+    current = conn.execute("SELECT * FROM media_items WHERE id=? AND active=1 AND exists_flag=1", (media_id,)).fetchone()
+    if current is None:
+        return 0
+    fields = ("path", "item_type", "title", "original_title", "series_title", "season", "episode", "year", "updated_at")
+    if any(current[field] != row[field] for field in fields):
+        return 0
     status = str(result.get("status") or "invalid")
     now = _now()
     if status == "unreachable":
@@ -226,7 +232,12 @@ def _apply_nfo_scan_result(
 
     _mark_parse_error(conn, media_id, status, str(result.get("error") or ""))
     conn.execute(
-        "UPDATE media_items SET nfo_status=?, nfo_path=?, nfo_scanned_at=?, updated_at=? WHERE id=?",
+        """
+        UPDATE media_items
+           SET nfo_status=?, nfo_path=?, nfo_type=NULL, nfo_mtime=NULL,
+               nfo_scanned_at=?, updated_at=?
+         WHERE id=?
+        """,
         (status, str(nfo_path or ""), now, now, media_id),
     )
     return 0

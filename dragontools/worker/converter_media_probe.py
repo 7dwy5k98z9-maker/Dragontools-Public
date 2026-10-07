@@ -42,7 +42,9 @@ def probe_frames(worker, path) -> int | None:
             capture_output=True, text=True, encoding="utf-8", errors="replace",
             stdin=subprocess.DEVNULL, **_no_window_kwargs(), timeout=15,
         )
-        nums = [int(value) for value in result.stdout.split() if value.strip().isdigit()]
+        if getattr(result, "returncode", 0) != 0:
+            raise RuntimeError(result.stderr or "ffprobe fehlgeschlagen")
+        nums = [int(value) for value in (result.stdout or "").split() if value.strip().isdigit()]
         frames = max(nums) if nums else None
         return frames if frames and frames > 100 else None
     except Exception as exc:

@@ -107,7 +107,9 @@ def test_source_trickplay_is_prepared_before_original_can_be_replaced(tmp_path, 
         assert Path(video_path).exists(), "original must still exist during source trickplay"
         root = Path(target_video_path).with_name(f"{Path(target_video_path).stem}.trickplay")
         root.mkdir(exist_ok=True)
-        (root / "1.jpg").write_bytes(b"jpg")
+        variant = root / f'{settings.width} - {settings.tile_label}'
+        variant.mkdir()
+        (variant / "1.jpg").write_bytes(b"jpg")
         return root
 
     monkeypatch.setattr("dragontools.worker.postprocess_runner.TrickplayGenerator.generate", fake_generate)
@@ -120,7 +122,10 @@ def test_source_trickplay_is_prepared_before_original_can_be_replaced(tmp_path, 
     prepared = service.prepare_source_trickplay(
         input_path=str(source), output_path=str(final_output)
     )
-    assert prepared.created_paths == [str(tmp_path / "Film.trickplay")]
+    assert prepared.created_paths == []
+    assert prepared.prepared_trickplay is not None
+    assert Path(prepared.prepared_trickplay.staging_root).is_dir()
+    assert not (tmp_path / 'Film.trickplay').exists()
     assert len(calls) == 1
 
     # Simulate destructive overwrite/container change before normal postprocess.

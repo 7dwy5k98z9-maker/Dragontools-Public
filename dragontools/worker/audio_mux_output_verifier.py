@@ -15,13 +15,14 @@ class AudioMuxVerification:
 
 
 class AudioMuxOutputVerifier:
-    def __init__(self, *, ffprobe_path: str) -> None:
-        self._verifier = OutputVerifier(ffprobe_path=ffprobe_path, min_size_bytes=1024)
+    def __init__(self, *, ffprobe_path: str, worker=None) -> None:
+        self._verifier = OutputVerifier(ffprobe_path=ffprobe_path, min_size_bytes=1024, worker=worker)
 
     def verify(
         self, *, output_path: str, expected_duration_ms: int | None,
         expected_audio_tracks: int | None = None,
         expected_contract: ExpectedMediaContract | None = None,
+        expected_chapter_count: int | None = None,
     ) -> AudioMuxVerification:
         count = expected_contract.audio_stream_count if expected_contract is not None else int(expected_audio_tracks or 0)
         result = self._verifier.verify(
@@ -32,9 +33,12 @@ class AudioMuxOutputVerifier:
             expected_contract=expected_contract,
         )
         messages = list(result.messages or [])
+        chapters_ok = expected_chapter_count is None or result.chapter_count == expected_chapter_count
+        if not chapters_ok:
+            messages.append(f"Kapitel-Anzahl abweichend: erwartet {expected_chapter_count}, gefunden {result.chapter_count}.")
         if expected_contract is None and result.audio_stream_count != count:
             messages.append(
                 f"Audiospur-Anzahl abweichend: erwartet {count}, gefunden {result.audio_stream_count}."
             )
-        ok = bool(result.ok and (expected_contract is not None or result.audio_stream_count == count))
+        ok = bool(result.ok and chapters_ok and (expected_contract is not None or result.audio_stream_count == count))
         return AudioMuxVerification(ok=ok, messages=tuple(messages))

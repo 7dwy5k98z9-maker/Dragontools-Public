@@ -15,6 +15,8 @@ from pathlib import Path
 from typing import Any, Callable
 
 from ..core.models import TargetCodec
+from ..core.strict_numbers import nonnegative_integer
+from ..core.media_metadata import normalize_video_codec
 from ..core.process_runner import subprocess_no_window_kwargs as _no_window_kwargs
 from .dv_command_runner import DVCommandRunner
 from .dv_failure_recovery import preserve_completed_dv_work
@@ -199,6 +201,70 @@ class DVPreflightService:
             )
             self._log(f"❌ DV: {reason}.", "error")
             return False, reason, "DV-Preflight"
+
+        if request.container not in {"mp4", "mkv"}:
+            reason = (
+                f"Ausgabecontainer '{request.container or '<leer>'}' ist für den DV-Encodepfad ungültig; "
+                "erlaubt sind nur MP4 oder MKV"
+            )
+            self._log(f"❌ DV: {reason}.", "error")
+            return False, reason, "DV-Preflight"
+
+        expected_suffix = f".{request.container}"
+        actual_suffix = Path(request.output_path).suffix.casefold()
+        if actual_suffix != expected_suffix:
+            reason = (
+                "Ausgabecontainer und Dateiendung widersprechen sich: "
+                f"container={request.container}, output={Path(request.output_path).name}. "
+                f"Erwartet wird '{expected_suffix}'"
+            )
+            self._log(f"❌ DV: {reason}.", "error")
+            return False, reason, "DV-Preflight"
+
+        if request.profile_major not in {5, 7, 8}:
+            reason = (
+                "Dolby-Vision-Profil ist für den HEVC-DV-Encodepfad nicht unterstützt: "
+                f"Profil {request.profile_major if request.profile_major is not None else 'unbekannt'}. "
+                "Unterstützt werden Profile 5, 7 und 8; AV1/DV Profil 10 gehört in den AV1-DV-Pfad"
+            )
+            self._log(f"❌ DV: {reason}.", "error")
+            return False, reason, "DV-Preflight"
+
+        media_info = request.media_info
+        if getattr(media_info, "ffmpeg_stream_indices_trusted", True) is False:
+            reason = (
+                "FFmpeg-Streamindizes der Quellenanalyse sind nicht verlässlich; "
+                "DV darf ohne eindeutige Videospurzuordnung nicht gestartet werden"
+            )
+            self._log(f"❌ DV: {reason}.", "error")
+            return False, reason, "DV-Preflight"
+
+        primary_video = getattr(media_info, "primary_video", None)
+        if hasattr(media_info, "video_streams") and primary_video is None:
+            reason = "DV-Quellenanalyse enthält keine eindeutig primäre Videospur"
+            self._log(f"❌ DV: {reason}.", "error")
+            return False, reason, "DV-Preflight"
+        if primary_video is not None:
+            source_codec = normalize_video_codec(getattr(primary_video, "codec", ""))
+            if source_codec != "hevc":
+                reason = (
+                    "DV-Quellprofil und Videocodec sind inkonsistent: "
+                    f"Profil {request.profile_major} wurde auf Codec '{source_codec or 'unbekannt'}' erkannt. "
+                    "Der HEVC-DV-Pfad akzeptiert nur HEVC-Quellvideo"
+                )
+                self._log(f"❌ DV: {reason}.", "error")
+                return False, reason, "DV-Preflight"
+            try:
+                source_index = nonnegative_integer(getattr(primary_video, "index"))
+            except (TypeError, ValueError, AttributeError):
+                source_index = -1
+            if source_index < 0:
+                reason = (
+                    "Primäre DV-Videospur besitzt keinen verlässlichen FFmpeg-Streamindex; "
+                    "Track-Auswahl wird nicht geraten"
+                )
+                self._log(f"❌ DV: {reason}.", "error")
+                return False, reason, "DV-Preflight"
 
         if not request.is_p5:
             return True, "", ""

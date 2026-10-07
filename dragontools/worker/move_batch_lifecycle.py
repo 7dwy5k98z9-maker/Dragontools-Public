@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from ..core.move_journal import MoveJournal, MoveJournalWriteError, archive_move_journal_path
 from ..core.system_shutdown import schedule_system_shutdown
+from ..core.journal_runtime import journal_activity
 from .move_batch_executor import MoveBatchExecutor, MoveProgressTracker
 from .move_completion_service import MoveCompletionService
 
@@ -63,7 +64,8 @@ class MoveBatchLifecycleMixin:
             diagnostic_sidecars_for=lambda path: list(self._sidecar_outputs_by_video.get(path, [])),
         )
         try:
-            return executor.run()
+            with journal_activity(self._move_journal.path):
+                return executor.run()
         finally:
             # Teilresultate bleiben auch bei einer unerwarteten Ausnahme sichtbar.
             self.ok_count = executor.result.ok_count

@@ -12,7 +12,7 @@ def test_mediainfo_details_zeigt_bitraten_und_spuren():
                     "@type": "General",
                     "Format": "Matroska",
                     "FileSize": "1450000000",
-                    "Duration": "1430100.000000",
+                    "Duration": "1430.100000",
                     "OverallBitRate": "8110000",
                 },
                 {

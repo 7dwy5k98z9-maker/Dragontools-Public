@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from .logger_paths import log_base_from_settings, make_log_dir
+from .diagnostic_redaction import redact_sensitive_text
 from .version import APP_VERSION
 
 
@@ -54,7 +55,7 @@ def write_tab_load_error_report(
             "",
         ]
     )
-    report_path.write_text(text, encoding="utf-8")
+    report_path.write_text(redact_sensitive_text(text), encoding="utf-8")
     return str(report_path)
 
 

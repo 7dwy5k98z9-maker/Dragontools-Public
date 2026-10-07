@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import Callable, Literal
 
 from ..core.crash_guard import mark_activity
+from ..core.owned_process import terminate_owned_job
 from .log_dispatch import dispatch_log
 from .process_control import terminate_process_tree, wait_while_paused
 
@@ -80,9 +81,37 @@ def terminate_plain(
     log: LogFn | None = None,
     label: str = "Tool",
 ) -> None:
-    """Terminate one process, including its isolated POSIX process group."""
+    """Terminate a tool process and, where supported, its owned process tree."""
     if proc is None or proc.poll() is not None:
         return
+
+    try:
+        if terminate_owned_job(proc):
+            proc.wait(timeout=timeout)
+            return
+    except (OSError, subprocess.SubprocessError) as exc:
+        dispatch_log(log, f"{label}: Job-Abbruch fehlgeschlagen: {exc}", "warn")
+
+    if os.name == "nt":
+        # run_tool() is also used without a Worker object.  In that case the
+        # normal lifecycle reaches terminate_plain(); killing only the parent
+        # could leave ffmpeg/helper children alive after timeout/abort.  The
+        # root PID is the process created by this job, so taskkill /T remains
+        # scoped to the owned tree.
+        from .process_control import _taskkill_tree
+
+        tree_killed = _taskkill_tree(proc.pid, log=log, label=label, timeout=timeout)
+        if tree_killed:
+            try:
+                proc.wait(timeout=timeout)
+                return
+            except (subprocess.TimeoutExpired, OSError) as exc:
+                dispatch_log(
+                    log,
+                    f"{label}: taskkill meldete Erfolg, Prozessende aber nicht bestätigt ({exc}); "
+                    "Python-Kill-Fallback wird versucht.",
+                    "warn",
+                )
 
     if os.name != "nt" and bool(getattr(proc, "_dragontools_process_group", False)):
         import signal
@@ -194,6 +223,10 @@ class ProcessLifecycle:
         if not requested:
             return False
         return self.abort_on_request or abort_type == "sofort"
+
+    def terminate(self) -> None:
+        """Stop the registered process using the shared ownership policy."""
+        self._terminate()
 
     def _terminate(self) -> None:
         if self.proc is None:

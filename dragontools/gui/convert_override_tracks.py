@@ -79,6 +79,12 @@ def _build_audio_rows(
             "mode": mode,
             "codec": codec,
             "bitrate": bitrate,
+            "source_identity": {
+                "language": str(getattr(stream, "language", None) or "").strip().lower(),
+                "codec": str(getattr(stream, "codec", None) or "").strip().lower(),
+                "channels": int(getattr(stream, "channels", 0) or 0),
+                "title": str(getattr(stream, "title", None) or "").strip(),
+            },
         })
 
 
@@ -132,7 +138,18 @@ def _build_subtitle_rows(
         layout.addWidget(label, row_idx, 0)
         layout.addWidget(keep_cb, row_idx, 1)
         layout.addWidget(burn_cb, row_idx, 2)
-        subtitle_rows.append({"index": idx, "keep": keep_cb, "burn": burn_cb})
+        subtitle_rows.append({
+            "index": idx,
+            "keep": keep_cb,
+            "burn": burn_cb,
+            "source_identity": {
+                "language": str(getattr(stream, "language", None) or "").strip().lower(),
+                "codec": str(getattr(stream, "codec", None) or "").strip().lower(),
+                "title": str(getattr(stream, "title", None) or "").strip(),
+                "forced": bool(getattr(stream, "forced", False)),
+                "default": bool(getattr(stream, "default", False)),
+            },
+        })
 
     for row in subtitle_rows:
         row["burn"].toggled.connect(
@@ -150,6 +167,7 @@ def _collect_audio_tracks(audio_rows: list) -> list:
         entry = {
             "index": row["index"],
             "mode": current_mode,
+            "source_identity": dict(row.get("source_identity") or {}),
         }
         if current_mode == "custom":
             entry["codec"] = row["codec"].currentText()
@@ -168,6 +186,7 @@ def _collect_subtitle_tracks(subtitle_rows: list) -> list:
             "index": row["index"],
             "keep": row["keep"].isChecked(),
             "burn_in": row["burn"].isChecked(),
+            "source_identity": dict(row.get("source_identity") or {}),
         }
         for row in subtitle_rows
     ]

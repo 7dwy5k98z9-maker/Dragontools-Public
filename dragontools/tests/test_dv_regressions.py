@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
+from dragontools.tests.subtitle_command_fixtures import subtitle_command_validation  # noqa: F401
 
 from pathlib import Path
 
@@ -192,7 +193,7 @@ def test_hdr10plus_bitstream_service_extract_inject_und_verify(tmp_path):
         calls.append(list(cmd))
         if cmd[1] == "extract":
             out = Path(cmd[cmd.index("-o") + 1])
-            out.write_text('{"metadata": [1]}', encoding="utf-8")
+            out.write_text('{"SceneInfo":[{"SequenceFrameIndex":0}]}', encoding="utf-8")
         elif cmd[1] == "inject":
             out = Path(cmd[cmd.index("-o") + 1])
             out.write_bytes(b"h" * 2048)
@@ -467,10 +468,10 @@ def _make_dv_stage_test_context(tmp_path, *, profile=8, has_hdrplus=True, transf
         has_hdrplus=has_hdrplus,
         transfer_characteristics=transfer,
         color_primaries=primaries,
-        primary_video=SimpleNamespace(color_transfer=transfer, color_primaries=primaries),
+        primary_video=SimpleNamespace(index=0,color_transfer=transfer, color_primaries=primaries),
     )
     request = DVRunRequest.create(
-        input_path="in.mkv",
+        input_path=str(tmp_path / "in.mkv"),
         output_path=str(tmp_path / "out.mp4"),
         media_info=mi,
         vf_args=[],
@@ -483,6 +484,7 @@ def _make_dv_stage_test_context(tmp_path, *, profile=8, has_hdrplus=True, transf
     )
     tmp_path.mkdir(parents=True, exist_ok=True)
     files = DVWorkFiles.create(tmp_path)
+    Path(request.input_path).write_bytes(b"source")
     files.src_hevc.write_bytes(b"source")
     temp_state = DVTempState()
     logs = []
@@ -495,7 +497,7 @@ def _make_dv_stage_test_context(tmp_path, *, profile=8, has_hdrplus=True, transf
             return True
 
     stages = DVPipelineStages(
-        tools=SimpleNamespace(dovi_tool="dovi_tool", ffmpeg="ffmpeg"),
+        tools=SimpleNamespace(dovi_tool="dovi_tool", ffmpeg="ffmpeg",ffprobe="ffprobe"),
         encoder_config=SimpleNamespace(),
         progress_runner=SimpleNamespace(),
         temp_state=temp_state,
@@ -538,13 +540,17 @@ def test_dv_p8_ohne_hdr10plus_normalisiert_rpu_direkt_aus_mkv(tmp_path):
     )
 
     class Runner:
+        def run(self,cmd,**kwargs):
+            text='Frames: 1' if 'info' in cmd else '{"streams":[{"index":0,"codec_type":"video","nb_read_frames":"1"}]}'
+            return SimpleNamespace(returncode=0,stdout=text,stderr='')
         def adapter(self, **_kwargs):
             return lambda *_args, **_kw: 0
 
     assert stages._convert_profile_to_81(state, Runner()) is True
     assert stages._extract_rpu(state, Runner()) is True
-    assert rpu_inputs == [("in.mkv", "2")]
+    assert rpu_inputs == [(state.request.input_path, "2")]
     assert state.profile_hevc is None
+
 
 
 def test_dv_p5_rpu_wird_direkt_aus_mkv_mit_mode3_auf_p81_normalisiert(tmp_path):
@@ -557,14 +563,18 @@ def test_dv_p5_rpu_wird_direkt_aus_mkv_mit_mode3_auf_p81_normalisiert(tmp_path):
     )
 
     class Runner:
+        def run(self,cmd,**kwargs):
+            text='Frames: 1' if 'info' in cmd else '{"streams":[{"index":0,"codec_type":"video","nb_read_frames":"1"}]}'
+            return SimpleNamespace(returncode=0,stdout=text,stderr='')
         def adapter(self, **_kwargs):
             return lambda *_args, **_kw: 0
 
     assert stages._convert_profile_to_81(state, Runner()) is True
     assert stages._extract_rpu(state, Runner()) is True
-    assert rpu_inputs == [("in.mkv", "3")]
+    assert rpu_inputs == [(state.request.input_path, "3")]
     assert state.profile_hevc is None
     assert any("dovi_tool -m 3" in msg for _, msg in logs)
+
 
 
 def test_dv_p7_und_p8_rpu_extraktion_nutzt_mkv_und_mode2(tmp_path):
@@ -574,11 +584,15 @@ def test_dv_p7_und_p8_rpu_extraktion_nutzt_mkv_und_mode2(tmp_path):
         )
 
         class Runner:
+            def run(self,cmd,**kwargs):
+                text='Frames: 1' if 'info' in cmd else '{"streams":[{"index":0,"codec_type":"video","nb_read_frames":"1"}]}'
+                return SimpleNamespace(returncode=0,stdout=text,stderr='')
             def adapter(self, **_kwargs):
                 return lambda *_args, **_kw: 0
 
         assert stages._extract_rpu(state, Runner()) is True
-        assert rpu_inputs == [("in.mkv", "2")]
+        assert rpu_inputs == [(state.request.input_path, "2")]
+
 
 
 def test_dv_unbekannter_cmv4_block_wird_jetzt_beim_extract_rpu_gemeldet(tmp_path):
@@ -864,6 +878,7 @@ def test_dv_pipeline_blockiert_unvollstaendigen_sidecar_export(tmp_path):
     assert result.success is False
     assert result.failure_stage == "Untertitel-Export"
     assert "0/1" in result.failure_reason
+    assert result.preserve_failed_output is True
 
 
 def test_dv_adapter_propagates_pipeline_verified_dolby_vision():
@@ -989,7 +1004,7 @@ def test_dv_post_mux_prueft_hdr10plus_und_rpu_aus_finalem_mp4(tmp_path):
     assert seen["expected"] == expected_hdr
 
 
-def test_dv_final_verify_uses_mediainfo_as_primary_and_skips_bitstream_fallback(tmp_path, monkeypatch):
+def test_dv_final_verify_uses_mediainfo_signalling_and_also_proves_final_rpu(tmp_path, monkeypatch):
     from dragontools.worker.dv_pipeline_stages import DVPipelineStages
     from dragontools.worker.dv_runtime_models import DVTempState
     import dragontools.worker.dv_pipeline_stages as stages_module
@@ -1002,44 +1017,48 @@ def test_dv_final_verify_uses_mediainfo_as_primary_and_skips_bitstream_fallback(
         stages_module,
         "inspect_dynamic_hdr_with_mediainfo",
         lambda *_args, **_kwargs: SimpleNamespace(
-            conclusive=True,
-            dolby_vision=True,
-            dolby_vision_profile="8",
-            hdr10plus=True,
-            warnings=(),
+            conclusive=True, dolby_vision=True, dolby_vision_profile="8",
+            hdr10plus=True, warnings=(),
         ),
     )
 
     class Runner:
-        def run(self, *_args, **_kwargs):
-            raise AssertionError("Bitstream-Fallback darf bei positivem MediaInfo nicht laufen")
-
+        def run(self, command, **_kwargs):
+            Path(command[-1]).write_bytes(b"HEVC" * 1024)
+            return 0
         def adapter(self, **_kwargs):
-            raise AssertionError("Tool-Fallback darf bei positivem MediaInfo nicht laufen")
+            return lambda *_args, **_kw: 0
+
+    class RpuService:
+        def extract_rpu(self, _run, *, input_hevc, output_rpu):
+            output_rpu.write_bytes(b"RPU" * 1024)
+            return True
 
     stages = DVPipelineStages(
         tools=SimpleNamespace(ffmpeg="ffmpeg"), encoder_config=None, progress_runner=None,
         temp_state=DVTempState(), audio_mux_service=None, mp4box_muxer=None,
-        rpu_service=None, hdr10plus_service=None, level5_editor=None,
+        rpu_service=RpuService(), hdr10plus_service=SimpleNamespace(verify_metadata=lambda *_a, **_k: True), level5_editor=None,
         subtitle_service=None, failure_recovery=None,
         log=lambda msg, level: logs.append((level, msg)), verbose_log=lambda *_: None,
         assert_nonempty_file=lambda path, _label: path.exists() and path.stat().st_size > 0,
         clear_burn_sub_tmp=lambda: None,
     )
     state = SimpleNamespace(
-        request=SimpleNamespace(output_path=str(output), preserve_dv_hdr10plus_combo=True),
-        files=SimpleNamespace(root=tmp_path), rpu_to_use=None,
+        request=SimpleNamespace(output_path=str(output), container="mp4", profile_major=8,
+                                preserve_dv_hdr10plus_combo=True),
+        files=SimpleNamespace(root=tmp_path, hdr10plus_json=tmp_path / "metadata_hdr10plus.json"), rpu_to_use=None,
         verified_hdr10plus=False, verified_dolby_vision=False,
     )
 
     assert stages._verify_final_mux_metadata(state, Runner()) is True
     assert state.verified_dolby_vision is True
     assert state.verified_hdr10plus is True
-    assert any("Finales MP4: Dolby Vision JA" in msg for _level, msg in logs)
-    assert any("HDR10+ JA" in msg for _level, msg in logs)
+    assert state.final_rpu_checked is True
+    assert state.final_rpu_present is True
+    assert any("finaler RPU-Nachweis" in msg for _level, msg in logs)
 
 
-def test_dv_final_verify_fallback_checks_only_hdr10plus_when_mediainfo_confirms_dv(tmp_path, monkeypatch):
+def test_dv_final_verify_checks_dv_and_hdr10plus_when_hdr10plus_signalling_is_missing(tmp_path, monkeypatch):
     from dragontools.worker.dv_pipeline_stages import DVPipelineStages
     from dragontools.worker.dv_runtime_models import DVTempState
     import dragontools.worker.dv_pipeline_stages as stages_module
@@ -1053,11 +1072,8 @@ def test_dv_final_verify_fallback_checks_only_hdr10plus_when_mediainfo_confirms_
         stages_module,
         "inspect_dynamic_hdr_with_mediainfo",
         lambda *_args, **_kwargs: SimpleNamespace(
-            conclusive=True,
-            dolby_vision=True,
-            dolby_vision_profile="8",
-            hdr10plus=False,
-            warnings=(),
+            conclusive=True, dolby_vision=True, dolby_vision_profile="8",
+            hdr10plus=False, warnings=(),
         ),
     )
 
@@ -1065,16 +1081,15 @@ def test_dv_final_verify_fallback_checks_only_hdr10plus_when_mediainfo_confirms_
         def run(self, command, **_kwargs):
             Path(command[-1]).write_bytes(b"HEVC" * 1024)
             return 0
-
         def adapter(self, **_kwargs):
-            return lambda *args, **kw: 0
+            return lambda *_args, **_kw: 0
 
     class RpuService:
-        def extract_rpu(self, *_args, **_kwargs):
-            raise AssertionError("DV-Fallback darf nicht laufen, wenn MediaInfo DV bestätigt")
+        def extract_rpu(self, _run, *, input_hevc, output_rpu):
+            output_rpu.write_bytes(b"RPU" * 1024)
+            return True
 
     seen = {}
-
     class HdrService:
         def verify_metadata(self, _run_fn, *, source_stream, scratch_json, expected_json):
             seen["source"] = source_stream
@@ -1091,7 +1106,8 @@ def test_dv_final_verify_fallback_checks_only_hdr10plus_when_mediainfo_confirms_
         clear_burn_sub_tmp=lambda: None,
     )
     state = SimpleNamespace(
-        request=SimpleNamespace(output_path=str(output), preserve_dv_hdr10plus_combo=True),
+        request=SimpleNamespace(output_path=str(output), container="mp4", profile_major=8,
+                                preserve_dv_hdr10plus_combo=True),
         files=SimpleNamespace(root=tmp_path, hdr10plus_json=expected_hdr),
         rpu_to_use=None, verified_hdr10plus=False, verified_dolby_vision=False,
     )
@@ -1099,6 +1115,7 @@ def test_dv_final_verify_fallback_checks_only_hdr10plus_when_mediainfo_confirms_
     assert stages._verify_final_mux_metadata(state, Runner()) is True
     assert state.verified_dolby_vision is True
     assert state.verified_hdr10plus is True
+    assert state.final_rpu_checked is True and state.final_rpu_present is True
     assert seen["source"].name == "final_mux_verify.hevc"
     assert seen["expected"] == expected_hdr
 

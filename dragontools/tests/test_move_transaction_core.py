@@ -29,7 +29,7 @@ def test_stage_copy_failure_keeps_existing_destination_and_cleans_partial(tmp_pa
 
     def failing_copytree(_src, dst, *args, **kwargs):
         partial = Path(dst)
-        partial.mkdir(parents=True)
+        partial.mkdir(parents=True, exist_ok=True)
         (partial / "partial.txt").write_text("partial", encoding="utf-8")
         raise OSError("simulierter Copy-Fehler")
 
@@ -50,14 +50,14 @@ def test_commit_failure_restores_old_destination(tmp_path, monkeypatch):
     source, destination, backup = _tree_pair(tmp_path)
     tx = PathSwapTransaction(source, destination, backup)
     stage = tx.stage()
-    real_replace = module.os.replace
+    real_replace = module.os.rename
 
     def failing_replace(src, dst):
         if Path(src) == stage and Path(dst) == destination:
             raise OSError("simulierter Commit-Fehler")
         return real_replace(src, dst)
 
-    monkeypatch.setattr(module.os, "replace", failing_replace)
+    monkeypatch.setattr(module.os, "rename", failing_replace)
 
     with pytest.raises(OSError, match="simulierter Commit-Fehler"):
         tx.commit()
@@ -109,7 +109,7 @@ def test_failed_rollback_surfaces_backup_path(tmp_path, monkeypatch):
     source, destination, backup = _tree_pair(tmp_path)
     tx = PathSwapTransaction(source, destination, backup)
     stage = tx.stage()
-    real_replace = module.os.replace
+    real_replace = module.os.rename
 
     def fail_commit_and_rollback(src, dst):
         src_p, dst_p = Path(src), Path(dst)
@@ -119,7 +119,7 @@ def test_failed_rollback_surfaces_backup_path(tmp_path, monkeypatch):
             raise OSError("rollback kaputt")
         return real_replace(src, dst)
 
-    monkeypatch.setattr(module.os, "replace", fail_commit_and_rollback)
+    monkeypatch.setattr(module.os, "rename", fail_commit_and_rollback)
 
     with pytest.raises(PathTransactionRollbackError) as exc_info:
         tx.commit()
@@ -147,14 +147,14 @@ def test_external_staging_can_survive_commit_failure_for_caller_recovery(tmp_pat
         staging_path=staging,
         preserve_staging_on_rollback=True,
     )
-    real_replace = module.os.replace
+    real_replace = module.os.rename
 
     def failing_replace(src, dst):
         if Path(src) == staging and Path(dst) == destination:
             raise OSError("simulierter Commit-Fehler")
         return real_replace(src, dst)
 
-    monkeypatch.setattr(module.os, "replace", failing_replace)
+    monkeypatch.setattr(module.os, "rename", failing_replace)
 
     with pytest.raises(OSError, match="simulierter Commit-Fehler"):
         tx.commit()

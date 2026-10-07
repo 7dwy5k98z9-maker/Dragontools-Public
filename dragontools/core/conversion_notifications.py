@@ -39,11 +39,11 @@ class ConversionNotificationService:
         prefs = NotificationPreferences.from_settings(self._settings)
         if not prefs.enabled or aborted:
             return
-        ok = int(summary.get("ok") or 0)
-        errors = int(summary.get("errors") or 0)
-        skipped = int(summary.get("skipped") or 0)
-        move_ok = int(summary.get("move_ok") or 0)
-        move_errors = int(summary.get("move_errors") or 0)
+        ok = _summary_count(summary, 'ok')
+        errors = _summary_count(summary, 'errors')
+        skipped = _summary_count(summary, 'skipped')
+        move_ok = _summary_count(summary, 'move_ok')
+        move_errors = _summary_count(summary, 'move_errors')
 
         if prefs.errors and move_errors:
             self._safe_emit(
@@ -84,4 +84,16 @@ class ConversionNotificationService:
                 try:
                     self._log(f"Windows-Benachrichtigung konnte nicht angezeigt werden: {exc}", "warn")
                 except Exception:
-                    logging.getLogger(__name__).debug("Unterdrückte Best-Effort-Ausnahme in _safe_emit.", exc_info=True)
+                    try:
+                        logging.getLogger(__name__).debug("Unterdrückte Best-Effort-Ausnahme in _safe_emit.", exc_info=True)
+                    except Exception:
+                        # Backend and both diagnostic channels failed. Optional
+                        # notification delivery cannot interrupt file completion.
+                        return
+
+
+def _summary_count(summary, key):
+    try:
+        return max(0, int(summary.get(key) or 0))
+    except (TypeError, ValueError, OverflowError):
+        return 0

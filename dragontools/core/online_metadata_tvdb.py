@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import logging
+
 from pathlib import Path
 from threading import RLock
 from typing import Any, Callable
@@ -15,6 +17,9 @@ from .online_metadata_tvdb_episode_data import TvdbEpisodeDataMixin
 from .online_metadata_tvdb_resolver import TvdbResolverMixin
 from .online_metadata_tvdb_suggestions import TvdbSuggestionMixin
 from .online_metadata_tvdb_transport import TvdbTransportMixin
+
+_LOG = logging.getLogger(__name__)
+
 
 class TheTvdbClient(TvdbResolverMixin, TvdbSuggestionMixin, TvdbEpisodeDataMixin, TvdbTransportMixin, ParsedMetadataResolverMixin):
     def __init__(
@@ -32,6 +37,17 @@ class TheTvdbClient(TvdbResolverMixin, TvdbSuggestionMixin, TvdbEpisodeDataMixin
         self._http_get = http_get or self._urllib_get
         self._http_post = http_post or self._urllib_post
         self._token = config.tvdb_bearer_token.strip()
+        token_loader = getattr(config, "tvdb_bearer_token_load", None)
+        if callable(token_loader):
+            try:
+                # The persisted value may have been refreshed by another client
+                # after this immutable config snapshot was created.
+                self._token = str(token_loader() or "").strip()
+            except Exception:
+                _LOG.warning(
+                    "Aktuelles TheTVDB Bearer-Token konnte nicht erneut aus den Einstellungen gelesen werden.",
+                    exc_info=True,
+                )
         # Per-client batch cache: one fresh episode-list request is enough for
         # all episodes of the same series during one renamer/NFO run.
         self._episode_batch_cache: dict[tuple[int, str, str], list[dict[str, Any]]] = {}

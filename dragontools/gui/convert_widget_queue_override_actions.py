@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from copy import deepcopy
 
 from PyQt6.QtWidgets import QInputDialog, QMessageBox
 
@@ -65,16 +66,16 @@ class ConvertWidgetQueueOverrideActionsMixin:
             current=current_index,
             editable=False,
         )
-        if not ok:
+        if not ok or not self._guard_queue_edit_allowed("Encoder-Profil anwenden"):
             return
 
-        ov = dict(self._state.file_overrides.get(path) or {})
+        ov = deepcopy(self._state.file_overrides.get(path) or {})
         selected_label = ""
         if item == reset_label:
             ov.pop("encoder_profile", None)
         else:
             selected = choices[labels.index(item) - 1][1]
-            ov["encoder_profile"] = dict(selected)
+            ov["encoder_profile"] = deepcopy(selected)
             selected_label = selected.get("label") or selected.get("key") or ""
 
         if self._state.thread and hasattr(self._state.thread, "update_override"):
@@ -90,6 +91,9 @@ class ConvertWidgetQueueOverrideActionsMixin:
                 return
 
         self._state.file_overrides[path] = ov
+        if hasattr(self._controller, "persist_file_override"):
+            self._controller.persist_file_override(path, ov)
+        getattr(self._state, "preflight_rows_by_path", {}).pop(path, None)
         self.update_queue_label(path)
         if selected_label:
             self._log(f"Encoder-Profil für Datei gesetzt: {Path(path).name} -> {selected_label}", "info")
@@ -115,7 +119,7 @@ class ConvertWidgetQueueOverrideActionsMixin:
         applied: list[str] = []
 
         for path in selected:
-            ov = dict(self._state.file_overrides.get(path) or {})
+            ov = deepcopy(self._state.file_overrides.get(path) or {})
             if enable:
                 ov["processing_mode"] = "strip_only"
             else:
@@ -127,6 +131,9 @@ class ConvertWidgetQueueOverrideActionsMixin:
                     continue
 
             self._state.file_overrides[path] = ov
+            if hasattr(self._controller, "persist_file_override"):
+                self._controller.persist_file_override(path, ov)
+            getattr(self._state, "preflight_rows_by_path", {}).pop(path, None)
             getattr(self._state, "preflight_rows_by_path", {}).pop(path, None)
             self.update_queue_label(path)
             applied.append(path)
@@ -152,7 +159,7 @@ class ConvertWidgetQueueOverrideActionsMixin:
     def _toggle_imax(self, path: str) -> None:
         if not self._guard_queue_edit_allowed("IMAX-Override aendern"):
             return
-        ov = dict(self._state.file_overrides.get(path) or {})
+        ov = deepcopy(self._state.file_overrides.get(path) or {})
         ov["imax"] = not ov.get("imax", False)
         if self._state.thread and hasattr(self._state.thread, "update_override"):
             ok = self._state.thread.update_override(path, ov)
@@ -166,6 +173,9 @@ class ConvertWidgetQueueOverrideActionsMixin:
                 )
                 return
         self._state.file_overrides[path] = ov
+        if hasattr(self._controller, "persist_file_override"):
+            self._controller.persist_file_override(path, ov)
+        getattr(self._state, "preflight_rows_by_path", {}).pop(path, None)
         self.update_queue_label(path)
 
     def _edit_override(self, paths) -> None:

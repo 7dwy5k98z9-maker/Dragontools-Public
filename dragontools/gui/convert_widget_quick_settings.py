@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ..core.settings_access import settings_bool
+from ..core.settings_access import settings_bool, settings_text
 from ..core.settings_conversion import (
     DEFAULT_HDR10PLUS_GENERATOR_ENABLED,
     DEFAULT_QUALITY_TARGET_ENABLED,
@@ -15,8 +15,8 @@ from ..core.settings_conversion import (
 )
 from ..core.settings_watch import DEFAULT_WATCH_ENABLED, SET_KEY_WATCH_ENABLED
 from ..core.settings_postprocess import (
-    DEFAULT_NFO_ENABLED, DEFAULT_TRICKPLAY_ENABLED,
-    SET_KEY_NFO_ENABLED, SET_KEY_TRICKPLAY_ENABLED,
+    DEFAULT_NFO_ENABLED, DEFAULT_NFO_TIMING, DEFAULT_TRICKPLAY_ENABLED,
+    SET_KEY_NFO_ENABLED, SET_KEY_NFO_TIMING, SET_KEY_TRICKPLAY_ENABLED,
 )
 
 
@@ -76,7 +76,8 @@ QUICK_TOGGLE_SPECS = (
     ),
     QuickToggleSpec(
         "nfo_quick_cb", "NFO", SET_KEY_NFO_ENABLED, DEFAULT_NFO_ENABLED,
-        "Jellyfin-NFO nach erfolgreicher Konvertierung erstellen. Gilt für neu gestartete Jobs.",
+        "Jellyfin-NFO gemäß dem in den Einstellungen gewählten Zeitpunkt aktivieren/deaktivieren. "
+        "Gilt für neu gestartete Jobs.",
     ),
     QuickToggleSpec(
         "trickplay_quick_cb", "Trickplay", SET_KEY_TRICKPLAY_ENABLED, DEFAULT_TRICKPLAY_ENABLED,
@@ -101,7 +102,18 @@ def quick_toggle_value(settings, spec: QuickToggleSpec) -> bool:
         if spec.rule_group:
             rules = rules.get(spec.rule_group, {})
         return _safe_bool(rules.get(spec.key), spec.default)
-    return settings_bool(settings, spec.key, spec.default)
+    enabled = settings_bool(settings, spec.key, spec.default)
+    if spec.key == SET_KEY_NFO_ENABLED and enabled:
+        contains = getattr(settings, "contains", None)
+        if callable(contains) and contains(SET_KEY_NFO_TIMING):
+            timing = settings_text(
+                settings,
+                SET_KEY_NFO_TIMING,
+                DEFAULT_NFO_TIMING,
+                allowed={"off", "during", "after"},
+            )
+            return timing != "off"
+    return enabled
 
 
 def set_quick_toggle_value(settings, spec: QuickToggleSpec, enabled: bool) -> None:
@@ -117,6 +129,15 @@ def set_quick_toggle_value(settings, spec: QuickToggleSpec, enabled: bool) -> No
         _save("subtitle_rules", rules)
         return
     settings.setValue(spec.key, bool(enabled))
+    if spec.key == SET_KEY_NFO_ENABLED and enabled:
+        timing = settings_text(
+            settings,
+            SET_KEY_NFO_TIMING,
+            DEFAULT_NFO_TIMING,
+            allowed={"off", "during", "after"},
+        )
+        if timing == "off":
+            settings.setValue(SET_KEY_NFO_TIMING, DEFAULT_NFO_TIMING)
     sync = getattr(settings, "sync", None)
     if callable(sync):
         sync()

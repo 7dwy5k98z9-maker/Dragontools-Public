@@ -74,9 +74,9 @@ class DVRemuxProcessRunner:
         )
         stderr_lines = [line for line in result.stderr.splitlines() if line.strip()]
         w._last_stderr = "\n".join(stderr_lines[-10:])
-        if not result.ok:
+        if not result.ok or result.aborted or result.timed_out:
             self._log_process_failure(cmd, result, stderr_lines)
-        return result.returncode
+        return _effective_returncode(result)
 
     @staticmethod
     def _estimate_eta(
@@ -89,8 +89,9 @@ class DVRemuxProcessRunner:
     ) -> float | None:
         if last_out_ms <= 0:
             return None
-        phase_fraction = (pct_range[1] - pct_range[0]) / 100.0
-        remaining_ms = max(0.0, dur_ms * phase_fraction - last_out_ms)
+        # Progress ranges scale the GUI percentage, not the media timeline.
+        # FFmpeg out_time_ms measures position within the complete input.
+        remaining_ms = max(0.0, dur_ms - last_out_ms)
         if last_speed and last_speed > 0:
             return (remaining_ms / 1000.0) / last_speed
         elapsed = max(0.001, time.time() - start)
@@ -131,7 +132,7 @@ class DVRemuxProcessRunner:
                 worker=w,
                 log=w._log,
             )
-            if not result.ok:
+            if not result.ok or result.aborted or result.timed_out:
                 return None
             value = result.stdout.strip()
             return int(float(value) * 1000) if value else None
@@ -153,4 +154,12 @@ class DVRemuxProcessRunner:
             worker=w,
             log=w._log,
         )
-        return result.returncode, result.stdout, result.stderr
+        return _effective_returncode(result), result.stdout, result.stderr
+
+
+def _effective_returncode(result) -> int:
+    if result.aborted:
+        return 130
+    if result.timed_out:
+        return 124
+    return result.returncode

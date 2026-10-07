@@ -110,14 +110,6 @@ def _block_to_html(block: str) -> str:
         html.append("<p>" + "<br>".join(escape(item) for item in paragraphs) + "</p>")
     if bullets:
         html.append("<ul>" + "".join(f"<li>{escape(item)}</li>" for item in bullets) + "</ul>")
-    if not numbered and not paragraphs and not bullets:
-        html.append(f"<p>{escape(first)}</p>")
-    elif not numbered and first and first not in paragraphs:
-        # Der erste Text ist bei normalen Blöcken Teil des Absatzes.
-        body = [first, *paragraphs]
-        html = ["<p>" + "<br>".join(escape(item) for item in body) + "</p>"]
-        if bullets:
-            html.append("<ul>" + "".join(f"<li>{escape(item)}</li>" for item in bullets) + "</ul>")
     return "".join(html)
 
 

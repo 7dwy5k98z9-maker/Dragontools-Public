@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+from .dialog_ownership import exec_owned_dialog
+
 from PyQt6.QtWidgets import QInputDialog, QLineEdit, QMessageBox
 
 
@@ -25,7 +27,7 @@ class MainWindowBackupActionsMixin:
         without_btn = choice.addButton("Ohne Keys (empfohlen)", QMessageBox.ButtonRole.AcceptRole)
         encrypted_btn = choice.addButton("Verschlüsselt inkl. Keys", QMessageBox.ButtonRole.ActionRole)
         choice.addButton(QMessageBox.StandardButton.Cancel)
-        choice.exec()
+        exec_owned_dialog(choice)
 
         clicked = choice.clickedButton()
         if clicked is not without_btn and clicked is not encrypted_btn:
@@ -148,7 +150,7 @@ class MainWindowBackupActionsMixin:
                 QMessageBox.ButtonRole.ActionRole,
             )
             legacy_choice.addButton(QMessageBox.StandardButton.Cancel)
-            legacy_choice.exec()
+            exec_owned_dialog(legacy_choice)
             clicked = legacy_choice.clickedButton()
             if clicked is keep_btn:
                 restore_legacy_plaintext_secrets = False

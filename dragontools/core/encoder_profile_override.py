@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from typing import Any
+from copy import deepcopy
 
-from .type_utils import _safe_int
+from .type_utils import _safe_bool, _safe_int
 
 
 SCALE_LABELS_TO_MODE = {
@@ -24,6 +25,20 @@ MODE_TO_SCALE_LABEL = {
 }
 
 _ALLOWED_ENCODERS = {"cpu", "nvenc", "qsv", "amf"}
+_BACKEND_OPTIONS = frozenset({
+    "encoder", "preset", "tune", "aq_mode", "aq_strength", "psy_rd", "psy_rdoq",
+    "bf", "rc_lookahead", "cq", "spatial_aq", "temporal_aq", "lookahead_level",
+    "multipass", "bref_mode", "q", "lookahead", "lookahead_depth", "quality", "qp",
+})
+
+
+def _merge_encoder_options(current: dict, incoming: dict, *, encoder: str | None = None) -> dict:
+    active = str(current.get("encoder") or "cpu").strip().lower()
+    selected = str(encoder or incoming.get("encoder") or active).strip().lower()
+    # Feature policy/capability data belongs to the job; encoding parameters
+    # belong to the selected backend, including names shared by two backends.
+    retained = current if selected == active else {k: v for k, v in current.items() if k not in _BACKEND_OPTIONS}
+    return {**deepcopy(retained), **deepcopy(incoming), "encoder": selected}
 
 
 def _codec_text(value: Any) -> str:
@@ -63,6 +78,35 @@ def scoped_encoder_options(
     if active != target or not isinstance(options, dict):
         return {}
     return dict(options)
+
+
+def file_override_may_enable_encoder_option(override: Any, option: str) -> bool:
+    """Conservative capability probe for options stored in per-file encoder profiles.
+
+    Runtime capability discovery happens before a concrete file profile becomes
+    effective.  It therefore only needs to know whether *any* queued override may
+    request an optional feature.  Over-probing is safe; under-probing would make
+    an otherwise valid assigned profile silently ineffective.
+    """
+    if not isinstance(override, dict):
+        return False
+    for key in ("encoder_override", "encoder_profile"):
+        nested = override.get(key)
+        if not isinstance(nested, dict):
+            continue
+        options = nested.get("encoder_options")
+        if isinstance(options, dict) and _safe_bool(options.get(option, False), False):
+            return True
+    return False
+
+
+def runtime_encoder_capabilities(override: dict) -> dict:
+    """Owned per-file readiness facts cannot override encoding policy."""
+    values = override.get("_encoder_runtime_capabilities")
+    if not isinstance(values, dict):
+        return {}
+    return deepcopy({key: value for key, value in values.items()
+                     if isinstance(key, str) and key.startswith("_comfyui_")})
 
 
 def profile_to_override(
@@ -158,8 +202,7 @@ def normalize_encoder_override(
 
 
 def _apply_profile_settings(result: dict[str, Any], profile: dict[str, Any]) -> None:
-    options = dict(result["encoder_options"])
-    options.update(profile.get("encoder_options") or {})
+    options = _merge_encoder_options(result["encoder_options"], profile.get("encoder_options") or {})
     result["crf"] = profile.get("crf") if profile.get("crf") is not None else result["crf"]
     result["preset"] = profile.get("preset") or result["preset"]
     result["scale_mode"] = _scale_mode(profile.get("scale"), result["scale_mode"])
@@ -169,9 +212,8 @@ def _apply_profile_settings(result: dict[str, Any], profile: dict[str, Any]) -> 
 
 
 def _apply_manual_settings(result: dict[str, Any], manual: dict[str, Any]) -> None:
-    options = dict(result["encoder_options"])
-    options.update(manual.get("encoder_options") or {})
     encoder = manual["encoder"]
+    options = _merge_encoder_options(result["encoder_options"], manual.get("encoder_options") or {}, encoder=encoder)
     options["encoder"] = encoder
 
     quality = manual.get("quality")
@@ -215,7 +257,7 @@ def effective_encoder_settings(
         "crf": default_crf,
         "preset": default_preset,
         "scale_mode": default_scale_mode,
-        "encoder_options": dict(default_encoder_options or {}),
+        "encoder_options": deepcopy(default_encoder_options or {}),
         "profile_key": "",
         "profile_label": "",
     }
@@ -236,5 +278,6 @@ def effective_encoder_settings(
 
     sdr_hdr = override.get("sdr_hdr")
     if sdr_hdr is not None:
-        result["encoder_options"]["sdr_hdr_enabled"] = bool(sdr_hdr)
+        result["encoder_options"]["sdr_hdr_enabled"] = _safe_bool(sdr_hdr, False)
+    result["encoder_options"].update(runtime_encoder_capabilities(override))
     return result

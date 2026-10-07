@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
+from ..core.media_duration import positive_seconds
 
 from .duration_repair_models import (
     MediaTimingInfo,
@@ -29,11 +30,8 @@ def _repair_duration_close(value: float | None, expected: float | None, *, toler
 def _sane_reference(value: float | None) -> float | None:
     if value is None:
         return None
-    try:
-        numeric = float(value)
-    except (TypeError, ValueError):
-        return None
-    if numeric <= 0 or numeric >= _EXTREME_TIMESTAMP_S:
+    numeric = positive_seconds(value)
+    if numeric is None or numeric >= _EXTREME_TIMESTAMP_S:
         return None
     return numeric
 

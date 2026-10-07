@@ -32,6 +32,7 @@ class HDRPlusToolRunner:
         self._log = log
         self._temp_state = temp_state
         self._worker = worker
+        self.interrupted = False
 
     def _remember_command(self, command: list[str], label: str) -> None:
         state = self._temp_state
@@ -54,6 +55,7 @@ class HDRPlusToolRunner:
     ) -> ToolRunResult:
         command = [str(part) for part in cmd]
         self._remember_command(command, label)
+        self.interrupted = False
         result = self._run_tool_fn(
             command,
             label=label,
@@ -63,6 +65,7 @@ class HDRPlusToolRunner:
             log=self._log,
         )
         self._remember_result(result)
+        self.interrupted = bool(getattr(result, 'aborted', False) or getattr(result, 'timed_out', False))
         return result
 
     def run_checked(
@@ -81,7 +84,7 @@ class HDRPlusToolRunner:
             timeout_s=timeout_s,
             timeout_mode=timeout_mode,
         )
-        returncode = int(result.returncode)
+        returncode = 130 if getattr(result, 'aborted', False) else 124 if getattr(result, 'timed_out', False) else int(result.returncode)
         if returncode in accepted_returncodes:
             if returncode != 0:
                 self._log(
@@ -124,11 +127,12 @@ class HDRPlusToolRunner:
             label=label,
             timeout_s=get_timeout("hdrplus_tool"),
         )
-        if not result.ok:
+        returncode = 130 if getattr(result, 'aborted', False) else 124 if getattr(result, 'timed_out', False) else int(result.returncode)
+        if returncode != 0:
             tool_name = Path(command[0]).name if command else "hdr10plus_tool"
             self._temp_state.failure_stage = label
             self._temp_state.failure_reason = (
-                f"{label}: {tool_name} fehlgeschlagen (rc={int(result.returncode)})"
+                f"{label}: {tool_name} fehlgeschlagen (rc={returncode})"
             )
             if not allow_error:
                 self._log_tool_failure_fn(
@@ -137,7 +141,7 @@ class HDRPlusToolRunner:
                     log=self._log,
                     tool_name=tool_name,
                 )
-        return int(result.returncode)
+        return returncode
 
     def run_mux(
         self,

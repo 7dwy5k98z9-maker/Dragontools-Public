@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 from copy import deepcopy
 from typing import Any
 
@@ -193,12 +194,15 @@ def sanitize_renamer_text(
 
 
 def _title_key(value: str) -> str:
-    text = str(value or "").casefold()
+    # Keep non-Latin letters/digits (CJK, Cyrillic, etc.) intact.  The previous
+    # ASCII-centric regexp collapsed e.g. Japanese/Chinese titles to an empty
+    # key, so an explicit title exception could never match them.
+    text = unicodedata.normalize("NFKC", str(value or "")).casefold()
     text = text.translate(str.maketrans({
         "’": "'", "‘": "'", "´": "'", "`": "'",
         "‐": "-", "‑": "-", "‒": "-", "–": "-", "—": "-", "−": "-",
     }))
-    text = re.sub(r"[^a-z0-9äöüß]+", " ", text)
+    text = "".join(ch if ch.isalnum() else " " for ch in text)
     return re.sub(r"\s+", " ", text).strip()
 
 

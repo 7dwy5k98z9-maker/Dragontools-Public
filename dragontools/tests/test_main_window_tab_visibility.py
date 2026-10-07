@@ -56,6 +56,9 @@ class _Tabs:
     def tabBar(self):
         return self._bar
 
+    def widget(self, _index):
+        return None
+
     def removeTab(self, index):
         self._bar.keys.pop(index)
 
@@ -78,6 +81,7 @@ def _fake_window(keys):
         tabs=_Tabs(keys),
     )
     window._set_tab_visible_setting = types.MethodType(MainWindow._set_tab_visible_setting, window)
+    window.set_tab_visible_setting = types.MethodType(MainWindow.set_tab_visible_setting, window)
     window._tab_label = types.MethodType(MainWindow._tab_label, window)
     window._reopen_tab = types.MethodType(MainWindow._reopen_tab, window)
     return window

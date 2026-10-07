@@ -1,12 +1,18 @@
 from __future__ import annotations
 
 import ast
+import html
+import io
 import re
+import zipfile
+from functools import lru_cache
 from pathlib import Path
 from typing import Iterable
 
 from .release_packaging import iter_public_source_files
 from .release_validation_common import ReleaseCheck
+from .release_private_paths import USER_PATH_PATTERN
+from .release_document_privacy import docx_searchable_text, pdf_hidden_text
 
 def _iter_release_text_files(root: Path) -> Iterable[Path]:
     """Iterate non-Python text artifacts from the canonical public inventory.
@@ -30,15 +36,28 @@ def _iter_release_python_files(root: Path) -> Iterable[Path]:
             yield path
 
 
+def _iter_release_docx_files(root: Path) -> Iterable[Path]:
+    for path in iter_public_source_files(root):
+        if path.suffix.casefold() == ".docx":
+            yield path
+
+
+def _iter_release_pdf_files(root: Path) -> Iterable[Path]:
+    for path in iter_public_source_files(root):
+        if path.suffix.casefold() == ".pdf":
+            yield path
+
+
 _PYTHON_SECRET_MARKERS = (
     "api_key", "api_token", "access_token", "bearer_token",
     "client_secret", "password", "passwd",
 )
-_SECRET_NAME_IGNORE_PREFIXES = ("set_key_", "default_", "secret_mode_")
+_SECRET_NAME_IGNORE_PREFIXES = ("set_key_", "secret_mode_")
 _SECRET_PLACEHOLDER_MARKERS = (
     "example", "dummy", "placeholder", "changeme", "replace_me",
     "your_", "your-", "test-key", "test-token", "wrong-password",
-    "very-good-password",
+    "very-good-password", "strong-password", "old-manual-token",
+    "plain-cli-secret", "plain-extra-secret",
 )
 
 
@@ -53,9 +72,10 @@ def _looks_like_secret_name(name: str) -> bool:
     return any(marker in normalized for marker in _PYTHON_SECRET_MARKERS)
 
 
-def _looks_like_real_secret(value: str) -> bool:
+def _looks_like_real_secret(value: str, name: str = "") -> bool:
     token = str(value or "").strip()
-    if len(token) < 12 or any(char.isspace() for char in token):
+    password = _normalized_secret_name(name).split('_')[-1] in {'password', 'passwd'}
+    if len(token) < (8 if password else 12) or any(char.isspace() for char in token):
         return False
     folded = token.casefold()
     if any(marker in folded for marker in _SECRET_PLACEHOLDER_MARKERS):
@@ -116,10 +136,10 @@ def _scan_python_secrets(root: Path) -> list[ReleaseCheck]:
         except (OSError, SyntaxError):
             continue
         for name, value, line in _python_secret_candidates(tree):
-            if not _looks_like_secret_name(name) or not _looks_like_real_secret(value):
+            if not _looks_like_secret_name(name) or not _looks_like_real_secret(value, name):
                 continue
             findings.append(ReleaseCheck(
-                "warn",
+                "error",
                 "Datenschutz: mögliches Python-Secret",
                 f"{path.relative_to(root)}:{line} enthält ein hart codiertes Literal für {name!r}.",
             ))
@@ -128,49 +148,143 @@ def _scan_python_secrets(root: Path) -> list[ReleaseCheck]:
 
 
 
-_PRIVATE_NAME_PATTERN = "".join(('\\bMark', 'us\\b|\\bMark', 'u\\b'))
-_PRIVATE_WORKDIR_PATTERN = "".join(('Arbeitsordner ', 'codex'))
-_PRIVATE_SERVER_PATTERN = "".join(('(?:\\\\\\\\|//)medien', 'speicher'))
+_PRIVATE_NAME_PATTERN = r"\bMark" + r"us\b|\bMark" + r"u\b"
+_PRIVATE_WORKDIR_PATTERN = "Arbeitsordner " + "codex"
+_PRIVATE_SERVER_PATTERN = r"(?:\\\\|//)medien" + "speicher"
 
 _PRIVATE_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
-    ("lokaler Benutzerpfad", re.compile(r"C:\\Users\\[^\\\r\n]+", re.IGNORECASE)),
+    ("lokaler Benutzerpfad", USER_PATH_PATTERN),
     ("persönlicher Name", re.compile(_PRIVATE_NAME_PATTERN, re.IGNORECASE)),
     ("Arbeitsordner-Pfad", re.compile(_PRIVATE_WORKDIR_PATTERN, re.IGNORECASE)),
     ("Netzwerk-Medienpfad", re.compile(_PRIVATE_SERVER_PATTERN, re.IGNORECASE)),
     ("temporärer Codex-Pfad", re.compile(r"AppData\\Local\\Temp\\codex-", re.IGNORECASE)),
-    ("möglicher API-Key", re.compile(r"(api[_-]?key|read[_-]?access[_-]?token)\s*[:=]\s*['\"][^'\"\s]{8,}", re.IGNORECASE)),
+    ("mögliches Secret", re.compile(
+        r"(api[_-]?key|api[_-]?token|read[_-]?access[_-]?token|access[_-]?token|bearer[_-]?token|client[_-]?secret|password|passwd)"
+        r"\s*[:=]\s*['\"][^'\"\s]{8,}",
+        re.IGNORECASE,
+    )),
 )
 
 
-def _scan_private_markers(root: Path) -> list[ReleaseCheck]:
+def _docx_searchable_text(path: Path) -> str:
+    return docx_searchable_text(path)
+
+
+def _document_private_findings(text: str, relative: Path, kind: str) -> list[ReleaseCheck]:
+    findings = []
+    for label, pattern in _PRIVATE_PATTERNS:
+        if label != "mögliches Secret" and pattern.search(text):
+            findings.append(ReleaseCheck("error", f"Datenschutz {kind}: {label}",
+                f"{relative} enthält einen privaten Marker."))
+    for match in _TEXT_SECRET_PATTERN.finditer(text):
+        if _looks_like_real_secret(match[2], match[1]):
+            findings.append(ReleaseCheck("error", f"Datenschutz {kind}: mögliches Secret",
+                f"{relative} enthält ein mögliches Secret für {match[1]!r}; Wert maskiert."))
+    return findings
+
+
+def _scan_docx_private_markers(root: Path) -> list[ReleaseCheck]:
+    findings: list[ReleaseCheck] = []
+    for path in _iter_release_docx_files(root):
+        try:
+            text = _docx_searchable_text(path)
+        except Exception as exc:
+            findings.append(ReleaseCheck(
+                "error",
+                "Datenschutz: DOCX nicht prüfbar",
+                f"{path.relative_to(root)} konnte nicht vollständig geprüft werden: {exc}",
+            ))
+            continue
+        findings.extend(_document_private_findings(text, path.relative_to(root), "DOCX"))
+    return findings
+
+
+@lru_cache(maxsize=8)
+def _pdf_searchable_text_cached(pdf_bytes: bytes) -> str:
+    # Cache by the actual artifact bytes: copied/extracted release trees reuse the
+    # same validation result, while any content change necessarily invalidates it.
+    from pypdf import PdfReader
+
+    reader = PdfReader(io.BytesIO(pdf_bytes), strict=False)
+    chunks: list[str] = []
+    metadata = reader.metadata
+    if metadata:
+        chunks.extend(str(value) for value in metadata.values() if value is not None)
+    for page in reader.pages:
+        chunks.append(page.extract_text() or "")
+    chunks.append(pdf_hidden_text(reader))
+    return "\n".join(chunks)
+
+
+def _scan_pdf_private_markers(root: Path) -> list[ReleaseCheck]:
+    pdfs = list(_iter_release_pdf_files(root))
+    if not pdfs:
+        return []
+    try:
+        import pypdf  # noqa: F401 - dependency gate for fail-closed PDF scanning
+    except ImportError:
+        return [ReleaseCheck(
+            "error",
+            "Datenschutz: PDF-Prüfung nicht verfügbar",
+            "pypdf fehlt; öffentliche PDF-Artefakte können nicht auf private Marker geprüft werden. "
+            "Installiere requirements-build.txt bzw. requirements-test.txt.",
+        )]
+
+    findings: list[ReleaseCheck] = []
+    for path in pdfs:
+        rel = path.relative_to(root)
+        try:
+            text = _pdf_searchable_text_cached(path.read_bytes())
+        except Exception as exc:
+            findings.append(ReleaseCheck(
+                "error",
+                "Datenschutz: PDF nicht prüfbar",
+                f"{rel} konnte nicht vollständig geprüft werden: {exc}",
+            ))
+            continue
+        findings.extend(_document_private_findings(text, rel, "PDF"))
+    return findings
+
+
+_TEXT_SECRET_PATTERN = re.compile(
+    r"(?<![\w])['\"]?([a-z0-9_.-]*(?:api[_-]?key|api[_-]?token|read[_-]?access[_-]?token|access[_-]?token|bearer[_-]?token|client[_-]?secret|password|passwd)[a-z0-9_.-]*)['\"]?"
+    r"\s*[:=]\s*['\"]?([^'\"\s,;}\]]{8,})", re.IGNORECASE)
+
+
+def _scan_private_markers(root: Path, *, check_pdf_privacy: bool = True) -> list[ReleaseCheck]:
+    try:
+        return _scan_private_markers_unchecked(root, check_pdf_privacy=check_pdf_privacy)
+    except (OSError, RuntimeError) as exc:
+        return [ReleaseCheck('error', 'Datenschutz: Inventar nicht prüfbar', str(exc))]
+
+
+def _scan_private_markers_unchecked(root: Path, *, check_pdf_privacy: bool = True) -> list[ReleaseCheck]:
     findings: list[ReleaseCheck] = []
     for path in _iter_release_text_files(root):
         try:
-            text = path.read_text(encoding="utf-8", errors="replace")
+            text = path.read_text(encoding="utf-8")
         except Exception as exc:
-            try:
-                rel = path.relative_to(root)
-            except (OSError, ValueError):
-                rel = path
-            findings.append(
-                ReleaseCheck(
-                    "warn",
-                    "Datenschutz: Datei nicht lesbar",
-                    f"{rel} konnte nicht geprüft werden: {exc}",
-                )
-            )
+            findings.append(ReleaseCheck("warn", "Datenschutz: Datei nicht lesbar",
+                f"{path.relative_to(root)} konnte nicht geprüft werden: {exc}"))
             continue
         for label, pattern in _PRIVATE_PATTERNS:
-            match = pattern.search(text)
-            if match:
-                findings.append(
-                    ReleaseCheck(
-                        "warn",
-                        f"Datenschutz: {label}",
-                        f"{path.relative_to(root)} enthält '{match.group(0)[:80]}'",
-                    )
-                )
-                break
+            if label == "mögliches Secret":
+                continue
+            if pattern.search(text):
+                findings.append(ReleaseCheck("warn", f"Datenschutz: {label}",
+                    f"{path.relative_to(root)} enthält einen privaten Marker."))
+        for match in _TEXT_SECRET_PATTERN.finditer(text):
+            if _looks_like_real_secret(match[2], match[1]):
+                findings.append(ReleaseCheck("error", "Datenschutz: mögliches Secret",
+                    f"{path.relative_to(root)} enthält ein mögliches Secret für {match[1]!r}; Wert maskiert."))
+    findings.extend(_scan_docx_private_markers(root))
+    if check_pdf_privacy:
+        findings.extend(_scan_pdf_private_markers(root))
+    else:
+        findings.append(ReleaseCheck(
+            "ok", "Datenschutz: PDF-Prüfung ausgelassen",
+            "Privater Build: PDF-Inhalte werden nicht auf private Marker geprüft; die übrigen Prüfungen bleiben aktiv.",
+        ))
     findings.extend(_scan_python_secrets(root))
     if not findings:
         findings.append(ReleaseCheck(

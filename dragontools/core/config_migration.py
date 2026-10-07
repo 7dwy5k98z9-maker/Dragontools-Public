@@ -283,7 +283,15 @@ def migrate_encoder_profile(
         codec = default_codec
         messages.append(f"Profil '{key}': Codec auf {default_codec} gesetzt")
 
-    options = dict(raw.get("encoder_options") or {})
+    raw_options = raw.get("encoder_options")
+    if isinstance(raw_options, dict):
+        options = dict(raw_options)
+    else:
+        options = {}
+        if raw_options not in (None, ""):
+            messages.append(
+                f"Profil '{key}': ungültige Encoder-Optionen wurden auf sichere Defaults zurückgesetzt"
+            )
     encoder = str(options.get("encoder") or "cpu").strip().lower()
     allowed_encoders = {"cpu", "nvenc", "qsv", "amf"}
     if encoder not in allowed_encoders:
@@ -357,7 +365,13 @@ def migrate_profile_collection(
         if key_text.startswith("_"):
             continue
         if not isinstance(value, dict):
-            messages.append(f"Profil '{key_text}' übersprungen: kein Objekt")
+            # Keep malformed user data in the persisted file so a migration
+            # can never silently destroy it.  ProfileManager filters such
+            # entries from the runtime view, while a future/manual repair can
+            # still recover the original value.
+            migrated[key_text] = value
+            if schema_version(data) < current_schema_version("profiles"):
+                messages.append(f"Profil '{key_text}' nicht aktiviert: kein Objekt (Wert beibehalten)")
             continue
         profile, profile_messages = migrate_encoder_profile(
             key_text,

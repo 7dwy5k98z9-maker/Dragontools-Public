@@ -10,7 +10,12 @@ from __future__ import annotations
 from .hdr10plus_generator_client import HDR10PlusGeneratorClient, generator_executable_available
 from .sdr_hdr_runtime import ffmpeg_has_libplacebo
 from .comfyui_runtime import configure_comfyui_runtime
+from .log_dispatch import dispatch_log
 from ..core.file_override_normalization import normalize_override_dict
+from ..core.encoder_profile_override import (
+    file_override_may_enable_encoder_option, effective_encoder_settings,
+    normalize_encoder_override, normalize_profile_override,
+)
 
 
 def configure_optional_runtime_features(worker, tools) -> None:
@@ -24,6 +29,8 @@ def configure_optional_runtime_features(worker, tools) -> None:
     options["_davinci_resolve_available"] = bool(resolve_available)
 
     _configure_hdr10plus_generator(worker, tools, options)
+    for raw in dict(getattr(worker._job_state, "file_overrides", {}) or {}).values():
+        configure_optional_file_runtime(worker, tools, raw, profiles_only=True)
 
     global_sdr_hdr = bool(options.get("sdr_hdr_enabled", False))
     per_file_sdr_hdr = any(
@@ -46,7 +53,7 @@ def configure_optional_runtime_features(worker, tools) -> None:
         return
 
     if backend == "comfyui":
-        configure_comfyui_runtime(worker, tools, options)
+        _probe_comfyui_backend(worker, tools, options)
         return
 
     worker.log(
@@ -60,11 +67,19 @@ def configure_optional_runtime_features(worker, tools) -> None:
 
 def _configure_hdr10plus_generator(worker, tools, options: dict) -> None:
     generator_enabled = bool(options.get("hdr10plus_generator_enabled", False))
+    per_file_enabled = any(
+        normalize_override_dict(raw).get("generate_hdr10plus") is True
+        or file_override_may_enable_encoder_option(raw, "hdr10plus_generator_enabled")
+        for raw in dict(getattr(worker._job_state, "file_overrides", {}) or {}).values()
+    )
+    generator_requested = bool(generator_enabled or per_file_enabled)
     generator_path = str(tools.hdr10plus_generator)
-    generator_available = generator_executable_available(generator_path)
+    generator_available = (
+        generator_executable_available(generator_path) if generator_requested else False
+    )
     generator_version = ""
 
-    if generator_enabled and generator_available:
+    if generator_requested and generator_available:
         probe = HDR10PlusGeneratorClient(
             generator_path,
             worker=worker,
@@ -81,18 +96,67 @@ def _configure_hdr10plus_generator(worker, tools, options: dict) -> None:
                 "warn",
             )
 
-    options["_hdr10plus_generator_available"] = bool(generator_enabled and generator_available)
+    options["_hdr10plus_generator_available"] = bool(generator_requested and generator_available)
     options["_hdr10plus_generator_version"] = generator_version
 
-    if generator_enabled:
+    if generator_requested:
+        request_source = (
+            "globale/per-Datei-Einstellung"
+            if generator_enabled and per_file_enabled
+            else "per-Datei-Override"
+            if per_file_enabled
+            else "globale Einstellung"
+        )
         if generator_available:
-            worker.log(f"🧪 Dragon HDR10+ Generator bereit (Version {generator_version}).", "info")
+            worker.log(
+                f"🧪 Dragon HDR10+ Generator bereit (Version {generator_version}, {request_source}).",
+                "info",
+            )
         else:
             worker.log(
-                "⚠️ Dragon HDR10+ Generator aktiviert, aber nicht verfügbar; bestehende HDR/DV-Pfade bleiben unverändert.",
+                "⚠️ Dragon HDR10+ Generator angefordert, aber nicht verfügbar; bestehende HDR/DV-Pfade bleiben unverändert.",
                 "warn",
             )
 
 
 
-__all__ = ["configure_optional_runtime_features"]
+def configure_optional_file_runtime(worker, tools, override: dict, *, profiles_only: bool = False) -> None:
+    """Probe the effective profile's backend and keep readiness on that profile."""
+    job = worker._job_state
+    codec = getattr(job, "codec", "h265")
+    normalized = normalize_override_dict(override)
+    if normalize_encoder_override(normalized.get("encoder_override"), default_codec=codec) is not None:
+        carrier = override["encoder_override"]
+    elif normalize_profile_override(normalized.get("encoder_profile"), default_codec=codec) is not None:
+        carrier = override["encoder_profile"]
+    else:
+        carrier = None
+    if carrier is None and profiles_only:
+        return
+    effective = effective_encoder_settings(default_codec=codec,
+        default_crf=getattr(job, "crf", 23), default_preset=getattr(job, "preset", "medium"),
+        default_scale_mode=getattr(job, "scale_mode", "original"),
+        default_encoder_options=getattr(job, "encoder_options", {}), file_override=normalized)["encoder_options"]
+    if not effective.get("sdr_hdr_enabled") or effective.get("sdr_hdr_backend") != "comfyui":
+        return
+    _probe_comfyui_backend(worker, tools, effective)
+    capabilities = {key: value for key, value in effective.items() if key.startswith("_comfyui_")}
+    if carrier is None:
+        override["_encoder_runtime_capabilities"] = capabilities
+    else:
+        if not isinstance(carrier.get("encoder_options"), dict):
+            carrier["encoder_options"] = {}
+        carrier["encoder_options"].update(capabilities)
+
+
+def _probe_comfyui_backend(worker, tools, options: dict) -> None:
+    try:
+        configure_comfyui_runtime(worker, tools, options)
+    except Exception as exc:
+        options["_comfyui_backend_ready"] = False
+        options["_comfyui_api_available"] = False
+        options["_comfyui_model_error"] = str(exc)
+        dispatch_log(worker.log, f"⚠️ Optionale ComfyUI-Prüfung fehlgeschlagen: {exc}", "warn")
+
+
+__all__ = ["configure_optional_runtime_features", "configure_optional_file_runtime"]

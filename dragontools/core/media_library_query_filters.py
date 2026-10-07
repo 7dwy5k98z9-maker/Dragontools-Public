@@ -40,16 +40,17 @@ def append_text_filter(where: list[str], params: list[Any], text: str) -> None:
     if not text.strip():
         return
     needle = f"%{text.strip().casefold()}%"
-    normalized_needle = f"%{_normalize_title(text.strip())}%"
+    normalized = _normalize_title(text.strip())
+    normalized_needle = f"%{normalized}%" if normalized else None
     where.append(
         """
         (
-            lower(coalesce(mi.title, '')) LIKE ?
-            OR lower(coalesce(mi.original_title, '')) LIKE ?
-            OR lower(coalesce(mi.series_title, '')) LIKE ?
-            OR lower(coalesce(mi.filename, '')) LIKE ?
-            OR lower(coalesce(mi.path, '')) LIKE ?
-            OR lower(coalesce(mi.normalized_title, '')) LIKE ?
+            dt_casefold(coalesce(mi.title, '')) LIKE ?
+            OR dt_casefold(coalesce(mi.original_title, '')) LIKE ?
+            OR dt_casefold(coalesce(mi.series_title, '')) LIKE ?
+            OR dt_casefold(coalesce(mi.filename, '')) LIKE ?
+            OR dt_casefold(coalesce(mi.path, '')) LIKE ?
+            OR dt_casefold(coalesce(mi.normalized_title, '')) LIKE ?
         )
         """
     )

@@ -7,7 +7,7 @@ from typing import Callable
 
 from .path_defaults import app_documents_dir
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 DEFAULT_DB_FILENAME = "dragontools_mediathek.sqlite3"
 
 LogFn = Callable[[str], None] | None

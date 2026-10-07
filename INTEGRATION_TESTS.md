@@ -221,3 +221,16 @@ Zusätzlich zu den automatisierten Watch-Folder-Tests in einer echten Windows-/P
 3. DV5 muss weiterhin denselben libplacebo-ICtCp→BT.2020/PQ-Pfad verwenden.
 4. Einen kontrollierten Frame-Mismatch nur in isoliertem Testmaterial provozieren. Eine Teilreparatur darf ausschließlich bei bewiesenem Alignment, zulässiger Fehlbildzahl, sicherem GOP-/IRAP-Fenster und erfolgreicher vollständiger Decode-/Frame-/Übergangsprüfung übernommen werden.
 5. Kann das Reparaturfenster nicht sicher bestimmt werden, muss der Auftrag fehlschlagen und diagnostisch archiviert werden; kein stiller Voll-Reencode und kein fragwürdiger Commit.
+
+
+## V9.9.0 – Review-Nachprüfung und neue Verträge
+
+Die Regressionstests test_review01_ bis test_review24_ decken die 24 Reviewbereiche ab. Zusätzlich prüfen test_tvdb_bearer_auto_refresh_persistence.py die Token-Erneuerung und test_dv_corrupt_rpu_fallback.py die eng begrenzte DV-Neuplanung. test_release_990_startup.py initialisiert echte Qt-Tabs mit regulären sowie vollständig ausgeblendeten Hauptregisterkarten.
+
+Vor Veröffentlichung: komplette Windows-/Qt-Suite, unveränderte Architekturgrenzen, Source-ZIP-Roundtrip, Frozen-EXE-Smoke und reale DV/HDR-Roundtrips mit der konfigurierten Toolkette prüfen. ComfyUI/DaVinci und echte defekte PGS-OCR-Medien benötigen eigene Laufzeitabnahmen. Frische Testergebnisse und verbleibende Prüfbefunde stehen im Reviewbericht.
+
+## Abschlussprüfung 9.9.0 – 07.10.2026
+
+Die abschließende Gesamtsuite besteht mit 5.152 Tests; 14 sind übersprungen und 24 native DV/HDR-Fälle separat abgewählt. Separat bestehen 23 native DV/HDR-Tests; zwei Skips betreffen eine optionale Generator-EXE und die beim Einsammeln fehlende optionale PyTorch-Komponente. Das ist eine Source-Abnahme, keine vollständige neue Release-EXE- oder Hardware-/Live-Online-Abnahme.
+
+46 eingeschränkte Pairwise-Vertragsfälle, zusätzliche AV1-Beta-Planungsnachweise, 3 × 48 Queue-Jobs mit Reorder/Pause/stale callbacks und sechs gleichzeitig native Medien-/Move-Ketten sind im Abschlusslauf enthalten. Quellen, Befehle und Grenzen: PATCH_26_CONTRACT_MATRIX.md, PATCH_27_STAGE_MATRIX.md und PATCH_29_REPORT.md. Keine native vollständige kartesische Matrix oder erneute vollständige Release-EXE-/Hardware-Abnahme wird behauptet.

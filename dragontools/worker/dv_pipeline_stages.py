@@ -9,6 +9,7 @@ from .dv_dynamic_metadata_service import DVDynamicMetadataService
 from .dv_final_mux_service import DVFinalMuxService
 from .dv_pipeline_context import DVPipelineResult, DVPipelineState
 from .dv_video_stage_service import DVVideoStageService
+from .dv_source_rpu_check import SourceRpuSanityCheck
 from ..core.media_analyzer import inspect_dynamic_hdr_with_mediainfo
 from ..rules.subtitle_rules import any_sidecar_export_enabled
 
@@ -224,7 +225,14 @@ class DVPipelineStages:
                 reason = export_result.failure_summary() or "Sidecar-Export unvollstaendig."
                 self._temp_state.record_failure(reason=reason, stage="Untertitel-Export")
                 self._log(f"❌ [DV] {reason}", "error")
-                return DVPipelineResult(False, tuple(state.sidecar_paths), reason, "Untertitel-Export")
+                # The final DV mux already succeeded.  A required sidecar failure
+                # must fail the job, but must not destroy the expensive usable
+                # video candidate during workflow cleanup.
+                state.preserve_failed_output = True
+                return DVPipelineResult(
+                    False, tuple(state.sidecar_paths), reason, "Untertitel-Export",
+                    preserve_failed_output=True,
+                )
         else:
             state.sidecar_paths = []
             if getattr(request.media_info, "subtitle_streams", None):
@@ -270,7 +278,10 @@ class DVPipelineStages:
         return _video_service(self).convert_profile_to_81(state, runner)
 
     def _extract_rpu(self, state: DVPipelineState, runner: DVCommandRunner) -> bool:
-        return _video_service(self).extract_rpu(state, runner)
+        if not _video_service(self).extract_rpu(state, runner):
+            return False
+        return SourceRpuSanityCheck(tools=self._tools,temp_state=self._temp_state,log=self._log).validate(
+            state,runner,probe_rpu=self._probe_rpu_frame_count)
 
     def _reconcile_crop_from_rpu(self, state: DVPipelineState, runner: DVCommandRunner) -> bool:
         return _video_service(self).reconcile_crop_from_rpu(state, runner)

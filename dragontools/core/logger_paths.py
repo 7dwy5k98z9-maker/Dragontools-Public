@@ -19,10 +19,15 @@ def make_log_dir(base_root: str | Path) -> Path:
     Keine locale-Abhängigkeit: Monatsnamen kommen aus _DE_MONTHS.
     Wird von allen Workern genutzt – einheitliche Pfadstruktur.
     """
-    now = datetime.now()
-    p = Path(base_root) / "Logging" / str(now.year) / f"{now.month:02d}-{_DE_MONTHS[now.month]}"
+    p = log_month_dir(base_root)
     p.mkdir(parents=True, exist_ok=True)
     return p
+
+
+def log_month_dir(base_root: str | Path) -> Path:
+    """Compute the log path without filesystem writes or initialization failures."""
+    now = datetime.now()
+    return Path(base_root) / "Logging" / str(now.year) / f"{now.month:02d}-{_DE_MONTHS[now.month]}"
 
 
 def log_base_from_settings(settings=None) -> Path:

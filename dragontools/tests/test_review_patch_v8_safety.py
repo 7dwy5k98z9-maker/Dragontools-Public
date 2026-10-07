@@ -238,7 +238,10 @@ def test_dv5_fallback_forces_h265_and_dv(monkeypatch):
     assert captured["config"].codec == "h265"
     assert captured["config"].strip_only is False
     assert captured["config"].encoder_options["preserve_dv"] is True
-    assert captured["config"].encoder_options["preserve_hdrplus"] is False
+    # An absent preference stays absent, so the normal settings/pipeline policy
+    # resolves it. P5 must not unconditionally disable dynamic HDR metadata.
+    assert "preserve_hdrplus" not in captured["config"].encoder_options
+    assert config.encoder_options == {"preserve_dv": False}
 
 
 def test_dv7_enhancement_layer_probe_reports_fel(tmp_path):

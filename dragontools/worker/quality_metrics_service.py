@@ -1,12 +1,17 @@
 from __future__ import annotations
 
 import re
+import math
 
 
 class QualityMetricsService:
     def __init__(self, *, ffmpeg: str, process_runner) -> None:
         self._ffmpeg = str(ffmpeg)
         self._runner = process_runner
+
+    @property
+    def worker(self):
+        return getattr(self._runner, 'worker', None)
 
     @staticmethod
     def comparison_filter(metric: str, width: int, height: int) -> str:
@@ -60,4 +65,11 @@ class QualityMetricsService:
             return None
         pattern = r"VMAF score:\s*([0-9.]+)" if metric == "libvmaf" else r"All:([0-9.]+)"
         match = re.search(pattern, err or "")
-        return float(match.group(1)) if match else None
+        if not match:
+            return None
+        value = float(match.group(1))
+        upper = 100.0 if metric == 'libvmaf' else 1.0
+        if not math.isfinite(value) or not 0 <= value <= upper:
+            notes.append(f"{display}: ungültiger Messwert; Ergebnis wird verworfen.")
+            return None
+        return value

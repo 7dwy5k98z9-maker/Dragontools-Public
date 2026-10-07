@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from .codec_utils import encoder_10bit_filter_pixel_format
 from .media_metadata import normalize_video_codec
 from .type_utils import _safe_bool
+from .comfyui_timing import source_cfr
 
 
 @dataclass(frozen=True, slots=True)
@@ -21,8 +22,6 @@ class SdrHdrEnhancementConfig:
         except (TypeError, ValueError):
             contrast = 0.30
         backend = str(data.get("sdr_hdr_backend", "ffmpeg") or "ffmpeg").strip().lower()
-        if backend not in {"ffmpeg", "davinci_free", "comfyui"}:
-            backend = "ffmpeg"
         return cls(
             enabled=_safe_bool(data.get("sdr_hdr_enabled", False), False),
             contrast_recovery=max(0.0, min(3.0, contrast)),
@@ -123,6 +122,8 @@ def decide_sdr_hdr_enhancement(
     config = SdrHdrEnhancementConfig.from_encoder_options(encoder_options)
     if not config.enabled:
         return SdrHdrEnhancementDecision(False, False, "deaktiviert")
+    if config.backend not in {"ffmpeg", "davinci_free", "comfyui"}:
+        return SdrHdrEnhancementDecision(True, False, f"Unbekanntes SDR→HDR-Backend: {config.backend}.")
 
     codec = normalize_video_codec(target_codec)
     if codec not in {"hevc", "av1"}:
@@ -175,7 +176,7 @@ def decide_sdr_hdr_enhancement(
                 "ComfyUI/HDRTVDM unterstützt aktuell nur eindeutig erkannte CFR-Quellen; "
                 f"Framerate-Modus ist {frame_rate_mode or 'unbekannt'}.",
             )
-        if not str(getattr(video, "frame_rate", "") or "").strip():
+        if source_cfr(media_info) is None:
             return SdrHdrEnhancementDecision(
                 True, False,
                 "ComfyUI/HDRTVDM benötigt eine bekannte Quellframerate.",

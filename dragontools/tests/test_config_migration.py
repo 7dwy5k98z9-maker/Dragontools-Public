@@ -111,7 +111,7 @@ def test_audio_rules_migration_adds_schema_and_stereo_copy_range(tmp_path, monke
     migrated = migrate_audio_rules(legacy, source_path=tmp_path / "audio_rules.json")
 
     assert migrated["_schema_version"] == 4
-    assert migrated["channel_rules"]["stereo"]["max_bitrate_k"] == 192
+    assert migrated["channel_rules"]["stereo"]["max_bitrate_k"] == 256
     assert migrated["channel_rules"]["stereo"]["copy_min_bitrate_k"] == 192
     assert migrated["channel_rules"]["stereo"]["copy_max_bitrate_k"] == 256
     assert migrated["channel_rules"]["surround_51"]["copy_min_bitrate_k"] == 428
@@ -337,3 +337,33 @@ def test_rule_loader_does_not_rewrite_current_subtitle_rules_for_runtime_marker(
 
     assert loaded["_legacy_language_rules"] is False
     assert writes == []
+
+
+def test_profile_migration_recovers_from_non_mapping_encoder_options():
+    from dragontools.core.config_migration import migrate_encoder_profile
+
+    migrated, messages = migrate_encoder_profile(
+        "broken_profile",
+        {
+            "codec": "h265",
+            "crf": 22,
+            "encoder_options": "not-a-mapping",
+        },
+    )
+
+    assert migrated["encoder_options"]["encoder"] == "cpu"
+    assert migrated["encoder_options"]["bf"] == 8
+    assert any("ungültige Encoder-Optionen" in message for message in messages)
+
+
+def test_profile_collection_migration_preserves_malformed_user_entry():
+    from dragontools.core.config_migration import migrate_profile_collection
+
+    result = migrate_profile_collection({
+        "_schema_version": 0,
+        "valid": {"codec": "h265", "encoder_options": {"encoder": "cpu"}},
+        "manual_recovery_needed": "opaque-user-value",
+    })
+
+    assert result.data["manual_recovery_needed"] == "opaque-user-value"
+    assert result.data["valid"]["encoder_options"]["encoder"] == "cpu"

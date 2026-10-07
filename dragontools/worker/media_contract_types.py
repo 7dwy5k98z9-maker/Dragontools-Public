@@ -8,6 +8,9 @@ class ExpectedAudioTrack:
     codec: str
     channels: int
     language: str = ""
+    default: bool | None = None
+    title: str | None = None
+    forced: bool | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -15,6 +18,8 @@ class ExpectedSubtitleTrack:
     codec: str
     language: str = ""
     forced: bool = False
+    default: bool | None = None
+    title: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

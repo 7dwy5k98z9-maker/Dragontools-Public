@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import traceback
 from pathlib import Path
+from copy import deepcopy
 
 from PyQt6.QtCore import pyqtSignal
 
 from .base_worker import BaseWorker
 from ..core.logger import create_worker_logger
 from ..core.media_analyzer import analyze_media
+from .utility_media_analysis import analyze_owned_media
+from ..core.transaction_identity import path_receipt
 from ..core.tool_paths import get_tool_paths
 from ..core.sidecar_transaction import SidecarCommitTransaction
 from ..core.timeout_settings import get_timeout
@@ -52,7 +55,7 @@ class MP4RemuxThread(BaseWorker):
         self.apply_audio_rules = apply_audio_rules
         self.export_subtitles = export_subtitles
         self.ignore_subtitles = ignore_subtitles
-        self.subtitle_rules = dict(subtitle_rules or load_subtitle_rules(default={}))
+        self.subtitle_rules = deepcopy(load_subtitle_rules(default={}) if subtitle_rules is None else subtitle_rules)
         self.faststart = faststart
         self.overwrite_original = overwrite_original
         self._current_idx = 0
@@ -100,7 +103,7 @@ class MP4RemuxThread(BaseWorker):
         )
 
     def _output_verifier(self) -> MP4RemuxOutputVerifier:
-        return MP4RemuxOutputVerifier(ffprobe_path=str(self.tools.ffprobe))
+        return MP4RemuxOutputVerifier(ffprobe_path=str(self.tools.ffprobe), worker=self)
 
     def _sidecar_service(self) -> MP4RemuxSidecarService:
         return MP4RemuxSidecarService(
@@ -127,7 +130,7 @@ class MP4RemuxThread(BaseWorker):
         out_base: str,
         media_info=None,
     ) -> SubtitleExportResult:
-        media = media_info if media_info is not None else analyze_media(input_path, self.tools)
+        media = media_info if media_info is not None else analyze_owned_media(input_path, self.tools, worker=self, analyzer=analyze_media)
         return self._sidecar_service().export(input_path, out_base, media_info=media)
 
     def _cleanup_generated_sidecars(self, paths: list[str] | tuple[str, ...]) -> None:
@@ -186,7 +189,8 @@ class MP4RemuxThread(BaseWorker):
         return result.returncode
 
     def _remux_file(self, input_path: str, output_path: str) -> bool:
-        media_info = analyze_media(input_path, self.tools)
+        source_receipt = path_receipt(input_path)
+        media_info = analyze_owned_media(input_path, self.tools, worker=self, analyzer=analyze_media)
         service = MP4RemuxFileService(
             planner=self._planner(),
             logger=self._logger,
@@ -209,4 +213,5 @@ class MP4RemuxThread(BaseWorker):
             current_index=self._current_idx,
             total_files=len(self.files),
             user_abort_error=_UserAbortError,
+            expected_source_receipt=source_receipt,
         )

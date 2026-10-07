@@ -13,15 +13,14 @@ from .settings_backup_common import (
     SECRET_MODE_EXCLUDED,
     SECRET_MODE_LEGACY_PLAINTEXT,
     SECRETS_ENTRY,
-    current_sensitive_values,
+    current_sensitive_storage_values,
     dragon_documents_dir,
     is_sensitive_settings_key,
     json_restore,
     read_manifest,
-    safe_member_path,
-    settings_to_dict,
 )
 from .settings_backup_crypto import decrypt_sensitive_settings
+from .settings_backup_payload import read_configuration_payloads
 from .settings_backup_limits import (
     MAX_BACKUP_METADATA_BYTES,
     MAX_BACKUP_SECRET_ENTRY_BYTES,
@@ -30,6 +29,11 @@ from .settings_backup_limits import (
     validate_backup_path_size,
 )
 from .secret_settings import write_secret
+from .settings_access import (
+    raw_settings_snapshot,
+    restore_raw_settings_snapshot,
+    sync_settings_checked as _sync_settings_checked,
+)
 
 _LOG = logging.getLogger(__name__)
 
@@ -55,7 +59,10 @@ def restore_backup(
         restore_legacy_plaintext_secrets=restore_legacy_plaintext_secrets,
     )
 
-    settings_snapshot = settings_to_dict(settings)
+    # Rollback must preserve the exact persisted representation.  In
+    # particular, an undecryptable DPAPI blob is still user data and must not
+    # turn into an empty secret during backup restore.
+    settings_snapshot = raw_settings_snapshot(settings)
     file_snapshots: dict[Path, bytes | None] = {
         target: target.read_bytes() if target.exists() and target.is_file() else None
         for target, _content in pending_files
@@ -72,7 +79,9 @@ def restore_backup(
             else:
                 settings.setValue(key_str, restored)
         for key, value in preserved_sensitive.items():
-            write_secret(settings, str(key), str(value or ""))
+            # ``preserved_sensitive`` contains raw storage values.  Re-running
+            # them through write_secret() could double-encrypt DPAPI blobs.
+            settings.setValue(str(key), value)
 
         for target, content in pending_files:
             target.parent.mkdir(parents=True, exist_ok=True)
@@ -122,6 +131,19 @@ def _load_restore_payload(
         if not isinstance(settings_data, dict):
             raise ValueError("Ungültige settings.json im Backup.")
 
+        format_version = int(manifest.get("format_version", 1))
+        if format_version >= 2 and secret_mode in {SECRET_MODE_EXCLUDED, SECRET_MODE_ENCRYPTED}:
+            plaintext_secret_keys = [
+                str(key) for key in settings_data
+                if is_sensitive_settings_key(str(key))
+            ]
+            if plaintext_secret_keys:
+                raise ValueError(
+                    "Ungültiges Backup: settings.json enthält bei Secret-Modus "
+                    f"'{secret_mode}' sensible Schlüssel im Klartext: "
+                    + ", ".join(sorted(plaintext_secret_keys))
+                )
+
         if secret_mode == SECRET_MODE_ENCRYPTED:
             try:
                 encrypted_payload = read_backup_entry(
@@ -129,57 +151,42 @@ def _load_restore_payload(
                 )
             except KeyError as exc:
                 raise ValueError("Verschlüsselte Zugangsdaten fehlen im Backup.") from exc
-            settings_data.update(decrypt_sensitive_settings(encrypted_payload, password))
+            decrypted_secrets = decrypt_sensitive_settings(encrypted_payload, password)
+            invalid_secret_keys = [
+                str(key) for key in decrypted_secrets
+                if not is_sensitive_settings_key(str(key))
+            ]
+            if invalid_secret_keys:
+                raise ValueError(
+                    "Ungültiges Backup: secrets.enc enthält nicht-sensitive Einstellungsschlüssel: "
+                    + ", ".join(sorted(invalid_secret_keys))
+                )
+            settings_data.update(decrypted_secrets)
 
         preserve_sensitive = secret_mode == SECRET_MODE_EXCLUDED or (
             secret_mode == SECRET_MODE_LEGACY_PLAINTEXT and not restore_legacy_plaintext_secrets
         )
-        preserved_sensitive = current_sensitive_values(settings) if preserve_sensitive else {}
+        preserved_sensitive = current_sensitive_storage_values(settings) if preserve_sensitive else {}
         if preserve_sensitive:
             settings_data = {
                 key: value for key, value in settings_data.items()
                 if not is_sensitive_settings_key(str(key))
             }
 
-        pending_files: list[tuple[Path, bytes]] = []
-        for info in zf.infolist():
-            name = info.filename.replace("\\", "/")
-            if info.is_dir() or not name.startswith("files/"):
-                continue
-            if name.startswith("files/rules/"):
-                relative = "rules/" + Path(name).name
-            elif name.startswith("files/profiles/"):
-                relative = Path(name).name
-            else:
-                continue
-            target = safe_member_path(root, relative)
-            if target is not None:
-                pending_files.append((target, zf.read(info)))
+        pending_files = read_configuration_payloads(zf, root)
     return settings_data, manifest, secret_mode, preserved_sensitive, pending_files
 
 
 def restore_settings_snapshot(settings, snapshot: dict[str, Any]) -> None:
     try:
-        settings.clear()
-        for key, value in snapshot.items():
-            key_str = str(key)
-            restored = json_restore(value)
-            if is_sensitive_settings_key(key_str):
-                write_secret(settings, key_str, str(restored or ""))
-            else:
-                settings.setValue(key_str, restored)
-        sync_settings_checked(settings)
+        restore_raw_settings_snapshot(settings, snapshot)
     except Exception:
         _LOG.exception("QSettings-Rollback nach fehlgeschlagenem Restore ist fehlgeschlagen.")
 
 
 def sync_settings_checked(settings) -> None:
-    settings.sync()
-    status_fn = getattr(settings, "status", None)
-    if callable(status_fn):
-        status = status_fn()
-        if getattr(status, "value", status) != 0:
-            raise OSError(f"Einstellungen konnten nicht gespeichert werden: {status}")
+    # Backward-compatible import surface for existing tests/callers.
+    _sync_settings_checked(settings)
 
 
 def restore_file_snapshots(snapshots: dict[Path, bytes | None]) -> None:
@@ -199,7 +206,10 @@ def atomic_write_bytes(path: Path, content: bytes) -> None:
     token = f"{os.getpid()}_{datetime.now().strftime('%H%M%S_%f')}"
     tmp = path.with_name(f"{path.name}.{token}.tmp")
     try:
-        tmp.write_bytes(content)
+        with tmp.open("wb") as handle:
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
         os.replace(str(tmp), str(path))
     except Exception:
         try:

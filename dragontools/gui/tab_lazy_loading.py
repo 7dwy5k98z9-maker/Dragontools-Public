@@ -6,6 +6,15 @@ from collections.abc import Callable
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QLabel, QPushButton, QVBoxLayout, QWidget
+from .qt_receiver_state import receiver_is_alive
+
+
+def cached_tab_widget(owner, key):
+    widget = owner._tab_widgets.get(key)
+    if widget is not None and not receiver_is_alive(widget):
+        owner._tab_widgets[key] = None
+        return None
+    return widget
 
 
 class TabLoadErrorWidget(QWidget):

@@ -114,7 +114,8 @@ def test_trickplay_sidecar_conflict_can_keep_existing_target(tmp_path):
     ok, result = service.move_trickplay(src.parent, dst.parent)
 
     assert ok is True
-    assert not (tmp_path / "work" / "Film.trickplay").exists()
+    assert (src / '0.jpg').read_bytes() == b'new'
+    assert result['source_retained'] is True
     assert (tmp_path / "target" / "Film.trickplay" / "320 - 10x10" / "0.jpg").read_bytes() == b"old"
     assert result["skipped_conflict"] is True
 

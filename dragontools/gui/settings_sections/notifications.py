@@ -54,21 +54,21 @@ class DesktopNotificationPanel:
 
     def load(self) -> None:
         d, s = self.dialog, self.settings
-        d.notifications_enabled_cb.setChecked(s.value(
-            cfg.SET_KEY_NOTIFICATIONS_ENABLED, cfg.DEFAULT_NOTIFICATIONS_ENABLED, type=bool
+        d.notifications_enabled_cb.setChecked(cfg.settings_bool(
+            s, cfg.SET_KEY_NOTIFICATIONS_ENABLED, cfg.DEFAULT_NOTIFICATIONS_ENABLED
         ))
-        d.notifications_queue_cb.setChecked(s.value(
+        d.notifications_queue_cb.setChecked(cfg.settings_bool(
+            s,
             cfg.SET_KEY_NOTIFICATIONS_QUEUE_FINISHED,
             cfg.DEFAULT_NOTIFICATIONS_QUEUE_FINISHED,
-            type=bool,
         ))
-        d.notifications_errors_cb.setChecked(s.value(
-            cfg.SET_KEY_NOTIFICATIONS_ERRORS, cfg.DEFAULT_NOTIFICATIONS_ERRORS, type=bool
+        d.notifications_errors_cb.setChecked(cfg.settings_bool(
+            s, cfg.SET_KEY_NOTIFICATIONS_ERRORS, cfg.DEFAULT_NOTIFICATIONS_ERRORS
         ))
-        d.notifications_file_cb.setChecked(s.value(
+        d.notifications_file_cb.setChecked(cfg.settings_bool(
+            s,
             cfg.SET_KEY_NOTIFICATIONS_FILE_FINISHED,
             cfg.DEFAULT_NOTIFICATIONS_FILE_FINISHED,
-            type=bool,
         ))
         self._sync_enabled(d.notifications_enabled_cb.isChecked())
 

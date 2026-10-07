@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import os
+from .transaction_identity import stat_identity
 
 _SAMPLE_BYTES = 1024 * 1024
 
@@ -32,8 +33,9 @@ def verify_staged_file_copy(source: str | Path, staged: str | Path) -> None:
     """Compare every byte before source deletion, with bounded memory."""
     src = Path(source)
     dst = Path(staged)
-    source_before = src.stat()
-    source_size = source_before.st_size
+    source_before = stat_identity(src)
+    staged_before = stat_identity(dst)
+    source_size = source_before[2]
     staged_size = dst.stat().st_size
     if staged_size != source_size:
         raise OSError(
@@ -48,7 +50,6 @@ def verify_staged_file_copy(source: str | Path, staged: str | Path) -> None:
             if not chunk:
                 break
             offset += len(chunk)
-    source_after = src.stat()
-    if (offset != source_size or source_after.st_size != source_size
-            or source_after.st_mtime_ns != source_before.st_mtime_ns):
+    if (offset != source_size or stat_identity(src) != source_before
+            or stat_identity(dst) != staged_before):
         raise OSError("Quelle wurde während der Integritätsprüfung verändert.")

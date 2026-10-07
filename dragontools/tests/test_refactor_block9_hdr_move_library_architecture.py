@@ -120,7 +120,7 @@ def test_media_item_sql_upsert_replaces_stream_snapshot_in_memory() -> None:
             CREATE TABLE media_items(
                 id INTEGER PRIMARY KEY AUTOINCREMENT, item_type TEXT, title TEXT, original_title TEXT,
                 series_title TEXT, season INTEGER, episode INTEGER, year INTEGER, source TEXT,
-                source_id TEXT, provider TEXT, path TEXT UNIQUE, parent_path TEXT, filename TEXT,
+                source_id TEXT, provider TEXT, path TEXT UNIQUE, path_key TEXT UNIQUE, parent_path TEXT, filename TEXT,
                 normalized_title TEXT, container TEXT, duration_s REAL, size_bytes INTEGER,
                 width INTEGER, height INTEGER, video_codec TEXT, video_bitrate INTEGER,
                 overall_bitrate INTEGER, is_hdr INTEGER, has_hdr10plus INTEGER,

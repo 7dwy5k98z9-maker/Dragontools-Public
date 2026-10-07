@@ -27,6 +27,9 @@ from .move_journal_adapter import MoveJournalAdapter
 from .move_preparation import MovePreparationService
 from .move_transfer_executor import MoveTransferExecutor
 from .move_transaction import remove_path
+from .callback_dispatch import best_effort_callback
+from .journal_runtime import journal_transaction
+from .transaction_identity import validate_destination_name, receipt_matches
 
 
 class JournalLike(Protocol):
@@ -37,24 +40,7 @@ class JournalLike(Protocol):
     def set_cleanup_pending(self, source_path: str, *, message: str) -> None: ...
 
 
-def new_move_result(src, dst_dir, *, dest_name: str | None = None) -> dict:
-    name = dest_name or Path(src).name
-    return {
-        "kind": "video", "name": Path(src).name, "source_path": str(src),
-        "target_dir": str(dst_dir), "dest_path": str(Path(dst_dir) / name), "ok": False,
-        "conflict": False, "deleted_existing": False, "deleted_existing_count": 0,
-        "replaced_existing": False, "replaced_existing_count": 0,
-        "backed_up_existing": False, "backed_up_existing_count": 0, "renamed": False,
-        "skipped_conflict": False, "episode_identity_replacement": False,
-        "episode_identity_label": "", "episode_identity_series": "",
-        "episode_identity_season": None, "episode_identity_episode": None,
-        "replacement_reason": "", "replacement_reminder_required": False,
-        "replacement_reminder_id": "", "replacement_artifact_paths": [],
-        "replacement_artifact_count": 0,
-        "replacement_artifacts_by_type": {"nfo": 0, "trickplay": 0},
-        "replacement_artifacts_removed_count": 0,
-        "episode_identity_replacement_declined": False,
-    }
+from .move_result import new_move_result
 
 
 class MoveFileService:
@@ -72,7 +58,8 @@ class MoveFileService:
         confirm_episode_replacement: Callable[[dict], bool] | None = None,
     ) -> None:
         self.conflict_mode = conflict_mode
-        self._log = log
+        self._log = lambda message, level='info', callback=log: best_effort_callback(callback, message, level)
+        log = self._log
         self._wait = wait
         self._abort_immediately = abort_immediately
         self._journal = journal
@@ -102,6 +89,7 @@ class MoveFileService:
         self.last_result = dict(prepared.get("result") or {})
         return prepared
 
+    @journal_transaction
     def move(
         self,
         src,
@@ -112,14 +100,27 @@ class MoveFileService:
         prepared: dict | None = None,
         protected_paths=None,
     ) -> tuple[bool, dict]:
+        validate_destination_name(dest_name)
         prepared = dict(prepared or self.prepare_move(src, dst_dir, dest_name=dest_name))
         result = dict(prepared.get("result") or new_move_result(src, dst_dir, dest_name=dest_name))
         prepared["result"] = result
         self.last_result = result
         src_p = Path(src)
+        self._wait()
+        if self._abort_immediately():
+            return False, result
+        if not src_p.exists() or ('source_receipt' in prepared
+                and not receipt_matches(src_p, prepared['source_receipt'])):
+            result['preparation_invalidated'] = True
+            result['error'] = 'Vorbereitete Quelle fehlt oder wurde verändert.'
+            return False, result
+        if str(prepared.get('source_path', src_p)) != str(src_p):
+            raise ValueError('Move-Vorbereitung gehört zu einer anderen Quelle.')
         dp = Path(str(prepared.get("target_dir") or dst_dir))
         dp.mkdir(parents=True, exist_ok=True)
         dst_p = Path(str(prepared.get("dest_path") or (dp / (dest_name or src_p.name))))
+        if dp.resolve() != Path(dst_dir).resolve() or dst_p.parent.resolve() != dp.resolve():
+            raise ValueError('Move-Vorbereitung gehört zu einem anderen Ziel.')
         result["target_dir"] = str(dp)
         result["dest_path"] = str(dst_p)
         self._journal_set_destination(src_p, dst_p)
@@ -128,10 +129,8 @@ class MoveFileService:
             return False, result
         if src_p.is_dir():
             return self.move_directory(src_p, dst_p, result), result
-        if bool(prepared.get("same_path")) or (dst_p.exists() and same_path(src_p, dst_p)):
-            result["ok"] = True
-            self._log(f"ℹ️ Datei liegt bereits im Zielordner: {dst_p.name}", "info")
-            return True, result
+        if dst_p.exists() and src_p.exists() and same_path(src_p, dst_p):
+            return self._transfer.finish_existing_file(src_p, dst_p, result), result
 
         commit = self._preparation_service().resolve_commit(
             prepared, src_p=src_p, dst_p=dst_p, protected_paths=protected_paths

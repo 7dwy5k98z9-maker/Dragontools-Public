@@ -12,7 +12,7 @@ def _candidate_rows(conn: sqlite3.Connection, *, full_audit: bool) -> list[sqlit
     rows = conn.execute(
         """
         SELECT id, item_type, title, original_title, series_title, season, episode, year,
-               path, nfo_status, nfo_path, nfo_mtime
+               path, nfo_status, nfo_path, nfo_mtime, updated_at, active, exists_flag
         FROM media_items
         WHERE active=1 AND exists_flag=1
           AND item_type IN ('movie', 'episode', 'video', 'series', 'season')

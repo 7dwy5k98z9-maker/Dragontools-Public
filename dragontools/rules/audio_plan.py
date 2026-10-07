@@ -193,6 +193,18 @@ def audio_input_args_for_plan(plan: list[AudioTrackDecision]) -> list[str]:
     return ["-drc_scale", f"{scales[0]:.1f}"]
 
 
+def output_default_for_decision(decision: AudioTrackDecision) -> bool:
+    """Final default disposition for one planned audio output.
+
+    A generated extra-stereo track must never inherit the source track's
+    default flag, otherwise mapping the same source twice creates two default
+    audio streams in ffmpeg/mkvmerge outputs.
+    """
+    if bool(getattr(decision, "is_extra_stereo", False)):
+        return False
+    return bool(getattr(decision.stream, "default", False))
+
+
 def _build_track_decision(
     *,
     out_idx: int,
@@ -222,6 +234,13 @@ def _build_track_decision(
         target_codec = str(target.get("codec") or "").lower()
         target_channels = safe_int(target.get("channels"), safe_int(stream.channels, 2))
         target_bitrate = safe_int(target.get("bitrate"), 0)
+        if target_bitrate <= 0:
+            # A custom codec override may intentionally omit bitrate. If the
+            # source bitrate is also unknown, do not leak a zero value down to
+            # command builders where a generic 256k fallback would incorrectly
+            # encode e.g. mono at 256k. Reuse the configured channel policy.
+            fallback_target = default_target_for_stream(stream, rules)
+            target_bitrate = safe_int(fallback_target.get("bitrate"), 0)
     else:
         target_codec = normalize_audio_codec(stream.codec)
         target_channels = safe_int(stream.channels, 2)
@@ -291,13 +310,21 @@ def compute_audio_track_plan(
     legacy_action = ((override.get("_legacy") or {}).get("audio_action") or "auto")
     audio_mode = override.get("audio_mode", "auto")
 
-    custom_track_map = build_custom_track_map(override, audio_mode=audio_mode)
+    custom_tracks_declared = bool(override.get("audio_tracks")) or (
+        audio_mode == "custom" and legacy_action == "auto"
+    )
+    custom_track_map = build_custom_track_map(
+        override,
+        audio_mode=audio_mode,
+        audio_streams=audio_streams,
+    )
     chosen_streams = select_streams_for_plan(
         audio_streams,
         audio_rules,
         audio_mode=audio_mode,
         custom_track_map=custom_track_map,
         apply_language_rules=apply_language_rules,
+        custom_tracks_declared=custom_tracks_declared,
     )
     plan = [
         _build_track_decision(

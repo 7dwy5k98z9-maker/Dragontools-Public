@@ -64,10 +64,9 @@ def test_watch_overwrite_is_not_requeued_after_sixty_second_stability_window(tmp
     assert scanner.scan([rule], now=130) == []
 
 
-def test_watch_controller_uses_current_signature_after_success() -> None:
+def test_watch_controller_acknowledges_only_the_signature_owned_by_successful_job() -> None:
     source = (PACKAGE / "gui/watch_folder_controller.py").read_text(encoding="utf-8")
-    assert "acknowledge_current(candidate)" in source
-    assert "self._scanner.acknowledge(candidate)" not in source
+    assert "acknowledge_success(candidate, output_path=output_path)" in source
 
 
 def test_tmdb_renamer_batches_multiple_episodes_by_season(tmp_path: Path) -> None:

@@ -52,7 +52,11 @@ def _cpu_args(codec, crf, preset, encoder_options):
     em = {"h264": "libx264", "h265": "libx265", "av1": "libsvtav1"}
     if codec not in em:
         raise ValueError(f"CPU: nicht unterstützter Ziel-Codec: {codec!r}")
-    args = ["-c:v", em[codec], "-crf", str(crf), "-preset", str(preset)]
+    raw_crf = _safe_int(crf, 23)
+    raw_crf = 23 if raw_crf is None else raw_crf
+    crf_max = 63 if codec == "av1" else 51
+    crf_value = max(0, min(crf_max, raw_crf))
+    args = ["-c:v", em[codec], "-crf", str(crf_value), "-preset", str(preset)]
     if codec == "h265":
         o = encoder_options
         p: list[str] = []
@@ -126,7 +130,7 @@ def _nvenc_args(codec, crf, encoder_options):
     if multipass is not None:
         args += ["-multipass", multipass]
     bref = _text_option(o, "bref_mode", {"disabled", "each", "middle"}) or "disabled"
-    if bf > 0 and bref != "disabled" and codec in ("h264", "h265"):
+    if bf > 0 and bref != "disabled" and codec in ("h264", "h265", "av1"):
         args += ["-b_ref_mode", bref]
     if codec == "h265":
         args += _h265_10bit_args("nvenc")
@@ -200,6 +204,7 @@ def _amf_args(codec, crf, encoder_options):
 
 def _vid_args(codec, crf, preset, encoder_options):
     codec = normalize_target_codec(codec)
+    crf = _int_option({"crf": crf}, "crf", 23)
     e = str(value_or_default(encoder_options.get("encoder"), "cpu") or "cpu").strip().lower()
     builders = {
         "nvenc": _nvenc_args,

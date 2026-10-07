@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 import shutil
+import threading
+import uuid
 from pathlib import Path
 
 from .tool_runner import run_tool
 from .log_dispatch import dispatch_log
 from .trickplay_commit import commit_generated_root, commit_missing_variant
-from .trickplay_concurrency import trickplay_semaphore
+from .trickplay_concurrency import trickplay_semaphore, trickplay_target_lock
 from .trickplay_ffmpeg import (
     build_trickplay_ffmpeg_cmd,
     command_hwaccel_label,
@@ -16,7 +18,9 @@ from .trickplay_ffmpeg import (
     trickplay_ffmpeg_strategies,
 )
 from .trickplay_models import TrickplayFfmpegStrategy, TrickplaySettings
+from .trickplay_sprite_verification import verify_command_sprites
 from .trickplay_paths import (
+    has_valid_trickplay_sprites,
     normalize_trickplay_conflict_mode,
     trickplay_root_for_video,
     trickplay_sprite_dir_for_video,
@@ -48,6 +52,7 @@ class TrickplayGenerator:
         self.log = log
         self.worker = worker
         self.timeout_s = max(0.05, float(timeout_s))
+        self._tool_state = threading.local()
 
     def generate(
         self,
@@ -56,7 +61,7 @@ class TrickplayGenerator:
         *,
         target_video_path: str | Path | None = None,
     ) -> Path | None:
-        if not settings.enabled:
+        if not settings.enabled or self._cancelled():
             return None
         video = Path(video_path)
         if not video.exists() or not self.ffmpeg_path:
@@ -66,13 +71,26 @@ class TrickplayGenerator:
         target_video = Path(target_video_path) if target_video_path else video
         final_root = trickplay_root_for_video(target_video)
         final_sprite_dir = trickplay_sprite_dir_for_video(target_video, settings)
-        if normalize_trickplay_conflict_mode(settings) == "skip" and final_sprite_dir.exists():
+        if normalize_trickplay_conflict_mode(settings) == "skip" and has_valid_trickplay_sprites(final_sprite_dir):
             self._info(f"Trickplay vorhanden, wird übernommen: {final_root.name}")
             return final_root
+        if normalize_trickplay_conflict_mode(settings) == "skip" and final_sprite_dir.exists():
+            self._warn(
+                "Trickplay-Variante existiert, enthält aber keine gültigen JPEGs; "
+                "sie wird sicher neu aufgebaut."
+            )
 
         max_jobs = max(1, min(int(settings.max_jobs or 1), 8))
-        with trickplay_semaphore(max_jobs):
-            return self._generate_locked(video, settings, final_root, final_sprite_dir)
+        try:
+            with trickplay_target_lock(final_root, abort_check=self._cancelled):
+                with trickplay_semaphore(max_jobs, abort_check=self._cancelled):
+                    return self._generate_locked(video, settings, final_root, final_sprite_dir)
+        except (OSError, RuntimeError) as exc:
+            self._warn(f'Trickplay konnte nicht erstellt werden: {exc}')
+            return None
+
+    def _cancelled(self):
+        return bool(getattr(self.worker, 'abort_requested', False))
 
     def _generate_locked(
         self,
@@ -81,14 +99,24 @@ class TrickplayGenerator:
         final_root: Path,
         final_sprite_dir: Path,
     ) -> Path | None:
-        partial_root, partial_sprite_dir = self._prepare_partial_root(final_root, final_sprite_dir)
+        prepared = self._prepare_partial_root(final_root, final_sprite_dir)
+        if prepared is None:
+            return None
+        partial_root, partial_sprite_dir = prepared
         self._info(
             "Trickplay: Sprite-Erstellung startet "
             f"({settings.width}px, {settings.tile_label}, alle {settings.interval_s}s, qscale {settings.qscale})."
         )
-        success_message = self._render_sprites(video, settings, partial_sprite_dir)
-        if not success_message:
+        try:
+            return self._render_and_commit(video, settings, final_root, final_sprite_dir,
+                                           partial_root, partial_sprite_dir)
+        finally:
             shutil.rmtree(partial_root, ignore_errors=True)
+
+    def _render_and_commit(self, video, settings, final_root, final_sprite_dir,
+                           partial_root, partial_sprite_dir):
+        success_message = self._render_sprites(video, settings, partial_sprite_dir)
+        if not success_message or self._cancelled():
             self._warn("Trickplay konnte nicht erstellt werden.")
             return None
         self._info(success_message)
@@ -110,13 +138,15 @@ class TrickplayGenerator:
             conflict_mode=conflict_mode,
         )
 
-    def _prepare_partial_root(self, final_root: Path, final_sprite_dir: Path) -> tuple[Path, Path]:
-        partial_root = final_root.with_name(f"{final_root.name}.__partial__")
-        if partial_root.exists():
-            shutil.rmtree(partial_root, ignore_errors=True)
-        partial_sprite_dir = partial_root / final_sprite_dir.name
-        partial_sprite_dir.mkdir(parents=True, exist_ok=True)
-        return partial_root, partial_sprite_dir
+    def _prepare_partial_root(self, final_root: Path, final_sprite_dir: Path) -> tuple[Path, Path] | None:
+        partial_root = final_root.with_name(f"{final_root.name}.__partial__{uuid.uuid4().hex}")
+        try:
+            partial_sprite_dir = partial_root / final_sprite_dir.name
+            partial_sprite_dir.mkdir(parents=True, exist_ok=False)
+            return partial_root, partial_sprite_dir
+        except OSError as exc:
+            self._warn(f"Trickplay-Staging konnte nicht sauber vorbereitet werden: {exc}")
+            return None
 
     def _render_sprites(
         self,
@@ -126,8 +156,13 @@ class TrickplayGenerator:
     ) -> str:
         output_pattern = partial_sprite_dir / "%d.jpg"
         for index, strategy in enumerate(trickplay_ffmpeg_strategies(settings.hwaccel)):
-            if index:
-                self._clear_partial_sprite_dir(partial_sprite_dir)
+            if self._cancelled():
+                return ''
+            if index and not self._clear_partial_sprite_dir(partial_sprite_dir):
+                self._warn(
+                    "Trickplay-Retry abgebrochen: vorherige Teilbilder konnten nicht sicher bereinigt werden."
+                )
+                return ""
             if strategy.before_message:
                 self._warn(strategy.before_message)
             self._info(strategy.start_message)
@@ -139,7 +174,9 @@ class TrickplayGenerator:
                 force_hwdownload=strategy.force_hwdownload,
             )
             ok = self._run(cmd)
-            if ok and any(partial_sprite_dir.glob("*.jpg")):
+            if self._cancelled() or getattr(self._tool_state, 'stopped', False):
+                return ''
+            if ok and has_valid_trickplay_sprites(partial_sprite_dir):
                 return strategy.success_message
             if ok:
                 self._warn(f"Trickplay: {strategy.name} beendet, aber keine Kachelbilder erzeugt.")
@@ -181,6 +218,7 @@ class TrickplayGenerator:
         )
 
     def _run(self, cmd: list[str]) -> bool:
+        self._tool_state.stopped = False
         try:
             result = run_tool(
                 cmd,
@@ -194,7 +232,13 @@ class TrickplayGenerator:
         except (OSError, RuntimeError, TypeError, ValueError) as exc:
             self._warn(f"Trickplay-Fehler: {exc}")
             return False
-        return self._handle_run_result(result, cmd)
+        self._tool_state.stopped = bool(result.aborted or result.timed_out)
+        if not self._handle_run_result(result, cmd):
+            return False
+        if not verify_command_sprites(cmd):
+            self._warn('Trickplay: JPEGs fehlen, sind beschädigt oder haben eine falsche Kachelgröße.')
+            return False
+        return True
 
     @staticmethod
     def _activity_file_from_command(cmd: list[str]) -> str | None:
@@ -224,13 +268,14 @@ class TrickplayGenerator:
     def _runner_log(self, message: str, level: str = "info") -> None:
         (self._warn if str(level).lower() in {"warn", "warning", "error"} else self._info)(message)
 
-    @staticmethod
-    def _clear_partial_sprite_dir(partial_sprite_dir: Path) -> None:
+    def _clear_partial_sprite_dir(self, partial_sprite_dir: Path) -> bool:
         try:
-            shutil.rmtree(partial_sprite_dir, ignore_errors=True)
-            partial_sprite_dir.mkdir(parents=True, exist_ok=True)
-        except OSError:
-            pass
+            shutil.rmtree(partial_sprite_dir)
+            partial_sprite_dir.mkdir(parents=True, exist_ok=False)
+            return True
+        except OSError as exc:
+            self._warn(f"Trickplay-Teilbilder konnten nicht bereinigt werden: {exc}")
+            return False
 
     def _info(self, message: str) -> None:
         dispatch_log(self.log, message, "info")

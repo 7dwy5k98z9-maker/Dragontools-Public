@@ -13,6 +13,16 @@ from PyQt6.QtWidgets import QListWidget, QWidget
 from ..core.settings_app import APP_NAME, APP_ORG
 
 
+
+def schedule_window_callback(widget: QWidget, delay_ms: int, callback) -> None:
+    """Plant einen Callback mit dem Widget als Qt-Lifecycle-Kontext."""
+    from PyQt6.QtCore import QTimer
+    timer = QTimer(widget)
+    timer.setSingleShot(True)
+    timer.timeout.connect(callback)
+    timer.timeout.connect(timer.deleteLater)
+    timer.start(max(0, int(delay_ms)))
+
 def set_file_list_item_text(file_list: QListWidget, path: str, text: str) -> None:
     """Setzt den Anzeigetext des List-Items, dessen UserRole == path ist.
 

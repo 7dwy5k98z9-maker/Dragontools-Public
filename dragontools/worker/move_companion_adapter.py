@@ -47,6 +47,7 @@ class MoveCompanionAdapterMixin:
                 result, kind=kind, sidecar_type=sidecar_type
             ),
             set_last_result=lambda result: setattr(self, "_last_move_result", result),
+            journal=self._attr('_move_journal', None),
         )
 
     def _prepare_move(self, src, dst_dir, *, dest_name: str | None = None) -> dict:

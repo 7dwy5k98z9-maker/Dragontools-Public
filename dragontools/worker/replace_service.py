@@ -12,7 +12,14 @@ from .output_size_policy import validate_output_size_policy
 class ReplaceService:
     """Kapselt Overwrite-/Replace-Logik inkl. Sicherheitsprüfungen."""
 
-    def __init__(self, *, overwrite_original: bool, log: Callable[[str, str], None], journal_root: str | Path | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        overwrite_original: bool,
+        log: Callable[[str, str], None],
+        journal_root: str | Path | None = None,
+        abort_check: Callable[[], bool] | None = None,
+    ) -> None:
         self._overwrite_original = overwrite_original
         self._log = log
         self._blocked_move_inputs: set[str] = set()
@@ -21,6 +28,7 @@ class ReplaceService:
         self._last_preserved_path: str | None = None
         self._last_block_reason: str = ""
         self._journal_root = journal_root
+        self._abort_check = abort_check
         self._cleanup_pending_inputs: set[str] = set()
         self._last_cleanup_message: str = ""
 
@@ -122,6 +130,7 @@ class ReplaceService:
             journal_root=self._journal_root,
             min_size=1024,
             remove_source=lambda path: os.remove(path),
+            abort_check=self._abort_check,
         )
         if result.cleanup_pending:
             self._cleanup_pending_inputs.add(input_path)
@@ -156,6 +165,7 @@ class ReplaceService:
             journal_root=self._journal_root,
             min_size=1024,
             remove_source=lambda path: os.remove(path),
+            abort_check=self._abort_check,
         )
         if result.cleanup_pending:
             self._cleanup_pending_inputs.add(str(input_path))

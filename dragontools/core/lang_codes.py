@@ -216,6 +216,9 @@ def canonical_lang(code: str | None) -> str:
         return ""
     if cleaned in _LANGUAGE_ALIAS_TO_CODE:
         return _LANGUAGE_ALIAS_TO_CODE[cleaned]
+    base, separator, _region = cleaned.replace("_", "-").partition("-")
+    if separator and base in _LANGUAGE_ALIAS_TO_CODE:
+        return _LANGUAGE_ALIAS_TO_CODE[base]
     iso1 = lang_iso_tag(cleaned)
     return _LANGUAGE_ALIAS_TO_CODE.get(iso1, iso1)
 
@@ -235,7 +238,9 @@ def mkv_language_tags(code: str | None) -> tuple[str, str]:
     canonical = canonical_lang(code)
     if not canonical:
         return "und", "und"
-    return _PREFERRED_ISO_639_2.get(canonical, canonical), canonical
+    original = _clean_language_token(code).replace("_", "-")
+    ietf = original if "-" in original and canonical_lang(original.split("-", 1)[0]) == canonical else canonical
+    return _PREFERRED_ISO_639_2.get(canonical, canonical), ietf
 
 def language_aliases(code: str | None) -> set[str]:
     """Alle bekannten Schreibweisen für eine Sprache."""
@@ -296,8 +301,8 @@ _SUB_CODEC_TABLE: dict[str, tuple[str, list[str]]] = {
     "text":              (".srt",  ["-c:s", "srt"]),
     "webvtt":            (".vtt",  ["-c:s", "webvtt"]),
     "hdmv_pgs_subtitle": (".sup",  ["-c:s", "copy"]),
-    "dvd_subtitle":      (".mks",  ["-c:s", "copy"]),
-    "vobsub":            (".mks",  ["-c:s", "copy"]),
+    "dvd_subtitle":      (".mks",  ["-c:s", "copy", "-f", "matroska"]),
+    "vobsub":            (".mks",  ["-c:s", "copy", "-f", "matroska"]),
 }
 
 

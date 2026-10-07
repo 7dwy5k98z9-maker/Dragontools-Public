@@ -151,6 +151,7 @@ def test_patch_g_is_wired_into_settings_main_window_and_converter() -> None:
     converter = (root / "gui/convert_widget.py").read_text(encoding="utf-8")
     watch_intake = (root / "gui/convert_widget_watch_intake.py").read_text(encoding="utf-8")
     watch_controller = (root / "gui/watch_folder_controller.py").read_text(encoding="utf-8")
+    dispatcher = (root / "gui/watch_folder_intake.py").read_text(encoding="utf-8")
     watch_bridge = (root / "gui/watch_folder_main_window_bridge.py").read_text(encoding="utf-8")
     layout = (root / "gui/convert_widget_layout_runtime.py").read_text(encoding="utf-8")
     composition = (root / "gui/convert_widget_composition.py").read_text(encoding="utf-8")
@@ -160,7 +161,8 @@ def test_patch_g_is_wired_into_settings_main_window_and_converter() -> None:
     assert "enqueue_watch_folder_files" in watch_intake
     assert "def scan_now" in watch_controller
     assert "stable_seconds_override=0 if manual else None" in watch_controller
-    assert "auto_start = False if manual else candidate.auto_start" in watch_controller
+    assert "dispatch_watch_candidates(" in watch_controller
+    assert "auto_start = False if manual else candidate.auto_start" in dispatcher
     assert "def scan_watch_folders_now" in watch_bridge
     assert "Watchfolder durchsuchen" in layout
     assert "watch_scan_btn.clicked.connect(owner._scan_watch_folders_now)" in composition

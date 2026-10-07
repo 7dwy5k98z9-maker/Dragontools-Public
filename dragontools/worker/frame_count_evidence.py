@@ -9,7 +9,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import re
 from typing import Literal
+from ..core.strict_numbers import positive_integer
 
 FrameCountReliability = Literal["unknown", "estimated", "reliable"]
 TemporalMapping = Literal["preserved", "changed", "unknown"]
@@ -20,6 +22,9 @@ class StreamIdentity:
     path: str
     size: int | None
     mtime_ns: int | None
+    device: int | None = None
+    inode: int | None = None
+    ctime_ns: int | None = None
 
     @classmethod
     def capture(cls, path: str | Path) -> "StreamIdentity":
@@ -28,7 +33,8 @@ class StreamIdentity:
             stat = target.stat()
         except OSError:
             return cls(str(target), None, None)
-        return cls(str(target), int(stat.st_size), int(stat.st_mtime_ns))
+        return cls(str(target), int(stat.st_size), int(stat.st_mtime_ns),
+                   int(stat.st_dev), int(stat.st_ino), int(stat.st_ctime_ns))
 
     def matches(self, path: str | Path) -> bool:
         other = self.capture(path)
@@ -38,6 +44,8 @@ class StreamIdentity:
             and self.mtime_ns is not None
             and self.size == other.size
             and self.mtime_ns == other.mtime_ns
+            and self.device == other.device and self.inode == other.inode
+            and self.ctime_ns == other.ctime_ns
         )
 
 
@@ -60,7 +68,7 @@ class FrameCountEvidence:
         stage: str,
         temporal_mapping: TemporalMapping = "unknown",
     ) -> "FrameCountEvidence":
-        value = int(count)
+        value = positive_integer(count)
         if value <= 0:
             raise ValueError("Reliable frame count must be > 0")
         return cls(
@@ -81,7 +89,7 @@ class FrameCountEvidence:
         path: str | Path,
         stage: str,
     ) -> "FrameCountEvidence":
-        value = int(count)
+        value = positive_integer(count)
         if value <= 0:
             raise ValueError("Estimated frame count must be > 0")
         return cls(value, str(source), "estimated", StreamIdentity.capture(path), str(stage), "unknown")
@@ -109,7 +117,7 @@ class FrameCountEvidence:
         stage: str,
     ) -> "FrameCountEvidence":
         """Carry a reliable count across a frame-preserving metadata injection."""
-        if self.reliability != "reliable" or self.count is None or self.count <= 0:
+        if not self.is_reliable_for(self.stream.path):
             return FrameCountEvidence.unknown(source=source, path=output_path, stage=stage)
         return FrameCountEvidence.reliable(
             self.count,
@@ -127,11 +135,16 @@ def temporal_mapping_for_filters(vf_args: list[object] | tuple[object, ...] | No
     Explicit temporal filters are fail-closed because equal counts alone do not
     prove RPU alignment after drops/duplicates/interpolation/timestamp rewrites.
     """
-    text = " ".join(str(item or "").lower() for item in (vf_args or ()))
+    args = [str(item or "").lower() for item in (vf_args or ())]
+    if any(item.split(":", 1)[0] in {"-r", "-ss", "-sseof", "-t", "-to", "-frames", "-vframes", "-shortest"} for item in args):
+        return "changed"
+    text = re.sub(r'@[-a-z0-9_]+(?=\s*=)', '', " ".join(args))
     temporal_tokens = (
         "fps=", "framerate=", "minterpolate", "framestep", "select=",
         "setpts=", "mpdecimate", "decimate", "fieldmatch", "telecine",
         "pullup", "tblend=all_mode=average",
+        "reverse", "tpad=", "trim=", "shuffleframes=", "loop=",
+        "bwdif", "yadif", "separatefields", "interleave", "concat=", "tmix=",
     )
     if any(token in text for token in temporal_tokens):
         return "changed"

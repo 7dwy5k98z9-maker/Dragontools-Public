@@ -46,78 +46,55 @@ def build_subtitle_preview(
     pipeline: str,
     container: str,
 ) -> dict[str, Any]:
-    plan = compute_subtitle_plan(
-        mi.subtitle_streams,
-        audio_streams=mi.audio_streams,
-        file_override=ov,
-        subtitle_rules=subtitle_rules,
-        container_copy_supported=(pipeline not in {"dv", "av1_dv"}),
-        media_duration_s=getattr(mi, "duration_s", None),
-    )
-    burn_sub = plan.burn_sub
-    keep = list(plan.keep_streams)
-    external_streams = list(plan.external_streams)
+    from dataclasses import replace
+    from ..rules.subtitle_output_plan import select_sidecar_streams
+    from ..rules.subtitle_storage import mkv_internal_subtitle_streams, pgs_original_storage, pgs_to_srt_enabled
+    from .models import normalize_override_dict
+
+    strip_only = ov.get("processing_mode") == "strip_only"
     target_container = str(container or "mkv").lower()
-    mp4_export_enabled = target_container in {"mp4", "m4v", "mov"} and mp4_sidecars_enabled(subtitle_rules)
-    additional_enabled = additional_sidecars_enabled(subtitle_rules)
-    text_srt_enabled = text_to_srt_sidecar_enabled(subtitle_rules)
-    copy_supported = pipeline not in {"dv", "av1_dv"}
-
-    selected_for_sidecars = list(external_streams)
+    selection = select_sidecar_streams(
+        mi.subtitle_streams, audio_streams=mi.audio_streams,
+        media_duration_s=getattr(mi, "duration_s", None), file_override=ov,
+        subtitle_rules=subtitle_rules or {}, preserve_burn_candidate=strip_only,
+        normalize_override=normalize_override_dict, compute_plan=compute_subtitle_plan,
+        build_storage_plan=build_mp4_subtitle_storage_plan,
+        sidecars_enabled=mp4_sidecars_enabled,
+        additional_sidecars_enabled=additional_sidecars_enabled,
+        text_to_srt_sidecar_enabled=text_to_srt_sidecar_enabled,
+        pgs_to_srt_enabled=pgs_to_srt_enabled, pgs_original_storage=pgs_original_storage,
+        container=target_container,
+    )
+    plan = selection.plan
     if target_container in {"mp4", "m4v", "mov"}:
-        storage = build_mp4_subtitle_storage_plan(
-            plan,
-            subtitle_rules=subtitle_rules,
-            preserve_burn_candidate=False,
-        )
-        stream_copy_candidates = list(storage.internal_streams)
-        normal_sidecar_streams = (
-            selected_for_sidecars if (mp4_export_enabled or additional_enabled)
-            else list(storage.external_streams)
-        )
-    elif not copy_supported:
-        stream_copy_candidates = []
-        normal_sidecar_streams = selected_for_sidecars if (mp4_export_enabled or additional_enabled) else []
+        internal = list(selection.storage.internal_streams)
     else:
-        stream_copy_candidates = keep
-        normal_sidecar_streams = selected_for_sidecars if additional_enabled else []
-
-    normal_srt_indices = native_srt_sidecar_indices(normal_sidecar_streams)
-    text_srt_candidates = [
-        s for s in selected_for_sidecars
-        if str(getattr(s, "codec", "") or "").lower() in TEXT_TO_SRT_PREVIEW_CODECS
-        and int(s.index) not in normal_srt_indices
-    ]
-    sidecar_fields = {
-        "mp4_sidecars_enabled": mp4_export_enabled,
-        "additional_sidecars_enabled": additional_enabled,
-        "text_to_srt_sidecar_enabled": text_srt_enabled,
-        "native_sidecar_candidates": subtitle_entries(normal_sidecar_streams),
-        "native_sidecar_candidate_count": len(normal_sidecar_streams),
-        "text_to_srt_candidates": [subtitle_entry(s) for s in text_srt_candidates] if text_srt_enabled else [],
-        "text_to_srt_candidate_count": len(text_srt_candidates) if text_srt_enabled else 0,
-        "sidecar_export_enabled": bool(normal_sidecar_streams or (text_srt_enabled and text_srt_candidates)),
-    }
-
-    common = _burn_fields(mi, plan, burn_sub)
-    if pipeline in {"dv", "av1_dv"}:
-        return {
-            **common,
-            "container_copy_supported": False,
-            "stream_copy_candidates": [],
-            "copy_candidate_count": 0,
-            "external_export_enabled": bool(sidecar_fields["sidecar_export_enabled"]),
-            "external_export_candidates": subtitle_entries(normal_sidecar_streams),
-            "external_export_candidate_count": len(normal_sidecar_streams),
-            **sidecar_fields,
-        }
-
+        internal = ([plan.burn_sub] if strip_only and plan.burn_sub is not None else []) + list(plan.keep_streams)
+        internal = mkv_internal_subtitle_streams(internal, subtitle_rules=subtitle_rules)
+    common = _burn_fields(mi, replace(plan, burn_sub=None) if strip_only else plan,
+        None if strip_only else plan.burn_sub)
+    native = list(selection.normal_streams)
+    text_srt = list(selection.ass_srt_streams)
+    pgs_srt = list(selection.pgs_srt_streams)
     return {
         **common,
         "container_copy_supported": True,
-        "stream_copy_candidates": subtitle_entries(stream_copy_candidates),
-        "copy_candidate_count": len(stream_copy_candidates),
-        **sidecar_fields,
+        "stream_copy_candidates": subtitle_entries(internal),
+        "copy_candidate_count": len(internal),
+        "external_export_enabled": bool(native or text_srt or pgs_srt),
+        "external_export_candidates": subtitle_entries(native),
+        "external_export_candidate_count": len(native),
+        "mp4_sidecars_enabled": target_container == "mp4" and mp4_sidecars_enabled(subtitle_rules),
+        "additional_sidecars_enabled": additional_sidecars_enabled(subtitle_rules),
+        "text_to_srt_sidecar_enabled": text_to_srt_sidecar_enabled(subtitle_rules),
+        "pgs_to_srt_enabled": pgs_to_srt_enabled(subtitle_rules),
+        "pgs_to_srt_candidates": subtitle_entries(pgs_srt),
+        "pgs_to_srt_candidate_count": len(pgs_srt),
+        "native_sidecar_candidates": subtitle_entries(native),
+        "native_sidecar_candidate_count": len(native),
+        "text_to_srt_candidates": subtitle_entries(text_srt),
+        "text_to_srt_candidate_count": len(text_srt),
+        "sidecar_export_enabled": bool(native or text_srt or pgs_srt),
     }
 
 

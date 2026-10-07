@@ -46,7 +46,16 @@ class ConvertWidgetQueueManagementMixin:
         if self._is_queue_blocking_move_active():
             self._log("Warteschlange w\u00e4hrend Verschieben gesperrt: Warteschlange leeren.", "warn")
             return
-        self._state.completed_inputs.clear()
-        self._state.pending_remove_paths.clear()
+        thread = getattr(self._state, "thread", None)
+        try:
+            conversion_running = bool(thread and thread.isRunning())
+        except (AttributeError, RuntimeError, TypeError):
+            conversion_running = False
         self._file_queue.clear()
+        # During a live conversion the queue helper marks current files for
+        # deferred removal. Clearing these run-state sets here used to erase
+        # terminal accounting and the deferred-removal contract.
+        if not conversion_running:
+            self._state.completed_inputs.clear()
+            self._state.pending_remove_paths.clear()
         self._refresh_queue_window()

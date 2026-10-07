@@ -6,42 +6,55 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from ..core.process_runner import subprocess_no_window_kwargs as no_window_kwargs
 from .source_visual_models import SourceVisualCheckSettings
+from .tool_runner import run_tool, run_tool_bytes
 
 
 class SourceVisualSampler:
-    """FFprobe/FFmpeg I/O for the source visual checker."""
+    """FFprobe/FFmpeg I/O for the source visual checker.
 
-    def __init__(self, *, ffmpeg_path: str, ffprobe_path: str) -> None:
+    ``worker`` is optional so the same sampler can be used both from the
+    converter worker and from the manual GUI check.  When supplied, all
+    external processes participate in DragonTools' normal cooperative abort
+    lifecycle instead of being opaque ``subprocess.run`` calls that remain
+    alive until their timeout expires.
+    """
+
+    def __init__(self, *, ffmpeg_path: str, ffprobe_path: str, worker=None, abort_on_request=True) -> None:
         self.ffmpeg_path = str(ffmpeg_path or "")
         self.ffprobe_path = str(ffprobe_path or "")
+        self.worker = worker
+        self.abort_on_request = bool(abort_on_request)
+
+    @property
+    def abort_requested(self) -> bool:
+        return bool(self.worker is not None and getattr(self.worker, "abort_requested", False)
+                    and (self.abort_on_request or getattr(self.worker, 'abort_type', None) == 'sofort'))
 
     def probe_duration(self, path: Path) -> float:
+        result = run_tool(
+            [
+                self.ffprobe_path,
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "json",
+                str(path),
+            ],
+            label="Quellbildprüfung ffprobe",
+            timeout_s=20,
+            worker=self.worker,
+            abort_on_request=self.abort_on_request,
+            activity_file=path,
+        )
+        if not result.ok:
+            return 0.0
         try:
-            result = subprocess.run(
-                [
-                    self.ffprobe_path,
-                    "-v",
-                    "error",
-                    "-show_entries",
-                    "format=duration",
-                    "-of",
-                    "json",
-                    str(path),
-                ],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                stdin=subprocess.DEVNULL,
-                **no_window_kwargs(),
-                timeout=20,
-            )
             data = json.loads(result.stdout or "{}")
             return float((data.get("format") or {}).get("duration") or 0.0)
-        except (OSError, subprocess.SubprocessError, json.JSONDecodeError, TypeError, ValueError):
+        except (json.JSONDecodeError, TypeError, ValueError):
             return 0.0
 
     @staticmethod
@@ -82,20 +95,17 @@ class SourceVisualSampler:
             "rawvideo",
             "-",
         ]
-        try:
-            result = subprocess.run(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                stdin=subprocess.DEVNULL,
-                **no_window_kwargs(),
-                timeout=max(15, int(settings.sample_duration_s) + 15),
-            )
-            if result.returncode != 0:
-                return b""
-            return bytes(result.stdout or b"")
-        except (OSError, subprocess.SubprocessError, TypeError, ValueError):
+        result = run_tool_bytes(
+            cmd,
+            label="Quellbildprüfung ffmpeg",
+            timeout_s=max(15, int(settings.sample_duration_s) + 15),
+            worker=self.worker,
+            abort_on_request=self.abort_on_request,
+            activity_file=path,
+        )
+        if not result.ok:
             return b""
+        return bytes(result.stdout or b"")
 
     def read_group(
         self,
@@ -140,18 +150,25 @@ class SourceVisualSampler:
                         ]
                     )
 
-                result = subprocess.run(
+                result = run_tool(
                     cmd,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.PIPE,
-                    stdin=subprocess.DEVNULL,
-                    **no_window_kwargs(),
-                    timeout=max(30, (sample_duration + 15) * len(start_points)),
+                    label="Quellbildprüfung ffmpeg batch",
+                    timeout_s=max(30, (sample_duration + 15) * len(start_points)),
+                    worker=self.worker,
+                    abort_on_request=self.abort_on_request,
+                    activity_file=path,
+                    stdout_file=subprocess.DEVNULL,
                 )
-                if result.returncode != 0:
+                if result.aborted:
+                    # Cancellation is terminal for this check.  Return a
+                    # correctly-sized empty batch so the service does not
+                    # interpret it as a batch failure and launch per-probe
+                    # fallback FFmpeg processes after the user already aborted.
+                    return [b""] * len(outputs)
+                if not result.ok:
                     return None
                 return [output.read_bytes() if output.is_file() else b"" for output in outputs]
-        except (OSError, subprocess.SubprocessError, TypeError, ValueError):
+        except (OSError, TypeError, ValueError):
             return None
 
 

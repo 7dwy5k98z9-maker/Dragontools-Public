@@ -35,18 +35,18 @@ import os
 from pathlib import Path
 from dragontools.core.move_file_service import MoveFileService
 from dragontools.core.move_journal import MoveJournal
-from dragontools.core import move_file_service as mfs
+from dragontools.core import move_conflict_transactions as mct
 root = Path({str(tmp_path)!r})
 source = Path({str(source)!r})
 target_dir = Path({str(target_dir)!r})
 journal = MoveJournal.start(files=[str(source)], conflict_mode="overwrite", root=root)
 journal.start_file(str(source), target_dir=str(target_dir), dest_path=str(target_dir / source.name))
-real_replace = os.replace
+real_replace = mct.publish_staged_no_replace
 def crash_after_backup(src, dst):
     real_replace(src, dst)
     if ".__dragontools_backup__" in str(dst):
         os._exit(77)
-mfs.os.replace = crash_after_backup
+mct.publish_staged_no_replace = crash_after_backup
 svc = MoveFileService(conflict_mode="overwrite", log=lambda *_: None, wait=lambda: None, abort_immediately=lambda: False, journal=journal)
 svc.move(source, target_dir)
 '''
@@ -79,12 +79,12 @@ from dragontools.worker.replace_service import ReplaceService
 from dragontools.core import move_transaction as mt
 source = Path({str(source)!r})
 staging = Path({str(staging)!r})
-real_replace = os.replace
+real_replace = mt.publish_staged_no_replace
 def crash_after_backup(src, dst):
     real_replace(src, dst)
     if ".dragontools_backup" in str(dst):
         os._exit(78)
-mt.os.replace = crash_after_backup
+mt.publish_staged_no_replace = crash_after_backup
 svc = ReplaceService(overwrite_original=True, log=lambda *_: None, journal_root=Path({str(tmp_path)!r}))
 svc.replace(input_path=str(source), output_path=str(staging), container="mkv")
 '''
@@ -140,6 +140,8 @@ def test_move_cleanup_pending_is_recovered_and_status_becomes_ok(tmp_path):
     dest.write_bytes(b"same")
     journal = MoveJournal.start(files=[str(source)], root=tmp_path)
     journal.start_file(str(source), target_dir=str(tmp_path), dest_path=str(dest))
+    from dragontools.core.transaction_identity import path_receipt
+    journal.set_commit_proof(str(source), path_receipt(source), path_receipt(dest))
     journal.set_cleanup_pending(str(source), message="Quelle gesperrt")
     journal.finish_file(str(source), status="warn", dest_path=str(dest), message="Quelle gesperrt")
 

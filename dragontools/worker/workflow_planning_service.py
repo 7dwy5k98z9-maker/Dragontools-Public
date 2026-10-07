@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+from ..core.codec_utils import normalize_target_codec, SUPPORTED_TARGET_CODECS
 from ..core.encoder_profile_override import effective_encoder_settings
 from .media_contract import build_expected_media_contract
 from .quality_target_integration import apply_automatic_quality_target
@@ -59,8 +60,26 @@ class WorkflowPlanningService:
         ctx.effective_encoder_options = enc_settings["encoder_options"]
         ctx.encoder_profile_label = enc_settings["profile_label"]
 
+        selection_codec = ctx.effective_codec
+        if ctx.strip_only:
+            # Strip-only copies the source video bitstream.  Dynamic-HDR
+            # capability checks must therefore use the *source* codec rather
+            # than the converter tab's configured encode codec.  Otherwise a
+            # HEVC-DV source queued from the H.264 tab is falsely classified as
+            # lossy/incompatible and can trigger needless source archiving.
+            primary = getattr(ctx.analysis, "primary_video", None)
+            source_codec = normalize_target_codec(
+                getattr(primary, "codec", ""), strict=False
+            )
+            if source_codec in SUPPORTED_TARGET_CODECS:
+                selection_codec = source_codec
+
         pipeline, container = self._pipeline_decision.select_pipeline_context(
-            ctx.input_path, ctx.analysis, override
+            ctx.input_path,
+            ctx.analysis,
+            override,
+            effective_encoder_options=ctx.effective_encoder_options,
+            effective_codec=selection_codec,
         )
         selection = getattr(self._pipeline_decision, "last_selection", None) or {}
         ctx.effective_preserve_dv = bool(selection.get("effective_preserve_dv", False))
@@ -107,7 +126,7 @@ class WorkflowPlanningService:
             self._logger.info("Per-Datei-Modus: Nur remuxen (Strip-Only) aktiv.")
 
         base_dir, output_path = self._output_paths.resolve_output_path(
-            ctx.input_path, container
+            ctx.input_path, container, codec=selection_codec
         )
         ctx.pipeline = pipeline
         ctx.container = container
@@ -126,11 +145,15 @@ class WorkflowPlanningService:
                 scale_mode=ctx.effective_scale_mode,
                 codec=ctx.effective_codec,
             )
+            planned_options = getattr(ctx.plan, "encoder_options", None)
+            if planned_options is not None:
+                ctx.effective_encoder_options = dict(planned_options)
 
         ctx.generate_hdr10plus_postprocess = should_postprocess_generated_hdr10plus(
             selection=selection, strip_only=ctx.strip_only, pipeline=pipeline,
             codec=ctx.effective_codec, encoder_options=ctx.effective_encoder_options,
             generate_hdr10plus=ctx.generate_hdr10plus,
+            source_codec=selection.get("source_codec"),
         )
         if ctx.generate_hdr10plus_postprocess and not ctx.strip_only:
             self._logger.info("HDR10+: SDR→HDR-Ausgabe erhält nach dem Encode generierte dynamische Metadaten.")

@@ -7,10 +7,12 @@ Parallel-Worker außerhalb des Qt-Controllers.
 """
 from __future__ import annotations
 
+from copy import deepcopy
 from typing import Callable
 
 from ..rules.rule_loader import load_subtitle_rules
 from ..worker.converter_config import ConverterConfig
+from ..core.preflight_metadata_identity import with_planned_metadata
 
 
 _SCALE_MAP = {
@@ -92,8 +94,9 @@ class ConversionConfigBuilder:
             scale_mode=_SCALE_MAP.get(ui.scale_combo.currentText(), "original"),
             overwrite_original=ui.over_cb.isChecked(),
             strip_only=ui.strip_cb.isChecked(),
-            encoder_options=dict(encoder_options or self._collect_encoder_options()),
-            file_overrides=dict(self._state.file_overrides),
+            encoder_options=deepcopy(dict(encoder_options or self._collect_encoder_options())),
+            file_overrides=with_planned_metadata(self._state.file_overrides,
+                getattr(self._state, 'planned_targets', {})),
             tv_path=paths.get("tv") or None,
             anime_path=paths.get("anime") or None,
             filme_path=paths.get("film") or None,
@@ -119,9 +122,9 @@ class ConversionConfigBuilder:
         fallback.filme_path = None
         return {
             "overwrite_original": bool(self._ui.over_cb.isChecked()),
-            "encoder_options": self._collect_encoder_options(),
-            "file_overrides": dict(self._state.file_overrides),
-            "subtitle_rules": self.subtitle_rules(),
+            "encoder_options": deepcopy(dict(self._collect_encoder_options() or {})),
+            "file_overrides": deepcopy(dict(self._state.file_overrides)),
+            "subtitle_rules": deepcopy(dict(self.subtitle_rules() or {})),
             "dv5_fallback_config": fallback,
         }
 

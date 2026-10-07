@@ -15,7 +15,7 @@ from PyQt6.QtWidgets import (
 
 from ...core import settings as cfg
 from ...core.jellyfin_api import JellyfinApiError, normalize_server_url
-from ...core.secret_settings import read_secret, write_secret
+from ...core.secret_settings import read_secret_state, write_secret
 from ..info_button import InfoButton
 from ..jellyfin_connection_test import JellyfinConnectionTestThread
 from .base import SettingsSection
@@ -55,6 +55,9 @@ class JellyfinIntegrationSection(SettingsSection):
         grid.addWidget(QLabel("API-Key:"), 3, 0)
         d.jellyfin_api_key_edit = QLineEdit()
         d.jellyfin_api_key_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        self._api_key_user_edited = False
+        self._api_key_was_unreadable = False
+        d.jellyfin_api_key_edit.textEdited.connect(self._mark_api_key_edited)
         grid.addWidget(d.jellyfin_api_key_edit, 3, 1)
         grid.addWidget(InfoButton(
             "Persönlicher Jellyfin-API-Key. Er wird lokal in den Dragon-Tools-Einstellungen gespeichert."
@@ -118,9 +121,16 @@ class JellyfinIntegrationSection(SettingsSection):
         d.jellyfin_server_url_edit.setText(s.value(
             cfg.SET_KEY_JELLYFIN_SERVER_URL, cfg.DEFAULT_JELLYFIN_SERVER_URL, type=str
         ))
-        d.jellyfin_api_key_edit.setText(read_secret(
+        api_key_state = read_secret_state(
             s, cfg.SET_KEY_JELLYFIN_API_KEY, cfg.DEFAULT_JELLYFIN_API_KEY
-        ))
+        )
+        self._api_key_was_unreadable = bool(api_key_state.protected and not api_key_state.readable)
+        self._api_key_user_edited = False
+        d.jellyfin_api_key_edit.setText(api_key_state.value)
+        if self._api_key_was_unreadable:
+            d.jellyfin_api_key_edit.setPlaceholderText(
+                "Gespeicherter API-Key nicht entschlüsselbar – zum Ersetzen neu eingeben"
+            )
         d.jellyfin_notify_move_cb.setChecked(s.value(
             cfg.SET_KEY_JELLYFIN_NOTIFY_AFTER_MOVE, cfg.DEFAULT_JELLYFIN_NOTIFY_AFTER_MOVE, type=bool
         ))
@@ -141,8 +151,11 @@ class JellyfinIntegrationSection(SettingsSection):
         api_key = d.jellyfin_api_key_edit.text().strip()
         was_enabled = s.value(cfg.SET_KEY_JELLYFIN_API_ENABLED, cfg.DEFAULT_JELLYFIN_API_ENABLED, type=bool)
         previous_server_url = s.value(cfg.SET_KEY_JELLYFIN_SERVER_URL, cfg.DEFAULT_JELLYFIN_SERVER_URL, type=str).strip()
+        preserve_unreadable_api_key = (
+            self._api_key_was_unreadable and not self._api_key_user_edited
+        )
         if d.jellyfin_api_enabled_cb.isChecked():
-            if not server_url or not api_key:
+            if not server_url or (not api_key and not preserve_unreadable_api_key):
                 QMessageBox.warning(
                     d,
                     "Jellyfin API",
@@ -174,7 +187,11 @@ class JellyfinIntegrationSection(SettingsSection):
 
         s.setValue(cfg.SET_KEY_JELLYFIN_API_ENABLED, d.jellyfin_api_enabled_cb.isChecked())
         s.setValue(cfg.SET_KEY_JELLYFIN_SERVER_URL, server_url)
-        write_secret(s, cfg.SET_KEY_JELLYFIN_API_KEY, api_key)
+        # An unreadable DPAPI blob belongs to another Windows user/machine (or
+        # is damaged), but it is still user data. Opening/saving unrelated
+        # settings must not destroy it. Only an explicit edit replaces it.
+        if not preserve_unreadable_api_key:
+            write_secret(s, cfg.SET_KEY_JELLYFIN_API_KEY, api_key)
         s.setValue(cfg.SET_KEY_JELLYFIN_NOTIFY_AFTER_MOVE, d.jellyfin_notify_move_cb.isChecked())
         s.setValue(cfg.SET_KEY_JELLYFIN_NOTIFY_AFTER_RENAME, d.jellyfin_notify_rename_cb.isChecked())
         s.setValue(
@@ -183,6 +200,9 @@ class JellyfinIntegrationSection(SettingsSection):
         )
         s.setValue(cfg.SET_KEY_JELLYFIN_FALLBACK_FULL_SCAN, d.jellyfin_fallback_scan_cb.isChecked())
         return True
+
+    def _mark_api_key_edited(self, _text: str) -> None:
+        self._api_key_user_edited = True
 
     def _sync_mode(self) -> None:
         targeted = self.dialog.jellyfin_refresh_mode_combo.currentData() == "targeted"

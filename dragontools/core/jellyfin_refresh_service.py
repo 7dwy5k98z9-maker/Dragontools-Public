@@ -10,6 +10,7 @@ from .jellyfin_api import JellyfinApiError, JellyfinClient
 from .jellyfin_full_scan_guard import start_full_scan_if_needed
 from .media_library_path_mappings import map_local_to_external_path
 from .media_library_types import PathMapping
+from .jellyfin_paths import normalize_path, path_key
 
 
 @dataclass(frozen=True)
@@ -31,24 +32,17 @@ class JellyfinRefreshResult:
 
 
 def _normalize_jellyfin_path(path: str) -> str:
-    text = str(path or "").strip().replace("\\", "/")
-    if not text:
-        return ""
-    while "//" in text[1:]:
-        text = text.replace("//", "/")
-    if text != "/":
-        text = text.rstrip("/")
-    return text
+    return normalize_path(path)
 
 
 def _path_within_root(path: str, root: str) -> bool:
-    path_norm = _normalize_jellyfin_path(path).casefold()
-    root_norm = _normalize_jellyfin_path(root).casefold()
+    path_norm = path_key(path)
+    root_norm = path_key(root)
     if not path_norm or not root_norm:
         return False
     if root_norm == "/":
         return path_norm.startswith("/")
-    return path_norm == root_norm or path_norm.startswith(root_norm + "/")
+    return path_norm == root_norm or path_norm.startswith(root_norm.rstrip('/') + "/")
 
 
 def _matching_root(path: str, roots: Iterable[str]) -> str | None:
@@ -63,7 +57,7 @@ def _canonicalize_under_root(path: str, root: str) -> str:
     root_norm = _normalize_jellyfin_path(root)
     if not _path_within_root(path_norm, root_norm):
         return path_norm
-    if path_norm.casefold() == root_norm.casefold():
+    if path_key(path_norm) == path_key(root_norm):
         return root_norm
     return root_norm + path_norm[len(root_norm) :]
 
@@ -89,7 +83,7 @@ def merge_refresh_mappings(
 
     for db_mapping in database:
         db_label = label_key(db_mapping.label)
-        db_external = _normalize_jellyfin_path(db_mapping.external_prefix).casefold()
+        db_external = path_key(db_mapping.external_prefix)
         match_index: int | None = None
         for index, mapping in enumerate(current):
             if index in used_current:
@@ -97,7 +91,7 @@ def merge_refresh_mappings(
             same_label = bool(db_label and db_label == label_key(mapping.label))
             same_external = bool(
                 db_external
-                and db_external == _normalize_jellyfin_path(mapping.external_prefix).casefold()
+                and db_external == path_key(mapping.external_prefix)
             )
             if same_label or same_external:
                 match_index = index
@@ -124,7 +118,7 @@ def merge_refresh_mappings(
         local = str(mapping.local_prefix or "").strip()
         if not external or not local:
             continue
-        key = (external.casefold(), local.replace("\\", "/").rstrip("/").casefold())
+        key = (path_key(external), path_key(local))
         if key in seen:
             continue
         seen.add(key)
@@ -165,14 +159,14 @@ def prepare_targeted_updates(
             continue
         path = _canonicalize_under_root(path, root)
 
-        key = (path.casefold(), update_type)
+        key = (path_key(path), update_type)
         if key not in seen_originals:
             seen_originals.add(key)
             originals.append({"Path": path, "UpdateType": update_type})
 
         parent = _normalize_jellyfin_path(posixpath.dirname(path))
-        if parent and parent.casefold() != _normalize_jellyfin_path(root).casefold():
-            parent_key = parent.casefold()
+        if parent and path_key(parent) != path_key(root):
+            parent_key = path_key(parent)
             if parent_key not in seen_parents and _path_within_root(parent, root):
                 seen_parents.add(parent_key)
                 parent_hints.append({"Path": parent, "UpdateType": "Modified"})
@@ -213,14 +207,14 @@ def build_move_updates(move_log: Iterable[dict], mappings: Iterable[PathMapping]
                 if not old_text:
                     continue
                 old_mapped = map_local_to_external_path(old_text, mapping_list)
-                old_key = (old_mapped.casefold(), "Deleted")
+                old_key = (path_key(old_mapped), "Deleted")
                 if old_key in seen:
                     continue
                 seen.add(old_key)
                 result.append({"Path": old_mapped, "UpdateType": "Deleted"})
 
         mapped = map_local_to_external_path(destination, mapping_list)
-        key = (mapped.casefold(), "Created")
+        key = (path_key(mapped), "Created")
         if key in seen:
             continue
         seen.add(key)
@@ -241,7 +235,7 @@ def build_rename_updates(
             if not text:
                 continue
             mapped = map_local_to_external_path(text, mapping_list)
-            key = (mapped.casefold(), update_type)
+            key = (path_key(mapped), update_type)
             if key in seen:
                 continue
             seen.add(key)
@@ -256,6 +250,9 @@ def execute_refresh(
     client_factory=JellyfinClient,
 ) -> JellyfinRefreshResult:
     update_list = list(updates)
+    if not update_list:
+        return JellyfinRefreshResult(True, config.refresh_mode, 0,
+            message='Keine installierte Ausgabe für Jellyfin-Aktualisierung vorhanden.')
     client = client_factory(config.server_url, config.api_key)
     if config.refresh_mode == "full":
         full_scan = start_full_scan_if_needed(client, config.server_url)
@@ -270,14 +267,6 @@ def execute_refresh(
             update_count=len(update_list),
             full_scan_reused=full_scan.reused,
             message=message,
-        )
-
-    if not update_list:
-        return JellyfinRefreshResult(
-            ok=True,
-            mode="targeted",
-            update_count=0,
-            message="Keine Jellyfin-Pfadänderung zu melden.",
         )
 
     try:

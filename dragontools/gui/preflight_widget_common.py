@@ -7,6 +7,12 @@ from PyQt6.QtWidgets import QFrame
 from ..rules.move_rules import move_safe_stem, sanitize_win_segment
 from ..core.path_syntax import join_user_path, path_compare_key
 
+
+def current_series_base(widget) -> str | None:
+    options = widget._options
+    index = widget._type_combo.currentIndex()
+    return options[index][1] if 0 <= index < len(options) else None
+
 def _safe_stem(path: str) -> str:
     """Dateiname für die Move-Zielfindung ohne technische Codec-Suffixe."""
     return move_safe_stem(path)

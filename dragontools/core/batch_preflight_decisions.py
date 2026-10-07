@@ -38,6 +38,17 @@ def _append_encoder_override_reason(reasons: list[str], overrides: dict[str, Any
 
 
 def _append_hdr_reasons(reasons: list[str], preview: dict[str, Any]) -> None:
+    if preview.get("sdr_hdr_requested"):
+        backend = _text(preview.get("sdr_hdr_backend"), "ffmpeg")
+        reason = _text(preview.get("sdr_hdr_reason"), "")
+        if preview.get("sdr_hdr_applied"):
+            reasons.append(f"SDR→HDR: {backend} wird angewendet. {reason}".strip())
+        elif preview.get("sdr_hdr_capability_known"):
+            reasons.append(f"SDR→HDR: angefordert, aber nicht anwendbar. {reason}".strip())
+        else:
+            reasons.append(
+                f"SDR→HDR: {backend} ist angefordert; die Backend-Verfügbarkeit wird beim Worker-Start geprüft."
+            )
     ignored_hdr = {str(value).lower() for value in preview.get("ignored_hdr") or []}
     if "dv" in ignored_hdr:
         reasons.append("HDR/DV: Dolby Vision wurde erkannt, kann in diesem Pfad aber nicht erhalten werden.")
@@ -205,6 +216,7 @@ def _warnings_for(path: str, preview: dict[str, Any]) -> tuple[list[str], bool]:
     error = False
 
     warnings.extend(str(w) for w in preview.get("analysis_warnings") or [] if w)
+    warnings.extend(str(w) for w in preview.get("capability_warnings") or [] if w)
     overrides = dict(preview.get("overrides") or {})
     warnings.extend(str(w) for w in overrides.get("_warnings") or [] if w)
 
@@ -221,16 +233,7 @@ def _warnings_for(path: str, preview: dict[str, Any]) -> tuple[list[str], bool]:
     elif audio_selection_count <= 0:
         warnings.append("Audioregeln wählen keine Spur aus.")
 
-    archive_reason = preview.get("archive_reason")
-    if archive_reason:
-        warnings.append(str(archive_reason))
-
-    ignored_hdr = set(str(v).lower() for v in preview.get("ignored_hdr") or [])
-    source_codec = _text(preview.get("source_codec"), "unbekannt").upper()
-    if "dv" in ignored_hdr:
-        warnings.append(f"Dolby Vision wird mit Quellcodec {source_codec} nicht erhalten.")
-    if "hdr10plus" in ignored_hdr:
-        warnings.append(f"HDR10+ wird mit Quellcodec {source_codec} nicht erhalten.")
+    _append_hdr_warnings(warnings, preview)
 
     subs = dict(preview.get("subtitles") or {})
     if subs.get("burn_blocked_reason") == "ambiguous":
@@ -284,3 +287,17 @@ def _strip_only_warnings(preview: dict[str, Any]) -> list[str]:
         )
 
     return warnings
+
+
+def _append_hdr_warnings(warnings: list[str], preview: dict[str, Any]) -> None:
+    archive_reason = preview.get("archive_reason")
+    if archive_reason:
+        warnings.append(str(archive_reason))
+
+    ignored_hdr = set(str(v).lower() for v in preview.get("ignored_hdr") or [])
+    source_codec = _text(preview.get("source_codec"), "unbekannt").upper()
+    if "dv" in ignored_hdr:
+        warnings.append(f"Dolby Vision wird mit Quellcodec {source_codec} nicht erhalten.")
+    if "hdr10plus" in ignored_hdr:
+        warnings.append(f"HDR10+ wird mit Quellcodec {source_codec} nicht erhalten.")
+

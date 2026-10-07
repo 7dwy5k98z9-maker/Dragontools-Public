@@ -4,18 +4,23 @@ import time
 from pathlib import Path
 
 from .cleanup_service import cleanup_empty_overwrite_dirs
+from .log_dispatch import dispatch_log
+from ..core.callback_dispatch import best_effort_callback
+from .parallel_queue_coordination import coordinated_change
 
 
 class ParallelConverterLifecycleMixin:
     """Run lifecycle, aggregate progress, diagnostics and final cleanup."""
 
+    @coordinated_change
     def start(self) -> None:
-        if self._running:
+        if self._running or getattr(self, "_started_once", False):
             return
+        self._started_once = True
         self._running = True
         self._run_start_ts = time.time()
         worker_count = min(self.parallel_jobs, len(self._pending_files))
-        self._logger.header(
+        best_effort_callback(self._logger.header,
             gpus=self._log_gpu_list,
             chosen_encoder=self._log_enc_name,
             total_files=len(self.files),
@@ -30,11 +35,11 @@ class ParallelConverterLifecycleMixin:
         )
         duplicates = list(getattr(self._queue_state, "duplicate_inputs_ignored", []) or [])
         if duplicates:
-            self._logger.warn(
+            best_effort_callback(self._logger.warn,
                 f"⚠️ {len(duplicates)} doppelter Queue-Eintrag wurde vor dem Start verworfen; "
                 "jede Quelldatei darf pro Run nur einem Worker gehören."
             )
-        self._logger.info(
+        best_effort_callback(self._logger.info,
             f"⚙️  Parallele Bearbeitung: {worker_count} Worker aktiv "
             f"(Encode-Limit: {self.parallel_jobs}; DV/HDR-Postprocessing-Limit: "
             f"{getattr(self, 'max_postprocessing_jobs', 4)})."
@@ -46,6 +51,10 @@ class ParallelConverterLifecycleMixin:
 
     def isRunning(self) -> bool:
         return self._running
+
+    @property
+    def is_paused(self) -> bool:
+        return self._paused
 
     def aggregate_progress_percent(self) -> int:
         return self._queue_state.aggregate_progress_percent()
@@ -89,9 +98,11 @@ class ParallelConverterLifecycleMixin:
             "log_file": getattr(self, "log_file_path", "") or "",
         }
 
+    @coordinated_change
     def _finish_if_done(self) -> None:
         if (
-            self._active_workers
+            getattr(self, "_launching_pending", False)
+            or self._active_workers
             or self._postprocessing_workers
             or self._postprocessing_inputs
             or self._queue_state.dv_postprocessing_inputs
@@ -107,21 +118,15 @@ class ParallelConverterLifecycleMixin:
         self._cleanup_empty_temp_overwrite_dirs_after_run()
         self._running = False
         if not self.abort_requested:
-            self.progress.emit(100)
-        self.finished.emit()
+            best_effort_callback(self.progress.emit, 100)
+        best_effort_callback(self.finished.emit)
 
     def _emit_aggregate_progress(self) -> None:
-        self.progress.emit(self.aggregate_progress_percent())
+        best_effort_callback(self.progress.emit, self.aggregate_progress_percent())
 
     def _logger_error(self, message: str) -> None:
-        error = getattr(self._logger, "error", None)
-        if callable(error):
-            error(message)
-            return
-        self.log_line.emit(message)
-        info = getattr(self._logger, "info", None)
-        if callable(info):
-            info(message)
+        if not dispatch_log(self._logger, message, "error"):
+            dispatch_log(self.log_line, message)
 
     def _sync_replace_service(self) -> None:
         self._registry.sync_replace_service()
@@ -139,4 +144,4 @@ class ParallelConverterLifecycleMixin:
                 else self._logger.info(msg),
             )
         except Exception as exc:
-            self._logger.warn(f"📝 Temporäre Overwrite-Ordner konnten nicht bereinigt werden: {exc}")
+            dispatch_log(self._logger, f"📝 Temporäre Overwrite-Ordner konnten nicht bereinigt werden: {exc}", "warn")

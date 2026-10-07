@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from ..core.recovery_file import preserve_recovery_file
+from .log_dispatch import dispatch_log
 from typing import Callable
 
 from ..core.settings_conversion import SET_KEY_SAVE_ALLOW_LARGER_OUTPUT, SET_KEY_SAVE_ALLOW_LARGER_OUTPUT_PERCENT, SET_KEY_SAVE_MIN_OUTPUT_SIZE_ENABLED, SET_KEY_SAVE_MIN_OUTPUT_SIZE_PERCENT
@@ -12,10 +14,7 @@ from ..core.settings_access import app_qsettings, settings_bool, settings_int
 def _log_warn(logger: Callable[[str], None] | Callable[[str, str], None] | None, message: str) -> None:
     if logger is None:
         return
-    try:
-        logger(message, "warn")
-    except TypeError:
-        logger(message)
+    dispatch_log(logger, message, "warn")
 
 
 def _unique_path_in_dir(directory: Path, filename: str) -> Path:
@@ -47,7 +46,7 @@ def _preserve_in_archiv(
     archiv_dir = input_path.parent / "Archiv"
     archiv_dir.mkdir(parents=True, exist_ok=True)
     target_path = _unique_path_in_dir(archiv_dir, output_path.name)
-    os.replace(str(output_path), str(target_path))
+    preserve_recovery_file(output_path, target_path)
     return target_path
 
 

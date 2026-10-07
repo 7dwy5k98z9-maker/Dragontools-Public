@@ -419,6 +419,11 @@ def _run_frozen_smoke_test() -> int:
         # Konstruktion des Tool-Resolvers darf im Frozen-Bundle ebenfalls nicht
         # an Pfadauflösung oder fehlenden optionalen Einstellungen scheitern.
         ToolPaths()
+        from dragontools.core.release_frozen_runtime import verify_runtime_imports, verify_opencv_image_backend
+        from dragontools.gui.release_frozen_widgets import verify_native_widgets_and_jpeg
+        verify_runtime_imports()
+        verify_opencv_image_backend()
+        verify_native_widgets_and_jpeg()
         probe_widget.deleteLater()
         app.processEvents()
     finally:

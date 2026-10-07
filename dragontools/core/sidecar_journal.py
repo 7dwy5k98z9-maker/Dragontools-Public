@@ -20,6 +20,10 @@ from typing import Any, Iterable
 
 from .json_io import atomic_write_json
 from .path_defaults import app_documents_dir
+from .transaction_identity import path_receipt, renamed_receipt_matches
+from .journal_runtime import register_journal, recovery_may_run
+from .sidecar_recovery import (validate_records, rollback_records as _rollback_records,
+    complete_records as _complete_records)
 
 _LOG = logging.getLogger(__name__)
 FORMAT_VERSION = 1
@@ -66,7 +70,13 @@ class SidecarJournal:
         path = folder / f"{PREFIX}{stamp}_{uuid.uuid4().hex[:8]}.json"
         now = _now()
         rows = [dict(row) for row in records]
+        validate_records(rows)
+        for row in rows:
+            row.setdefault('new_receipt', path_receipt(row['source']) if Path(row['source']).exists() else None)
+            row.setdefault('old_receipt', path_receipt(row['destination']) if row.get('backup') and Path(row['destination']).exists() else None)
+        candidate = Path(video_destination) if video_committed else Path(video_staging)
         data = {
+            'video_receipt': path_receipt(candidate) if candidate.exists() else None,
             "format": "DragonToolsSidecarJournal",
             "format_version": FORMAT_VERSION,
             "active": True,
@@ -82,6 +92,7 @@ class SidecarJournal:
         }
         journal = cls(path, data)
         journal.write(fatal=True)
+        register_journal(path)
         return journal
 
     def set_status(self, status: str, *, message: str = "", fatal: bool = False) -> None:
@@ -134,18 +145,22 @@ def recover_active_sidecar_journals(root: str | Path | None = None) -> dict[str,
             data = json.loads(path.read_text(encoding="utf-8"))
             if not isinstance(data, dict):
                 raise ValueError("ungueltiges Journalformat")
-            if data.get("format") != "DragonToolsSidecarJournal":
+            if (data.get("format") != "DragonToolsSidecarJournal"
+                    or data.get('format_version') != FORMAT_VERSION or not data.get('active')):
                 raise ValueError("unbekanntes Sidecar-Journalformat")
             rows = data.get("sidecars")
-            if not isinstance(rows, list) or not rows:
-                raise ValueError("Sidecar-Journal enthaelt keinen Commit-Plan")
+            validate_records(rows)
+            if not recovery_may_run(data, path):
+                totals['pending'] += 1
+                continue
 
             staging_text = str(data.get("video_staging") or "")
             destination_text = str(data.get("video_destination") or "")
             staging = Path(staging_text) if staging_text else None
             destination = Path(destination_text) if destination_text else None
 
-            if bool(data.get("video_committed", False)):
+            if (bool(data.get("video_committed", False)) and destination is not None
+                    and renamed_receipt_matches(destination, data.get('video_receipt'))):
                 _complete_records(rows)
                 totals["completed"] += 1
                 path.unlink(missing_ok=True)
@@ -157,7 +172,7 @@ def recover_active_sidecar_journals(root: str | Path | None = None) -> dict[str,
                 path.unlink(missing_ok=True)
                 continue
 
-            if destination is not None and _path_exists(destination):
+            if destination is not None and renamed_receipt_matches(destination, data.get('video_receipt')):
                 _complete_records(rows)
                 totals["completed"] += 1
                 path.unlink(missing_ok=True)
@@ -172,85 +187,6 @@ def recover_active_sidecar_journals(root: str | Path | None = None) -> dict[str,
             _LOG.warning("Sidecar-Recovery fehlgeschlagen fuer %s: %s", path, exc)
             totals["failed"] += 1
     return totals
-
-
-def _rollback_records(rows: list[dict[str, Any]]) -> None:
-    errors: list[str] = []
-    for row in reversed(rows):
-        source = Path(str(row.get("source") or ""))
-        destination = Path(str(row.get("destination") or ""))
-        backup_text = str(row.get("backup") or "")
-        backup = Path(backup_text) if backup_text else None
-        try:
-            source_exists = _path_exists(source)
-            dest_exists = _path_exists(destination)
-            backup_exists = backup is not None and _path_exists(backup)
-
-            if backup_exists and source_exists and dest_exists:
-                raise FileExistsError(
-                    "Sidecar-Zustand ist mehrdeutig: Staging, Ziel und Backup existieren gleichzeitig."
-                )
-
-            # Neuer Sidecar wurde bereits auf das Ziel committed -> zurueck ins Staging.
-            if not source_exists and dest_exists:
-                source.parent.mkdir(parents=True, exist_ok=True)
-                os.replace(str(destination), str(source))
-                dest_exists = False
-
-            # Altbestand wurde bereits auf Backup verschoben -> Originalnamen restaurieren.
-            if backup_exists:
-                if dest_exists or _path_exists(destination):
-                    raise FileExistsError(
-                        f"Sidecar-Rollback-Ziel ist belegt: {destination}"
-                    )
-                os.replace(str(backup), str(destination))
-        except Exception as exc:  # Recovery darf weitere Journale trotzdem bearbeiten.
-            errors.append(f"{destination.name}: {exc}")
-
-    if errors:
-        raise OSError("; ".join(errors))
-
-
-def _complete_records(rows: list[dict[str, Any]]) -> None:
-    """Fuehrt einen bereits logisch committed Sidecar-Plan deterministisch zu Ende."""
-    for row in rows:
-        source = Path(str(row.get("source") or ""))
-        destination = Path(str(row.get("destination") or ""))
-        backup_text = str(row.get("backup") or "")
-        backup = Path(backup_text) if backup_text else None
-
-        source_exists = _path_exists(source)
-        dest_exists = _path_exists(destination)
-        backup_exists = backup is not None and _path_exists(backup)
-
-        if backup is not None:
-            if source_exists and dest_exists and backup_exists:
-                raise FileExistsError(
-                    f"Sidecar-Zustand ist mehrdeutig: {destination}"
-                )
-            if source_exists and dest_exists and not backup_exists:
-                backup.parent.mkdir(parents=True, exist_ok=True)
-                os.replace(str(destination), str(backup))
-                dest_exists = False
-                backup_exists = True
-            if source_exists and not dest_exists and backup_exists:
-                os.replace(str(source), str(destination))
-                continue
-            if not source_exists and dest_exists and backup_exists:
-                continue
-            raise FileNotFoundError(
-                f"Sidecar-Commit kann nicht eindeutig vervollstaendigt werden: {destination}"
-            )
-
-        if source_exists and not dest_exists:
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            os.replace(str(source), str(destination))
-            continue
-        if not source_exists and dest_exists:
-            continue
-        raise FileExistsError(
-            f"Sidecar-Commit ohne Altbestand ist mehrdeutig: {destination}"
-        )
 
 
 def _path_exists(path: Path) -> bool:

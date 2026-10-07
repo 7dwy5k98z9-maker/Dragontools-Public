@@ -11,9 +11,12 @@ from ..core.sidecar_journal import SidecarJournal
 from ..core.sidecar_transaction import SidecarCommitError, SidecarCommitTransaction
 from ..rules.subtitle_rules import any_sidecar_export_enabled
 from .converter_utils import _fd, _fs
+from .log_dispatch import dispatch_log
+from .dv_remux_transaction_state import DVRemuxTransactionState
 from .dv_output_install import DVOutputInstallResult
 from .dv_result_contract import emit_dv_failure, mark_dv_terminal
 from .worker_events import progress_event, result_event
+from .worker_contracts import file_override_for_path
 
 
 class DVRemuxJobRunner:
@@ -44,157 +47,193 @@ class DVRemuxJobRunner:
         self.emit_success = emit_success
         self._prepared_source_trickplay: dict[str, object] = {}
 
+    def _log(self, message, level="info") -> None:
+        dispatch_log(self.worker.log, message, level)
+
     def run(self, input_path: str) -> bool:
-        output_path: str | None = None
-        staging_output_path: str | None = None
-        remux_complete = False
-        video_committed = False
-        preserved_output = False
+        tx = DVRemuxTransactionState(input_path)
         try:
-            self._emit_started(input_path)
-            if self.prepare_metadata is not None:
-                name, media_info, dur_ms, file_override = self.prepare_metadata(input_path)
-            else:
-                name, media_info, dur_ms, file_override = self._prepare_metadata(input_path)
-            self.worker.log(f"DV-Remux: {name}", "info")
-
-            staging_output_path = self.output_manager.build_output_path(input_path)
-            output_path = staging_output_path
-            size_before = Path(input_path).stat().st_size if Path(input_path).exists() else 0
-            start_ts = time.time()
-
-            if not self.pipeline.run(
-                input_path=input_path,
-                output_path=output_path,
-                mi=media_info,
-                dur_ms=dur_ms,
-                file_override=file_override,
-                name=name,
-            ) or self._abort_current_file():
-                if not self._abort_current_file():
-                    self.worker.log(f"Remux fehlgeschlagen: {name}", "error")
-                self._emit_failed(
-                    input_path,
-                    "DV-Remux-Pipeline fehlgeschlagen oder wurde abgebrochen.",
-                    stage="pipeline",
-                )
-                return False
-
-            verify_output = getattr(self.output_manager, "verify_output", None)
-            if callable(verify_output):
-                contract = getattr(self.pipeline, "last_expected_contract", None)
-                try:
-                    verified = verify_output(
-                        output_path=output_path, media_info=media_info, expected_duration_ms=dur_ms,
-                        expected_contract=contract,
-                    )
-                except TypeError as exc:
-                    if "expected_contract" not in str(exc):
-                        raise
-                    verified = verify_output(
-                        output_path=output_path, media_info=media_info, expected_duration_ms=dur_ms,
-                    )
-                if not verified:
-                    self._emit_failed(
-                        input_path,
-                        "DV-Remux-Ausgabeverifikation fehlgeschlagen.",
-                        stage="verify",
-                    )
-                    return False
-
-            staged_sidecars = self._export_sidecars_if_needed(
-                input_path=input_path,
-                output_path=output_path,
-                media_info=media_info,
-                file_override=file_override,
-            )
-            if staged_sidecars is None:
-                return False
-            self._prepare_source_trickplay(input_path)
-            if self._abort_current_file():
-                self._emit_failed(
-                    input_path,
-                    "Sofort-Abbruch vor dem destruktiven DV-Commit.",
-                    stage="abort_before_commit",
-                )
-                return False
-
-            sidecar_tx = self._commit_sidecars(input_path, output_path, staged_sidecars)
-            if staged_sidecars and sidecar_tx is None:
-                return False
-            if self._abort_current_file():
-                self._rollback_sidecars(sidecar_tx, staged_sidecars)
-                self._emit_failed(
-                    input_path,
-                    "Sofort-Abbruch vor dem Video-Replace; Sidecars wurden zurückgerollt.",
-                    stage="abort_before_replace",
-                )
-                return False
-
-            install = DVOutputInstallResult.from_value(
-                self.output_manager.replace_output_if_needed(input_path, output_path)
-            )
-            output_path = install.output_path
-            video_committed = bool(install.committed)
-            preserved_output = bool(install.preserved)
-            if not install.ok:
-                self._rollback_sidecars(sidecar_tx, staged_sidecars)
-                self._emit_failed(
-                    input_path,
-                    "DV-Remux-Ausgabe wurde durch die Größen-/Installationsregel nicht aktiviert.",
-                    stage="size_policy" if install.preserved else "replace",
-                    output_path=output_path,
-                    status="⚠️" if install.preserved else "❌",
-                )
-                return False
-
-            self._finalize_sidecars(input_path, sidecar_tx)
-            if install.cleanup_pending:
-                self._run_optional_postprocess(input_path, output_path)
-                self._emit_cleanup_pending(
-                    input_path, output_path, install.cleanup_message
-                )
-                return False
-
-            if self._abort_current_file():
-                self._emit_failed(
-                    input_path,
-                    "Sofort-Abbruch wurde während des Video-Commits erkannt; "
-                    "die bereits sicher installierte DV-Ausgabe bleibt erhalten.",
-                    stage="abort_after_commit",
-                    output_path=output_path,
-                    status="⚠️",
-                )
-                return False
-
-            self._run_optional_postprocess(input_path, output_path)
-            if self.emit_success is not None:
-                self.emit_success(input_path, output_path, name, size_before, start_ts)
-            else:
-                self._emit_success(input_path, output_path, name, size_before, start_ts)
-            remux_complete = True
-            return True
+            return self._execute_transaction(input_path, tx)
         except Exception as exc:
-            self.worker.log(
-                f"Unbehandelte Ausnahme in DVRemuxJobRunner bei {Path(input_path).name}",
-                "error",
-            )
-            self.worker.log(traceback.format_exc(), "error")
+            self._log(f"Unbehandelte Ausnahme in DVRemuxJobRunner bei {Path(input_path).name}", "error")
+            self._log(traceback.format_exc(), "error")
             self._emit_failed(
-                input_path,
-                f"Unbehandelte Ausnahme im DV-Remux: {exc}",
-                stage="unhandled",
-                output_path=output_path if video_committed else None,
-                status="⚠️" if video_committed else "❌",
+                input_path, f"Unbehandelte Ausnahme im DV-Remux: {exc}", stage="unhandled",
+                output_path=tx.output_path if tx.video_committed else None,
+                status="⚠️" if tx.video_committed else "❌",
             )
             return False
         finally:
-            if not remux_complete:
-                self._discard_prepared_source_trickplay(input_path, cleanup=False)
-                if not video_committed and not preserved_output:
-                    self.output_manager.cleanup_incomplete(
-                        input_path, staging_output_path or output_path
+            self._finish_transaction(tx)
+
+    def _execute_transaction(self, input_path, tx) -> bool:
+        self._emit_started(input_path)
+        if self.prepare_metadata is not None:
+            name, media_info, dur_ms, file_override = self.prepare_metadata(input_path)
+        else:
+            name, media_info, dur_ms, file_override = self._prepare_metadata(input_path)
+        self._log(f"DV-Remux: {name}", "info")
+
+        tx.staging_output_path = self.output_manager.build_output_path(input_path)
+        tx.output_path = tx.staging_output_path
+        size_before = Path(input_path).stat().st_size if Path(input_path).exists() else 0
+        start_ts = time.time()
+
+        if not self.pipeline.run(
+            input_path=input_path,
+            output_path=tx.output_path,
+            mi=media_info,
+            dur_ms=dur_ms,
+            file_override=file_override,
+            name=name,
+        ) or self._abort_current_file():
+            if not self._abort_current_file():
+                self._log(f"Remux fehlgeschlagen: {name}", "error")
+            self._emit_failed(
+                input_path,
+                "DV-Remux-Pipeline fehlgeschlagen oder wurde abgebrochen.",
+                stage="pipeline",
+            )
+            return False
+
+        if not self._verify_candidate(tx, media_info, dur_ms):
+            return False
+
+        staged_sidecars = self._export_sidecars_if_needed(
+            input_path=input_path,
+            output_path=tx.output_path,
+            media_info=media_info,
+            file_override=file_override,
+        )
+        if staged_sidecars is None:
+            return False
+        tx.staged_sidecars = staged_sidecars
+        self._prepare_source_trickplay(input_path)
+        if self._abort_current_file():
+            self._emit_failed(
+                input_path,
+                "Sofort-Abbruch vor dem destruktiven DV-Commit.",
+                stage="abort_before_commit",
+            )
+            return False
+
+        sidecar_tx = self._commit_sidecars(input_path, tx.output_path, staged_sidecars, transaction_state=tx)
+        if sidecar_tx is not None:
+            tx.sidecar_transaction = sidecar_tx
+        if staged_sidecars and sidecar_tx is None:
+            return False
+        if self._abort_current_file():
+            self._emit_failed(
+                input_path,
+                "Sofort-Abbruch vor dem Video-Replace; Sidecars wurden zurückgerollt.",
+                stage="abort_before_replace",
+            )
+            return False
+
+        install = DVOutputInstallResult.from_value(
+            self.output_manager.replace_output_if_needed(input_path, tx.output_path)
+        )
+        tx.output_path = install.output_path
+        tx.video_committed = bool(install.committed)
+        tx.preserved_output = bool(install.preserved)
+        if not install.ok:
+            self._emit_failed(
+                input_path,
+                "DV-Remux-Ausgabe wurde durch die Größen-/Installationsregel nicht aktiviert.",
+                stage="size_policy" if install.preserved else "replace",
+                output_path=tx.output_path,
+                status="⚠️" if install.preserved else "❌",
+            )
+            return False
+
+        self._finalize_sidecars(input_path, sidecar_tx)
+        if install.cleanup_pending:
+            self._run_optional_postprocess(input_path, tx.output_path)
+            self._emit_cleanup_pending(
+                input_path, tx.output_path, install.cleanup_message
+            )
+            return False
+
+        if self._abort_current_file():
+            self._emit_failed(
+                input_path,
+                "Sofort-Abbruch wurde während des Video-Commits erkannt; "
+                "die bereits sicher installierte DV-Ausgabe bleibt erhalten.",
+                stage="abort_after_commit",
+                output_path=tx.output_path,
+                status="⚠️",
+            )
+            return False
+
+        self._run_optional_postprocess(input_path, tx.output_path)
+        if self.emit_success is not None:
+            self.emit_success(input_path, tx.output_path, name, size_before, start_ts)
+        else:
+            self._emit_success(input_path, tx.output_path, name, size_before, start_ts)
+        tx.complete = True
+        return True
+
+    def _verify_candidate(self, tx, media_info, dur_ms) -> bool:
+        verify_output = getattr(self.output_manager, "verify_output", None)
+        if callable(verify_output):
+            contract = getattr(self.pipeline, "last_expected_contract", None)
+            try:
+                verified = verify_output(
+                    output_path=tx.output_path, media_info=media_info, expected_duration_ms=dur_ms,
+                    expected_contract=contract,
+                )
+            except TypeError as exc:
+                if "expected_contract" not in str(exc):
+                    raise
+                verified = verify_output(
+                    output_path=tx.output_path, media_info=media_info, expected_duration_ms=dur_ms,
+                )
+            if not verified:
+                tx.preserved_output = True
+                archived = None
+                preserve = getattr(self.output_manager, "preserve_failed_output", None)
+                if callable(preserve):
+                    archived = preserve(
+                        tx.input_path, tx.output_path,
+                        reason="DV-Remux-Ausgabeverifikation fehlgeschlagen",
                     )
+                    if archived:
+                        tx.output_path = str(archived)
+                        tx.preserved_output = True
+                self._emit_failed(
+                    tx.input_path,
+                    "DV-Remux-Ausgabeverifikation fehlgeschlagen; "
+                    + ("Kandidat wurde im Archiv erhalten." if archived else "Kandidat bleibt am Ausgabepfad erhalten; Archivierung nicht abgeschlossen."),
+                    stage="verify",
+                    output_path=tx.output_path if tx.preserved_output else None,
+                )
+                return False
+            tx.output_verified = True
+
+        return True
+
+    def _finish_transaction(self, tx) -> None:
+        self._discard_prepared_source_trickplay(tx.input_path, cleanup=False)
+        if tx.complete:
+            return
+        if not tx.video_committed:
+            if not self._rollback_sidecars(tx.sidecar_transaction, tx.staged_sidecars):
+                tx.preserved_output = True
+        if tx.output_verified and tx.needs_cleanup and tx.staging_output_path:
+            # Install the cleanup veto before optional archiving. A locked/full
+            # archive must leave the verified candidate at its staging path.
+            tx.preserved_output = True
+            preserve = getattr(self.output_manager, "preserve_failed_output", None)
+            if callable(preserve):
+                try:
+                    archived = preserve(tx.input_path, tx.staging_output_path,
+                        reason="Fehler nach erfolgreicher DV-Remux-Ausgabeverifikation")
+                    if archived:
+                        tx.output_path = str(archived)
+                except Exception as exc:
+                    self._log(f"DV-Recovery nicht abgeschlossen; geprüfter Kandidat bleibt erhalten: {exc}", "warn")
+        if tx.needs_cleanup:
+            self.output_manager.cleanup_incomplete(tx.input_path, tx.staging_output_path or tx.output_path)
 
     def _abort_current_file(self) -> bool:
         return bool(
@@ -206,9 +245,9 @@ class DVRemuxJobRunner:
         name = Path(input_path).name
         media_info = analyze_media(input_path, self.worker.tools)
         for warning in getattr(media_info, "analysis_warnings", []) or []:
-            self.worker.log(f"Analyse-Warnung: {warning}", "warn")
+            self._log(f"Analyse-Warnung: {warning}", "warn")
         dur_ms = self.process_runner.probe_ms(input_path)
-        file_override = self.worker.file_overrides.get(input_path)
+        file_override = file_override_for_path(self.worker.file_overrides, input_path)
         return name, media_info, dur_ms, file_override
 
     def _export_sidecars_if_needed(
@@ -266,13 +305,15 @@ class DVRemuxJobRunner:
         )
 
     def _discard_prepared_source_trickplay(self, input_path: str, *, cleanup: bool) -> None:
-        self._prepared_source_trickplay.pop(input_path, None)
+        from .postprocess_source_trickplay import discard_source_trickplay
+        discard_source_trickplay(self._prepared_source_trickplay.pop(input_path, None))
 
     def _commit_sidecars(
         self,
         input_path: str,
         output_path: str,
         staged_sidecars: list[str],
+        *, transaction_state=None,
     ) -> SidecarCommitTransaction | None:
         if not staged_sidecars:
             return None
@@ -282,12 +323,15 @@ class DVRemuxJobRunner:
             if self.worker.overwrite_original
             else output_path
         )
+        transaction = None
         try:
             transaction = SidecarCommitTransaction(
                 staged_sidecars,
                 source_base=Path(output_path).with_suffix(""),
                 destination_base=Path(anticipated_output).with_suffix(""),
             )
+            if transaction_state is not None:
+                transaction_state.sidecar_transaction = transaction
             journal = SidecarJournal.start(
                 video_staging=output_path,
                 video_destination=anticipated_output,
@@ -298,21 +342,17 @@ class DVRemuxJobRunner:
             transaction.commit()
             journal.set_status("sidecars_committed")
             return transaction
-        except SidecarCommitError as exc:
-            self.cleanup_generated_sidecars(staged_sidecars)
-            self.worker.log(f"Sidecar-Finalisierung fehlgeschlagen: {exc}", "error")
-            self._emit_failed(
-                input_path,
-                f"Sidecar-Finalisierung fehlgeschlagen: {exc}",
-                stage="sidecar_commit",
-            )
+        except Exception as exc:
+            self._rollback_sidecars(transaction, staged_sidecars)
+            self._log(f"Sidecar-Finalisierung fehlgeschlagen: {exc}", "error")
+            self._emit_failed(input_path, f"Sidecar-Finalisierung fehlgeschlagen: {exc}", stage="sidecar_commit")
             return None
 
     def _rollback_sidecars(
         self,
         transaction: SidecarCommitTransaction | None,
         staged_sidecars: list[str],
-    ) -> None:
+    ) -> bool:
         if transaction is not None:
             try:
                 transaction.rollback()
@@ -320,8 +360,10 @@ class DVRemuxJobRunner:
                 if journal is not None:
                     journal.finish()
             except SidecarCommitError as exc:
-                self.worker.log(f"Sidecar-Rollback unvollständig: {exc}", "error")
+                self._log(f"Sidecar-Rollback unvollständig: {exc}", "error")
+                return False
         self.cleanup_generated_sidecars(staged_sidecars)
+        return True
 
     def _finalize_sidecars(
         self,
@@ -334,7 +376,7 @@ class DVRemuxJobRunner:
             return
 
         for destination, backup in transaction.backup_pairs:
-            self.worker.log(
+            self._log(
                 "Vorhandenes Sidecar wurde nicht gelöscht, sondern gesichert: "
                 f"{destination.name} -> {backup.name}",
                 "warn",
@@ -368,7 +410,7 @@ class DVRemuxJobRunner:
                 "message": str(exc),
             }]
             created = []
-            self.worker.log(f"⚠️ Optionales Post-Processing fehlgeschlagen: {exc}", "warn")
+            self._log(f"⚠️ Optionales Post-Processing fehlgeschlagen: {exc}", "warn")
 
         postprocess_outputs = getattr(self.worker, "_postprocess_outputs", None)
         if isinstance(postprocess_outputs, dict):
@@ -383,7 +425,7 @@ class DVRemuxJobRunner:
             sidecar_outputs[input_path] = merged
 
         if any(str(item.get("status", "")).lower() == "error" for item in details):
-            self.worker.log(
+            self._log(
                 f"⚠️ DV-Remux erfolgreich, optionale NFO/Trickplay-Nacharbeit mit Fehlern: {Path(output_path).name}",
                 "warn",
             )
@@ -419,8 +461,8 @@ class DVRemuxJobRunner:
             message
             or "DV-Ausgabe ist installiert; Cleanup des Originals/Backups steht noch aus."
         )
-        self.worker.log(f"⚠️ DV-Replace abgeschlossen, Cleanup ausstehend: {Path(input_path).name}", "warn")
-        self.worker.log(reason, "warn")
+        self._log(f"⚠️ DV-Replace abgeschlossen, Cleanup ausstehend: {Path(input_path).name}", "warn")
+        self._log(reason, "warn")
         emit_dv_failure(
             self.worker, input_path, reason, stage="cleanup_pending",
             output_path=output_path, status="⚠️"
@@ -437,7 +479,7 @@ class DVRemuxJobRunner:
         mark_dv_terminal(self.worker, input_path, "✅")
         size_after = Path(output_path).stat().st_size if Path(output_path).exists() else 0
         duration = time.time() - start_ts
-        self.worker.log(
+        self._log(
             f"✅ {name} → {Path(output_path).name} | "
             f"{_fs(size_before)} → {_fs(size_after)} | {_fd(duration)}",
             "success",

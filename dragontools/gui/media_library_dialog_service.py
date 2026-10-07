@@ -238,7 +238,7 @@ class MediaLibraryDialogService:
                 configured = settings.value(key, "", type=str)
                 candidate = configured or default_target_path_for_settings_key(key, create=False)
                 local = normalize_user_path(candidate)
-                if not local or not Path(local).is_dir():
+                if not local or (not configured and not Path(local).is_dir()):
                     continue
                 compare = path_compare_key(local)
                 if compare in seen:

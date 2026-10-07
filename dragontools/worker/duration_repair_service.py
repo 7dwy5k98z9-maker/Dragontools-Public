@@ -26,6 +26,7 @@ from .duration_timestamp_service import TimestampRepairService
 from .tool_runner import ToolRunResult, run_tool
 from .workflow_engine import WorkflowVerifyResult
 from .timestamp_diagnostics import log_timestamp_diagnostics
+from .owned_probe import owned_probe_runner
 
 
 class DurationRepairService:
@@ -63,7 +64,7 @@ class DurationRepairService:
         self._timing_analyzer = MediaTimingAnalyzer(
             ffprobe_path=self._runtime.ffprobe_path,
             mediainfo_path=self._runtime.mediainfo_path,
-            run_command=subprocess.run,
+            run_command=subprocess.run if worker is None else owned_probe_runner(worker, label='Timinganalyse'),
         )
         self._remux_service = DurationRemuxService(self._runtime)
         self._timestamp_service = TimestampRepairService(self._runtime, self._timing_analyzer)
@@ -115,7 +116,7 @@ class DurationRepairService:
             source_path=source_path, output_path=output_path,
             expected_s=expected_duration_ms / 1000.0 if expected_duration_ms else None,
             actual_s=initial_result.duration_s, container=container,
-            ffprobe_path=self._runtime.ffprobe_path, log=self._runtime.log,
+            ffprobe_path=self._runtime.ffprobe_path, log=self._runtime.log, worker=self._runtime.worker,
         )
         return self._orchestrator.repair(
             output_path=str(output_path),

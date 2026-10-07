@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
@@ -113,6 +114,29 @@ def validate_comfyui_video_workflow(
             "DragonTools-ComfyUI-Workflow fehlt/fehlen Pflicht-Platzhalter: "
             + ", ".join("{{" + name + "}}" for name in missing_placeholders)
         )
+    if 'DragonHDRTVDMVideoConvert' in required:
+        _validate_hdrtvdm_graph(payload)
+
+
+def _validate_hdrtvdm_graph(payload):
+    converters = [node for node in payload.values() if node.get('class_type') == 'DragonHDRTVDMVideoConvert']
+    if len(converters) != 1:
+        raise ValueError('HDRTVDM benötigt genau einen aktiven Voll-Datei-Video-Node.')
+    inputs = converters[0].get('inputs') or {}
+    for name, token in (('input_video', 'INPUT_VIDEO'), ('output_video', 'OUTPUT_VIDEO'), ('manifest_path', 'MANIFEST_PATH'),
+        ('ffmpeg_path', 'FFMPEG'), ('decode_args_json', 'DECODE_ARGS_JSON'), ('encode_args_json', 'ENCODE_ARGS_JSON'),
+        ('hdr_args_json', 'HDR_ARGS_JSON'), ('fps_num', 'FPS_NUM'), ('fps_den', 'FPS_DEN'), ('expected_frames', 'EXPECTED_FRAMES')):
+        if inputs.get(name) != '{{' + token + '}}':
+            raise ValueError(f'HDRTVDM-Input {name} muss direkt an {{{{{token}}}}} gebunden sein.')
+    link = inputs.get('model')
+    if not isinstance(link, list) or len(link) != 2 or link[1] != 0:
+        raise ValueError('HDRTVDM-Videonode besitzt keine gültige Modellverbindung.')
+    loader = payload.get(str(link[0]), {})
+    if loader.get('class_type') != 'DragonHDRTVDMModelLoader':
+        raise ValueError('HDRTVDM-Modellverbindung zeigt nicht auf den geplanten Loader.')
+    loader_inputs = loader.get('inputs') or {}
+    if loader_inputs.get('repo_root') != '{{MODEL_ROOT}}' or loader_inputs.get('checkpoint') != '{{CHECKPOINT}}':
+        raise ValueError('HDRTVDM-Repository und Checkpoint müssen an die gewählte Konfiguration gebunden sein.')
 
 
 def workflow_uses_placeholder(payload: object, name: str) -> bool:
@@ -128,7 +152,13 @@ def render_comfyui_workflow(template: Mapping[str, Any], values: Mapping[str, ob
     unknown = set(normalized) - _ALLOWED_PLACEHOLDERS
     if unknown:
         raise ValueError(f"Unsupported ComfyUI placeholder(s): {', '.join(sorted(unknown))}")
-    return _render_value(dict(template), normalized)
+    rendered = _render_value(dict(template), normalized)
+    unresolved = sorted(_collect_placeholders(rendered))
+    if unresolved:
+        raise ValueError(
+            "Unresolved ComfyUI placeholder(s): " + ", ".join("{{" + name + "}}" for name in unresolved)
+        )
+    return rendered
 
 
 def _render_value(value: Any, values: Mapping[str, object]) -> Any:
@@ -146,6 +176,19 @@ def _render_value(value: Any, values: Mapping[str, object]) -> Any:
         return rendered
     return value
 
+
+
+def _collect_placeholders(value: object) -> set[str]:
+    found: set[str] = set()
+    if isinstance(value, dict):
+        for item in value.values():
+            found.update(_collect_placeholders(item))
+    elif isinstance(value, (list, tuple)):
+        for item in value:
+            found.update(_collect_placeholders(item))
+    elif isinstance(value, str):
+        found.update(match.group(1).strip().upper() for match in re.finditer(r"\{\{([A-Za-z0-9_]+)\}\}", value))
+    return found
 
 def _value_contains_token(value: object, token: str) -> bool:
     if isinstance(value, dict):

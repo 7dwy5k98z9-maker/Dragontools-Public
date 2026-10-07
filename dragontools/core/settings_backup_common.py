@@ -8,8 +8,8 @@ from pathlib import Path
 from typing import Any
 import zipfile
 
-from .secret_settings import read_secret
-from .settings_metadata import SENSITIVE_SETTINGS_KEYS
+from .secret_settings import SecretProtectionError, read_secret, read_secret_state
+from .settings_metadata import is_sensitive_settings_key
 from .settings_backup_limits import MAX_BACKUP_METADATA_BYTES, read_backup_entry
 
 BACKUP_FORMAT = "DragonToolsBackup"
@@ -68,25 +68,14 @@ def json_safe(value: Any) -> Any:
 def json_restore(value: Any) -> Any:
     if isinstance(value, dict) and set(value) == {"__bytes_b64__"}:
         try:
-            return base64.b64decode(str(value["__bytes_b64__"]))
-        except Exception:
-            return b""
+            return base64.b64decode(str(value["__bytes_b64__"]), validate=True)
+        except Exception as exc:
+            raise ValueError("Ungültiger Base64-Bytewert im Backup.") from exc
     if isinstance(value, list):
         return [json_restore(item) for item in value]
     if isinstance(value, dict):
         return {key: json_restore(val) for key, val in value.items()}
     return value
-
-
-def is_sensitive_settings_key(key: str) -> bool:
-    normalized = str(key).lower()
-    if normalized in {item.lower() for item in SENSITIVE_SETTINGS_KEYS}:
-        return True
-    sensitive_markers = (
-        "api_key", "apikey", "access_token", "read_access_token",
-        "bearer_token", "secret", "password",
-    )
-    return any(marker in normalized for marker in sensitive_markers)
 
 
 def settings_to_dict(settings, *, mask_sensitive: bool = False) -> dict[str, Any]:
@@ -102,15 +91,33 @@ def settings_to_dict(settings, *, mask_sensitive: bool = False) -> dict[str, Any
     return result
 
 
-def partition_settings(settings) -> tuple[dict[str, Any], dict[str, Any]]:
+def partition_settings(
+    settings,
+    *,
+    include_sensitive_values: bool = True,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Split settings for backup without silently losing protected secrets.
+
+    Excluded-secret backups do not need to decrypt credentials at all. For an
+    encrypted-secret backup, however, every protected credential must be
+    readable; otherwise exporting an empty fallback would create a seemingly
+    complete backup that cannot restore the original secret.
+    """
     normal: dict[str, Any] = {}
     sensitive: dict[str, Any] = {}
     for key in sorted(settings.allKeys()):
         key_str = str(key)
-        is_sensitive = is_sensitive_settings_key(key_str)
-        target = sensitive if is_sensitive else normal
-        value = read_secret(settings, key_str) if is_sensitive else settings.value(key)
-        target[key_str] = json_safe(value)
+        if is_sensitive_settings_key(key_str):
+            if not include_sensitive_values:
+                continue
+            state = read_secret_state(settings, key_str)
+            if state.protected and not state.readable:
+                raise SecretProtectionError(
+                    f"Geschützte Einstellung kann nicht für das verschlüsselte Backup gelesen werden: {key_str}"
+                )
+            sensitive[key_str] = json_safe(state.value)
+            continue
+        normal[key_str] = json_safe(settings.value(key))
     return normal, sensitive
 
 
@@ -168,4 +175,20 @@ def current_sensitive_values(settings) -> dict[str, Any]:
         key_str = str(key)
         if is_sensitive_settings_key(key_str):
             result[key_str] = read_secret(settings, key_str)
+    return result
+
+
+def current_sensitive_storage_values(settings) -> dict[str, Any]:
+    """Return the *stored* secret representation without decrypting it.
+
+    This is intentionally different from :func:`current_sensitive_values`.
+    Backup restore uses it when secrets are excluded from a backup: an
+    undecryptable DPAPI blob must survive the restore byte-for-byte instead of
+    being converted to an empty string and permanently lost.
+    """
+    result: dict[str, Any] = {}
+    for key in settings.allKeys():
+        key_str = str(key)
+        if is_sensitive_settings_key(key_str):
+            result[key_str] = settings.value(key)
     return result

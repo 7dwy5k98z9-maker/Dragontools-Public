@@ -55,6 +55,9 @@ class ConvertWidgetQueueDragDropMixin:
             event.accept()
             return True
 
+        if not self._guard_queue_edit_allowed("Dateien hinzufügen"):
+            event.ignore()
+            return True
         added = self._file_queue.collect_video_paths_from_mime_data(mime)
         if added:
             self.add_dropped_files(added)
@@ -66,6 +69,9 @@ class ConvertWidgetQueueDragDropMixin:
         e.setDropAction(Qt.DropAction.CopyAction)
         e.accept()
         if not _mime_has_file_payload(e.mimeData()):
+            e.ignore()
+            return
+        if not self._guard_queue_edit_allowed("Dateien hinzufügen"):
             e.ignore()
             return
         added = self._file_queue.collect_video_paths_from_mime_data(e.mimeData())

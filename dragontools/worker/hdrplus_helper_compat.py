@@ -42,11 +42,18 @@ class HDRPlusCompatibilityMixin:
             bitstream_service=self._hdr10plus_service,
         )
 
-    def _extract_hevc_annexb(self, input_path: str, output_hevc: str) -> bool:
+    def _extract_hevc_annexb(
+        self,
+        input_path: str,
+        output_hevc: str,
+        *,
+        stream_index: int | None = None,
+    ) -> bool:
         return self._stream_service.extract_hevc_annexb(
             input_path,
             output_hevc,
             run_tool=self._run_hdrplus_tool,
+            stream_index=stream_index,
         )
 
     @staticmethod
@@ -129,7 +136,7 @@ class HDRPlusCompatibilityMixin:
         tmp_dir: Path | None = None,
         subtitle_tracks=(),
     ) -> bool:
-        target = str(container or "mkv").lower()
+        target = str(container or "").strip().lower()
         if target == "mkv":
             return self._mux_hdrplus_mkv(injected_hevc, stream_donor, output_path)
         if target == "mp4":

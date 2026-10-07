@@ -11,6 +11,7 @@ import logging
 from dataclasses import dataclass
 import time
 from typing import Iterable, Any
+from .shutdown_worker_state import discovered_workers, invoke_abort_once, worker_is_running
 
 
 @dataclass(frozen=True)
@@ -35,20 +36,14 @@ def _worker_name(worker: Any) -> str:
 
 
 def _is_running(worker: Any) -> bool:
-    try:
-        return bool(worker.isRunning())
-    except Exception:
-        return False
+    return worker_is_running(worker)
 
 
 def _request_stop(worker: Any) -> None:
     """Fordert einen kooperativen Sofort-Abbruch an, ohne QThread.terminate()."""
     request_abort = getattr(worker, "request_abort", None)
     if callable(request_abort):
-        try:
-            request_abort("sofort")
-        except TypeError:
-            request_abort()
+        invoke_abort_once(request_abort)
         return
 
     cancel = getattr(worker, "cancel", None)
@@ -80,14 +75,7 @@ def collect_shutdown_workers(widgets: Iterable[Any]) -> list[Any]:
     for widget in widgets:
         if widget is None:
             continue
-        provider = getattr(widget, "iter_shutdown_workers", None)
-        if not callable(provider):
-            continue
-        try:
-            provided = provider() or ()
-        except Exception:
-            continue
-        for worker in provided:
+        for worker in discovered_workers(widget):
             if worker is None:
                 continue
             ident = id(worker)
@@ -105,6 +93,7 @@ def shutdown_workers(workers: Iterable[Any], *, timeout_ms: int = 8000) -> Appli
     nach Ablauf des Budgets aktiv, muss die Anwendung offen bleiben; ein harter
     Thread-Abschuss könnte gerade während eines Datei-Commits Daten beschädigen.
     """
+    deadline = time.monotonic() + max(0, int(timeout_ms)) / 1000.0
     unique: list[Any] = []
     seen: set[int] = set()
     for worker in workers:
@@ -121,7 +110,6 @@ def shutdown_workers(workers: Iterable[Any], *, timeout_ms: int = 8000) -> Appli
             # Worker ebenfalls ihren Abbruch erhalten.
             continue
 
-    deadline = time.monotonic() + max(0, int(timeout_ms)) / 1000.0
     for worker in unique:
         remaining_ms = max(0, int((deadline - time.monotonic()) * 1000))
         _wait(worker, remaining_ms)

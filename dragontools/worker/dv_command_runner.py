@@ -81,7 +81,11 @@ class DVCommandRunner:
             command = [command[0], "-nostdin"] + command[1:]
 
         started = time.monotonic()
-        self._reset_command_diagnostics(command, label)
+        # Best-effort probes/fallback attempts must not erase a real failure
+        # recorded by the productive stage and must not leave their expected
+        # non-zero return code as the pipeline's terminal diagnostic.
+        if not allow_error:
+            self._reset_command_diagnostics(command, label)
         self._vlog(f"[DV CMD] {command_to_log_string(command)}")
         try:
             result = run_tool(
@@ -94,11 +98,12 @@ class DVCommandRunner:
             )
         except (OSError, ValueError) as exc:
             reason = f"{label}: {Path(command[0]).name} konnte nicht ausgeführt werden: {exc}"
-            self._record_failure(command=command, label=label, reason=reason, output=str(exc))
-            self._log(
-                f"❌ [DV] Tool konnte nicht ausgeführt werden: {Path(command[0]).name} – {exc}",
-                "error",
-            )
+            if not allow_error:
+                self._record_failure(command=command, label=label, reason=reason, output=str(exc))
+                self._log(
+                    f"❌ [DV] Tool konnte nicht ausgeführt werden: {Path(command[0]).name} – {exc}",
+                    "error",
+                )
             return None if return_process else 1
 
         elapsed = time.monotonic() - started
@@ -114,9 +119,19 @@ class DVCommandRunner:
                 f"❌ [DV] Timeout ({timeout}s) bei '{tool}' nach {elapsed:.0f}s – Prozess abgebrochen.",
                 "error",
             )
-            return result if return_process else 1
+            return result if return_process else 124
 
+        return self._finish_command(result, command=command, label=label,
+                                    elapsed=elapsed, allow_error=allow_error,
+                                    return_process=return_process)
+
+    def _finish_command(self, result, *, command, label, elapsed, allow_error, return_process):
         rc = result.returncode
+        if rc == 1 and Path(command[0]).stem.casefold() == "mkvmerge":
+            self._log("⚠️ mkvmerge meldete Warnungen; die Ausgabe muss validiert werden.", "warn")
+            for line in result.combined_output.splitlines()[-8:]:
+                self._log(f"  mkvmerge: {line}", "warn")
+            return result if return_process else rc
         if rc != 0:
             tool = Path(command[0]).name
             err_text = (result.stderr or result.stdout or "").strip()
@@ -133,13 +148,13 @@ class DVCommandRunner:
                     "abweichende/fehlende Profilnormalisierung oder ein tatsächlich "
                     "inkompatibler Metadatenblock sein"
                 )
-            self._record_failure(
-                command=command,
-                label=label,
-                reason=reason,
-                output=tail,
-            )
             if not allow_error:
+                self._record_failure(
+                    command=command,
+                    label=label,
+                    reason=reason,
+                    output=tail,
+                )
                 self._log(f"❌ DV-Fehler bei {tool} (rc={rc}, {elapsed:.1f}s)", "error")
                 for line in tail_lines[-8:]:
                     self._log(f"  stderr: {line}", "error")
@@ -155,7 +170,7 @@ class DVCommandRunner:
         default_return_process: bool = False,
     ):
         """Erzeugt den von den vorhandenen DV-Services erwarteten Callback."""
-        def _run(cmd, allow_error=False, return_process=None, **_):
+        def _run(cmd, allow_error=False, return_process=None, **overrides):
             effective_return_process = (
                 default_return_process
                 if return_process is None
@@ -165,8 +180,8 @@ class DVCommandRunner:
                 cmd,
                 allow_error=allow_error,
                 return_process=effective_return_process,
-                timeout=timeout,
-                label=label,
+                timeout=overrides.get("timeout", timeout),
+                label=overrides.get("label", label),
             )
 
         return _run

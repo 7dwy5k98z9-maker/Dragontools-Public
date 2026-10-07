@@ -27,3 +27,7 @@ class SettingsSection:
 
     def save(self) -> bool:
         return True
+
+    def is_visible(self, section_key: str) -> bool:
+        """Keep writes inside the UI area the user actually opened."""
+        return section_key in getattr(self.dialog, "_visible_sections", self.section_keys)

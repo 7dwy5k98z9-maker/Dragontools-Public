@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from copy import deepcopy
 from pathlib import Path
 from typing import Callable
 
@@ -44,9 +45,9 @@ class AudioVideoMatchRequest:
             target_path=str(Path(target_path).resolve()) if target_path else "",
             output_path=str(Path(output_path).resolve()) if output_path else "",
             audio_stream_index=audio_stream_index,
-            mapping_result=mapping_result,
+            mapping_result=deepcopy(mapping_result),
             cut_ranges_text=str(cut_ranges_text or ""),
-            cut_results=tuple(cut_results or ()),
+            cut_results=tuple(deepcopy(cut_results or ())),
         )
 
 

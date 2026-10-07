@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from math import isfinite
 
 from ..core.result_status import POSTPROCESS_PENDING_ICON
 
@@ -97,7 +98,7 @@ class ConversionProgressDisplay:
             value = float(eta_s)
         except (TypeError, ValueError, OverflowError):
             return None
-        return value if value > 0 else None
+        return value if isfinite(value) and value > 0 else None
 
     def set_bar_format(self, text: str) -> None:
         try:

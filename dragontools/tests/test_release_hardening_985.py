@@ -14,9 +14,9 @@ def test_release_manifest_matches_985() -> None:
     from dragontools.core.version import APP_VERSION
 
     manifest = json.loads((ROOT / "release_manifest.json").read_text(encoding="utf-8"))
-    assert APP_VERSION == "9.8.7"
+    assert APP_VERSION == "9.9.0"
     assert manifest["app_version"] == APP_VERSION
-    assert "9.8.7" in manifest["help_policy"]
+    assert APP_VERSION in manifest["help_policy"]
 
 
 def test_whisper_is_declared_and_build_script_auto_installs_and_collects_it() -> None:
@@ -29,8 +29,12 @@ def test_whisper_is_declared_and_build_script_auto_installs_and_collects_it() ->
     assert "ctranslate2" in whisper
     assert 'import faster_whisper, ctranslate2' in build
     assert "pip install -r requirements-whisper.txt" in build
-    assert "--collect-all faster_whisper" in build
-    assert "--collect-all ctranslate2" in build
+    assert "--collect-submodules faster_whisper" in build
+    assert "--collect-binaries faster_whisper" in build
+    assert "--collect-data faster_whisper" in build
+    assert "--collect-submodules ctranslate2" in build
+    assert "--collect-binaries ctranslate2" in build
+    assert "--collect-data ctranslate2" in build
     assert "--copy-metadata faster-whisper" in build
 
 

@@ -8,6 +8,8 @@ from typing import Callable
 
 from ..core.timeout_settings import get_timeout
 from .tool_runner import ToolRunResult
+from .log_dispatch import dispatch_log
+from .verification_control import require_running
 
 LogFn = Callable[[str, str], None]
 RunToolFn = Callable[..., ToolRunResult]
@@ -34,7 +36,12 @@ class DurationRepairRuntime:
     run_tool_fn: RunToolFn
     replace_fn: ReplaceFn = os.replace
 
+    def __post_init__(self):
+        callback = self.log
+        self.log = lambda message, level='info': dispatch_log(callback, message, level)
+
     def run_tool(self, cmd: list[str], *, label: str, stdout_file=None) -> ToolRunResult:
+        require_running(worker=self.worker)
         output_options = {"stdout_file": stdout_file} if stdout_file is not None else {}
         return self.run_tool_fn(
             cmd,
@@ -46,6 +53,7 @@ class DurationRepairRuntime:
         )
 
     def replace_file(self, source: Path, destination: Path) -> None:
+        require_running(worker=self.worker)
         self.replace_fn(str(source), str(destination))
 
     def safe_unlink(self, path: Path) -> None:

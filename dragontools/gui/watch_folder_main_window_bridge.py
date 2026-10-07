@@ -9,11 +9,16 @@ import logging
 
 from .watch_folder_controller import WatchFolderController
 from .tab_lazy_loading import find_tab_index
+from .watch_folder_queue_ownership import available_watch_paths
 
 _LOG = logging.getLogger(__name__)
 
 
 def start_watch_folder_controller(window) -> None:
+    controller = getattr(window, "_watch_folder_controller", None)
+    if controller is not None:
+        controller.refresh_settings()
+        return
     window._watch_folder_controller = WatchFolderController(
         settings=window._settings,
         enqueue_callback=lambda **kwargs: enqueue_watch_folder_files(window, **kwargs),
@@ -28,11 +33,11 @@ def refresh_watch_folder_controller(window) -> None:
         controller.refresh_settings()
 
 
-def stop_watch_folder_controller(window) -> bool:
+def stop_watch_folder_controller(window, *, timeout_ms: int = 8000) -> bool:
     controller = getattr(window, "_watch_folder_controller", None)
     if controller is None:
         return True
-    return bool(controller.stop())
+    return bool(controller.stop(timeout_ms=timeout_ms))
 
 
 def scan_watch_folders_now(window) -> bool:
@@ -67,6 +72,9 @@ def enqueue_watch_folder_files(
         return []
     enqueue = getattr(widget, "enqueue_watch_folder_files", None)
     if not callable(enqueue):
+        return []
+    paths = available_watch_paths(getattr(window, "_tab_widgets", {}), codec=codec, paths=paths)
+    if not paths:
         return []
     return list(
         enqueue(

@@ -7,6 +7,12 @@ from pathlib import Path
 from .movie_renamer_models import ParsedMovieReleaseName, ParsedSeriesReleaseName
 from .online_metadata_common import default_episode_title, normalize_episode_metadata_title, parse_series_query
 from .path_syntax import path_compare_key
+from .move_companion_discovery import discover_move_companions
+from .move_transaction import publish_staged_no_replace
+from .sidecar_journal import SidecarJournal
+from .sidecar_transaction import SidecarCommitTransaction
+from .renamer_file_commit import rename_prepared_file
+from .online_metadata_parsing import _extract_metadata_year
 from ..rules.renamer_rules import sanitize_renamer_text, strip_configured_release_groups
 
 VIDEO_SUFFIXES = {
@@ -120,19 +126,19 @@ def parse_movie_release_name(value: str | Path) -> ParsedMovieReleaseName:
     release_groups = list(configured_groups)
 
     group_match = _RELEASE_GROUP_RE.search(stem)
-    if group_match:
+    if group_match and _movie_release_group(stem, group_match):
         detected = group_match.group("group").strip(".-_ ")
         if detected and detected.casefold() not in {item.casefold() for item in release_groups}:
             release_groups.append(detected)
         stem = stem[: group_match.start()].strip(".-_ ")
 
     release_group = ", ".join(release_groups)
-    normalized = _normalize_release_text(stem)
+    normalized = _normalize_release_text(stem, preserve_title_hyphens=True)
     edition_hints = _find_named_patterns(normalized, EDITION_PATTERNS)
     technical_tags = _find_named_patterns(normalized, TECHNICAL_TAG_PATTERNS)
 
     year: int | None = None
-    year_match = _YEAR_RE.search(normalized)
+    _detected_year, year_match = _extract_metadata_year(normalized)
     title_text = normalized
     if year_match:
         year = int(year_match.group(1))
@@ -141,10 +147,10 @@ def parse_movie_release_name(value: str | Path) -> ParsedMovieReleaseName:
         title_text = _strip_named_patterns(title_text, EDITION_PATTERNS)
         title_text = _strip_named_patterns(title_text, TECHNICAL_TAG_PATTERNS)
 
-    query_title = _cleanup_title(title_text)
+    query_title = _cleanup_title(title_text, preserve_title_hyphens=True)
     warnings: list[str] = []
     if not query_title:
-        query_title = _cleanup_title(normalized) or source.stem
+        query_title = _cleanup_title(normalized, preserve_title_hyphens=True) or source.stem
         warnings.append("Suchname konnte nur grob aus dem Dateinamen abgeleitet werden.")
     if year is None:
         warnings.append("Kein Jahr im Dateinamen erkannt.")
@@ -206,48 +212,17 @@ def parse_series_release_name(value: str | Path) -> ParsedSeriesReleaseName | No
     season_inferred = False
 
     series_query = parse_series_query(clean_name)
-    if details and details.get("series"):
-        series = series_query.title or str(details.get("series") or "").strip()
-        season = int(details.get("season") or 0)
-        episode = int(details.get("episode") or 0)
-    elif episode_only:
-        # EP01/EP1 enthält eine Episode, aber keine Staffel. Der Parser gibt
-        # die Folge bereits strukturiert zurück; die GUI fragt die Staffel vor
-        # der Provider-Suche explizit ab. Staffel 0 bleibt dadurch weiterhin
-        # ausschließlich ein bewusst gewählter Specials-Wert.
-        series = series_query.title.strip()
-        if not series:
-            prefix = stem[: episode_only.start()]
-            series = _cleanup_title(prefix)
-        if not series:
-            return None
-        season = 0
-        episode = int(episode_only.group("episode"))
-        season_missing = True
-    elif bare_episode_only:
-        # Scene-/P2P-Namen verwenden haeufig nur E19 statt S01E19. Fuer den
-        # Renamer ist Staffel 1 der sichere praktische Standard, soll aber
-        # jederzeit ueber die manuelle Staffelwahl ueberschreibbar bleiben.
-        series = series_query.title.strip()
-        if not series:
-            prefix = stem[: bare_episode_only.start()]
-            series = _cleanup_title(prefix)
-        if not series:
-            return None
-        season = 1
-        episode = int(bare_episode_only.group("episode"))
-        season_inferred = True
-    else:
+    parsed_episodes: tuple[int, ...] = ()
+    multi_episode_warning = ""
+    identity = _series_episode_identity(details, stem, series_query, episode_only, bare_episode_only)
+    if identity is None:
         return None
+    series, season, episode, parsed_episodes, multi_episode_warning, season_missing, season_inferred = identity
 
     match = _SERIES_EPISODE_RE.search(stem)
     episode_title = _cleanup_episode_title(stem[match.end():] if match else "")
 
     year: int | None = series_query.year
-    if year is None:
-        year_match = _YEAR_RE.search(stem)
-        if year_match:
-            year = int(year_match.group(1))
 
     technical_tags = _find_named_patterns(_normalize_release_text(stem), TECHNICAL_TAG_PATTERNS)
     warnings: list[str] = []
@@ -261,6 +236,12 @@ def parse_series_release_name(value: str | Path) -> ParsedSeriesReleaseName | No
         )
     if not episode_title:
         warnings.append("Kein lokaler Episodentitel im Dateinamen erkannt.")
+    if parsed_episodes:
+        warnings.append(
+            "Mehrfachfolge erkannt: " + "".join(f"E{value:02d}" for value in parsed_episodes)
+        )
+    elif multi_episode_warning:
+        warnings.append(multi_episode_warning)
 
     return ParsedSeriesReleaseName(
         source_name=source.name,
@@ -274,6 +255,8 @@ def parse_series_release_name(value: str | Path) -> ParsedSeriesReleaseName | No
         technical_tags=technical_tags,
         warnings=tuple(warnings),
         season_missing=season_missing,
+        episodes=parsed_episodes,
+        episode_mapping_required=bool(multi_episode_warning),
     )
 
 
@@ -374,26 +357,59 @@ def _cleanup_episode_title(value: str) -> str:
 
 
 def rename_movie_file(source_path: str | Path, target_name: str) -> Path:
+    """Rename one media file and its stem-bound companions transactionally.
+
+    The Renamer is not a remuxer: changing ``.mkv`` to ``.mp4`` by filename
+    alone would create a container/extension lie, so the source container
+    suffix is immutable here.  NFO/subtitle/trickplay companions are committed
+    before the video and protected by the existing durable sidecar journal.
+    """
     source = Path(source_path)
-    target = source.with_name(sanitize_filename_part(Path(target_name).stem) + Path(target_name).suffix)
-    if path_compare_key(source) == path_compare_key(target):
+    if not (source.exists() or source.is_symlink()):
+        raise FileNotFoundError(f"Quelldatei existiert nicht: {source}")
+
+    requested = Path(str(target_name or "").strip())
+    requested_suffix = requested.suffix
+    if requested_suffix and requested_suffix.casefold() != source.suffix.casefold():
+        raise ValueError(
+            "Der Renamer darf den Container nicht durch Umbenennen ändern: "
+            f"{source.suffix or '(ohne Endung)'} -> {requested_suffix}. "
+            "Bitte dafür Convert/Remux verwenden."
+        )
+    requested_stem = requested.stem if requested_suffix else requested.name
+    target = source.with_name(sanitize_filename_part(requested_stem) + source.suffix)
+    if source.name == target.name:
         return source
-    if target.exists():
+
+    source_key = path_compare_key(source)
+    target_key = path_compare_key(target)
+    if (target.exists() or target.is_symlink()) and target_key != source_key:
         raise FileExistsError(f"Zieldatei existiert bereits: {target}")
-    return source.rename(target)
+
+    return rename_prepared_file(source, target,
+        discover_companions=discover_move_companions, publish=publish_staged_no_replace,
+        transaction_cls=SidecarCommitTransaction, journal_cls=SidecarJournal)
 
 
-def _normalize_release_text(value: str) -> str:
+def _movie_release_group(stem, match):
+    group = match.group('group')
+    if _find_named_patterns(_normalize_release_text(stem[:match.start()]), TECHNICAL_TAG_PATTERNS):
+        return True
+    return group.isupper() and sum(char.isalpha() for char in group) >= 2
+
+
+def _normalize_release_text(value: str, *, preserve_title_hyphens=False) -> str:
     text = str(value or "")
     text = re.sub(r"[\[\]{}()]", " ", text)
     text = text.replace("_", " ").replace(".", " ")
-    text = re.sub(r"\s*[-–—]\s*", " ", text)
+    separator = r"\s+[-–—]\s*|\s*[-–—]\s+" if preserve_title_hyphens else r"\s*[-–—]\s*"
+    text = re.sub(separator, " ", text)
     text = re.sub(r"\s+", " ", text).strip()
     return text
 
 
-def _cleanup_title(value: str) -> str:
-    text = _normalize_release_text(value)
+def _cleanup_title(value: str, *, preserve_title_hyphens=False) -> str:
+    text = _normalize_release_text(value, preserve_title_hyphens=preserve_title_hyphens)
     text = re.sub(r"\b(?:Part|Pt)\s+(\d+)\b", r"\1", text, flags=re.IGNORECASE)
     text = re.sub(r"\s+", " ", text).strip(" .-_")
     return text
@@ -412,3 +428,53 @@ def _strip_named_patterns(value: str, patterns: tuple[tuple[str, str], ...]) -> 
     for _label, pattern in patterns:
         text = re.sub(pattern, " ", text, flags=re.IGNORECASE)
     return re.sub(r"\s+", " ", text).strip(" .-_")
+
+
+def _series_episode_identity(details, stem, series_query, episode_only, bare_episode_only):
+    parsed_episodes = ()
+    multi_episode_warning = ''
+    season_missing = season_inferred = False
+    if details and details.get("series"):
+        series = series_query.title or str(details.get("series") or "").strip()
+        season = int(details.get("season") or 0)
+        episode = int(details.get("episode") or 0)
+        raw_episodes = tuple(int(value) for value in (details.get("episodes") or ()) if int(value) > 0)
+        if len(raw_episodes) > 1:
+            if len(raw_episodes) <= 4 and raw_episodes == tuple(range(raw_episodes[0], raw_episodes[0] + len(raw_episodes))):
+                parsed_episodes = raw_episodes
+            else:
+                multi_episode_warning = (
+                    "Mehrfachfolgen-Muster ist nicht aufeinanderfolgend oder umfasst mehr als vier Episoden; "
+                    "bitte Episoden explizit zuordnen oder die Start-Episode manuell bestätigen."
+                )
+    elif episode_only:
+        # EP01/EP1 enthält eine Episode, aber keine Staffel. Der Parser gibt
+        # die Folge bereits strukturiert zurück; die GUI fragt die Staffel vor
+        # der Provider-Suche explizit ab. Staffel 0 bleibt dadurch weiterhin
+        # ausschließlich ein bewusst gewählter Specials-Wert.
+        series = series_query.title.strip()
+        if not series:
+            prefix = stem[: episode_only.start()]
+            series = _cleanup_title(prefix)
+        if not series:
+            return None
+        season = 0
+        episode = int(episode_only.group("episode"))
+        season_missing = True
+    elif bare_episode_only:
+        # Scene-/P2P-Namen verwenden haeufig nur E19 statt S01E19. Fuer den
+        # Renamer ist Staffel 1 der sichere praktische Standard, soll aber
+        # jederzeit ueber die manuelle Staffelwahl ueberschreibbar bleiben.
+        series = series_query.title.strip()
+        if not series:
+            prefix = stem[: bare_episode_only.start()]
+            series = _cleanup_title(prefix)
+        if not series:
+            return None
+        season = 1
+        episode = int(bare_episode_only.group("episode"))
+        season_inferred = True
+    else:
+        return None
+
+    return series, season, episode, parsed_episodes, multi_episode_warning, season_missing, season_inferred

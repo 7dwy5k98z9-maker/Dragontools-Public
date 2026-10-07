@@ -25,6 +25,15 @@ def infer_series_season(path: str, planned_entry: Any = None) -> int | None:
     intentionally contain no season; after preflight their planned target does,
     so the existing target's final folder is used as the authoritative fallback.
     """
+    target = planned_target_dir(planned_entry)
+    if target:
+        leaf = user_path_name(target).strip()
+        if leaf.casefold() in _SPECIAL_DIR_NAMES:
+            return 0
+        match = _SEASON_DIR_RE.fullmatch(leaf)
+        if match:
+            return int(match.group(1))
+
     parsed = parse_series_match_details(user_path_name(path))
     if parsed and parsed.get("season") is not None:
         try:
@@ -32,14 +41,7 @@ def infer_series_season(path: str, planned_entry: Any = None) -> int | None:
         except (TypeError, ValueError):
             pass
 
-    target = planned_target_dir(planned_entry)
-    if not target:
-        return None
-    leaf = user_path_name(target).strip()
-    if leaf.casefold() in _SPECIAL_DIR_NAMES:
-        return 0
-    match = _SEASON_DIR_RE.fullmatch(leaf)
-    return int(match.group(1)) if match else None
+    return None
 
 
 def target_kind(path: str, planned_entry: Any = None) -> str:

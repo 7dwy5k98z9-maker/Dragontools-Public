@@ -5,6 +5,18 @@ from types import SimpleNamespace
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def explicit_normal_remux_packet_boundary(monkeypatch, request):
+    # These two legacy command tests supply a fake OutputVerifier and bytes;
+    # real packet verification is covered separately by actual media tests.
+    if request.node.originalname in {
+        'test_duration_repair_remuxes_mkv_and_accepts_fixed_duration',
+        'test_duration_repair_remuxes_mp4_with_mp4box',
+    }:
+        monkeypatch.setattr('dragontools.worker.duration_packet_integrity.PacketIntegrityVerifier.validate',
+            lambda *a,**kw: SimpleNamespace(ok=True,available=True,messages=[]))
+
+
 def _verify_result(*, duration_ok: bool, duration_s: float = 50.0):
     from dragontools.worker.workflow_engine import WorkflowVerifyResult
 
@@ -70,7 +82,12 @@ def test_duration_repair_remuxes_mkv_and_accepts_fixed_duration(tmp_path, monkey
 
     assert outcome.repaired is True
     assert outcome.archived_path is None
-    assert verifier.calls == [(str(out), "mkv", 100_000, True)]
+    assert len(verifier.calls) == 1
+    verified_path, verified_container, verified_duration, verified_audio = verifier.calls[0]
+    assert Path(verified_path).parent == tmp_path
+    assert Path(verified_path).name.startswith("film.duration_remux_")
+    assert verified_path != str(out)
+    assert (verified_container, verified_duration, verified_audio) == ("mkv", 100_000, True)
     assert out.read_bytes().startswith(b"remuxed")
     assert any("korrigiert" in msg for _, msg in logs)
 
@@ -543,7 +560,7 @@ def test_vfr_datei_startet_keine_blinde_cfr_timestamp_reparatur(tmp_path, monkey
                     {
                         "media": {
                             "track": [
-                                {"@type": "General", "Duration": "4296408000"},
+                                {"@type": "General", "Duration": "4296408.000"},
                                 {
                                     "@type": "Video",
                                     "FrameRate_Mode": "Variable",
@@ -643,7 +660,10 @@ def test_fehlgeschlagene_timestamp_reparatur_archiviert_ausgabe_und_entfernt_tmp
     assert outcome.archived_path is not None
     archived = Path(outcome.archived_path)
     assert archived.exists()
-    assert archived.read_bytes().startswith(b"remuxed")
+    # Der normale Remux wird seit Review 13 erst nach erfolgreicher
+    # Verifikation committed. Ein verworfener Remux darf den vorherigen
+    # Encode-Kandidaten nicht mehr ersetzen.
+    assert archived.read_bytes().startswith(b"original")
     assert not list(tmp_path.glob("*.timestamp_fix_*.mkv"))
 
 
@@ -674,7 +694,7 @@ def test_abweichende_ffprobe_framerates_werden_nicht_blind_als_cfr_behandelt():
 
 
 
-def test_media_info_vfr_pts_ausreisser_wird_ueber_quell_dauer_sicher_repariert(tmp_path, monkeypatch):
+def test_vfr_pts_outlier_without_independent_cfr_source_is_not_forced_to_cfr(tmp_path, monkeypatch):
     import json
 
     import dragontools.worker.duration_repair_service as module
@@ -703,9 +723,9 @@ def test_media_info_vfr_pts_ausreisser_wird_ueber_quell_dauer_sicher_repariert(t
                             "FrameRate": "0.008",
                             "FrameCount": "34563",
                         },
-                        {"@type": "Audio", "Duration": "1441470"},
-                        {"@type": "Text", "Duration": "1436900"},
-                        {"@type": "Text", "Duration": "1436900"},
+                        {"@type": "Audio", "Duration": "1441.470"},
+                        {"@type": "Text", "Duration": "1436.900"},
+                        {"@type": "Text", "Duration": "1436.900"},
                     ]
                 }
             }
@@ -716,18 +736,18 @@ def test_media_info_vfr_pts_ausreisser_wird_ueber_quell_dauer_sicher_repariert(t
             {
                 "media": {
                     "track": [
-                        {"@type": "General", "Duration": "1441565"},
+                        {"@type": "General", "Duration": "1441.565"},
                         {
                             "@type": "Video",
                             "Format": "HEVC",
-                            "Duration": "1441565",
+                            "Duration": "1441.565",
                             "FrameRate_Mode": "Constant",
                             "FrameRate": "23.976",
                             "FrameCount": "34563",
                         },
-                        {"@type": "Audio", "Duration": "1441470"},
-                        {"@type": "Text", "Duration": "1436900"},
-                        {"@type": "Text", "Duration": "1436900"},
+                        {"@type": "Audio", "Duration": "1441.470"},
+                        {"@type": "Text", "Duration": "1436.900"},
+                        {"@type": "Text", "Duration": "1436.900"},
                     ]
                 }
             }
@@ -793,12 +813,11 @@ def test_media_info_vfr_pts_ausreisser_wird_ueber_quell_dauer_sicher_repariert(t
     )
 
     setts_commands = [cmd for cmd in commands if Path(cmd[0]).name.lower() == "ffmpeg.exe" and "-bsf:v:0" in cmd]
-    assert outcome.repaired is True
-    assert outcome.timestamp_fixed is True
-    assert outcome.archived_path is None
-    assert setts_commands
-    assert "setts=pts=N*1001/24000/TB:dts=N*1001/24000/TB:duration=1001/24000/TB" in setts_commands[0]
-    assert any("abgeleitet" in line for line in outcome.timing_summary or [])
+    assert outcome.repaired is False
+    assert outcome.timestamp_fixed is False
+    assert outcome.archived_path is not None
+    assert not setts_commands
+    assert any("VFR" in line for line in outcome.timing_summary or [])
 
 
 
@@ -824,15 +843,15 @@ def test_timinganalyse_nutzt_mediainfo_framecount_ohne_ffprobe_count_frames(tmp_
                     {
                         "media": {
                             "track": [
-                                {"@type": "General", "Duration": "1441565"},
+                                {"@type": "General", "Duration": "1441.565"},
                                 {
                                     "@type": "Video",
-                                    "Duration": "1441565",
+                                    "Duration": "1441.565",
                                     "FrameRate_Mode": "Constant",
                                     "FrameRate": "23.976",
                                     "FrameCount": "34563",
                                 },
-                                {"@type": "Audio", "Duration": "1441470"},
+                                {"@type": "Audio", "Duration": "1441.470"},
                             ]
                         }
                     }
@@ -1228,16 +1247,16 @@ def _vfr_mediainfo_json(*, duration: float, frames: int = 4, audio_duration: flo
         {
             "media": {
                 "track": [
-                    {"@type": "General", "Duration": str(duration * 1000.0)},
+                    {"@type": "General", "Duration": str(duration)},
                     {
                         "@type": "Video",
                         "Format": "HEVC",
-                        "Duration": str(duration * 1000.0),
+                        "Duration": str(duration),
                         "FrameRate_Mode": "Variable",
                         "FrameRate": "1.000",
                         "FrameCount": str(frames),
                     },
-                    {"@type": "Audio", "Duration": str(audio_duration * 1000.0)},
+                    {"@type": "Audio", "Duration": str(audio_duration)},
                 ]
             }
         }
@@ -1298,13 +1317,15 @@ def test_vfr_reparatur_uebernimmt_original_timeline_wenn_frameanzahl_identisch(t
             str(part).startswith("frame=") for part in cmd
         ):
             assert "-show_frames" in cmd
-            assert target == str(source)
+            assert target == str(source) or target in fixed_paths
             return SimpleNamespace(
                 returncode=0,
                 stdout=_source_frame_timeline_json([0.0, 0.5, 1.5, 3.0], last_duration=1.0),
                 stderr="",
             )
         if exe == "ffprobe.exe":
+            if "-show_packets" in cmd:
+                return _packet_probe_result(1, 0)
             if target == str(source) or target in fixed_paths:
                 stdout = _timing_probe_json(
                     container_duration=4.0,

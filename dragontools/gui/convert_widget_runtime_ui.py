@@ -16,7 +16,14 @@ class ConvertWidgetRuntimeUI:
         self.refresh_queue = refresh_queue
 
     def is_move_active(self) -> bool:
-        return bool(self.state.move_thread and self.state.move_thread.isRunning())
+        worker = self.state.move_thread
+        if worker is None:
+            return False
+        try:
+            return bool(worker.isRunning())
+        except (AttributeError, RuntimeError, TypeError):
+            # QObject wrappers can survive their C++ QThread during teardown.
+            return False
 
     def is_incremental_move_active(self) -> bool:
         return self.is_move_active() and bool(
@@ -54,13 +61,21 @@ class ConvertWidgetRuntimeUI:
         self.refresh_queue()
 
     def guard_queue_edit_allowed(self, action: str) -> bool:
-        if not self.is_queue_blocking_move_active():
+        # The start reservation also spans terminal dialogs and queue cleanup.
+        # That phase is not a pending start; a real move still blocks edits below.
+        starting = (
+            bool(getattr(self.state, "start_reserved", False))
+            and not bool(getattr(self.state, "finalization_in_progress", False))
+            and getattr(self.state, "thread", None) is None
+            and not self.is_move_active()
+        )
+        if not starting and not self.is_queue_blocking_move_active():
             return True
         self.log(f"Warteschlange während Verschieben gesperrt: {action}.", "warn")
         QMessageBox.information(
             self.parent_widget,
             "Warteschlange gesperrt",
-            "Während des Verschiebens sind Queue-Änderungen gesperrt.",
+            "Während der Startvorbereitung oder des Verschiebens sind Queue-Änderungen gesperrt.",
         )
         return False
 

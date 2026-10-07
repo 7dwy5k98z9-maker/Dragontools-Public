@@ -13,4 +13,7 @@ def verify_dynamic_metadata_contract(result, contract: ExpectedMediaContract) ->
         messages.append("Dolby-Vision-Vertrag verletzt: Dolby Vision ist im finalen Videostream nicht nachweisbar.")
     if contract.require_hdr10plus and not result.has_hdr10plus:
         messages.append("HDR10+-Vertrag verletzt: HDR10+ ist im finalen Videostream nicht nachweisbar.")
+    expected_profile = contract.expected_dolby_vision_profile
+    if expected_profile is not None and getattr(result, 'dolby_vision_profile', None) != expected_profile:
+        messages.append(f"Dolby-Vision-Profil abweichend: erwartet {expected_profile}, gefunden {getattr(result, 'dolby_vision_profile', None)}.")
     return messages

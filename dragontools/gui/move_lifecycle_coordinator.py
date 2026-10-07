@@ -44,8 +44,8 @@ class MoveLifecycleCoordinator:
             **common,
         )
 
-    def start_move(self, files: list[str], finished_thread) -> None:
-        self._regular.start(files, finished_thread)
+    def start_move(self, files: list[str], finished_thread) -> bool:
+        return self._regular.start(files, finished_thread)
 
     def move_finished_now(self) -> None:
         self._incremental.prompt_and_start()

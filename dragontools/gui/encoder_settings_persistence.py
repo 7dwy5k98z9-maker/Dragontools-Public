@@ -2,6 +2,31 @@
 from __future__ import annotations
 
 from ..core.type_utils import _safe_bool, _safe_float, _safe_int
+from .encoder_profile_options import save_profile_options, load_profile_options
+
+
+def _apply_combo_value(combo, value) -> bool:
+    """Stellt Combo-Werte bevorzugt über itemData wieder her, dann über sichtbaren Text."""
+    if combo is None or value is None:
+        return False
+    text = str(value)
+    if hasattr(combo, "findData"):
+        index = combo.findData(text)
+        if index is not None and index >= 0:
+            if hasattr(combo, "setCurrentIndex"):
+                combo.setCurrentIndex(index)
+                return True
+    if hasattr(combo, "findText"):
+        index = combo.findText(text)
+        if index is not None and index >= 0:
+            if hasattr(combo, "setCurrentIndex"):
+                combo.setCurrentIndex(index)
+            elif hasattr(combo, "setCurrentText"):
+                combo.setCurrentText(text)
+            else:
+                return False
+            return True
+    return False
 
 
 class EncoderSettingsPersistenceMixin:
@@ -29,6 +54,7 @@ class EncoderSettingsPersistenceMixin:
             widgets = self._ui.widgets
             c = self._default_codec
             s = self._settings
+            save_profile_options(self)
             s.setValue(f"encoder/{c}/encoder_idx", widgets.encoder_combo.currentIndex())
             s.setValue(f"encoder/{c}/crf", widgets.crf_spin.value())
             s.setValue(f"encoder/{c}/preset", widgets.preset_combo.currentText())
@@ -78,6 +104,7 @@ class EncoderSettingsPersistenceMixin:
             s = self._settings
             self._state.loading = True
             try:
+                load_profile_options(self)
                 def iv(key: str, default=None):
                     return s.value(f"encoder/{c}/{key}", default)
 
@@ -92,13 +119,10 @@ class EncoderSettingsPersistenceMixin:
                     widgets.crf_spin.setValue(crf)
                     widgets.x265_crf.setValue(crf)
                 preset = iv("preset", None)
-                if preset and widgets.preset_combo.findText(str(preset)) >= 0:
-                    widgets.preset_combo.setCurrentText(str(preset))
-                if preset and widgets.x265_preset.findText(str(preset)) >= 0:
-                    widgets.x265_preset.setCurrentText(str(preset))
+                _apply_combo_value(widgets.preset_combo, preset)
+                _apply_combo_value(widgets.x265_preset, preset)
                 scale = iv("scale", None)
-                if scale and widgets.scale_combo.findText(str(scale)) >= 0:
-                    widgets.scale_combo.setCurrentText(str(scale))
+                _apply_combo_value(widgets.scale_combo, scale)
                 for key, combo in [
                     ("nv_preset", widgets.nv_preset),
                     ("nv_bref", widgets.nv_bref),
@@ -113,8 +137,7 @@ class EncoderSettingsPersistenceMixin:
                     if combo is None:
                         continue
                     value = iv(key, None)
-                    if value and combo.findText(str(value)) >= 0:
-                        combo.setCurrentText(str(value))
+                    _apply_combo_value(combo, value)
                 for key, widget in [
                     ("nv_cq", widgets.nv_cq),
                     ("nv_bf", widgets.nv_bf),

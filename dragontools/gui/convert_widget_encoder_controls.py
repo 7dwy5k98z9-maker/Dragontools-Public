@@ -7,6 +7,7 @@ from ..core.encoder_profile_override import MODE_TO_SCALE_LABEL, SCALE_LABELS_TO
 from ..core.type_utils import _safe_bool, _safe_float, _safe_int
 from .convert_widget_encoder_panels import create_encoder_controls, preset_items
 from .convert_widget_encoder_state import default_encoder_preset
+from .encoder_settings_options import encoder_quality_range
 
 
 class EncoderOverrideControls:
@@ -26,6 +27,7 @@ class EncoderOverrideControls:
         controls["scale"].setCurrentText(
             MODE_TO_SCALE_LABEL.get(snapshot.get("scale_mode") or "original", "original")
         )
+        controls["quality"].setRange(*encoder_quality_range(self.default_codec, encoder))
         controls["quality"].setValue(_safe_int(snapshot.get("quality"), 22))
         options = dict(snapshot.get("encoder_options") or {})
         preferred = str(snapshot.get("preset") or default_encoder_preset(encoder, self.default_codec))
@@ -41,6 +43,7 @@ class EncoderOverrideControls:
 
     def refresh_encoder(self, controls: dict) -> None:
         encoder = str(controls["encoder"].currentData() or "cpu")
+        controls["quality"].setRange(*encoder_quality_range(self.default_codec, encoder))
         controls["stack"].setCurrentIndex({"cpu": 0, "nvenc": 1, "qsv": 2, "amf": 3}[encoder])
         self._set_preset_items(controls["preset"], encoder, controls["preset"].currentText())
 

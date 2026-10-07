@@ -11,28 +11,34 @@ from typing import Callable
 
 from .move_conflicts import episode_identity_for_path
 from .move_journal import MoveJournalWriteError
-from .move_transaction import remove_path
+from .move_transaction import remove_path, publish_staged_no_replace
+from .transaction_identity import path_receipt, receipt_matches
 
 
 class MoveConflictTransactions:
     def __init__(self, *, log: Callable[[str, str], None], journal) -> None:
         self._log = log
         self._journal = journal
+        self._owned_backups = {}
 
     @staticmethod
     def unique_backup_path(conflict: Path) -> Path:
         token = uuid.uuid4().hex[:10]
         return conflict.with_name(f"{conflict.name}.__dragontools_backup__{token}")
 
+    def register_backup(self, backup):
+        self._owned_backups[str(backup)] = path_receipt(backup)
+
     def backup(self, source_path: str | Path, conflicts: list[Path], result: dict) -> list[dict[str, str]] | None:
         pairs: list[dict[str, str]] = []
         try:
             for conflict in conflicts:
                 backup = self.unique_backup_path(conflict)
-                pair = {"original": str(conflict), "backup": str(backup)}
+                pair = {"original": str(conflict), "backup": str(backup), 'receipt': path_receipt(conflict)}
                 pairs.append(pair)
                 self._journal.set_backups(source_path, pairs)
-                os.replace(str(conflict), str(backup))
+                publish_staged_no_replace(conflict, backup)
+                self._owned_backups[str(backup)] = path_receipt(backup)
                 self._log(f"🛡️ Vorhandene Datei temporär gesichert: {conflict.name}", "info")
             result["backup_pairs"] = list(pairs)
             result["transaction_backup_count"] = len(pairs)
@@ -53,10 +59,13 @@ class MoveConflictTransactions:
             if not backup.exists():
                 continue
             try:
+                if not receipt_matches(backup, self._owned_backups.get(str(backup))):
+                    failures.append(f'{backup.name}: Backup gehört nicht zu dieser Transaktion')
+                    continue
                 if original.exists():
                     failures.append(f"{original.name}: Original existiert bereits")
                     continue
-                os.replace(str(backup), str(original))
+                publish_staged_no_replace(backup, original)
                 self._log(f"↩️ Vorhandene Datei wiederhergestellt: {original.name}", "warn")
             except OSError as exc:
                 failures.append(f"{original.name}: {exc}")
@@ -78,6 +87,9 @@ class MoveConflictTransactions:
             if not backup.exists():
                 continue
             try:
+                if not receipt_matches(backup, self._owned_backups.get(str(backup))):
+                    remaining.append(pair)
+                    continue
                 remove_path(backup)
             except (OSError, shutil.Error) as exc:
                 remaining.append(pair)
@@ -99,10 +111,14 @@ class MoveConflictTransactions:
         if identity is None or not conflicts:
             return
         artifacts = list(artifacts or [])
+        subtitle_suffixes = {".srt", ".ass", ".ssa", ".sup", ".sub", ".idx", ".vtt"}
         artifact_counts = {
             "nfo": sum(path.suffix.casefold() == ".nfo" for path in artifacts),
             "trickplay": sum(path.suffix.casefold() == ".trickplay" for path in artifacts),
         }
+        subtitle_count = sum(path.suffix.casefold() in subtitle_suffixes for path in artifacts)
+        if subtitle_count:
+            artifact_counts["subtitle"] = subtitle_count
         result.update(
             episode_identity_replacement=True,
             episode_identity_label=identity.label,
@@ -124,6 +140,6 @@ class MoveConflictTransactions:
             "♻️ SxxExx-Ersetzung: "
             f"alt={old_files} | neu={dst_p.name} | Serie={identity.series or 'unbekannt'} | "
             f"{identity.label} | Zeitpunkt={timestamp} | Grund={result['replacement_reason']} | "
-            f"alte NFO/Trickplay-Artefakte={artifact_text}",
+            f"alte Companion-Artefakte={artifact_text}",
             "warn",
         )

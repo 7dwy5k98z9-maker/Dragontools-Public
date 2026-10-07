@@ -29,6 +29,12 @@ class _FakeSettings:
     def setValue(self, key, value):
         self.values[key] = value
 
+    def allKeys(self):
+        return list(self.values)
+
+    def clear(self):
+        self.values.clear()
+
     def sync(self):
         self.synced += 1
 
@@ -82,3 +88,15 @@ def test_block12_metadata_settings_roundtrip_is_lossless() -> None:
     save_online_metadata_settings(settings, state)
     assert settings.synced == 1
     assert load_online_metadata_settings(settings) == state
+
+
+def test_block12_metadata_save_preserves_unreadable_dpapi_fallback():
+    from dragontools.core.settings_metadata import SET_KEY_METADATA_TMDB_API_KEY
+
+    opaque = "dpapi:v1:opaque-from-other-user"
+    settings = _FakeSettings({SET_KEY_METADATA_TMDB_API_KEY: opaque})
+    state = OnlineMetadataSettingsState(tmdb_api_key="")
+
+    save_online_metadata_settings(settings, state)
+
+    assert settings.values[SET_KEY_METADATA_TMDB_API_KEY] == opaque

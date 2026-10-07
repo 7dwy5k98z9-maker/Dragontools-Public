@@ -142,9 +142,9 @@ def test_cross_volume_directory_move_failure_removes_partial_destination(tmp_pat
         def rollback(self, *_args, **_kwargs):
             return None
 
-    def partial_then_fail(src: str, dst: str):
+    def partial_then_fail(src: str, dst: str, **kwargs):
         target = Path(dst)
-        target.mkdir(parents=True)
+        target.mkdir(parents=True, exist_ok=True)
         (target / "one.bin").write_bytes(b"one")
         raise OSError("simulated cross-volume copy failure")
 
@@ -156,7 +156,7 @@ def test_cross_volume_directory_move_failure_removes_partial_destination(tmp_pat
         raise OSError(errno.EXDEV, 'different volumes')
 
     monkeypatch.setattr(module.os, "rename", cross_volume)
-    monkeypatch.setattr(transaction_module, "copy_path_to_staging", partial_then_fail)
+    monkeypatch.setattr(transaction_module.shutil, "copytree", partial_then_fail)
     executor = module.MoveTransferExecutor(
         log=lambda *_args: None,
         wait=lambda: None,

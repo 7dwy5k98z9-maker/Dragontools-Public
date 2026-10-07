@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from ..core.callback_dispatch import invoke_callback
+from .parallel_queue_coordination import coordinated_change, canonical_owned_input
 from ..core.path_syntax import display_name, path_compare_key
 
 
@@ -13,6 +14,7 @@ class ParallelChildResultCoordinator:
         self._queue = queue_state
         self._results = result_state
 
+    @coordinated_change
     def on_encode_stage_complete(
         self,
         child,
@@ -25,7 +27,8 @@ class ParallelChildResultCoordinator:
         emit_aggregate_progress,
         finish_if_done,
     ) -> None:
-        if input_path in self._queue.terminal_inputs:
+        input_path = canonical_owned_input(self._queue, child, input_path)
+        if input_path is None or input_path in self._queue.dv_postprocessing_inputs:
             return
         self._queue.dv_postprocessing_inputs.add(input_path)
         self._queue.file_progress_pct[input_path] = 90
@@ -38,6 +41,7 @@ class ParallelChildResultCoordinator:
         invoke_callback(emit_aggregate_progress)
         invoke_callback(finish_if_done)
 
+    @coordinated_change
     def on_file_result(
         self,
         child,
@@ -51,7 +55,11 @@ class ParallelChildResultCoordinator:
         emit_aggregate_progress,
         finish_if_done,
     ) -> None:
-        self._registry.sync_child_maps(child, input_path)
+        original_path = input_path
+        input_path = canonical_owned_input(self._queue, child, input_path)
+        if input_path is None:
+            return
+        self._registry.sync_child_maps(child, original_path)
         if status == "🧩":
             # Terminal state is monotonic. Never resurrect a completed input
             # when a delayed pending event arrives from a very fast or legacy
@@ -80,6 +88,7 @@ class ParallelChildResultCoordinator:
         invoke_callback(emit_aggregate_progress)
         invoke_callback(finish_if_done)
 
+    @coordinated_change
     def on_finished(
         self,
         child,
@@ -92,6 +101,9 @@ class ParallelChildResultCoordinator:
         emit_aggregate_progress,
         finish_if_done,
     ) -> None:
+        if child not in self._registry.workers or child in self._registry.finished_workers:
+            return
+        self._registry.finished_workers.add(child)
         self._registry.sync_child_maps(child)
         self.mark_unreported_files_failed(
             child,
@@ -106,6 +118,7 @@ class ParallelChildResultCoordinator:
         invoke_callback(emit_aggregate_progress)
         invoke_callback(finish_if_done)
 
+    @coordinated_change
     def mark_unreported_files_failed(
         self,
         child,
@@ -127,6 +140,7 @@ class ParallelChildResultCoordinator:
             child_failures = getattr(child, "_failure_details", {}) or {}
         child_failed_count = int(getattr(child, "fehlgeschlagen", 0) or 0)
         for path in unreported:
+            self._registry.sync_child_maps(child, path)
             details = dict(child_failures.get(path, {}) or {}) or {
                 "message": "Worker beendet ohne finales Dateiergebnis.",
                 "error_report": "",

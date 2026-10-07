@@ -1,13 +1,19 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import hashlib
 import json
+from collections import Counter
 from pathlib import Path
 from ..core.output_timestamps import build_output_timestamp_args
 
 from ..core.media_analyzer import analyze_media
+from ..core.codec_utils import normalize_target_codec
 from ..core.quality_tester import QualityMetricResult, automatic_quality_segments, parse_extra_args, parse_quality_segments, quality_output_name
 from .encoder_args import _scale, _vid_args
+from .utility_media_analysis import analyze_owned_media
+from .quality_output_validation import quality_video, finite_duration
+from .utility_output_workspace import VerifiedOutputWorkspace
 
 
 class QualityTestService:
@@ -19,25 +25,26 @@ class QualityTestService:
         self._progress = progress
         self._result_ready = result_ready
         self._is_aborted = is_aborted
+        self.had_failures = False
 
     def run(self, *, files: list[str], output_dir: str, runs: list, sample_count: int, sample_duration_s: int, manual_ranges: str) -> None:
         if not files:
-            self._log("⚠️ Keine Dateien im Qualitätstester.")
-            return
+            raise RuntimeError("Keine Dateien im Qualitätstester.")
         if not runs:
-            self._log("⚠️ Keine aktiven Testläufe definiert.")
-            return
+            raise RuntimeError("Keine aktiven Testläufe definiert.")
+        self.had_failures = False
         out_root = Path(output_dir)
         out_root.mkdir(parents=True, exist_ok=True)
         file_segments = self._collect_segments(files, sample_count, sample_duration_s, manual_ranges)
         total_units = sum(len(segments) * len(runs) for _, segments in file_segments)
         done_units = 0
         self._progress(0)
+        stem_counts = Counter(Path(file_path).stem.casefold() for file_path, _segments in file_segments)
         for file_path, segments in file_segments:
             if self._is_aborted():
                 self._log("⚠️ Qualitätstest abgebrochen.")
                 return
-            file_out_dir = out_root / Path(file_path).stem
+            file_out_dir = out_root / self._output_directory_name(file_path, stem_counts)
             file_out_dir.mkdir(parents=True, exist_ok=True)
             self._log(f"▶ Qualitätstest: {Path(file_path).name}")
             for segment in segments:
@@ -50,13 +57,22 @@ class QualityTestService:
                     self._progress(int(done_units / max(total_units, 1) * 100))
         self._progress(100)
 
+
+    @staticmethod
+    def _output_directory_name(file_path: str, stem_counts: Counter) -> str:
+        stem = Path(file_path).stem
+        if stem_counts.get(stem.casefold(), 0) <= 1:
+            return stem
+        digest = hashlib.sha1(str(Path(file_path).resolve()).encode("utf-8")).hexdigest()[:8]
+        return f"{stem}__{digest}"
+
     def _collect_segments(self, files, sample_count, sample_duration_s, manual_ranges):
         collected = []
         for file_path in files:
             if self._is_aborted():
                 break
-            media = analyze_media(file_path, self._tools)
-            duration = float(getattr(media, "duration_s", 0.0) or 0.0)
+            media = analyze_owned_media(file_path, self._tools, worker=getattr(self._runner, 'worker', None), analyzer=analyze_media)
+            duration = finite_duration(getattr(media, "duration_s", 0.0))
             segments = parse_quality_segments(manual_ranges, duration_s=duration, default_duration_s=float(sample_duration_s))
             if not segments:
                 segments = automatic_quality_segments(duration_s=duration, count=sample_count, segment_duration_s=float(sample_duration_s))
@@ -67,32 +83,46 @@ class QualityTestService:
         output_path = output_dir / quality_output_name(file_path, test_run, segment)
         self._log(f"ℹ️  {test_run.name}: Segment {segment.label} ({segment.duration_s:.0f}s ab {segment.start_s:.1f}s)")
         try:
-            self.encode_segment(file_path, str(output_path), test_run, segment)
-            result = self.analyze_result(file_path, str(output_path), test_run, segment)
+            if output_path.exists() or output_path.is_symlink():
+                raise FileExistsError(f"Testausgabe existiert bereits: {output_path}")
+            workspace = VerifiedOutputWorkspace(output_dir, self._log, prefix='.__dragontools_quality_')
+            with workspace as root:
+                staged = root / output_path.name
+                self.encode_segment(file_path, str(staged), test_run, segment)
+                result = self.analyze_result(file_path, str(staged), test_run, segment)
+                if self._is_aborted():
+                    raise RuntimeError("Abgebrochen")
+                workspace.mark_verified(staged)
+                workspace.publish_verified(staged, output_path, require_current=self._raise_if_aborted)
+                result.output_path = str(output_path)
         except (OSError, RuntimeError, ValueError, TypeError) as exc:
+            # A failed encoder/probe may leave a truncated container behind.
+            # It must never look like a successful quality sample on disk.
+            self.had_failures = True
             self._log(f"❌ Testlauf fehlgeschlagen: {exc}")
             return
         self._result_ready(result)
         self.log_result(result)
 
+    def _raise_if_aborted(self):
+        if self._is_aborted():
+            raise RuntimeError('Abgebrochen')
+
     @staticmethod
     def video_args(run) -> list[str]:
-        codec = (run.codec or "h265").lower()
-        codec = "h265" if codec in {"hevc", "x265"} else "h264" if codec in {"avc", "x264"} else codec
-        if codec not in {"h264", "h265", "av1"}:
-            codec = "h265"
+        codec = normalize_target_codec(run.codec or 'h265')
         encoder = (run.encoder or "cpu").lower()
         aliases = {"software": "cpu", "libx264": "cpu", "libx265": "cpu", "libsvtav1": "cpu", "nvidia": "nvenc", "nvidia nvenc": "nvenc", "intel": "qsv", "intel qsv": "qsv", "amd": "amf", "amd amf": "amf"}
         encoder = aliases.get(encoder, encoder)
         if encoder not in {"cpu", "nvenc", "qsv", "amf"}:
-            encoder = "cpu"
+            raise ValueError(f"Nicht unterstützter Qualitäts-Encoder: {encoder}")
         quality = max(0, min(63, int(run.quality)))
         preset = str(run.preset or ("6" if codec == "av1" and encoder == "cpu" else "medium"))
         opts = dict(getattr(run, "encoder_options", {}) or {})
-        opts["encoder"] = encoder
-        if encoder == "nvenc": opts.setdefault("cq", quality); opts.setdefault("preset", preset)
-        elif encoder == "qsv": opts.setdefault("q", quality); opts.setdefault("preset", preset)
-        elif encoder == "amf": opts.setdefault("qp", quality); opts.setdefault("quality", preset)
+        opts.update(encoder=encoder, preset=preset)
+        if encoder == "nvenc": opts['cq'] = quality
+        elif encoder == "qsv": opts['q'] = quality
+        elif encoder == "amf": opts.update(qp=quality, quality=preset)
         elif codec == "av1" and not str(preset).isdigit(): preset = "6"
         args = _vid_args(codec, quality, preset, opts)
         scale_key = {"1080": "1080p", "720": "720p"}.get(str(run.scale or "").strip().lower(), str(run.scale or "").strip().lower())
@@ -117,17 +147,29 @@ class QualityTestService:
         return value if isinstance(value, dict) else {}
 
     def analyze_result(self, input_path: str, output_path: str, run, segment) -> QualityMetricResult:
+        output = Path(output_path)
+        if not output.is_file() or output.stat().st_size <= 0:
+            raise RuntimeError("Testencode wurde nicht erzeugt oder ist leer.")
+
         probe = self.probe_output(output_path)
-        streams = probe.get("streams") or []
-        video = next((s for s in streams if s.get("codec_type") == "video"), {})
+        video = quality_video(probe, run)
         fmt = probe.get("format") or {}
-        size = Path(output_path).stat().st_size if Path(output_path).exists() else 0
-        duration = float(fmt.get("duration") or video.get("duration") or segment.duration_s or 0.0)
+        width = int(video.get("width") or 0)
+        height = int(video.get("height") or 0)
+        if width <= 0 or height <= 0:
+            raise RuntimeError("Videodimensionen des Testencodes sind ungültig.")
+
+        size = output.stat().st_size
+        duration = finite_duration(fmt.get("duration") or video.get("duration"))
+        expected = float(segment.duration_s or 0.0)
+        if expected > 0.0 and abs(duration - expected) > max(1.0, expected * 0.05):
+            raise RuntimeError(
+                f"Testencode-Laufzeit unplausibel: erwartet {expected:.3f}s, erhalten {duration:.3f}s."
+            )
         bitrate_k = float(fmt.get("bit_rate") or 0) / 1000.0 if fmt.get("bit_rate") else 0.0
         result = QualityMetricResult(run_name=run.name, segment_label=segment.label, output_path=output_path, size_bytes=size,
             duration_s=duration, video_bitrate_kbps=bitrate_k, codec=str(video.get("codec_name") or ""),
             pix_fmt=str(video.get("pix_fmt") or ""), profile=str(video.get("profile") or ""))
-        width, height = int(video.get("width") or 0), int(video.get("height") or 0)
         result.ssim = self._metrics.measure_encoded(metric="ssim", input_path=input_path, output_path=output_path,
             start_s=segment.start_s, duration_s=segment.duration_s, width=width, height=height, label="SSIM", notes=result.notes)
         result.vmaf = self._metrics.measure_encoded(metric="libvmaf", input_path=input_path, output_path=output_path,

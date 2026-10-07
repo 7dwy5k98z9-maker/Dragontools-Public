@@ -34,8 +34,11 @@ def test_run_tool_reports_timeout():
     assert result.returncode == 124
 
 
-def test_terminate_plain_logs_terminate_and_kill_failures():
+def test_terminate_plain_logs_terminate_and_kill_failures(monkeypatch):
+    from dragontools.worker import process_control
+    monkeypatch.setattr(process_control, "_taskkill_tree", lambda *_args, **_kwargs: False)
     class FakeProc:
+        pid = 12345
         def poll(self):
             return None
 
@@ -52,8 +55,11 @@ def test_terminate_plain_logs_terminate_and_kill_failures():
     assert any(level == "error" and "kill() fehlgeschlagen" in msg for level, msg in logs)
 
 
-def test_terminate_plain_does_not_swallow_unexpected_programming_error():
+def test_terminate_plain_does_not_swallow_unexpected_programming_error(monkeypatch):
+    from dragontools.worker import process_control
+    monkeypatch.setattr(process_control, "_taskkill_tree", lambda *_args, **_kwargs: False)
     class FakeProc:
+        pid = 12345
         def poll(self):
             return None
 

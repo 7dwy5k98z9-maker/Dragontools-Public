@@ -3,9 +3,15 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
+
+from .dv_mkv_source_subtitles import resolve_subtitle_ids, direct_subtitle_args
 
 from ..core.timeout_settings import get_timeout
 from .dv_subtitle_mux_service import DVMuxSubtitleTrack
+from .dv_mux_input_validation import required_mux_inputs_available
+from .mp4box_track_args import mp4box_track_argument, append_mp4box_subtitle
+from .mkv_audio_track_args import mkv_audio_track_args
 
 
 class DVRemuxMuxer:
@@ -21,35 +27,22 @@ class DVRemuxMuxer:
         subtitle_tracks: list[DVMuxSubtitleTrack] | None = None,
     ) -> bool:
         w = self.worker
+        if not required_mux_inputs_available([path for path, _job in audio_tracks] + [track.path for track in subtitle_tracks or ()]):
+            w.log("❌ DV-MP4: eine geplante Mux-Spur fehlt oder ist leer.", "error")
+            return False
         # MP4 is intentionally a Profile-8.1 compatibility target.  The
         # pipeline guarantees that ``video_hevc`` has actually been prepared
         # with dovi_tool Mode 2 before this explicit container signal is set.
         cmd = [w.tools.mp4box, "-new", output_path, "-add", f"{video_hevc}:dvp=8.1.hdr10"]
         for audio_path, audio_job in audio_tracks:
-            if not _nonempty_file(audio_path):
-                continue
             lang = (audio_job.get("language") or "und").lower()
             title = (audio_job.get("title") or "").replace('"', "'").strip()
-            add_arg = f"{audio_path}:lang={lang}"
-            if title:
-                add_arg += f':name="{title}"'
+            add_arg = mp4box_track_argument(audio_path, language=lang, title=title,media_type='audio',
+                default=audio_job.get('default'))
             cmd += ["-add", add_arg]
 
         for subtitle_track in list(subtitle_tracks or []):
-            if not _nonempty_file(subtitle_track.path):
-                continue
-            lang = (subtitle_track.language or "und").lower()
-            title = (subtitle_track.title or "").replace('"', "'").strip()
-            if subtitle_track.forced and "forced" not in title.lower():
-                title = f"{title} [Forced]".strip() if title else "Forced"
-            add_arg = f"{subtitle_track.path}:lang={lang}"
-            # GPAC/tx3g uses the high two text flags for forced subtitles.
-            # A track name like "Forced" is cosmetic and is not sufficient.
-            if subtitle_track.forced:
-                add_arg += ":hdlr=text:txtflags=0xC0000000"
-            if title:
-                add_arg += f':name="{title}"'
-            cmd += ["-add", add_arg]
+            append_mp4box_subtitle(cmd, subtitle_track)
 
         w._last_stderr = ""
         rc, stdout, stderr = self.process_runner.run_abortable_capture(cmd)
@@ -68,39 +61,39 @@ class DVRemuxMuxer:
         subtitle_tracks: list[DVMuxSubtitleTrack] | None = None,
     ) -> bool:
         w = self.worker
+        if not required_mux_inputs_available([path for path, _job in audio_tracks] + [track.path for track in subtitle_tracks or ()]):
+            w.log("❌ DV-MKV: eine geplante Mux-Spur fehlt oder ist leer.", "error")
+            return False
         cmd = [w.tools.mkvmerge, "-o", output_path, video_hevc]
         for audio_path, audio_job in audio_tracks:
-            if not _nonempty_file(audio_path):
-                continue
             lang = (audio_job.get("language") or "und").lower()
             title = (audio_job.get("title") or "").replace('"', "'").strip()
-            cmd += ["--language", f"0:{lang}"]
-            if title:
-                cmd += ["--track-name", f"0:{title}"]
-            cmd += [audio_path]
+            cmd += mkv_audio_track_args(audio_path, audio_job, language=lang, title=title)
 
+        source_ids = {}
         for subtitle_track in list(subtitle_tracks or []):
-            if not _nonempty_file(subtitle_track.path):
-                continue
             lang = (subtitle_track.language or "und").lower()
             title = (subtitle_track.title or "").replace('"', "'").strip()
             forced = "yes" if subtitle_track.forced else "no"
             if getattr(subtitle_track, "source_direct", False):
-                track_id = int(subtitle_track.stream_index)
-                cmd += [
-                    "--no-video", "--no-audio", "--no-attachments", "--no-chapters",
-                    "--subtitle-tracks", str(track_id),
-                    "--language", f"{track_id}:{lang}",
-                    "--forced-display-flag", f"{track_id}:{forced}",
-                ]
-                if title:
-                    cmd += ["--track-name", f"{track_id}:{title}"]
-                cmd += [str(subtitle_track.path)]
+                def capture(command):
+                    rc, stdout, stderr = self.process_runner.run_abortable_capture(command, timeout_s=60)
+                    return SimpleNamespace(returncode=rc, stdout=stdout, stderr=stderr, aborted=_abort_current_file(w))
+                try:
+                    key = str(subtitle_track.path)
+                    if key not in source_ids:
+                        source_ids[key] = resolve_subtitle_ids(
+                            path=subtitle_track.path, ffprobe=getattr(w.tools, "ffprobe", "ffprobe"),
+                            mkvmerge=w.tools.mkvmerge, capture=capture,
+                            required_stream_indices={t.stream_index for t in subtitle_tracks if getattr(t, 'source_direct', False) and str(t.path)==key},
+                        )
+                    track_id = source_ids[key][int(subtitle_track.stream_index)]
+                except (ValueError, KeyError, OSError) as exc:
+                    w.log(f"❌ PGS-Spurzuordnung fehlgeschlagen: {exc}", "error")
+                    return False
+                cmd += direct_subtitle_args(subtitle_track, track_id)
                 continue
-            cmd += ["--language", f"0:{lang}", "--forced-display-flag", f"0:{forced}"]
-            if title:
-                cmd += ["--track-name", f"0:{title}"]
-            cmd += [str(subtitle_track.path)]
+            cmd += direct_subtitle_args(subtitle_track,0)
 
         w._last_stderr = ""
         rc, stdout, stderr = self.process_runner.run_abortable_capture(
@@ -127,7 +120,10 @@ class DVRemuxMuxer:
         container = str(getattr(self.worker, "container", "mp4") or "mp4").lower()
         if container == "mkv":
             return self.mux_mkv(video_hevc, audio_tracks, output_path, subtitle_tracks)
-        return self.mux_mp4(video_hevc, audio_tracks, output_path, subtitle_tracks)
+        if container == "mp4":
+            return self.mux_mp4(video_hevc, audio_tracks, output_path, subtitle_tracks)
+        self.worker.log(f"❌ Ungültiger DV-Container: {container!r}", "error")
+        return False
 
     def _log_mux_error(self, tool: str, rc: int, stdout: str, stderr: str) -> None:
         w = self.worker

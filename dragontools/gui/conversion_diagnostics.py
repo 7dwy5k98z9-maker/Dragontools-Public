@@ -18,9 +18,13 @@ class ConversionDiagnosticsService:
             except Exception as exc:
                 return f"Diagnose konnte nicht erstellt werden:\n{exc}"
         else:
+            try:
+                running = bool(worker.isRunning()) if hasattr(worker, "isRunning") else False
+            except (AttributeError, RuntimeError, TypeError) as exc:
+                return f"Diagnose konnte nicht erstellt werden:\n{exc}"
             snapshot = {
                 "type": "generic",
-                "running": bool(worker.isRunning()) if hasattr(worker, "isRunning") else False,
+                "running": running,
                 "paused": bool(getattr(worker, "_paused", False)),
                 "abort_requested": bool(getattr(worker, "abort_requested", False)),
                 "abort_type": getattr(worker, "abort_type", "") or "",

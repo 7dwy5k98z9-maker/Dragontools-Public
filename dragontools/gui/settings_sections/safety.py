@@ -190,22 +190,25 @@ class SafetyValidationSection(SettingsSection):
 
     def save(self) -> bool:
         d, s = self.dialog, self.settings
-        s.setValue(cfg.SET_KEY_SAVE_ALLOW_LARGER_OUTPUT, d.save_allow_larger_cb.isChecked())
-        s.setValue(cfg.SET_KEY_SAVE_ALLOW_LARGER_OUTPUT_PERCENT, d.save_allow_larger_percent_spin.value())
-        s.setValue(cfg.SET_KEY_SAVE_MIN_OUTPUT_SIZE_ENABLED, d.save_min_output_cb.isChecked())
-        s.setValue(cfg.SET_KEY_SAVE_MIN_OUTPUT_SIZE_PERCENT, d.save_min_output_percent_spin.value())
-        s.setValue(cfg.SET_KEY_OUTPUT_MIN_SIZE_KB, d.output_min_size_spin.value())
-        s.setValue(cfg.SET_KEY_OUTPUT_DURATION_MIN_PERCENT, d.duration_min_percent_spin.value())
-        s.setValue(cfg.SET_KEY_OUTPUT_DURATION_MAX_PERCENT, d.duration_max_percent_spin.value())
-        s.setValue(cfg.SET_KEY_OUTPUT_DURATION_MAX_EXTRA_S, d.duration_max_extra_spin.value())
-        s.setValue(cfg.SET_KEY_REPAIR_DURATION_REMUX_ENABLED, d.repair_remux_cb.isChecked())
-        s.setValue(cfg.SET_KEY_REPAIR_DURATION_TIMESTAMP_ENABLED, d.repair_timestamp_cb.isChecked())
-        values = ["skip", "delete_first", "overwrite", "rename"]
-        s.setValue(cfg.SET_KEY_MOVE_CONFLICT, values[d.move_conflict_combo.currentIndex()])
-        s.setValue(
-            cfg.SET_KEY_EPISODE_REPLACEMENT_MODE,
-            d.episode_replacement_combo.currentData() or cfg.DEFAULT_EPISODE_REPLACEMENT_MODE,
-        )
+        if self.is_visible("save"):
+            s.setValue(cfg.SET_KEY_SAVE_ALLOW_LARGER_OUTPUT, d.save_allow_larger_cb.isChecked())
+            s.setValue(cfg.SET_KEY_SAVE_ALLOW_LARGER_OUTPUT_PERCENT, d.save_allow_larger_percent_spin.value())
+            s.setValue(cfg.SET_KEY_SAVE_MIN_OUTPUT_SIZE_ENABLED, d.save_min_output_cb.isChecked())
+            s.setValue(cfg.SET_KEY_SAVE_MIN_OUTPUT_SIZE_PERCENT, d.save_min_output_percent_spin.value())
+        if self.is_visible("validation"):
+            s.setValue(cfg.SET_KEY_OUTPUT_MIN_SIZE_KB, d.output_min_size_spin.value())
+            s.setValue(cfg.SET_KEY_OUTPUT_DURATION_MIN_PERCENT, d.duration_min_percent_spin.value())
+            s.setValue(cfg.SET_KEY_OUTPUT_DURATION_MAX_PERCENT, d.duration_max_percent_spin.value())
+            s.setValue(cfg.SET_KEY_OUTPUT_DURATION_MAX_EXTRA_S, d.duration_max_extra_spin.value())
+            s.setValue(cfg.SET_KEY_REPAIR_DURATION_REMUX_ENABLED, d.repair_remux_cb.isChecked())
+            s.setValue(cfg.SET_KEY_REPAIR_DURATION_TIMESTAMP_ENABLED, d.repair_timestamp_cb.isChecked())
+        if self.is_visible("move_conflict"):
+            values = ["skip", "delete_first", "overwrite", "rename"]
+            s.setValue(cfg.SET_KEY_MOVE_CONFLICT, values[d.move_conflict_combo.currentIndex()])
+            s.setValue(
+                cfg.SET_KEY_EPISODE_REPLACEMENT_MODE,
+                d.episode_replacement_combo.currentData() or cfg.DEFAULT_EPISODE_REPLACEMENT_MODE,
+            )
         return True
 
     def open_timeout_settings(self) -> None:

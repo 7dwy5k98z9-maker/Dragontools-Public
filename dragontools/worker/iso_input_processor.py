@@ -1,6 +1,12 @@
 from __future__ import annotations
 
 from pathlib import Path
+from .iso_models import FFMPEG_FALLBACK_TITLE_ID
+
+
+def explicit_iso_titles(host, path):
+    selection = getattr(host, 'selected_titles', {})
+    return list(selection.get(path) or selection.get(str(Path(path).resolve())) or [])
 
 class ISOInputProcessor:
     """Qt-free per-input ISO/disc orchestration via a small public host contract."""
@@ -38,6 +44,14 @@ class ISOInputProcessor:
 
     def _handle_no_makemkv_titles(self, path: str, output_dir: str) -> None:
         host = self._host
+        if not host.scan_only:
+            explicit = explicit_iso_titles(host, path)
+            if explicit and explicit != [FFMPEG_FALLBACK_TITLE_ID]:
+                self._fail(path, "MakeMKV-Titelauswahl kann ohne gültigen Disc-Scan nicht auf FFmpeg abgebildet werden.")
+                return
+            if not explicit and not getattr(host, 'auto_main_title', True):
+                self._fail(path, "Keine Fallback-Auswahl und keine automatische Titelauswahl aktiviert.")
+                return
         fallback_titles = host.scan_ffmpeg_fallback_titles(path) if host.ffmpeg_fallback else []
         if fallback_titles:
             host.file_progress.emit(path, 15, fallback_titles)
@@ -56,8 +70,29 @@ class ISOInputProcessor:
 
     def _select_titles(self, path: str, src: Path, titles: list[dict]) -> list[int] | None:
         host = self._host
-        explicit = list(host.selected_titles.get(path) or host.selected_titles.get(str(src.resolve())) or [])
+        explicit = explicit_iso_titles(host, path)
         if explicit:
+            available_ids: set[int] = set()
+            for title in titles:
+                try:
+                    if title.get("id") is not None:
+                        available_ids.add(int(title.get("id")))
+                except (TypeError, ValueError):
+                    continue
+            try:
+                explicit_ids = [int(title_id) for title_id in explicit]
+            except (TypeError, ValueError):
+                self._fail(path, "Explizite Titelauswahl enthält eine ungültige Titel-ID.")
+                return None
+            invalid = [title_id for title_id in explicit_ids if title_id not in available_ids]
+            if invalid:
+                self._fail(
+                    path,
+                    "Explizite Titelauswahl ist nach dem aktuellen Disc-Scan nicht mehr gültig: "
+                    + ", ".join(map(str, invalid)),
+                )
+                return None
+            explicit = list(dict.fromkeys(explicit_ids))
             host.log_message(f"ℹ️ Verwende explizit ausgewählte Titel: {', '.join(map(str, explicit))}")
             return explicit
         if not host.auto_main_title:
@@ -81,12 +116,17 @@ class ISOInputProcessor:
             return False
         if ok:
             return True
-        if host.ffmpeg_fallback:
-            host.log_message("⚠️ MakeMKV-Extraktion fehlgeschlagen. FFmpeg-Fallback wird einmalig versucht.", "warn")
-            if host.extract_with_ffmpeg_fallback(path, output_dir):
-                host.file_progress.emit(path, 100, None)
-                host.file_result.emit(path, True, "Extraktion über FFmpeg-Fallback abgeschlossen")
-                return False
+        # Sobald MakeMKV verwertbare Titel geliefert und ein konkreter Titel
+        # ausgewählt wurde, darf der rohe FFmpeg-Fallback nicht einspringen:
+        # VOB-/M2TS-Dateien lassen sich nicht sicher auf die MakeMKV-Titel-ID
+        # abbilden. Ein Fallback könnte daher unbemerkt den falschen Film bzw.
+        # eine andere Episode extrahieren. Fallback bleibt ausschließlich für
+        # den Fall ohne verwertbare MakeMKV-Titelliste erlaubt.
+        host.log_message(
+            "⚠️ MakeMKV-Extraktion eines ausgewählten Titels fehlgeschlagen; "
+            "FFmpeg-Fallback wird aus Titelsicherheitsgründen nicht verwendet.",
+            "warn",
+        )
         host.file_result.emit(path, False, "Extraktion fehlgeschlagen")
         return False
 

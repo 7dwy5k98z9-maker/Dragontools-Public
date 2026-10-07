@@ -67,6 +67,8 @@ def build_dv_processing_components(
         mkv_muxer=DVMKVMuxer(
             mkvmerge_path=getattr(tools, "mkvmerge", "mkvmerge"),
             audio_track_name=audio_mux.audio_track_name,
+            ffprobe_path=getattr(tools, "ffprobe", "ffprobe"),
+            log=log,
         ),
         rpu_service=DVRpuService(dovi_tool_path=tools.dovi_tool, log=detail_log),
         hdr10plus_service=HDR10PlusBitstreamService(

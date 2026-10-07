@@ -10,6 +10,7 @@ Deaktivierte Timeouts liefern None und werden von subprocess als unbegrenzt
 behandelt. Die gespeicherten Minutenwerte bleiben dabei erhalten.
 """
 from __future__ import annotations
+import logging
 from typing import NamedTuple
 
 
@@ -327,6 +328,32 @@ def _read_qsettings_or_none():
     return QSettings(APP_ORG, APP_NAME)
 
 
+def _write_qsettings_transaction(mutator) -> None:
+    """Apply timeout changes atomically from DragonTools' point of view.
+
+    QSettings can report persistence failures only after ``sync()``.  Keep an
+    exact raw snapshot so a failed save does not leave this process with a
+    partially changed timeout configuration while the on-disk store still
+    contains the previous values.
+    """
+    from PyQt6.QtCore import QSettings
+    from .settings_access import (
+        raw_settings_snapshot,
+        restore_raw_settings_snapshot,
+        sync_settings_checked,
+    )
+    from .settings_app import APP_ORG, APP_NAME
+
+    qs = QSettings(APP_ORG, APP_NAME)
+    snapshot = raw_settings_snapshot(qs)
+    try:
+        mutator(qs)
+        sync_settings_checked(qs)
+    except Exception:
+        restore_raw_settings_snapshot(qs, snapshot)
+        raise
+
+
 def _read_timeout_value(qs, td: TimeoutDef) -> int:
     val = qs.value(_SETTINGS_PREFIX + td.key, defaultValue=None)
     if val is None:
@@ -363,7 +390,8 @@ def is_timeout_enabled(key: str) -> bool:
     qs = _read_qsettings_or_none()
     if qs is None:
         return True
-    return bool(qs.value(_ENABLED_PREFIX + key, True, type=bool))
+    from .settings_access import settings_bool
+    return settings_bool(qs, _ENABLED_PREFIX + key, True)
 
 
 def get_timeout(key: str) -> int | None:
@@ -390,52 +418,56 @@ def get_all_timeout_enabled() -> dict[str, bool]:
 
 def save_timeout(key: str, seconds: int) -> None:
     """Speichert einen einzelnen Timeout-Wert (Sekunden) in QSettings."""
-    from PyQt6.QtCore import QSettings
-    from .settings_app import APP_ORG, APP_NAME
-
     if key not in _BY_KEY:
         raise KeyError(f"Unbekannter Timeout-Key: '{key}'")
-    qs = QSettings(APP_ORG, APP_NAME)
-    qs.setValue(_SETTINGS_PREFIX + key, seconds)
+    value = max(1, int(seconds))
+    _write_qsettings_transaction(
+        lambda qs: qs.setValue(_SETTINGS_PREFIX + key, value)
+    )
 
 
 def save_timeout_enabled(key: str, enabled: bool) -> None:
     """Speichert den Aktivstatus eines Timeouts in QSettings."""
-    from PyQt6.QtCore import QSettings
-    from .settings_app import APP_ORG, APP_NAME
-
     if key not in _BY_KEY:
         raise KeyError(f"Unbekannter Timeout-Key: '{key}'")
-    qs = QSettings(APP_ORG, APP_NAME)
-    qs.setValue(_ENABLED_PREFIX + key, bool(enabled))
+    _write_qsettings_transaction(
+        lambda qs: qs.setValue(_ENABLED_PREFIX + key, bool(enabled))
+    )
 
 
 def save_all_timeouts(
     values: dict[str, int],
     enabled: dict[str, bool] | None = None,
 ) -> None:
-    """Speichert mehrere Timeout-Werte auf einmal."""
-    from PyQt6.QtCore import QSettings
-    from .settings_app import APP_ORG, APP_NAME
+    """Speichert mehrere Timeout-Werte auf einmal und prüft den Persistenzstatus."""
+    normalized_values = {
+        key: max(1, int(seconds))
+        for key, seconds in values.items()
+        if key in _BY_KEY
+    }
+    normalized_enabled = {
+        key: bool(is_enabled)
+        for key, is_enabled in (enabled or {}).items()
+        if key in _BY_KEY
+    }
 
-    qs = QSettings(APP_ORG, APP_NAME)
-    for key, seconds in values.items():
-        if key in _BY_KEY:
+    def _apply(qs) -> None:
+        for key, seconds in normalized_values.items():
             qs.setValue(_SETTINGS_PREFIX + key, seconds)
-    for key, is_enabled in (enabled or {}).items():
-        if key in _BY_KEY:
-            qs.setValue(_ENABLED_PREFIX + key, bool(is_enabled))
+        for key, is_enabled in normalized_enabled.items():
+            qs.setValue(_ENABLED_PREFIX + key, is_enabled)
+
+    _write_qsettings_transaction(_apply)
 
 
 def reset_all_timeouts() -> None:
     """Setzt alle Timeouts auf ihre Standardwerte zurück."""
-    from PyQt6.QtCore import QSettings
-    from .settings_app import APP_ORG, APP_NAME
+    def _apply(qs) -> None:
+        for td in TIMEOUT_DEFS:
+            qs.remove(_SETTINGS_PREFIX + td.key)
+            qs.remove(_ENABLED_PREFIX + td.key)
 
-    qs = QSettings(APP_ORG, APP_NAME)
-    for td in TIMEOUT_DEFS:
-        qs.remove(_SETTINGS_PREFIX + td.key)
-        qs.remove(_ENABLED_PREFIX + td.key)
+    _write_qsettings_transaction(_apply)
 
 
 def get_default(key: str) -> int:
@@ -452,24 +484,39 @@ def migrate_v91_timeout_defaults() -> None:
     V9.0 speicherte für Encoder-Timeouts lange Maximal-Laufzeiten. In neueren
     Versionen sind dieselben Einstellungen Inaktivitätslimits. Deshalb werden einmalig
     alte große Werte auf den neuen 5-Minuten-Standard gesetzt.
-    """
-    from PyQt6.QtCore import QSettings
-    from .settings_app import APP_ORG, APP_NAME
 
-    qs = QSettings(APP_ORG, APP_NAME)
-    if qs.value(_V91_MIGRATION_KEY, False, type=bool):
+    Die Migrationsmarke wird erst zusammen mit den Werten erfolgreich
+    synchronisiert. Bei einem QSettings-Schreibfehler bleibt die App startbar
+    und die Migration wird beim nächsten Start erneut versucht.
+    """
+    from .settings_access import settings_bool
+
+    qs = _read_qsettings_or_none()
+    if qs is None or settings_bool(qs, _V91_MIGRATION_KEY, False):
         return
 
-    for key in _INACTIVITY_TIMEOUT_KEYS:
-        td = _BY_KEY[key]
-        raw = qs.value(_SETTINGS_PREFIX + key, defaultValue=None)
-        try:
-            current = int(raw) if raw is not None else td.default_s
-        except (TypeError, ValueError):
-            current = td.default_s
-        if raw is None or current >= 3_600:
-            qs.setValue(_SETTINGS_PREFIX + key, td.default_s)
-        if qs.value(_ENABLED_PREFIX + key, defaultValue=None) is None:
-            qs.setValue(_ENABLED_PREFIX + key, True)
+    def _apply(target) -> None:
+        # Re-check inside the write transaction to keep repeated calls
+        # idempotent even if another caller completed the migration meanwhile.
+        if settings_bool(target, _V91_MIGRATION_KEY, False):
+            return
+        for key in _INACTIVITY_TIMEOUT_KEYS:
+            td = _BY_KEY[key]
+            raw = target.value(_SETTINGS_PREFIX + key, defaultValue=None)
+            try:
+                current = int(raw) if raw is not None else td.default_s
+            except (TypeError, ValueError, OverflowError):
+                current = td.default_s
+            if raw is None or current >= 3_600:
+                target.setValue(_SETTINGS_PREFIX + key, td.default_s)
+            if target.value(_ENABLED_PREFIX + key, defaultValue=None) is None:
+                target.setValue(_ENABLED_PREFIX + key, True)
+        target.setValue(_V91_MIGRATION_KEY, True)
 
-    qs.setValue(_V91_MIGRATION_KEY, True)
+    try:
+        _write_qsettings_transaction(_apply)
+    except OSError:
+        logging.getLogger(__name__).warning(
+            "Timeout-Migration konnte nicht gespeichert werden; erneuter Versuch beim nächsten Start.",
+            exc_info=True,
+        )

@@ -5,10 +5,14 @@ import subprocess
 from pathlib import Path
 from typing import Callable
 
+from ..core.hdr10plus_generation import source_is_hdr10_pq_compatible
 from ..core.media_analyzer import analyze_media, inspect_dynamic_hdr_with_mediainfo
 from ..core.media_metadata import normalize_video_codec
 from ..core.output_timestamps import build_output_timestamp_args
 from .hdr10_color import HDR10_OUTPUT_ARGS
+from .hdr_metadata_picture_policy import requires_metadata_reauthoring
+from .tool_runner import run_tool
+from .log_dispatch import dispatch_log
 from .standard_pipeline_runner import _clear_reencoded_video_stat_tags
 from .subtitle_sidecar_service import SubtitleSidecarService
 from .workflow_models import PipelineExecutionRequest, PipelineExecutionResult
@@ -20,6 +24,7 @@ class _AV1MetadataPipelineBase:
 
     feature_name = "AV1 HDR-Metadaten"
     failure_stage = "AV1-Metadaten"
+    requires_dovi_container_signalling = False
 
     def __init__(
         self,
@@ -32,6 +37,7 @@ class _AV1MetadataPipelineBase:
         worker=None,
     ) -> None:
         self._tools = tools
+        self._worker = worker
         self._progress_runner = progress_runner
         self._temp_state = temp_state
         self._log_fn = log or (lambda *_args, **_kwargs: None)
@@ -44,9 +50,16 @@ class _AV1MetadataPipelineBase:
         )
 
     def _log(self, message: str, level: str = "info") -> None:
-        self._log_fn(message, level)
+        dispatch_log(self._log_fn, message, level)
 
-    def _fail(self, reason: str, *, command: list[str] | None = None, output: str = "") -> PipelineExecutionResult:
+    def _fail(
+        self,
+        reason: str,
+        *,
+        command: list[str] | None = None,
+        output: str = "",
+        preserve_output: bool = False,
+    ) -> PipelineExecutionResult:
         command_text = subprocess.list2cmdline(command) if command else ""
         self._temp_state.record_failure(
             reason=reason,
@@ -63,32 +76,22 @@ class _AV1MetadataPipelineBase:
             tool_output=output,
             tool=Path(self._tools.ffmpeg).name,
             command=command_text,
+            preserve_failed_output=bool(preserve_output),
         )
 
     def _ffmpeg_help_contains(self, encoder: str, token: str) -> tuple[bool, str]:
         cmd = [self._tools.ffmpeg, "-hide_banner", "-h", f"encoder={encoder}"]
         try:
-            result = subprocess.run(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                errors="replace",
-                timeout=20,
-                check=False,
-            )
+            result = run_tool(cmd, label='AV1 encoder capability', timeout_s=20,
+                              worker=self._worker, log=self._log, abort_on_request=True)
         except Exception as exc:
             return False, str(exc)
-        output = result.stdout or ""
-        return result.returncode == 0 and token.lower() in output.lower(), output[-6000:]
+        output = (result.stdout or "") + '\n' + (result.stderr or "")
+        return result.ok and token.lower() in output.lower(), output[-6000:]
 
     @staticmethod
     def _has_geometry_change(plan) -> bool:
-        if getattr(plan, "crop", None):
-            return True
-        args = [str(value).lower() for value in (getattr(plan, "vf_args", None) or [])]
-        joined = " ".join(args)
-        return "scale=" in joined or "scale_cuda=" in joined or "scale_qsv=" in joined
+        return requires_metadata_reauthoring(plan)
 
     def _base_command(self, request: PipelineExecutionRequest, video_args: list[str]) -> list[str]:
         plan = request.plan
@@ -96,6 +99,11 @@ class _AV1MetadataPipelineBase:
         output_args += build_output_timestamp_args(request.container)
         if str(request.container).lower() in {"mp4", "m4v", "mov"}:
             output_args += ["-movflags", "+faststart"]
+            if self.requires_dovi_container_signalling:
+                # The MOV/MP4 muxer writes the DOVI configuration box only with
+                # this explicit compliance setting. In-frame RPUs alone do not
+                # make a correctly signalled Dolby Vision MP4.
+                output_args += ['-strict', 'unofficial']
         return (
             [self._tools.ffmpeg, "-y", "-loglevel", "error"]
             + list(getattr(plan, "audio_input_args", []) or [])
@@ -135,7 +143,8 @@ class _AV1MetadataPipelineBase:
         sidecars = tuple(export.exported_paths)
         if not export.complete:
             return sidecars, self._fail(
-                export.failure_summary() or "AV1-Metadatenpfad: Sidecar-Export unvollständig."
+                export.failure_summary() or "AV1-Metadatenpfad: Sidecar-Export unvollständig.",
+                preserve_output=True,
             )
         return sidecars, None
 
@@ -152,6 +161,12 @@ class AV1DolbyVisionPipeline(_AV1MetadataPipelineBase):
 
     feature_name = "AV1 Dolby Vision Profile 10"
     failure_stage = "AV1-DV10"
+    requires_dovi_container_signalling = True
+
+    def _check_source(self, request):
+        from .dv_embedded_source_check import validate_embedded_source
+        return validate_embedded_source(request,tools=self._tools,temp_state=self._temp_state,
+                                        log=self._log,worker=self._worker)
 
     def execute(self, request: PipelineExecutionRequest) -> PipelineExecutionResult:
         plan = request.plan
@@ -159,6 +174,8 @@ class AV1DolbyVisionPipeline(_AV1MetadataPipelineBase):
             return self._fail("AV1-DV10: Encode-Plan fehlt.")
         if normalize_video_codec(request.codec) != "av1":
             return self._fail("AV1-DV10 benötigt Zielcodec AV1.")
+        if str(request.container or '').strip().lower() not in {'mkv', 'mp4'}:
+            return self._fail('AV1-DV10: Nicht unterstützter Zielcontainer.')
         encoder = str((request.encoder_options or {}).get("encoder", "cpu") or "cpu").lower()
         if encoder != "cpu":
             return self._fail(
@@ -203,6 +220,10 @@ class AV1DolbyVisionPipeline(_AV1MetadataPipelineBase):
                 output=help_output,
             )
 
+        if not self._check_source(request):
+            return PipelineExecutionResult(False,failure_reason=self._temp_state.failure_reason,
+                                           failure_stage=self._temp_state.failure_stage)
+
         # FFmpeg konfiguriert DOVI bei AV1 als Profile 10. P5 bleibt dabei als
         # proprietaerer IPTPQc2-Basislayer erhalten; P8/P10 erhalten HDR10-Basis-Tags.
         video_args = [
@@ -223,6 +244,17 @@ class AV1DolbyVisionPipeline(_AV1MetadataPipelineBase):
         if failed is not None:
             return failed
 
+        verification_failure = self._verify_final_dv_output(request)
+        if verification_failure is not None:
+            return verification_failure
+
+        sidecars, sidecar_failure = self._export_mp4_sidecars(request)
+        if sidecar_failure is not None:
+            return sidecar_failure
+        self._log("✅ AV1-DV10: Dolby Vision nach finalem Mux verifiziert.", "info")
+        return PipelineExecutionResult.succeeded(sidecar_paths=sidecars, verified_dolby_vision=True)
+
+    def _verify_final_dv_output(self, request):
         inspection = inspect_dynamic_hdr_with_mediainfo(request.output_path, self._tools)
         dv_ok = bool(inspection.dolby_vision)
         out_profile = inspection.dolby_vision_profile
@@ -232,21 +264,17 @@ class AV1DolbyVisionPipeline(_AV1MetadataPipelineBase):
                 dv_ok = bool(getattr(fallback, "has_dv", False))
                 out_profile = getattr(fallback, "dv_profile", None) or getattr(fallback, "dolby_vision_profile", None)
         if not dv_ok:
-            return self._fail("AV1-DV10: finale Dolby-Vision-Verifikation fehlgeschlagen.")
+            return self._fail("AV1-DV10: finale Dolby-Vision-Verifikation fehlgeschlagen.", preserve_output=True)
         try:
             out_major = int(str(out_profile).split(".", 1)[0]) if out_profile not in (None, "", "Ja") else None
         except (TypeError, ValueError):
             out_major = None
         if out_major is not None and out_major != 10:
-            return self._fail(f"AV1-DV10: finales Dolby-Vision-Profil ist P{out_major} statt P10.")
+            return self._fail(f"AV1-DV10: finales Dolby-Vision-Profil ist P{out_major} statt P10.", preserve_output=True)
         if out_major is None:
-            self._log("⚠️ AV1-DV10 erkannt, aber MediaInfo/ffprobe konnte Profil 10 nicht numerisch bestätigen.", "warn")
+            return self._fail('AV1-DV10: finales Profil 10 ist nicht eindeutig nachgewiesen.', preserve_output=True)
 
-        sidecars, sidecar_failure = self._export_mp4_sidecars(request)
-        if sidecar_failure is not None:
-            return sidecar_failure
-        self._log("✅ AV1-DV10: Dolby Vision nach finalem Mux verifiziert.", "info")
-        return PipelineExecutionResult.succeeded(sidecar_paths=sidecars, verified_dolby_vision=True)
+        return None
 
 
 class AV1HDR10PlusPipeline(_AV1MetadataPipelineBase):
@@ -270,11 +298,46 @@ class AV1HDR10PlusPipeline(_AV1MetadataPipelineBase):
             return self._fail("AV1-HDR10+: Encode-Plan fehlt.")
         if normalize_video_codec(request.codec) != "av1":
             return self._fail("AV1-HDR10+ benötigt Zielcodec AV1.")
+        if str(request.container or "").strip().lower() not in {"mkv", "mp4"}:
+            return self._fail(
+                f"AV1-HDR10+: Nicht unterstützter Zielcontainer: {request.container or '<leer>'}."
+            )
         encoder = str((request.encoder_options or {}).get("encoder", "cpu") or "cpu").lower()
         if encoder != "cpu":
             return self._fail(
                 "AV1-HDR10+ Beta benötigt derzeit CPU/libaom-av1. NVENC/QSV/AMF werden nicht verwendet, "
                 "weil DragonTools dort noch keinen verifizierten HDR10+-T.35-Write besitzt."
+            )
+
+        source_codec = normalize_video_codec(
+            getattr(getattr(request.media_info, "primary_video", None), "codec", "")
+        )
+        if source_codec not in {"hevc", "av1"}:
+            return self._fail(
+                "AV1-HDR10+ unterstützt derzeit nur HEVC- oder AV1-HDR10+-Quellen."
+            )
+        source_has_hdrplus = bool(
+            getattr(request.media_info, "has_hdrplus", False)
+            or getattr(request.media_info, "has_hdr10plus", False)
+            or getattr(getattr(request.media_info, "primary_video", None), "has_hdr10plus", False)
+        )
+        if not source_has_hdrplus:
+            return self._fail(
+                "AV1-HDR10+-Pipeline angefordert, aber die Quelle enthält kein nachgewiesenes HDR10+."
+            )
+        pq_ok, pq_reason = source_is_hdr10_pq_compatible(request.media_info)
+        if not pq_ok:
+            return self._fail(f"AV1-HDR10+: Quellfarbraum ist nicht eindeutig HDR10/PQ-kompatibel: {pq_reason}")
+        if self._has_geometry_change(plan):
+            return self._fail(
+                "AV1-HDR10+ Beta: Crop oder Skalierung ist gesperrt, weil die übernommenen "
+                "bildabhängigen ST-2094-40-Metadaten danach nicht mehr zum Bildinhalt passen."
+            )
+        burn_sub = getattr(plan, "burn_sub_or_vf", None)
+        if burn_sub and not isinstance(burn_sub, list):
+            return self._fail(
+                "AV1-HDR10+ Beta: Untertitel-Burn-In ist gesperrt, weil dadurch der Bildinhalt "
+                "ohne Neugenerierung der dynamischen Metadaten verändert würde."
             )
 
         supported, help_output = self._ffmpeg_help_contains("libaom-av1", "libaom")
@@ -309,10 +372,22 @@ class AV1HDR10PlusPipeline(_AV1MetadataPipelineBase):
                     or getattr(fallback, "has_hdr10plus", False)
                 )
         if not hdrplus_ok:
-            return self._fail("AV1-HDR10+: finale HDR10+-Verifikation fehlgeschlagen.")
+            return self._fail(
+                "AV1-HDR10+: finale HDR10+-Verifikation fehlgeschlagen.",
+                preserve_output=True,
+            )
 
         sidecars, sidecar_failure = self._export_mp4_sidecars(request)
         if sidecar_failure is not None:
-            return sidecar_failure
+            return PipelineExecutionResult(
+                success=False,
+                sidecar_paths=sidecar_failure.sidecar_paths,
+                failure_reason=sidecar_failure.failure_reason,
+                failure_stage=sidecar_failure.failure_stage,
+                tool_output=sidecar_failure.tool_output,
+                tool=sidecar_failure.tool,
+                command=sidecar_failure.command,
+                preserve_failed_output=True,
+            )
         self._log("✅ AV1-HDR10+: dynamische Metadaten nach finalem Mux verifiziert.", "info")
         return PipelineExecutionResult.succeeded(sidecar_paths=sidecars, verified_hdr10plus=True)

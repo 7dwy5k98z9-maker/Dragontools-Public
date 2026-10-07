@@ -25,6 +25,7 @@ Ablauf:
 from __future__ import annotations
 
 import threading, traceback
+from copy import deepcopy
 
 from pathlib import Path
 
@@ -47,6 +48,7 @@ from ..rules.rule_loader import load_subtitle_rules
 from .worker_contracts import RemoveFileStatus, normalize_worker_path
 from .converter_utils import _fd, _fs  # compatibility re-export for legacy tests/extensions
 from .converter_queue_state import ConverterQueueState
+from .live_queue_overrides import set_file_override
 from .process_control import terminate_process_tree, wait_while_paused
 from .subtitle_sidecar_service import SubtitleSidecarService
 from .dv_remux_components import (
@@ -93,8 +95,10 @@ class DVRemuxThread(QThread):
             DEFAULT_OUTPUT_CONTAINER_DV,
             allowed=("mp4", "mkv"),
         )
-        requested_container = str(container or configured_container).strip().lower()
-        self.container = requested_container if requested_container in {"mp4", "mkv"} else DEFAULT_OUTPUT_CONTAINER_DV
+        requested_container = str(configured_container if container is None else container).strip().lower()
+        if requested_container not in {"mp4", "mkv"}:
+            raise ValueError(f"Ungültiger DV-Ausgabecontainer: {requested_container!r}")
+        self.container = requested_container
         self.keep_dv7_mkv = bool(settings.value(
             SET_KEY_DV_REMUX_KEEP_DV7_MKV,
             DEFAULT_DV_REMUX_KEEP_DV7_MKV,
@@ -106,9 +110,9 @@ class DVRemuxThread(QThread):
             type=bool,
         ))
         self.dv5_fallback_config = dv5_fallback_config
-        self.encoder_options = dict(encoder_options or {})
-        self.file_overrides = dict(file_overrides or {})
-        self.subtitle_rules = dict(
+        self.encoder_options = deepcopy(encoder_options or {})
+        self.file_overrides = deepcopy(file_overrides or {})
+        self.subtitle_rules = deepcopy(
             subtitle_rules or load_subtitle_rules(default={"mp4_sidecars_enabled": True})
         )
         self.tools = get_tool_paths()
@@ -233,6 +237,13 @@ class DVRemuxThread(QThread):
         self.files = self._queue.files
         return result
 
+    def add_file_with_override(self, path: str, override: dict) -> bool:
+        """Publish a live remux entry only after its owned settings are installed."""
+        result = self._queue.add_file(path, self._log,
+            before_enqueue=lambda normalized: set_file_override(self.file_overrides, normalized, override))
+        self.files = self._queue.files
+        return result
+
     def remove_file(self, path: str) -> RemoveFileStatus:
         """Entfernt eine Datei aus der Queue oder merkt sie zur Spaet-Entfernung vor."""
         result = self._queue.remove_file(path, self._log)
@@ -281,7 +292,10 @@ class DVRemuxThread(QThread):
                 )
                 return False
 
-            self.file_overrides[path] = override
+            for existing_path in list(self.file_overrides):
+                if normalize_worker_path(existing_path) == path_n:
+                    self.file_overrides.pop(existing_path, None)
+            self.file_overrides[path] = deepcopy(override or {})
 
         self.log(f"✏️ Override für '{name}' gesetzt.", "info")
         return True

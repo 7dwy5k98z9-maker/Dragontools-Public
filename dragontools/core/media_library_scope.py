@@ -6,7 +6,7 @@ from typing import Any, Iterable
 from .media_library_paths import _has_prefix, _normalize_slashes, get_path_mappings
 from .media_library_types import PathMapping
 from .media_library_utils import _normalize_title
-from .path_syntax import normalize_user_path
+from .path_syntax import is_windows_style_path, normalize_user_path
 
 def _path_norm_sql(alias: str = "mi") -> str:
     return f"lower(replace(coalesce({alias}.path, ''), char(92), '/'))"
@@ -14,13 +14,20 @@ def _path_norm_sql(alias: str = "mi") -> str:
 
 def _path_prefix_condition(prefixes: Iterable[str], params: list[Any]) -> str:
     conditions: list[str] = []
-    path_expr = _path_norm_sql("mi")
+    raw_expr = "replace(coalesce(mi.path, ''), char(92), '/')"
     for prefix in prefixes:
-        norm = _normalize_slashes(normalize_user_path(str(prefix))).casefold().rstrip("/")
-        if not norm:
+        normalized = _normalize_slashes(normalize_user_path(str(prefix))).rstrip("/")
+        if not normalized:
             continue
-        conditions.append(f"({path_expr}=? OR {path_expr} LIKE ?)")
-        params.extend([norm, norm + "/%"])
+        if is_windows_style_path(str(prefix)):
+            path_expr = f"lower({raw_expr})"
+            norm = normalized.casefold()
+        else:
+            path_expr = raw_expr
+            norm = normalized
+        conditions.append(f"({path_expr}=? OR {path_expr} LIKE ? ESCAPE '!')")
+        escaped = norm.replace('!', '!!').replace('%', '!%').replace('_', '!_')
+        params.extend([norm, escaped + "/%"])
     return "(" + " OR ".join(conditions) + ")" if conditions else ""
 
 

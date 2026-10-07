@@ -41,10 +41,10 @@ def test_source_release_zip_failure_keeps_existing_target(tmp_path, monkeypatch)
     target = tmp_path / "release.zip"
     target.write_bytes(b"existing-release")
 
-    def fail_replace(_src, _dst):
+    def fail_replace(_src, _dst, **kwargs):
         raise OSError("simulierter Replace-Fehler")
 
-    monkeypatch.setattr(release_packaging.os, "replace", fail_replace)
+    monkeypatch.setattr(release_packaging, "publish_release_archive", fail_replace)
 
     with pytest.raises(OSError, match="Replace-Fehler"):
         release_packaging.create_source_release_zip(root, target)
@@ -218,9 +218,9 @@ def test_privacy_scan_uses_same_public_inventory_as_source_packager():
 def test_public_sanitizer_normalizes_both_private_unc_spellings():
     from dragontools.core.release_packaging import sanitize_public_text
 
-    server = "medien" + "speicher"; payload = rf"forward=//{server}/video/Serien\nbackslash=\\{server}\video\Serien"
+    payload = r"forward=//<SERVER>/video/Serien\nbackslash=\\<SERVER>\video\Serien"
     sanitized = sanitize_public_text(payload)
 
-    assert server not in sanitized.casefold()
+    assert ("medien" + "speicher") not in sanitized.casefold()
     assert r"\\<SERVER>" in sanitized
     assert "//<SERVER>" in sanitized

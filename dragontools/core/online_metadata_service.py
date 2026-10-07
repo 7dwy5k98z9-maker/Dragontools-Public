@@ -1,8 +1,11 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Any
+
+_LOG = logging.getLogger(__name__)
 
 from .online_metadata_common import (
     EpisodeMetadataSuggestion,
@@ -68,11 +71,13 @@ class CompositeMetadataClient(ParsedMetadataResolverMixin):
             provider = "thetvdb" if isinstance(client, TheTvdbClient) else "tmdb"
             for item in provider_results:
                 record = dict(item)
-                record.setdefault("provider", provider)
-                record.setdefault(
-                    "provider_id",
-                    record.get("provider_id") or record.get("id") or record.get("tmdb_id"),
-                )
+                # Child transports own provider identity; Composite only
+                # stamps the source label and preserves their normalized ID.
+                record["provider"] = provider
+                source_id = record.get("provider_id")
+                if source_id is None:
+                    source_id = record.get("id") or record.get("tmdb_id")
+                record["provider_id"] = source_id
                 results.append(record)
         _raise_if_all_providers_failed(successful_providers, errors)
         return results
@@ -268,7 +273,8 @@ def suggest_movie_metadata_for_file(path: str | Path, settings) -> MovieMetadata
     try:
         client = client_from_settings_for(settings, "movie", require_enabled=True)
         return client.resolve_movie_file(path)
-    except OnlineMetadataError:
+    except OnlineMetadataError as exc:
+        _LOG.warning("Online-Metadaten Film fehlgeschlagen (%s): %s", path, exc)
         return None
 
 
@@ -287,7 +293,8 @@ def suggest_series_metadata_for_name(
         if not parsed.title:
             return None
         return client.resolve_series(parsed.title, year=int(year))
-    except OnlineMetadataError:
+    except OnlineMetadataError as exc:
+        _LOG.warning("Online-Metadaten Serie fehlgeschlagen (%s): %s", value, exc)
         return None
 
 
@@ -295,7 +302,8 @@ def suggest_episode_metadata_for_file(path: str | Path, settings) -> EpisodeMeta
     try:
         client = client_from_settings_for(settings, "series", require_enabled=True)
         return client.resolve_episode_file(path)
-    except OnlineMetadataError:
+    except OnlineMetadataError as exc:
+        _LOG.warning("Online-Metadaten Episode fehlgeschlagen (%s): %s", path, exc)
         return None
 
 

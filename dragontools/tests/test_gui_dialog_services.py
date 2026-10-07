@@ -106,7 +106,6 @@ def _install_pyqt_stubs(monkeypatch) -> types.ModuleType:
 
 
 def test_timeout_dialog_saves_minutes_and_enabled_state(monkeypatch):
-    _install_pyqt_stubs(monkeypatch)
 
     from dragontools.core.timeout_settings import TimeoutDef
     import dragontools.gui.timeout_settings_dialog as module
@@ -129,6 +128,7 @@ def test_timeout_dialog_saves_minutes_and_enabled_state(monkeypatch):
 
     dlg = SimpleNamespace(
         _spinboxes={"encoder_general": _Spin(7)},
+        _timeout_seconds={},
         _enabled_cbs={"encoder_general": _Check(False)},
         accept=lambda: captured.update(accepted=True),
     )

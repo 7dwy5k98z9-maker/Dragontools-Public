@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Gemeinsame Fehlerausgabe für externe Subtitle-Tools."""
 from __future__ import annotations
+from ..worker.log_dispatch import dispatch_log
 
 from typing import Callable
 
@@ -16,16 +17,16 @@ def log_tool_error(
     if not logger:
         return
     if exc is not None:
-        logger(f"❌ {tool} konnte nicht gestartet werden: {exc}")
+        dispatch_log(logger, f"❌ {tool} konnte nicht gestartet werden: {exc}")
         return
-    logger(f"❌ {tool} fehlgeschlagen (rc={rc})")
+    dispatch_log(logger, f"❌ {tool} fehlgeschlagen (rc={rc})")
     lines = [
         line.strip()
         for line in ((stderr or "") + "\n" + (stdout or "")).splitlines()
         if line.strip()
     ]
     for line in lines[-10:]:
-        logger(f"  {tool}: {line}")
+        dispatch_log(logger, f"  {tool}: {line}")
 
 
 __all__ = ["log_tool_error"]

@@ -27,3 +27,19 @@ def test_audit_summary_masks_sensitive_values():
     assert "alt" not in text
     assert "neu" not in text
     assert "*** -> ***" in text
+
+
+def test_audit_summary_masks_jellyfin_api_key_too():
+    from dragontools.core.audit_log import summarize_changes
+    from dragontools.core.settings_jellyfin import SET_KEY_JELLYFIN_API_KEY
+
+    count, text = summarize_changes(
+        {SET_KEY_JELLYFIN_API_KEY: "old-jellyfin-secret"},
+        {SET_KEY_JELLYFIN_API_KEY: "new-jellyfin-secret"},
+    )
+
+    assert count == 1
+    assert SET_KEY_JELLYFIN_API_KEY in text
+    assert "old-jellyfin-secret" not in text
+    assert "new-jellyfin-secret" not in text
+    assert "*** -> ***" in text

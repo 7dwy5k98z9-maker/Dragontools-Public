@@ -1,4 +1,4 @@
-Dragon Tools V9.8.7 - Build-Hinweise
+Dragon Tools V9.9.0 - Build-Hinweise
 =====================================
 
 Diese Hinweise gelten für den aktuellen DragonTools-Quellstand unter Windows 10/11.
@@ -34,7 +34,11 @@ Build starten
 -------------
 Den Build aus einer Eingabeaufforderung im Projektordner starten:
 
-   build_v9.bat
+   build_v9.bat --public
+
+Die öffentliche Ausgabe enthält keine externen Medienwerkzeuge.
+Die PDF-Datenschutzprüfung ist standardmäßig aktiv; ein fehlendes oder ungeeignetes
+pypdf wird vor dem Build automatisch installiert/repariert (pypdf>=5,<7).
 
 Der Builder prüft vor PyInstaller faster_whisper und ctranslate2 inklusive Versionsgrenzen.
 Fehlen die Pakete oder liegen sie außerhalb der freigegebenen Constraints, installiert/repariert
@@ -44,7 +48,7 @@ und danach lokal gecacht.
 
 Das fertige Programm liegt anschließend unter:
 
-   dist\DragonToolsV9.8.7\
+   dist\DragonToolsV9.9.0\
 
 Prüfung vor einer Veröffentlichung
 ----------------------------------
@@ -61,6 +65,6 @@ Wichtige Sicherheitshinweise
 ----------------------------
 - API-Schlüssel, lokale Einstellungen, Logs, Datenbanken und Medien gehören nicht in Git.
 - build, dist, Caches und externe Programme bleiben außerhalb der Git-Historie.
-- Der fertige 9.8.7-Build enthält keinen separat ausgelieferten Daten\Python-Quellbaum.
+- Der fertige 9.9.0-Build enthält keinen separat ausgelieferten Daten\Python-Quellbaum.
 - Die öffentliche Fassung verwendet ausschließlich Dragon Developer als Entwicklername.
 - Bei einer fehlgeschlagenen Timestamp- oder Streamprüfung ersetzt oder verschiebt DragonTools die Quelldatei nicht.

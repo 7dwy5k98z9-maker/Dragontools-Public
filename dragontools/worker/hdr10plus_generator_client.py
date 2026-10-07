@@ -8,7 +8,11 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Callable
 
+from ..core.hdr10plus_generation import hdr10plus_summary_frame_count, validate_hdr10plus_json_payload
 from .tool_process_lifecycle import TimeoutMode
+from .hdr10plus_generator_frame_contract import validate_generator_frame_contract
+from ..core.strict_numbers import nonnegative_integer
+from .hdr_metadata_file_ownership import metadata_output_conflicts_with_sources
 from .tool_runner import ToolRunResult, run_tool
 
 
@@ -108,6 +112,9 @@ class HDR10PlusGeneratorClient:
         timeout_s: int | float | None = DEFAULT_ANALYZE_INACTIVITY_TIMEOUT_S,
     ) -> HDR10PlusGeneratorResult:
         output = Path(output_path)
+        source = Path(input_path)
+        if metadata_output_conflicts_with_sources(output, source):
+            return HDR10PlusGeneratorResult(False, 2, error="OUTPUT_INPUT_COLLISION", message="Ein- und Ausgabepfad müssen verschieden sein.")
         output.unlink(missing_ok=True)
         result = self._invoke(
             self.build_analyze_command(input_path, output),
@@ -134,6 +141,36 @@ class HDR10PlusGeneratorClient:
         if payload is None:
             output.unlink(missing_ok=True)
             return self._failed_from(result, "OUTPUT_INVALID_JSON", parse_error)
+
+        valid, contract_error = validate_hdr10plus_json_payload(payload)
+        if not valid:
+            output.unlink(missing_ok=True)
+            return self._failed_from(result, "OUTPUT_INVALID_HDR10PLUS", contract_error)
+
+        failed = validate_generator_frame_contract(result, payload, self._failed_from)
+        if failed is not None:
+            output.unlink(missing_ok=True)
+            return failed
+
+        # A generator returning a different output path indicates a stale/wrong
+        # process contract.  Missing path fields remain backwards compatible.
+        if result.output:
+            try:
+                reported = Path(result.output).expanduser().resolve(strict=False)
+                requested = output.expanduser().resolve(strict=False)
+            except OSError:
+                reported = Path(result.output)
+                requested = output
+            if reported != requested:
+                output.unlink(missing_ok=True)
+                return self._failed_from(
+                    result,
+                    "OUTPUT_PATH_MISMATCH",
+                    f"Generator meldet einen anderen Ausgabepfad ({result.output}) als angefordert ({output}).",
+                )
+        if result.input and Path(result.input).resolve(strict=False) != source.resolve(strict=False):
+            output.unlink(missing_ok=True)
+            return self._failed_from(result, "INPUT_PATH_MISMATCH", "Generator meldet einen anderen Eingabepfad als angefordert.")
         return result
 
     def _invoke(
@@ -238,7 +275,7 @@ class HDR10PlusGeneratorClient:
     @staticmethod
     def _int_or_none(value: object) -> int | None:
         try:
-            return int(value) if value is not None else None
+            return nonnegative_integer(value) if value is not None else None
         except (TypeError, ValueError):
             return None
 

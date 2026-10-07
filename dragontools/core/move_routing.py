@@ -23,6 +23,11 @@ def _fmt(path: str) -> str:
 
 
 def _similar(a: str, b: str) -> bool:
+    from .movie_identity import movie_identity_for_name
+    left=movie_identity_for_name(a)
+    right=movie_identity_for_name(b)
+    if left.year is not None and right.year is not None:
+        return left.matches(right)
     an = re.sub(r"\W", "", a.lower())
     bn = re.sub(r"\W", "", b.lower())
     if len(an) < 4 or len(bn) < 4:
@@ -69,12 +74,11 @@ class MoveRouter:
             ):
                 Path(target_dir).mkdir(parents=True, exist_ok=True)
                 return target_dir
-            self._log(
-                f"Geplantes Ziel unplausibel, berechne Ziel neu: {Path(path).name} -> {target_dir}",
-                "warn",
-            )
+            self._log(f"Geplantes Ziel ist ungültig: {Path(path).name} -> {target_dir}", "warn")
+            return ""
         elif planned_entry is not None:
-            self._log(f"Geplantes Ziel unlesbar, berechne Ziel neu: {Path(path).name}", "warn")
+            self._log(f"Geplantes Ziel ist unlesbar: {Path(path).name}", "warn")
+            return ""
 
         name = Path(path).name
         stem = move_safe_stem(path)

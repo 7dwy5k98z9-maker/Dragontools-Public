@@ -9,6 +9,8 @@ from ..core.audio_video_matcher import AudioVideoMatcher, format_seconds, image_
 from .audio_video_match_contracts import AudioVideoMatchCallbacks, AudioVideoMatchRequest
 from .audio_video_match_reporting import log_analysis_result
 from .audio_video_match_runtime import AudioVideoMatchProgress, AudioVideoMatchToolIO
+from ..core.audio_video_match_identity import require_mapping_inputs
+from .utility_media_analysis import owned_media_runner
 
 
 class AudioVideoMatchAnalysisService:
@@ -27,9 +29,9 @@ class AudioVideoMatchAnalysisService:
 
     @staticmethod
     def require_inputs(request: AudioVideoMatchRequest) -> None:
-        if not request.source_path or not Path(request.source_path).exists():
+        if not request.source_path or not Path(request.source_path).is_file():
             raise RuntimeError("Deutsche Quellvideodatei fehlt.")
-        if not request.target_path or not Path(request.target_path).exists():
+        if not request.target_path or not Path(request.target_path).is_file():
             raise RuntimeError("Zielvideodatei fehlt.")
 
     def _matcher(self) -> AudioVideoMatcher:
@@ -37,6 +39,7 @@ class AudioVideoMatchAnalysisService:
             self._tools,
             run_bytes=self._tool_io.run_binary_stdout,
             progress=self._progress.message,
+            run_process=owned_media_runner(self._tool_io.process_worker),
         )
 
     def analyze(self, request: AudioVideoMatchRequest) -> None:
@@ -44,6 +47,7 @@ class AudioVideoMatchAnalysisService:
         self._callbacks.log_line("▶ Audio-Video-Matcher: Analyse startet.")
         self._callbacks.log_line(f"ℹ️  Bildanalyse: {image_analysis_backend_label()}")
         result = self._matcher().analyze(request.source_path, request.target_path)
+        self._tool_io.raise_if_aborted()
         log_analysis_result(result, self._callbacks.log_line)
         self._callbacks.analysis_ready(result)
         self._progress.set(100)
@@ -52,8 +56,10 @@ class AudioVideoMatchAnalysisService:
         self.require_inputs(request)
         if request.mapping_result is None:
             raise RuntimeError("Es liegt noch keine A/B/C-Analyse vor.")
+        require_mapping_inputs(request.mapping_result, request.source_path, request.target_path)
         self._callbacks.log_line("▶ Schnittbereich-Feinanalyse startet.")
         cuts = self._matcher().refine_cut_regions(request.mapping_result, request.cut_ranges_text)
+        self._tool_io.raise_if_aborted()
         for cut in cuts:
             label = f"{format_seconds(cut.target_start_s)}-{format_seconds(cut.target_end_s)}"
             status = "OK" if cut.resolved else "nicht lösbar"

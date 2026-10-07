@@ -110,3 +110,35 @@ def test_build_media_info_text_keeps_analysis_when_rules_preview_fails(monkeypat
     assert "========= Untertitel =========" in text
     assert "Rules Preview konnte nicht erstellt werden." in text
     assert "Fehler: preview kaputt" in text
+
+
+def test_media_info_text_forwards_current_rule_tester_options(monkeypatch):
+    captured = {}
+
+    def fake_preview(*_args, **kwargs):
+        captured.update(kwargs)
+        return {
+            "pipeline": "standard", "target_container": "mp4",
+            "target_video": {"resolution": "3840x1600", "autocrop_pending": False},
+            "dv_preserved": False, "hdr10plus_preserved": False,
+            "audio": {"override_action": "auto", "selected_streams": []},
+            "subtitles": {"override_mode": "auto", "burn_candidate": None, "container_copy_supported": True, "stream_copy_candidates": []},
+            "overrides": {}, "move": {"available": False},
+        }
+
+    monkeypatch.setattr(builder, "_build_rules_preview", fake_preview)
+    builder.build_media_info_text(
+        "film.mkv", mi=_media_info(), file_override={}, planned_target=None,
+        subtitle_rules={}, codec="h265", standard_container="mkv", dv_container="mp4",
+        preview_options={
+            "default_crf": 19,
+            "default_encoder_options": {"encoder": "nvenc", "hdr10plus_generator_enabled": True},
+            "standard_container": "mp4",
+            "dv_container": "mkv",
+        },
+    )
+
+    assert captured["default_crf"] == 19
+    assert captured["default_encoder_options"]["encoder"] == "nvenc"
+    assert captured["standard_container"] == "mp4"
+    assert captured["dv_container"] == "mkv"

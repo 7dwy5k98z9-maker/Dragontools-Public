@@ -8,18 +8,17 @@ Spuren derselben Sprache/Forced-Kombination gesetzt.
 """
 from __future__ import annotations
 
-import json
-import re
-import traceback
-from dataclasses import dataclass
-from collections import Counter
 from pathlib import Path
 from typing import Callable
 
 from ..core.lang_codes import lang_iso_tag, sub_codec_to_ext_and_args
 from ..core.models import normalize_override_dict
-from ..core.media_library_fix_queue import MediaLibraryFixIssue
 from .tool_runner import run_tool
+from .log_dispatch import dispatch_log
+from .subtitle_export_models import safe_lang_tag, sidecar_filename, SubtitleExportFailure, SubtitleExportResult
+from .subtitle_sidecar_exporter import SubtitleSidecarExporter
+from .subtitle_ocr_sidecars import export_pgs_ocr_sidecars
+
 from .subtitle_sidecar_plan import select_sidecar_streams
 from .subtitle_sidecar_targets import build_sidecar_targets
 from .bitmap_subtitle_ocr_service import BitmapSubtitleOcrService
@@ -38,125 +37,16 @@ from ..rules.subtitle_rules import (
 # Hilfsfunktionen (modulweit, testbar)
 # ---------------------------------------------------------------------------
 
-def safe_lang_tag(language: str | None) -> str:
-    """Normalisiert einen Sprach-Tag für Dateinamen.
-
-    Wandelt den Tag in Kleinbuchstaben um und entfernt alle Zeichen
-    außer [a-z0-9].  Ergibt einen leeren String wird "und" verwendet.
-
-    Beispiele:
-        "deu"       → "deu"
-        "de"        → "de"
-        "zh-Hant"   → "zhhant"
-        None        → "und"
-        ""          → "und"
-    """
-    tag = (language or "und").lower()
-    cleaned = re.sub(r"[^a-z0-9]", "", tag)
-    return cleaned or "und"
 
 
-def sidecar_filename(
-    base: Path,
-    lang: str,
-    forced: bool,
-    ext: str,
-    number: int | None = None,
-) -> str:
-    """Erzeugt den vollständigen Sidecar-Pfad nach Jellyfin/VLC-Schema.
-
-    Parameters
-    ----------
-    base : Path
-        Output-Stem (Videodatei ohne Suffix), z.B. Path("/films/Film")
-    lang : str
-        Bereits normalisierter Sprach-Tag (ISO-639-1, lowercase, [a-z0-9])
-    forced : bool
-        True wenn Sub-Stream als Forced markiert ist
-    ext : str
-        Dateierweiterung inkl. Punkt, z.B. ".srt"
-    number : int | None
-        Laufende Nummer für doppelte (lang, forced)-Kombinationen.
-        None   → keine Nummerierung (einzige Spur dieser Art)
-        1, 2 … → Nummer wird angehängt
-
-    Returns
-    -------
-    str
-        Vollständiger Dateipfad, z.B.:
-            "/films/Film.de.srt"
-            "/films/Film.de.forced.srt"
-            "/films/Film.de.1.srt"
-            "/films/Film.de.forced.2.srt"
-    """
-    forced_part = ".forced" if forced else ""
-    num_part = f".{number}" if number is not None else ""
-    base_text = str(base)
-    if not base.drive:
-        base_text = base.as_posix()
-    return base_text + f".{lang}{forced_part}{num_part}{ext}"
 
 
 # ---------------------------------------------------------------------------
 # Strukturierte Export-Ergebnisse
 # ---------------------------------------------------------------------------
 
-@dataclass(frozen=True)
-class SubtitleExportFailure:
-    stream_index: int
-    language: str
-    codec: str
-    reason: str
-    output_path: str = ""
 
 
-@dataclass(frozen=True)
-class SubtitleExportResult:
-    """Vollstaendiger fachlicher Status eines Sidecar-Exports."""
-
-    planned_stream_indices: tuple[int, ...] = ()
-    exported_paths: tuple[str, ...] = ()
-    failures: tuple[SubtitleExportFailure, ...] = ()
-    aborted: bool = False
-    disabled: bool = False
-
-    @property
-    def expected_count(self) -> int:
-        return len(self.planned_stream_indices)
-
-    @property
-    def exported_count(self) -> int:
-        return len(self.exported_paths)
-
-    @property
-    def complete(self) -> bool:
-        return (
-            not self.aborted
-            and not self.failures
-            and self.exported_count >= self.expected_count
-        )
-
-    @property
-    def ok(self) -> bool:
-        return self.complete
-
-    def failure_summary(self) -> str:
-        if self.aborted:
-            return "Sidecar-Export wurde abgebrochen."
-        if self.failures:
-            details = "; ".join(
-                f"Sub #{item.stream_index}: {item.reason}" for item in self.failures
-            )
-            return (
-                f"Sidecar-Export unvollstaendig "
-                f"({self.exported_count}/{self.expected_count}): {details}"
-            )
-        if self.exported_count != self.expected_count:
-            return (
-                f"Sidecar-Export unvollstaendig "
-                f"({self.exported_count}/{self.expected_count})."
-            )
-        return ""
 
 
 # ---------------------------------------------------------------------------
@@ -180,8 +70,12 @@ class SubtitleSidecarService:
     ) -> None:
         self._ffmpeg_path = ffmpeg_path
         self._subtitle_rules = subtitle_rules
-        self._log = log
+        self._log = lambda message, level="info": dispatch_log(log, message, level)
         self._worker = worker
+
+    def _exporter(self):
+        return SubtitleSidecarExporter(ffmpeg_path=self._ffmpeg_path, worker=self._worker,
+                                       log=self._log, run=run_tool)
 
     def export_sidecars_result(
         self,
@@ -258,7 +152,7 @@ class SubtitleSidecarService:
                 aborted = True
                 self._log("  📄 Sidecar-Export nach Abbruch-Signal gestoppt.", "warn")
                 break
-            ok, failure, was_aborted = self._export_target(input_path, target)
+            ok, failure, was_aborted = self._export_target(input_path, target, abort_check=abort_check)
             if ok:
                 exported.append(target.output_path)
             if failure is not None:
@@ -272,13 +166,15 @@ class SubtitleSidecarService:
         # conversion into a failed file job. The original PGS preservation is
         # handled independently by the normal container/sidecar policy above.
         if not aborted and getattr(selection, "pgs_srt_streams", ()):
-            exported.extend(self._export_pgs_ocr_sidecars(
+            ocr_paths, ocr_aborted = self._export_pgs_ocr_sidecars(
                 input_path=input_path,
                 output_base=Path(str(output_base)),
                 media_info=media_info,
                 streams=selection.pgs_srt_streams,
                 abort_check=abort_check,
-            ))
+            )
+            exported.extend(ocr_paths)
+            aborted = aborted or ocr_aborted
 
         return SubtitleExportResult(
             planned_stream_indices=planned,
@@ -287,60 +183,26 @@ class SubtitleSidecarService:
             aborted=aborted,
         )
 
-    def _export_pgs_ocr_sidecars(
-        self, *, input_path: str, output_base: Path, media_info, streams,
-        abort_check: "Callable[[], bool] | None" = None,
-    ) -> list[str]:
-        if self._worker is None or getattr(self._worker, "settings", None) is None or getattr(self._worker, "tools", None) is None:
-            self._log("  ⚠️ PGS→SRT übersprungen: Worker-Laufzeit für OCR nicht verfügbar.", "warn")
-            return []
-        subtitle_streams = list(getattr(media_info, "subtitle_streams", None) or [])
-        ordinal_by_index = {int(stream.index): pos + 1 for pos, stream in enumerate(subtitle_streams)}
-        selected = list(streams or [])
-        keys = [(safe_lang_tag(lang_iso_tag(getattr(stream, "language", None) or "und")), bool(getattr(stream, "forced", False))) for stream in selected]
-        counts = Counter(keys)
-        cursors: dict[tuple[str, bool], int] = {}
-        service = BitmapSubtitleOcrService(
-            settings=self._worker.settings, tools=self._worker.tools, log=self._log, worker=self._worker
-        )
-        exported: list[str] = []
-        self._log(f"  🔤 PGS→SRT: OCR für {len(selected)} ausgewählte Spur(en) …", "info")
-        for stream, key in zip(selected, keys):
-            if abort_check and abort_check():
-                break
-            lang, forced = key
-            number = None
-            if counts[key] > 1:
-                number = cursors.get(key, 1)
-                cursors[key] = number + 1
-            target = Path(sidecar_filename(output_base, lang, forced, ".srt", number))
-            issue = MediaLibraryFixIssue(
-                media_id=0, path=input_path, title=Path(input_path).stem, item_type="video",
-                issue_type="bitmap_subtitle_ocr", action="ocr_bitmap_subtitle",
-                problem="PGS→SRT Encode-OCR", action_label="PGS→SRT",
-                stream_index=int(stream.index), stream_type="subtitle",
-                stream_ordinal=ordinal_by_index.get(int(stream.index)),
-                codec=str(getattr(stream, "codec", "") or ""),
-                language=str(getattr(stream, "language", "") or ""),
-                track_title=str(getattr(stream, "title", "") or ""),
-                forced=bool(getattr(stream, "forced", False)),
-            )
+    def _export_pgs_ocr_sidecars(self, *, input_path, output_base, media_info, streams, abort_check=None):
+        return export_pgs_ocr_sidecars(input_path=input_path, output_base=output_base,
+            media_info=media_info, streams=streams, worker=self._worker, log=self._log,
+            abort_check=lambda:self._immediate_abort_requested(abort_check),
+            service_factory=BitmapSubtitleOcrService)
+
+    def _immediate_abort_requested(self, abort_check=None) -> bool:
+        if abort_check is not None:
             try:
-                result = service.create_srt(issue, target)
+                if bool(abort_check()):
+                    return True
             except Exception as exc:
-                try:
-                    target.unlink(missing_ok=True)
-                except OSError:
-                    pass
-                self._log(
-                    f"  ⚠️ PGS→SRT für Sub #{stream.index} übersprungen: {exc}. "
-                    "Original-PGS bleibt gemäß Regelwerk erhalten.",
-                    "warn",
-                )
-                continue
-            exported.append(str(result))
-            self._log(f"  ✅ PGS→SRT erzeugt: {result.name}", "info")
-        return exported
+                self._log(f"  ⚠️ Abbruchprüfung für Sidecar-Export fehlgeschlagen: {exc}", "warn")
+        worker = self._worker
+        if worker is None:
+            return False
+        state = getattr(worker, "_control_state", None)
+        requested = bool(getattr(state, "abort_requested", False)) if state is not None else bool(getattr(worker, "abort_requested", False))
+        abort_type = getattr(state, "abort_type", None) if state is not None else getattr(worker, "abort_type", None)
+        return bool(requested and abort_type == "sofort")
 
     def export_mov_text_backup_result(
         self, *, input_path: str, output_base: "str | Path", streams,
@@ -391,115 +253,8 @@ class SubtitleSidecarService:
         self._log(f"  ⚠️  Sub #{stream.index} ({codec}, {language}) – {reason}.", "warn")
         return SubtitleExportFailure(int(stream.index), language, codec, reason)
 
-    def _export_target(self, input_path: str, target) -> tuple[bool, SubtitleExportFailure | None, bool]:
-        stream = target.stream
-        codec = str(getattr(target, "output_codec", "") or stream.codec or "").lower()
-        codec_args = list(getattr(target, "codec_args", ()) or ())
-        if not codec_args:  # defensive: planning already filled this case
-            codec_result = sub_codec_to_ext_and_args(str(stream.codec or "").lower())
-            if codec_result is None:
-                return False, self._unsupported_failure(stream, target.language, codec), False
-            _ext, codec_args = codec_result
-        out_file = Path(target.output_path)
-        if out_file.exists() or out_file.is_symlink():
-            reason = "Zieldatei existiert bereits; stilles Ueberschreiben blockiert"
-            self._log(f"  ⚠️  Sub #{stream.index} ({target.language}): {reason}: {out_file.name}", "warn")
-            return False, SubtitleExportFailure(int(stream.index), target.language, codec, reason, target.output_path), False
+    def _export_target(self, input_path, target, *, abort_check=None):
+        return self._exporter().export_target(input_path, target, abort_check=abort_check)
 
-        completed = run_tool(
-            [
-                self._ffmpeg_path, "-n", "-nostdin", "-loglevel", "error",
-                "-i", input_path, "-map", f"0:{stream.index}", *codec_args, target.output_path,
-            ],
-            label=f"Untertitel-Sidecar #{stream.index}",
-            timeout_s=300,
-            worker=self._worker,
-            log=self._log,
-        )
-        if getattr(completed, "aborted", False) is True:
-            reason = "Sidecar-Export abgebrochen"
-            return False, SubtitleExportFailure(int(stream.index), target.language, codec, reason, target.output_path), True
-        if getattr(completed, "timed_out", False) is True:
-            reason = "Timeout beim Sidecar-Export"
-            self._log(f"  ⚠️  Sub #{stream.index} ({target.language}): {reason}.", "warn")
-            return False, SubtitleExportFailure(int(stream.index), target.language, codec, reason, target.output_path), False
-
-        try:
-            valid_output = out_file.exists() and out_file.stat().st_size > 0
-        except OSError:
-            valid_output = False
-        if completed.returncode == 0 and valid_output:
-            suffix = " (Text→SRT)" if getattr(target, "variant", "") == "text_to_srt" else ""
-            self._log(f"  📄 Sidecar OK: {out_file.name}{suffix}", "info")
-            return True, None, False
-
-        detail = str(completed.stderr or completed.stdout or "").strip()
-
-        # FFmpeg's raw SUP muxer can reject otherwise extractable Matroska PGS
-        # packets (for example around malformed display segments). For MKV PGS
-        # sources, fall back to MKVToolNix, which can copy the Matroska track
-        # without routing it through FFmpeg's SUP muxer. OCR remains a separate
-        # best-effort concern; this fallback protects the original bitmap track.
-        if codec in {"hdmv_pgs_subtitle", "pgs"} and Path(input_path).suffix.casefold() == ".mkv":
-            if self._try_mkvextract_pgs_fallback(input_path, stream, out_file):
-                self._log(
-                    f"  📄 Sidecar OK: {out_file.name} (MKVToolNix-Fallback nach FFmpeg-Fehler)",
-                    "info",
-                )
-                return True, None, False
-
-        reason = f"Export fehlgeschlagen (rc={completed.returncode})"
-        if detail:
-            reason += f": {detail[-500:]}"
-        self._log(f"  ⚠️  Sub #{stream.index} ({target.language}, {codec}): {reason}.", "warn")
-        return False, SubtitleExportFailure(int(stream.index), target.language, codec, reason, target.output_path), False
-
-    def _try_mkvextract_pgs_fallback(self, input_path: str, stream, out_file: Path) -> bool:
-        worker_tools = getattr(self._worker, "tools", None) if self._worker is not None else None
-        mkvmerge = str(getattr(worker_tools, "mkvmerge", "") or "").strip()
-        mkvextract = str(getattr(worker_tools, "mkvextract", "") or "").strip()
-        ffprobe = str(getattr(worker_tools, "ffprobe", "") or "").strip()
-        if not mkvmerge or not mkvextract or not ffprobe:
-            return False
-
-        try:
-            out_file.unlink(missing_ok=True)
-        except OSError:
-            return False
-
-        probe = run_tool(
-            [ffprobe, "-v", "error", "-select_streams", "s", "-show_entries", "stream=index", "-of", "json", input_path],
-            label="PGS-Fallback ffprobe", timeout_s=60, worker=self._worker, log=self._log,
-        )
-        if not probe.ok:
-            return False
-        try:
-            stream_rows = json.loads(probe.stdout or "{}").get("streams") or []
-            subtitle_indices = [int(row["index"]) for row in stream_rows if "index" in row]
-            subtitle_ordinal = subtitle_indices.index(int(stream.index))
-        except (ValueError, TypeError, KeyError, json.JSONDecodeError):
-            return False
-
-        identify = run_tool(
-            [mkvmerge, "-J", input_path],
-            label="PGS-Fallback mkvmerge identify", timeout_s=60, worker=self._worker, log=self._log,
-        )
-        if not identify.ok:
-            return False
-        try:
-            tracks = json.loads(identify.stdout or "{}").get("tracks") or []
-            subtitle_tracks = [row for row in tracks if str(row.get("type") or "").casefold() == "subtitles"]
-            track_id = int(subtitle_tracks[subtitle_ordinal]["id"])
-        except (IndexError, ValueError, TypeError, KeyError, json.JSONDecodeError):
-            return False
-
-        extracted = run_tool(
-            [mkvextract, "tracks", input_path, f"{track_id}:{out_file}"],
-            label=f"PGS-Sidecar mkvextract #{stream.index}", timeout_s=300, worker=self._worker, log=self._log,
-        )
-        if getattr(extracted, "aborted", False) or getattr(extracted, "timed_out", False):
-            return False
-        try:
-            return extracted.returncode == 0 and out_file.is_file() and out_file.stat().st_size > 0
-        except OSError:
-            return False
+    def _try_mkvextract_pgs_fallback(self, input_path, stream, out_file):
+        return self._exporter().pgs_fallback(input_path, stream, out_file)

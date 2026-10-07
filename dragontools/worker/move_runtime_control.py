@@ -6,6 +6,8 @@ Benutzerentscheidungen, Pause/Resume/Abort und geplante Zielpfade.
 """
 from __future__ import annotations
 
+from copy import deepcopy
+from .log_dispatch import dispatch_log
 import threading
 import uuid
 
@@ -22,7 +24,7 @@ class MoveRuntimeControlMixin:
     def add_planned_target(self, path: str, target) -> None:
         with self._planned_targets_lock:
             if path not in self.planned_targets:
-                self.planned_targets[path] = target
+                self.planned_targets[path] = deepcopy(target)
 
     def update_planned_target(self, path: str, target) -> bool:
         """Replace a queued move target without racing an active file transfer.
@@ -34,7 +36,7 @@ class MoveRuntimeControlMixin:
             journal = getattr(self, "_move_journal", None)
             if journal is not None and not journal.update_planned_target_if_queued(path, target):
                 return False
-            self.planned_targets[path] = target
+            self.planned_targets[path] = deepcopy(target)
             return True
 
     def request_abort(self, mode: str = "sofort") -> None:
@@ -80,5 +82,4 @@ class MoveRuntimeControlMixin:
             self._events.pop(rid, None)
 
     def _log(self, msg, level="info"):
-        lv = (level or "info").lower()
-        getattr(self._logger, lv, self._logger.info)(msg)
+        dispatch_log(self._logger, msg, level)

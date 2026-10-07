@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dragontools.tests.subtitle_command_fixtures import subtitle_command_validation
+
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -27,7 +29,7 @@ def test_extract_uses_shared_runner_and_worker(monkeypatch, tmp_path):
     def fake_run_tool(cmd, **kwargs):
         seen["cmd"] = cmd
         seen.update(kwargs)
-        out.write_text("SUB", encoding="utf-8")
+        Path(cmd[-1]).write_text("SUB", encoding="utf-8")
         return SimpleNamespace(ok=True, returncode=0, stdout="", stderr="")
 
     monkeypatch.setattr(module, "run_tool", fake_run_tool)
@@ -58,7 +60,9 @@ def test_ffmpeg_inject_uses_shared_runner(monkeypatch, tmp_path):
     def fake_run_tool(cmd, **kwargs):
         seen["cmd"] = cmd
         seen.update(kwargs)
-        out.write_bytes(b"video")
+        if "-show_entries" in cmd:
+            return SimpleNamespace(ok=True, returncode=0, stdout='{"streams": []}', stderr="")
+        Path(cmd[-1]).write_bytes(b"video")
         return SimpleNamespace(ok=True, returncode=0, stdout="", stderr="")
 
     monkeypatch.setattr(module, "run_tool", fake_run_tool)

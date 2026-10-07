@@ -14,6 +14,7 @@ def test_hdr10plus_workflow_policy_is_importable_and_callable():
         codec="h265",
         encoder_options={},
         generate_hdr10plus=True,
+        source_codec="hevc",
     ) is True
 
 

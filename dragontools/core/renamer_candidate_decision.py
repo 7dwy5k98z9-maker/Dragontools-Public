@@ -13,7 +13,7 @@ from .movie_renamer import (
 )
 from .path_syntax import path_compare_key
 from ..rules.renamer_rules import manual_review_below, minimum_candidate_score
-from .renamer_year_safety import apply_year_review
+from .renamer_identity_review import apply_rename_identity_review
 
 _GENERATED_WARNINGS = {
     "Zieldatei existiert bereits.",
@@ -47,7 +47,8 @@ def apply_candidate_decision(proposal: RenameProposal, candidate_index: int, sou
     target_path = source_path.with_name(target_name)
     target_exists = target_path.exists() and path_compare_key(target_path) != path_compare_key(source_path)
     status = _status_for(proposal, selected.score, target_exists, warnings)
-    status = apply_year_review(status, warnings, proposal.parsed.year, selected.year)
+    status = apply_rename_identity_review(status, warnings, proposal.parsed, selected,
+        proposal.candidates, explicit=proposal.search_mode == 'explicit_mapping')
     updated = replace(
         proposal,
         selected=selected,

@@ -59,6 +59,8 @@ class AudioStream:
     channels: int
     channel_layout: str | None = None
     bitrate: int | None = None
+    duration_s: float | None = None
+    default: bool = False
 
 @dataclass(slots=True)
 class SubtitleStream:
@@ -71,6 +73,7 @@ class SubtitleStream:
     duration_s: float | None = None
     source_kind: str = "internal"
     external_path: str | None = None
+    default: bool = False
 
 @dataclass(slots=True)
 class VideoStream:
@@ -136,6 +139,7 @@ class MediaInfo:
 
     analysis_source: str = "Unbekannt"
     analysis_warnings: list[str] = field(default_factory=list)
+    ffmpeg_stream_indices_trusted: bool = True
 
     @property
     def primary_video(self) -> VideoStream | None:
@@ -143,16 +147,24 @@ class MediaInfo:
 
     @property
     def has_dv(self) -> bool:
-        return bool(self.dolby_vision) or any(
-            v.hdr_format == "dolby_vision" or getattr(v, "has_dolby_vision", False)
-            for v in self.video_streams
+        primary = self.primary_video
+        return bool(self.dolby_vision) or bool(
+            primary is not None
+            and (
+                primary.hdr_format == "dolby_vision"
+                or getattr(primary, "has_dolby_vision", False)
+            )
         )
 
     @property
     def has_hdrplus(self) -> bool:
-        return bool(self.has_hdr10plus) or any(
-            v.hdr_format == "hdr10plus" or getattr(v, "has_hdr10plus", False)
-            for v in self.video_streams
+        primary = self.primary_video
+        return bool(self.has_hdr10plus) or bool(
+            primary is not None
+            and (
+                primary.hdr_format == "hdr10plus"
+                or getattr(primary, "has_hdr10plus", False)
+            )
         )
 
     def dv_profile_label(self) -> str:

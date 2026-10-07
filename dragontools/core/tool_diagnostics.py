@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-import shutil
 import subprocess
-import tempfile
 from pathlib import Path
 from typing import Any, Callable
 
-from .process_runner import subprocess_no_window_kwargs
+from .process_runner import subprocess_no_window_kwargs, tool_available
 
 
 TOOL_VERSION_ARGS: dict[str, list[str]] = {
@@ -49,10 +47,7 @@ TOOL_FEATURE_LABELS: dict[str, list[str]] = {
 
 
 def _exists_or_which(path: str) -> bool:
-    value = str(path or "").strip()
-    if not value:
-        return False
-    return Path(value).exists() or bool(shutil.which(value))
+    return tool_available(path)
 
 
 def _run_tool(path: str, args: list[str], *, timeout: int = 5) -> tuple[int, str]:
@@ -106,7 +101,7 @@ def _first_useful_line(text: str) -> str:
 
 def _probe_ffmpeg_features(path: str) -> list[str]:
     features: list[str] = []
-    _rc, filters_text = _run_tool(path, ["-hide_banner", "-filters"], timeout=6)
+    filters_text = _successful_probe_output(path, ["-hide_banner", "-filters"])
     filters = filters_text.lower()
     if "libplacebo" in filters:
         features.append("libplacebo")
@@ -115,12 +110,12 @@ def _probe_ffmpeg_features(path: str) -> list[str]:
     if " subtitles " in filters or " ass " in filters:
         features.append("Untertitel/Burn-In")
 
-    _rc, encoders_text = _run_tool(path, ["-hide_banner", "-encoders"], timeout=6)
+    encoders_text = _successful_probe_output(path, ["-hide_banner", "-encoders"])
     encoders = encoders_text.lower()
     has_nvenc = "hevc_nvenc" in encoders or "h264_nvenc" in encoders or "av1_nvenc" in encoders
     if has_nvenc:
         features.append("NVENC")
-        _rc, nvenc_help = _run_tool(path, ["-hide_banner", "-h", "encoder=hevc_nvenc"], timeout=6)
+        nvenc_help = _successful_probe_output(path, ["-hide_banner", "-h", "encoder=hevc_nvenc"])
         nvenc_help_l = nvenc_help.lower()
         if "-lookahead_level" in nvenc_help_l:
             features.append("NVENC lookahead_level")
@@ -134,12 +129,17 @@ def _probe_ffmpeg_features(path: str) -> list[str]:
         features.append("x265")
     if "libsvtav1" in encoders or "av1_svt" in encoders:
         features.append("SVT-AV1")
-        _rc, svt_help = _run_tool(path, ["-hide_banner", "-h", "encoder=libsvtav1"], timeout=6)
+        svt_help = _successful_probe_output(path, ["-hide_banner", "-h", "encoder=libsvtav1"])
         if "dolbyvision" in svt_help.lower():
             features.append("AV1 Dolby Vision P10")
     if "libaom-av1" in encoders:
         features.append("libaom-av1 / AV1 HDR10+")
     return features
+
+
+def _successful_probe_output(path: str, args: list[str]) -> str:
+    rc, text = _run_tool(path, args, timeout=6)
+    return text if rc == 0 else ""
 
 
 def probe_tool(tool_name: str, path: str) -> dict[str, Any]:
@@ -159,10 +159,10 @@ def probe_tool(tool_name: str, path: str) -> dict[str, Any]:
     if tool_name == "handbrake" and "cli" not in Path(path).stem.lower():
         args = []
     rc, text = _run_tool(path, args)
-    if rc == 0 or text:
+    if rc == 0:
         info["version"] = _first_useful_line(text)
-    if rc != 0 and text:
-        info["error"] = _first_useful_line(text)
+    else:
+        info["error"] = _first_useful_line(text) or f"Exit-Code {rc}"
 
     if tool_name == "ffmpeg":
         info["features"] = _probe_ffmpeg_features(path)
@@ -226,7 +226,8 @@ def format_tool_diagnostics(rows: list[dict[str, Any]]) -> str:
             if error:
                 lines.append(f"   Hinweis: {error}")
             continue
-        lines.append(f"✅  {name}")
+        error = str(row.get("error") or "").strip()
+        lines.append(f"{'⚠️' if error else '✅'}  {name}")
         lines.append(f"   Pfad: {path}")
         version = str(row.get("version") or "").strip()
         if version:
@@ -234,7 +235,6 @@ def format_tool_diagnostics(rows: list[dict[str, Any]]) -> str:
         features = [str(v) for v in row.get("features") or [] if v]
         if features:
             lines.append(f"   Features: {', '.join(features)}")
-        error = str(row.get("error") or "").strip()
         if error:
             lines.append(f"   Hinweis: {error}")
     return "\n".join(lines)

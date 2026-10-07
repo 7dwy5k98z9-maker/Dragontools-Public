@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Callable
 
 from ..core.lang_codes import lang_iso_tag, sub_codec_to_ext_and_args
+from ..rules.subtitle_storage import mkv_internal_subtitle_streams
 from ..rules.subtitle_rules import (
     build_mp4_subtitle_storage_plan,
     compute_subtitle_plan,
@@ -35,6 +36,7 @@ class DVSubtitleJob:
     language: str
     title: str
     forced: bool
+    default: bool = False
 
 
 @dataclass(frozen=True)
@@ -46,6 +48,7 @@ class DVMuxSubtitleTrack:
     title: str
     forced: bool
     source_direct: bool = False
+    default: bool = False
 
 
 class DVSubtitleMuxService:
@@ -94,11 +97,7 @@ class DVSubtitleMuxService:
                 "info",
             )
 
-        if pgs_original_storage(self._subtitle_rules) == "sidecar":
-            selected = [
-                stream for stream in selected
-                if str(getattr(stream, "codec", "") or "").lower() not in {"hdmv_pgs_subtitle", "pgs"}
-            ]
+        selected = mkv_internal_subtitle_streams(selected, subtitle_rules=self._subtitle_rules)
 
         jobs: list[DVSubtitleJob] = []
         seen: set[int] = set()
@@ -128,6 +127,7 @@ class DVSubtitleMuxService:
                     language=lang_iso_tag(stream.language or "und"),
                     title=str(stream.title or "").strip(),
                     forced=bool(stream.forced),
+                    default=bool(getattr(stream, "default", False)),
                 )
             )
         return jobs
@@ -169,6 +169,7 @@ class DVSubtitleMuxService:
                     language=lang_iso_tag(stream.language or "und"),
                     title=str(stream.title or "").strip(),
                     forced=bool(stream.forced),
+                    default=bool(getattr(stream, "default", False)),
                 )
             )
         return jobs
@@ -222,6 +223,7 @@ class DVSubtitleMuxService:
                     language=job.language,
                     title=job.title,
                     forced=job.forced,
+                    default=job.default,
                 )
             )
         return True, tracks
@@ -261,6 +263,7 @@ class DVSubtitleMuxService:
                     DVMuxSubtitleTrack(
                         path=Path(input_path), stream_index=job.stream_index, codec=job.codec,
                         language=job.language, title=job.title, forced=job.forced, source_direct=True,
+                        default=job.default,
                     )
                 )
                 self._log(
@@ -283,8 +286,20 @@ class DVSubtitleMuxService:
                 return False, tracks
             tracks.append(
                 DVMuxSubtitleTrack(
-                    path=output, stream_index=job.stream_index, codec=job.codec,
-                    language=job.language, title=job.title, forced=job.forced,
+                    path=output, stream_index=job.stream_index, codec=_prepared_mkv_codec(job),
+                    language=job.language, title=job.title, forced=job.forced, default=job.default,
                 )
             )
         return True, tracks
+
+
+def _prepared_mkv_codec(job: DVSubtitleJob) -> str:
+    """Return the codec actually written by the staging FFmpeg command."""
+    args = [str(value).strip().lower() for value in (job.codec_args or ())]
+    for codec in ("srt", "subrip", "ass", "ssa", "webvtt"):
+        if codec in args:
+            return "subrip" if codec in {"srt", "subrip"} else codec
+    source = str(job.codec or "").strip().lower()
+    if source in {"mov_text", "tx3g", "subt", "text"}:
+        return "subrip"
+    return source

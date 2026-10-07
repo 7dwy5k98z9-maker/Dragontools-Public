@@ -35,7 +35,32 @@ SENSITIVE_SETTINGS_KEYS = {
     SET_KEY_METADATA_TVDB_BEARER_TOKEN,
 }
 
+SENSITIVE_SETTINGS_KEY_MARKERS = (
+    "api_key",
+    "apikey",
+    "access_token",
+    "read_access_token",
+    "bearer_token",
+    "secret",
+    "password",
+)
+
+
+def is_sensitive_settings_key(key: str) -> bool:
+    """Return whether a settings key may contain credentials or secrets.
+
+    Exact metadata keys remain the documented contract, but DragonTools also
+    stores credentials outside the metadata subsystem (for example the
+    Jellyfin API key).  Security-sensitive consumers therefore need one
+    shared classification rule instead of divergent local allowlists.
+    """
+    normalized = str(key or "").casefold()
+    if normalized in {item.casefold() for item in SENSITIVE_SETTINGS_KEYS}:
+        return True
+    return any(marker in normalized for marker in SENSITIVE_SETTINGS_KEY_MARKERS)
+
 __all__ = [
     name for name in globals()
     if name.startswith(("SET_KEY_", "DEFAULT_", "SENSITIVE_"))
+    or name == "is_sensitive_settings_key"
 ]

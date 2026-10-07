@@ -15,6 +15,9 @@ def test_mkvpropedit_uses_configured_path_ordinal_track_and_accepts_warning(monk
         return SimpleNamespace(returncode=1, stdout="warning", stderr="")
 
     monkeypatch.setattr(tagger, "run_analysis_tool", fake_run)
+    # This test checks command/ordinal semantics. Real property verification
+    # has independent negative and actual MKV roundtrip coverage.
+    monkeypatch.setattr(tagger, "verify_tag_edit", lambda *_a, **_k: True)
     logs = []
 
     assert tagger.set_track_language("film.mkv", 2, "de", logger=logs.append) is True

@@ -41,9 +41,12 @@ class FileListQueueIndexMixin:
         key = path_compare_key(path)
         item = self._path_items.get(key)
         if item is not None:
-            item_path = item.data(Qt.ItemDataRole.UserRole)
-            if item_path and path_compare_key(item_path) == key:
-                return item
+            try:
+                item_path = item.data(Qt.ItemDataRole.UserRole)
+                if self.row(item) >= 0 and item_path and path_compare_key(item_path) == key:
+                    return item
+            except RuntimeError:
+                pass  # Native Qt removal can leave an invalid cached wrapper.
         self.rebuild_path_index()
         return self._path_items.get(key)
 

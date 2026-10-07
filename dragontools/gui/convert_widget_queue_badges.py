@@ -6,7 +6,7 @@ from PyQt6.QtCore import Qt
 from ..core.models import normalize_override_dict
 from ..core.encoder_profile_override import MODE_TO_SCALE_LABEL, normalize_encoder_override
 from ..core.path_syntax import display_name
-from ..core.settings_postprocess import DEFAULT_NFO_ENABLED, DEFAULT_TRICKPLAY_ENABLED, SET_KEY_NFO_ENABLED, SET_KEY_TRICKPLAY_ENABLED
+from ..core.settings_postprocess import DEFAULT_NFO_ENABLED, DEFAULT_NFO_TIMING, DEFAULT_TRICKPLAY_ENABLED, SET_KEY_NFO_ENABLED, SET_KEY_NFO_TIMING, SET_KEY_TRICKPLAY_ENABLED
 
 
 class ConvertWidgetQueueBadgesMixin:
@@ -104,7 +104,15 @@ class ConvertWidgetQueueBadgesMixin:
             )
             parts: list[str] = []
             if nfo:
-                parts.append("NFO")
+                timing = settings.value(SET_KEY_NFO_TIMING, DEFAULT_NFO_TIMING, type=str)
+                if timing == "off":
+                    pass
+                elif timing == "during":
+                    parts.append("NFO während")
+                elif timing == "after":
+                    parts.append("NFO danach")
+                else:
+                    parts.append("NFO")
             if trickplay:
                 parts.append("Trickplay")
             return parts

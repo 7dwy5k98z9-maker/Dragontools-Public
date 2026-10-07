@@ -7,6 +7,9 @@ import errno
 import os
 import shutil
 from pathlib import Path
+from ..core.recovery_file import copy_recovery_file, preserve_recovery_file
+from .log_dispatch import dispatch_log
+from .hdr_metadata_file_ownership import metadata_output_conflicts_with_sources
 
 
 def _unique_archive_path(directory: Path, filename: str) -> Path:
@@ -25,32 +28,7 @@ def _unique_archive_path(directory: Path, filename: str) -> Path:
 
 def _cross_volume_preserve(output: Path, target: Path) -> None:
     """Copy safely when an atomic move cannot cross filesystem boundaries."""
-    staging = target.with_name(f".{target.name}.archiving-{os.getpid()}.part")
-    counter = 1
-    while staging.exists():
-        staging = target.with_name(
-            f".{target.name}.archiving-{os.getpid()}-{counter:03d}.part"
-        )
-        counter += 1
-    try:
-        shutil.copy2(str(output), str(staging))
-        if staging.stat().st_size != output.stat().st_size:
-            raise OSError(
-                "Archivkopie hat eine abweichende Dateigroesse "
-                f"({staging.stat().st_size} != {output.stat().st_size})"
-            )
-        os.replace(str(staging), str(target))
-        try:
-            output.unlink()
-        except OSError:
-            # The archive is already durable. Keeping the original duplicate is safer
-            # than treating the preservation itself as failed.
-            pass
-    finally:
-        try:
-            staging.unlink(missing_ok=True)
-        except OSError:
-            pass
+    copy_recovery_file(output, target)
 
 
 def preserve_failed_verification_output(ctx, result, *, logger) -> str | None:
@@ -76,16 +54,14 @@ def preserve_failed_verification_output(ctx, result, *, logger) -> str | None:
         return None
 
     source = Path(source_raw)
+    if metadata_output_conflicts_with_sources(output, source):
+        dispatch_log(logger.warn, 'Archivierung verweigert: Ausgabe und Medienquelle sind identisch.')
+        return None
     archive_dir = source.parent / "Archiv"
     try:
         archive_dir.mkdir(parents=True, exist_ok=True)
         target = _unique_archive_path(archive_dir, output.name)
-        try:
-            os.replace(str(output), str(target))
-        except OSError as exc:
-            if exc.errno not in {errno.EXDEV, errno.EACCES, errno.EPERM}:
-                raise
-            _cross_volume_preserve(output, target)
+        preserve_recovery_file(output, target)
 
         ctx.verification_archive_path = str(target)
         message = f"Fehlerhafte Ausgabedatei wurde archiviert: {target}"
@@ -93,7 +69,7 @@ def preserve_failed_verification_output(ctx, result, *, logger) -> str | None:
         if message not in messages:
             messages.append(message)
             result.messages = messages
-        logger.warn(message)
+        dispatch_log(logger.warn, message)
         return str(target)
     except Exception as exc:
         message = (
@@ -104,7 +80,7 @@ def preserve_failed_verification_output(ctx, result, *, logger) -> str | None:
         if message not in messages:
             messages.append(message)
             result.messages = messages
-        logger.warn(message)
+        dispatch_log(logger.warn, message)
         return None
 
 

@@ -10,6 +10,8 @@ from __future__ import annotations
 import traceback
 from pathlib import Path
 
+from .utility_worker_start import owned_utility_start, restore_utility_start, connect_owned_signal, utility_workers, start_utility_worker
+
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
@@ -152,7 +154,10 @@ class AudioMuxerWidget(QWidget):
         self.btn_cancel.setEnabled(running)
         self.chk_overwrite.setEnabled(not running)
 
+    @owned_utility_start("_worker")
     def _start(self) -> None:
+        if self._worker is not None:
+            return
         try:
             files = [
                 str(self.file_list.item(i).data(Qt.ItemDataRole.UserRole))
@@ -172,22 +177,25 @@ class AudioMuxerWidget(QWidget):
                 overwrite_original=self.chk_overwrite.isChecked(),
                 parent=self,
             )
-            self._worker.log_line.connect(self.log.append)
-            self._worker.progress_total.connect(self.progress_total.setValue)
-            self._worker.progress_file.connect(self._on_file_progress)
-            self._worker.file_result.connect(self._on_file_result)
-            self._worker.finished.connect(self._on_finished)
+            connect_owned_signal(self, "_worker", self._worker, self._worker.log_line, self.log.append)
+            connect_owned_signal(self, "_worker", self._worker, self._worker.progress_total, self.progress_total.setValue)
+            connect_owned_signal(self, "_worker", self._worker, self._worker.progress_file, self._on_file_progress)
+            connect_owned_signal(self, "_worker", self._worker, self._worker.file_result, self._on_file_result)
+            connect_owned_signal(self, "_worker", self._worker, self._worker.finished, self._on_finished)
 
             self._set_running(True)
-            self._worker.start()
+            start_utility_worker(self, self._worker)
 
         except Exception:
             self.log.append("❌ Unbehandelte Ausnahme in _start()")
             self.log.append(traceback.format_exc())
-            self._set_running(False)
+            restore_utility_start(self, "_worker")
+
+    def set_utility_running(self, running: bool) -> None:
+        self._set_running(running)
 
     def iter_shutdown_workers(self) -> tuple:
-        return (self._worker,) if self._worker is not None else ()
+        return utility_workers(self, "_worker")
 
     def _cancel(self) -> None:
         if self._worker is not None:
@@ -202,7 +210,9 @@ class AudioMuxerWidget(QWidget):
         icon = "✅" if success else "❌"
         self.log.append(f"{icon} {Path(path).name} → {message}")
 
-    def _on_finished(self) -> None:
+    def _on_finished(self, worker=None) -> None:
+        if worker is not None and worker is not self._worker:
+            return
         self._set_running(False)
         self.progress_file.setValue(0)
         self.lbl_current.setText("Aktuelle Datei: –")

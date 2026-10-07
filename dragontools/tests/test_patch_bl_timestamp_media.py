@@ -107,9 +107,10 @@ def test_real_mp4_remux_preserves_offset(media, tmp_path, monkeypatch):
         ignore_subtitles=True, subtitle_rules={}, faststart=True, log=lambda *_: None, log_audio=lambda *_: None)
     monkeypatch.setattr(planner, "build_audio_plan", lambda _: [])
     monkeypatch.setattr(planner, "build_audio_args", lambda _: ["-map", "0:a", "-c:a", "copy"])
-    plan = planner.build(str(src), str(out), NS(duration_s=3))
+    plan = planner.build(str(src), str(out), NS(duration_s=3, primary_video=NS(codec="h264", index=0)))
     run(plan.command)
-    assert_good(tools, src, out)
+    assert not out.exists()
+    assert_good(tools, src, plan.staging)
 
 
 @pytest.mark.parametrize("container", ["mkv", "mp4"])
@@ -144,6 +145,7 @@ def test_standard_and_comfy_movtext_retry_use_same_policy(media, tmp_path, monke
     monkeypatch.setattr(runner, "_export_mov_text_backup", lambda *_: NS(complete=True, exported_paths=[]))
     monkeypatch.setattr(module, "build_subtitle_args", lambda *a, **kw: (None, ["-sn"]))
     monkeypatch.setattr(module.ComfyUIHDRVideoService, "render", lambda *a, **kw: NS(success=True, peak_vram_bytes=0, elapsed_s=0, frames=75))
+    monkeypatch.setattr(module, "verify_comfyui_mux", lambda **_kw: NS(success=True))
     req = request(src, out)
     if comfy:
         req = replace(req, encoder_options={"_sdr_hdr_applied": True, "sdr_hdr_backend": "comfyui"})

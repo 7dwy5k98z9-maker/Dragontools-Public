@@ -8,6 +8,7 @@ package/model.
 """
 from __future__ import annotations
 import logging
+import math
 
 from dataclasses import dataclass
 import re
@@ -49,9 +50,14 @@ def combine_language_evidence(
     confidence instead of being hidden by a simple majority vote.
     """
     normalized: list[LanguageEvidence] = []
-    for item in evidence:
+    samples = list(evidence)
+    for item in samples:
         language = canonical_lang(item.language)
-        probability = max(0.0, min(1.0, float(item.probability or 0.0)))
+        try:
+            probability = float(item.probability or 0.0)
+        except (ValueError, TypeError, OverflowError):
+            probability = 0.0
+        probability = max(0.0, min(1.0, probability)) if math.isfinite(probability) else 0.0
         if language and language not in {"und", "unk", "unknown"}:
             normalized.append(LanguageEvidence(language, probability, item.source))
     if not normalized:
@@ -63,12 +69,12 @@ def combine_language_evidence(
         score[item.language] = score.get(item.language, 0.0) + item.probability
         support[item.language] = support.get(item.language, 0) + 1
     winner = max(score, key=lambda key: (score[key], support[key], key))
-    confidence = score[winner] / len(normalized)
-    required_support = (len(normalized) // 2) + 1
+    confidence = score[winner] / len(samples)
+    required_support = (len(samples) // 2) + 1
     accepted = support[winner] >= required_support and confidence >= float(min_probability)
     reason = (
         f"{lang_display(winner)} mit {confidence * 100:.1f}% Konsens "
-        f"({support[winner]}/{len(normalized)} Samples)."
+        f"({support[winner]}/{len(samples)} Samples)."
     )
     if not accepted:
         reason += f" Mindestkonfidenz: {float(min_probability) * 100:.0f}%."

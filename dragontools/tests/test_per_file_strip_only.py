@@ -121,7 +121,7 @@ def test_queue_label_shows_pipeline_and_postprocess_badges_from_cache():
 
     label = owner._override_label_text(path)
 
-    assert "[Encode: DV, Postprocessing: NFO]" in label
+    assert "[Encode: DV, Postprocessing: NFO danach]" in label
 
 
 @pytest.mark.skipif(not HAS_PYQT6, reason="PyQt6 wird fuer den GUI-Queue-Mixin benoetigt")
@@ -146,7 +146,7 @@ def test_queue_label_shows_dv_hdr10plus_and_named_postprocess_badges():
 
     label = owner._override_label_text(path)
 
-    assert "[Encode: DV + HDR10+, Postprocessing: NFO + Trickplay]" in label
+    assert "[Encode: DV + HDR10+, Postprocessing: NFO danach + Trickplay]" in label
 
 
 @pytest.mark.skipif(not HAS_PYQT6, reason="PyQt6 wird fuer den GUI-Queue-Mixin benoetigt")
@@ -162,6 +162,7 @@ def test_strip_only_toggle_applies_to_all_selected_paths():
         thread=None,
     )
     owner._guard_queue_edit_allowed = lambda *_args: True
+    owner._controller = SimpleNamespace()
     owner.update_queue_label = lambda _path: None
     owner._log = lambda *_args: None
 

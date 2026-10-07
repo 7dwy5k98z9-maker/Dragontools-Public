@@ -42,15 +42,20 @@ class ConversionResultFinishMixin:
 
             ui.progress_bar.setValue(100)
             self._log("✅ Konvertierung abgeschlossen.")
+            move_started = False
             if ui.move_cb.isChecked() and self._state.fertig:
-                self._start_move(list(self._state.fertig), finished_thread)
+                move_result = self._start_move(list(self._state.fertig), finished_thread)
+                # Legacy extensions returned None after a successful hand-off.
+                # Only an explicit False means that no MoveThread owns the run.
+                move_started = move_result is not False
             else:
                 self.finalize_run(finished_thread, move_log=[], move_ok=0, move_errors=0)
                 self._set_start_enabled(True)
                 self._set_queue_edit(True)
 
             self._state.thread = None
-            self._state.start_reserved = False
+            if not move_started:
+                self._state.start_reserved = False
             self._refresh_queue()
         except Exception:
             details = traceback.format_exc()
@@ -70,9 +75,10 @@ class ConversionResultFinishMixin:
                     "werden jetzt verschoben.",
                     "warn",
                 )
-                self._start_move(move_files, finished_thread)
+                move_result = self._start_move(move_files, finished_thread)
                 self._state.thread = None
-                self._state.start_reserved = False
+                if move_result is False:
+                    self._state.start_reserved = False
                 self._refresh_queue()
                 return
             self._log(

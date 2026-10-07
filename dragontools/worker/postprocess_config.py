@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-from ..core.settings_postprocess import DEFAULT_NFO_CONFLICT_MODE, DEFAULT_NFO_ENABLED, DEFAULT_NFO_FILEINFO_ENABLED, DEFAULT_NFO_MOVIE_TARGET_NAME, DEFAULT_NFO_ONLY_UNAMBIGUOUS, DEFAULT_TRICKPLAY_ENABLED, DEFAULT_TRICKPLAY_CONFLICT_MODE, DEFAULT_TRICKPLAY_HWACCEL, DEFAULT_TRICKPLAY_INTERVAL_S, DEFAULT_TRICKPLAY_JPEG_QUALITY, DEFAULT_TRICKPLAY_MAX_JOBS, DEFAULT_TRICKPLAY_ONLY_MISSING, DEFAULT_TRICKPLAY_QSCALE, DEFAULT_TRICKPLAY_SOURCE_MODE, DEFAULT_TRICKPLAY_TILE_COLUMNS, DEFAULT_TRICKPLAY_TILE_ROWS, DEFAULT_TRICKPLAY_WIDTH, SET_KEY_NFO_CONFLICT_MODE, SET_KEY_NFO_ENABLED, SET_KEY_NFO_FILEINFO_ENABLED, SET_KEY_NFO_MOVIE_TARGET_NAME, SET_KEY_NFO_ONLY_UNAMBIGUOUS, SET_KEY_TRICKPLAY_ENABLED, SET_KEY_TRICKPLAY_CONFLICT_MODE, SET_KEY_TRICKPLAY_HWACCEL, SET_KEY_TRICKPLAY_INTERVAL_S, SET_KEY_TRICKPLAY_JPEG_QUALITY, SET_KEY_TRICKPLAY_MAX_JOBS, SET_KEY_TRICKPLAY_ONLY_MISSING, SET_KEY_TRICKPLAY_QSCALE, SET_KEY_TRICKPLAY_SOURCE_MODE, SET_KEY_TRICKPLAY_TILE_COLUMNS, SET_KEY_TRICKPLAY_TILE_ROWS, SET_KEY_TRICKPLAY_WIDTH
+from ..core.settings_postprocess import DEFAULT_NFO_CONFLICT_MODE, DEFAULT_NFO_ENABLED, DEFAULT_NFO_FILEINFO_ENABLED, DEFAULT_NFO_MOVIE_TARGET_NAME, DEFAULT_NFO_ONLY_UNAMBIGUOUS, DEFAULT_NFO_TIMING, DEFAULT_TRICKPLAY_ENABLED, DEFAULT_TRICKPLAY_CONFLICT_MODE, DEFAULT_TRICKPLAY_HWACCEL, DEFAULT_TRICKPLAY_INTERVAL_S, DEFAULT_TRICKPLAY_JPEG_QUALITY, DEFAULT_TRICKPLAY_MAX_JOBS, DEFAULT_TRICKPLAY_ONLY_MISSING, DEFAULT_TRICKPLAY_QSCALE, DEFAULT_TRICKPLAY_SOURCE_MODE, DEFAULT_TRICKPLAY_TILE_COLUMNS, DEFAULT_TRICKPLAY_TILE_ROWS, DEFAULT_TRICKPLAY_WIDTH, SET_KEY_NFO_CONFLICT_MODE, SET_KEY_NFO_ENABLED, SET_KEY_NFO_FILEINFO_ENABLED, SET_KEY_NFO_MOVIE_TARGET_NAME, SET_KEY_NFO_ONLY_UNAMBIGUOUS, SET_KEY_NFO_TIMING, SET_KEY_TRICKPLAY_ENABLED, SET_KEY_TRICKPLAY_CONFLICT_MODE, SET_KEY_TRICKPLAY_HWACCEL, SET_KEY_TRICKPLAY_INTERVAL_S, SET_KEY_TRICKPLAY_JPEG_QUALITY, SET_KEY_TRICKPLAY_MAX_JOBS, SET_KEY_TRICKPLAY_ONLY_MISSING, SET_KEY_TRICKPLAY_QSCALE, SET_KEY_TRICKPLAY_SOURCE_MODE, SET_KEY_TRICKPLAY_TILE_COLUMNS, SET_KEY_TRICKPLAY_TILE_ROWS, SET_KEY_TRICKPLAY_WIDTH
 from ..core.settings_access import settings_bool, settings_int, settings_text
 
 from .postprocess_models import NfoSettings, PostProcessConfig
@@ -43,9 +43,33 @@ def config_from_settings(settings) -> PostProcessConfig:
     if trickplay_conflict_mode not in conflict_modes:
         trickplay_conflict_mode = DEFAULT_TRICKPLAY_CONFLICT_MODE
 
+    nfo_enabled = settings_bool(settings, SET_KEY_NFO_ENABLED, DEFAULT_NFO_ENABLED)
+    # Backward compatibility: old configs only had the enabled checkbox.  If
+    # no timing key exists, an enabled NFO keeps the historic "after" behavior.
+    contains = getattr(settings, "contains", None)
+    if callable(contains):
+        has_timing = bool(contains(SET_KEY_NFO_TIMING))
+    else:
+        value = getattr(settings, "value", None)
+        has_timing = bool(
+            callable(value)
+            and value(SET_KEY_NFO_TIMING, None) is not None
+        )
+    if has_timing:
+        nfo_timing = settings_text(
+            settings,
+            SET_KEY_NFO_TIMING,
+            DEFAULT_NFO_TIMING,
+            allowed={"off", "during", "after"},
+        )
+    else:
+        nfo_timing = DEFAULT_NFO_TIMING if nfo_enabled else "off"
+    nfo_enabled = bool(nfo_enabled and nfo_timing != "off")
+
     return PostProcessConfig(
         nfo=NfoSettings(
-            enabled=settings_bool(settings, SET_KEY_NFO_ENABLED, DEFAULT_NFO_ENABLED),
+            enabled=nfo_enabled,
+            timing=nfo_timing,
             only_unambiguous=settings_bool(
                 settings,
                 SET_KEY_NFO_ONLY_UNAMBIGUOUS,

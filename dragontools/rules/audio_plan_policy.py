@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ..core.lang_codes import canonical_lang
 from ..core.models import AudioStream
 from .audio_rules import (
     audio_requires_transcode,
@@ -19,20 +20,64 @@ def build_custom_track_map(
     override: dict[str, Any],
     *,
     audio_mode: str,
+    audio_streams: list[AudioStream] | None = None,
 ) -> dict[int, dict[str, Any]]:
-    """Normalize per-track custom entries into a stream-index keyed mapping."""
+    """Normalize per-track custom entries into a current stream-index mapping.
+
+    New overrides carry a small source identity.  If ffmpeg stream indices were
+    reordered after the override was created, resolve the entry by identity
+    instead of blindly applying it to whatever track now owns the old index.
+    Legacy overrides without an identity remain index-based for compatibility.
+    """
     if audio_mode != "custom":
         return {}
 
+    streams = list(audio_streams or [])
+    stream_map = {int(stream.index): stream for stream in streams}
     custom_track_map: dict[int, dict[str, Any]] = {}
     for entry in list(override.get("audio_tracks", []) or []):
         if not isinstance(entry, dict):
             continue
         try:
-            custom_track_map[int(entry.get("index"))] = dict(entry)
+            stored_index = int(entry.get("index"))
         except (TypeError, ValueError, OverflowError):
             continue
+        resolved_index = stored_index
+        identity = entry.get("source_identity")
+        if isinstance(identity, dict) and identity and streams:
+            current = stream_map.get(stored_index)
+            if current is None or not _stream_matches_identity(current, identity):
+                candidates = [
+                    stream for stream in streams
+                    if _stream_matches_identity(stream, identity)
+                ]
+                if len(candidates) != 1:
+                    # Fail closed. Applying a custom codec/drop decision to the
+                    # wrong language/track is worse than omitting an ambiguous
+                    # stale override.
+                    continue
+                resolved_index = int(candidates[0].index)
+        normalized = dict(entry)
+        normalized["index"] = resolved_index
+        custom_track_map[resolved_index] = normalized
     return custom_track_map
+
+
+def _stream_matches_identity(stream: AudioStream, identity: dict[str, Any]) -> bool:
+    expected_language = canonical_lang(str(identity.get("language") or ""))
+    expected_codec = normalize_audio_codec(str(identity.get("codec") or ""))
+    expected_channels = safe_int(identity.get("channels"), 0)
+    expected_title = str(identity.get("title") or "").strip().casefold()
+
+    if expected_language and canonical_lang(getattr(stream, "language", None)) != expected_language:
+        return False
+    if expected_codec and normalize_audio_codec(getattr(stream, "codec", "")) != expected_codec:
+        return False
+    if expected_channels > 0 and safe_int(getattr(stream, "channels", 0), 0) != expected_channels:
+        return False
+    if expected_title and str(getattr(stream, "title", None) or "").strip().casefold() != expected_title:
+        return False
+    return bool(expected_language or expected_codec or expected_channels > 0 or expected_title)
 
 
 def select_streams_for_plan(
@@ -42,9 +87,10 @@ def select_streams_for_plan(
     audio_mode: str,
     custom_track_map: dict[int, dict[str, Any]],
     apply_language_rules: bool,
+    custom_tracks_declared: bool = False,
 ) -> list[AudioStream]:
     """Select streams while preserving the precedence of custom track mapping."""
-    if audio_mode == "custom" and custom_track_map:
+    if audio_mode == "custom" and (custom_track_map or custom_tracks_declared):
         stream_map = {int(stream.index): stream for stream in audio_streams}
         return [
             stream_map[index]

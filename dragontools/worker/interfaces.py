@@ -34,7 +34,15 @@ class AnalysisService(Protocol):
 
 
 class PipelineService(Protocol):
-    def select_pipeline_context(self, input_path: str, media_info: Any) -> tuple[str, str]:
+    def select_pipeline_context(
+        self,
+        input_path: str,
+        media_info: Any,
+        file_override: dict | None = None,
+        *,
+        effective_encoder_options: dict | None = None,
+        effective_codec: str | None = None,
+    ) -> tuple[str, str]:
         ...
 
 

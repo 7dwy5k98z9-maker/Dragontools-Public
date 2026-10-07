@@ -199,6 +199,8 @@ def resolve_comfyui_workflow(
 
     profile = str(profile_key or "").strip().lower()
     configured = str(workflow_path or "").strip()
+    if profile != CUSTOM_PROFILE and get_comfyui_hdr_profile(profile) is None:
+        return ComfyUIWorkflowSelection(False, error="Unbekanntes ComfyUI-Modellprofil.")
     required = required_node_classes(profile)
     builtin = builtin_workflow_for_profile(profile)
 

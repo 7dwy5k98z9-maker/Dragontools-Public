@@ -222,6 +222,7 @@ def scan_pq_video(
         "-an", "-sn", "-dn",
         "-vf", f"scale={width}:{height}:flags=bilinear,format=gbrp16le",
         "-pix_fmt", "gbrp16le",
+        "-fps_mode", "passthrough",
         "-f", "rawvideo",
         "pipe:1",
     ]

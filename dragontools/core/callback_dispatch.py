@@ -38,4 +38,13 @@ def invoke_callback(callback: Any, *args, **kwargs):
     raise TypeError(f"Callback is neither callable nor signal-like: {type(callback).__name__}")
 
 
-__all__ = ["invoke_callback", "is_callback_like"]
+def best_effort_callback(callback, *args, **kwargs) -> bool:
+    """Diagnostics/progress may fail; transaction state must still be finalized."""
+    try:
+        invoke_callback(callback, *args, **kwargs)
+        return True
+    except Exception:
+        return False
+
+
+__all__ = ["invoke_callback", "is_callback_like", "best_effort_callback"]

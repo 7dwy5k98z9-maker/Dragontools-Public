@@ -51,7 +51,7 @@ class WatchFolderRuleDialog(QDialog):
         wanted_codec = rule.codec if rule else "h265"
         idx = self.codec_combo.findData(wanted_codec)
         self.codec_combo.setCurrentIndex(max(0, idx))
-        self.codec_combo.currentIndexChanged.connect(self._reload_profiles)
+        self.codec_combo.currentIndexChanged.connect(lambda _index: self._reload_profiles())
         form.addRow("Converter:", self.codec_combo)
 
         self.profile_combo = QComboBox()

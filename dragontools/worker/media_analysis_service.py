@@ -24,6 +24,14 @@ class MediaAnalysisService:
     def analyze(self, input_path: str) -> tuple[object, int | None, int]:
         media_info = analyze_media(input_path, self._tools)
         self.log_analysis_warnings(media_info)
+        if not bool(getattr(media_info, "ffmpeg_stream_indices_trusted", True)):
+            raise RuntimeError(
+                "ffprobe lieferte keine verlässlichen globalen Streamindizes. "
+                "DragonTools bricht die Konvertierung ab, statt MediaInfo-StreamOrder "
+                "fälschlich als ffmpeg -map Index zu verwenden."
+            )
+        if getattr(media_info, "primary_video", None) is None:
+            raise RuntimeError("Die Medienanalyse lieferte keine verarbeitbare Videospur.")
         duration_ms = self._probe_duration_ms(input_path)
         src = Path(input_path)
         size_before = src.stat().st_size if src.exists() else 0

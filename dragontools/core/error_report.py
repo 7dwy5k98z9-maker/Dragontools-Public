@@ -3,12 +3,14 @@ from __future__ import annotations
 import json
 import re
 import traceback
+import uuid
 from dataclasses import asdict, is_dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from .logger import resolve_log_month_dir
+from .diagnostic_redaction import redact_sensitive_text
 
 
 _MAX_TEXT_CHARS = 20_000
@@ -35,8 +37,8 @@ def write_conversion_error_report(
     input_path = str(getattr(ctx, "input_path", "") or "")
     stem = Path(input_path).stem or "unbekannte_datei"
     report_path = report_dir / (
-        f"{timestamp.strftime('%Y%m%d_%H%M%S')}_"
-        f"{_safe_filename(stem)[:80]}_error.txt"
+        f"{timestamp.strftime('%Y%m%d_%H%M%S_%f')}_"
+        f"{_safe_filename(stem)[:80]}_{uuid.uuid4().hex[:8]}_error.txt"
     )
 
     text = "\n".join(
@@ -59,7 +61,7 @@ def write_conversion_error_report(
         ]
     ).rstrip() + "\n"
 
-    report_path.write_text(text, encoding="utf-8")
+    report_path.write_text(redact_sensitive_text(text), encoding="utf-8")
     return str(report_path)
 
 

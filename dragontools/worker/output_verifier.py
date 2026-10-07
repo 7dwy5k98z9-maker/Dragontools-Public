@@ -1,11 +1,13 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import math
 import subprocess
 from pathlib import Path
 
-from ..core.media_hdr_detection import detect_hdr_from_ffprobe_stream
+from ..core.media_hdr_detection import detect_hdr_from_ffprobe_stream, parse_dolby_vision_from_ffprobe_stream
 from ..core.media_metadata import normalize_video_codec
+from ..core.transaction_identity import stat_identity
 from ..core.process_runner import subprocess_no_window_kwargs as _no_window_kwargs
 from .media_contract import ExpectedMediaContract
 from .output_contract_verifier import (
@@ -17,6 +19,8 @@ from .output_contract_verifier import (
 from .output_probe import probe_output
 from .workflow_engine import WorkflowVerifyResult
 from .timestamp_diagnostics import wrap_message
+from .owned_probe import owned_probe_runner
+from .verification_control import require_running
 
 
 class OutputVerifier:
@@ -30,12 +34,27 @@ class OutputVerifier:
         duration_min_ratio: float = 0.90,
         duration_max_ratio: float = 1.25,
         duration_max_extra_s: float = 60.0,
+        duration_max_shortfall_s: float = 3.0,
+        duration_max_overrun_s: float = 3.0,
+        worker=None,
     ) -> None:
         self._ffprobe_path = ffprobe_path
+        self._worker = worker
         self._min_size_bytes = max(1, int(min_size_bytes or 1024))
         self._duration_min_ratio = max(0.01, float(duration_min_ratio or 0.90))
         self._duration_max_ratio = max(self._duration_min_ratio, float(duration_max_ratio or 1.25))
         self._duration_max_extra_s = max(0.0, float(duration_max_extra_s or 0.0))
+        self._duration_max_shortfall_s = max(0.0, float(duration_max_shortfall_s or 0.0))
+        self._duration_max_overrun_s = max(0.0, float(duration_max_overrun_s or 0.0))
+
+    def probe_chapter_count(self, output_path: str | Path) -> int:
+        probe = probe_output(
+            Path(output_path),
+            ffprobe_path=self._ffprobe_path,
+            run_process=self._probe_runner(),
+            no_window_kwargs=_no_window_kwargs(),
+        )
+        return len(probe.chapters)
 
     def verify(
         self,
@@ -54,7 +73,13 @@ class OutputVerifier:
             return result
 
         path = Path(output_path)
-        self._apply_file_checks(result, path, container)
+        try:
+            require_running(worker=self._worker)
+            self._apply_file_checks(result, path, container)
+        except (OSError, RuntimeError) as exc:
+            result.messages.append(f'Ausgabeprüfung nicht verfügbar: {exc}')
+            self._mark_unprobeable(result, source_has_audio, expected_contract)
+            return result
         if not result.exists:
             return result
         if not result.size_ok:
@@ -62,12 +87,16 @@ class OutputVerifier:
             return result
 
         try:
+            verified_identity = stat_identity(path)
             probe = probe_output(
                 path,
                 ffprobe_path=self._ffprobe_path,
-                run_process=subprocess.run,
+                run_process=self._probe_runner(),
                 no_window_kwargs=_no_window_kwargs(),
             )
+            require_running(worker=self._worker)
+            if stat_identity(path) != verified_identity:
+                raise OSError('Ausgabedatei wurde während der semantischen Prüfung verändert.')
             self._apply_probe_result(
                 result,
                 probe,
@@ -85,8 +114,11 @@ class OutputVerifier:
             result.messages.append(f"ffprobe-Prüfung fehlgeschlagen: {exc}")
         return result
 
+    def _probe_runner(self):
+        return subprocess.run if self._worker is None else owned_probe_runner(self._worker)
+
     def _apply_file_checks(self, result: WorkflowVerifyResult, path: Path, container: str) -> None:
-        result.exists = path.exists()
+        result.exists = path.is_file()
         result.size_ok = result.exists and path.stat().st_size >= self._min_size_bytes
         result.container_ok = path.suffix.lower() == f".{container.lower()}"
         if not result.exists:
@@ -111,6 +143,7 @@ class OutputVerifier:
     ) -> None:
         videos, audios, subtitles = probe.video_streams, probe.audio_streams, probe.subtitle_streams
         attachments = [stream for stream in probe.streams if stream.get("codec_type") == "attachment"]
+        attachments.extend(probe.attached_picture_streams)
         data_streams = [stream for stream in probe.streams if stream.get("codec_type") == "data"]
         result.format_name = probe.format_name
         result.duration_s = probe.duration_s
@@ -119,6 +152,7 @@ class OutputVerifier:
         result.subtitle_stream_count = len(subtitles)
         result.attachment_stream_count = len(attachments)
         result.data_stream_count = len(data_streams)
+        result.chapter_count = len(getattr(probe, "chapters", ()) or ())
         result.probe_ok = probe.usable
         result.video_ok = bool(videos)
         result.audio_ok = True if expected_contract is not None else ((not source_has_audio) or bool(audios))
@@ -132,6 +166,7 @@ class OutputVerifier:
             result.has_hdr = bool(is_hdr)
             result.has_hdr10plus = bool(has_hdr10plus) or bool(verified_hdr10plus)
             result.has_dolby_vision = dv_profile is not None or bool(verified_dolby_vision)
+            result.dolby_vision_profile = parse_dolby_vision_from_ffprobe_stream(video)['dv_profile_major']
             if result.has_hdr10plus or result.has_dolby_vision:
                 result.has_hdr = True
 
@@ -157,6 +192,15 @@ class OutputVerifier:
                 result, expected_contract, video_streams=videos, audio_streams=audios,
                 subtitle_streams=subtitles, attachment_streams=attachments, data_streams=data_streams,
             )
+            expected_container = self._normalize_contract_container(expected_contract.container)
+            requested_container = self._normalize_contract_container(container)
+            if expected_container and expected_container != requested_container:
+                result.contract_ok = False
+                result.contract_non_geometry_ok = False
+                result.messages.append(
+                    "Container-Vertrag verletzt: "
+                    f"geplant {expected_container}, Workflow prueft/committet {requested_container or '<unbekannt>'}."
+                )
 
     @staticmethod
     def _mark_unprobeable(result, source_has_audio, expected_contract) -> None:
@@ -187,11 +231,37 @@ class OutputVerifier:
         return target in names
 
     def _duration_plausible(self, duration_s: float | None, *, expected_duration_ms: int | None) -> bool:
-        if duration_s is None or duration_s <= 0:
+        if duration_s is None:
+            return False
+        try:
+            duration_s = float(duration_s)
+        except (TypeError, ValueError):
+            return False
+        if not math.isfinite(duration_s) or duration_s <= 0:
             return False
         if not expected_duration_ms or expected_duration_ms <= 0:
             return True
         expected_s = expected_duration_ms / 1000.0
-        lower = expected_s * self._duration_min_ratio
-        upper = max(expected_s + self._duration_max_extra_s, expected_s * self._duration_max_ratio)
+        # Die Prozentgrenze bleibt als konfigurierbarer Outer Guard erhalten,
+        # aber ein finaler Replace-Gate darf bei langen Filmen nicht Minuten an
+        # fehlendem Material akzeptieren.  Maximal wenige Sekunden Shortfall
+        # decken Container-/VFR-Rundung ab, nicht abgeschnittene Encodes.
+        lower = max(
+            expected_s * self._duration_min_ratio,
+            expected_s - self._duration_max_shortfall_s,
+        )
+        configured_upper = max(
+            expected_s + self._duration_max_extra_s,
+            expected_s * self._duration_max_ratio,
+        )
+        upper = min(configured_upper, expected_s + self._duration_max_overrun_s)
         return lower <= duration_s <= upper
+
+    @staticmethod
+    def _normalize_contract_container(value: str | None) -> str:
+        normalized = str(value or "").strip().lower().lstrip(".")
+        if normalized in {"mov", "m4v"}:
+            return "mp4"
+        if normalized in {"matroska", "webm"}:
+            return "mkv"
+        return normalized

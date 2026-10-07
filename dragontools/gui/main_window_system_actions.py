@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-from pathlib import Path
-
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QApplication, QMessageBox
 
@@ -96,57 +94,11 @@ class MainWindowSystemActionsMixin:
         )
 
     def _launch_external(self, exe_name: str):
-        """
-        Öffnet ein externes Programm. Sucht in dieser Reihenfolge:
-        1. Konfigurierter Ordner aus Einstellungen (TOOL_KEYS)
-        2. Direkt gespeicherter Pfad (legacy tools/external/...)
-        3. Bundle-Verzeichnis
-        4. FileDialog (nur wenn alles andere fehlschlägt)
-        """
+        from .external_program_launch import launch_external_program
         from .tab_manager import _find_bundled_exe, _open_external
         from PyQt6.QtWidgets import QFileDialog
 
-        # Mapping: exe_name → TOOL_KEYS-Schlüssel + mögliche Exe-Namen
-        tool_map = {
-            "HandBrake.exe":        ("handbrake", ["HandBrake.exe"]),
-            "Resolve.exe":          ("davinci_resolve", ["Resolve.exe", "resolve"]),
-            "RenameMyTVSeries.exe": ("rmts", ["RenameMyTVSeries.exe", "rmts.exe"]),
-            "mkvtoolnix-gui.exe":   ("mkv", ["mkvtoolnix-gui.exe"]),
-        }
-
-        # 1) Konfigurierter Ordner aus Einstellungen (settings_dialog Tool-Pfade)
-        if exe_name in tool_map:
-            tool_key, exe_names = tool_map[exe_name]
-            result = get_tool_paths().find_in_settings(tool_key, *exe_names)
-            if result and Path(result).exists():
-                _open_external(result)
-                return
-
-        # Resolve is commonly installed outside PATH. Reuse the central
-        # ToolPaths fallback so a standard Blackmagic installation opens
-        # without forcing the user to configure the directory manually.
-        if exe_name == "Resolve.exe":
-            resolved = get_tool_paths().davinci_resolve
-            if resolved and Path(resolved).is_file():
-                _open_external(resolved)
-                return
-
-        # 2) Legacy: direkt gespeicherter Pfad
-        stored = self._settings.value(f"tools/external/{exe_name}", "", type=str)
-        if stored and Path(stored).exists():
-            _open_external(stored); return
-
-        # 3) Bundle-Verzeichnis
-        found = _find_bundled_exe(exe_name)
-        if found:
-            _open_external(found); return
-
-        # 4) Nutzer manuell fragen (nur als letzter Ausweg)
-        path, _ = QFileDialog.getOpenFileName(
-            self, f"{exe_name} wählen", "",
-            f"Programm ({exe_name});;Alle Dateien (*)"
+        launch_external_program(
+            self, exe_name, tools=get_tool_paths(), find_bundled=_find_bundled_exe,
+            open_external=_open_external, choose=QFileDialog.getOpenFileName,
         )
-        if path:
-            # Für nächstes Mal merken
-            self._settings.setValue(f"tools/external/{exe_name}", path)
-            _open_external(path)

@@ -9,8 +9,9 @@ from .media_hdr_detection import (
     parse_dolby_vision_from_ffprobe_stream,
     parse_dolby_vision_profile,
 )
-from .media_metadata import normalize_color_range_label, normalize_video_codec
+from .media_metadata import first_metadata_text, normalize_color_range_label, normalize_video_codec
 from .models import VideoStream
+from .media_track_pairing import pair_media_tracks
 
 _log = logging.getLogger(__name__)
 
@@ -44,8 +45,13 @@ def _resolve_dv_info(
     fp_videos: list[dict],
     analysis_warnings: list[str] | None = None,
 ) -> dict[str, Any]:
-    dv_streams = [stream for stream in video_streams if stream.hdr_format == "dolby_vision"]
-    if not dv_streams:
+    primary = video_streams[0] if video_streams else None
+    # DragonTools encodes/remuxes 0:v:0. Dynamic-HDR metadata from a secondary
+    # video stream must therefore never switch the primary conversion pipeline.
+    if primary is None or not (
+        primary.hdr_format == "dolby_vision"
+        or bool(getattr(primary, "has_dolby_vision", False))
+    ):
         return _default_dv_info()
 
     mi_info = parse_dolby_vision_profile(mi_videos[0]) if mi_videos else _default_dv_info()
@@ -68,23 +74,20 @@ def _resolve_color_metadata(
 ) -> tuple[str | None, str | None, str | None]:
     media_info = mi_videos[0] if mi_videos else {}
     ffprobe = fp_videos[0] if fp_videos else {}
-    color_range = (
-        media_info.get("colour_range")
-        or media_info.get("ColorRange")
-        or ffprobe.get("color_range")
-        or None
+    color_range = first_metadata_text(
+        media_info.get("colour_range"),
+        media_info.get("ColorRange"),
+        ffprobe.get("color_range"),
     )
-    transfer = (
-        media_info.get("transfer_characteristics")
-        or media_info.get("TransferCharacteristics")
-        or ffprobe.get("color_transfer")
-        or None
+    transfer = first_metadata_text(
+        media_info.get("transfer_characteristics"),
+        media_info.get("TransferCharacteristics"),
+        ffprobe.get("color_transfer"),
     )
-    matrix = (
-        media_info.get("matrix_coefficients")
-        or media_info.get("MatrixCoefficients")
-        or ffprobe.get("color_space")
-        or None
+    matrix = first_metadata_text(
+        media_info.get("matrix_coefficients"),
+        media_info.get("MatrixCoefficients"),
+        ffprobe.get("color_space"),
     )
     return color_range, transfer, matrix
 
@@ -95,13 +98,20 @@ def collect_video_metadata(
     fp_videos: list[dict],
     analysis_warnings: list[str] | None = None,
 ) -> VideoAnalysisMetadata:
-    is_hdr = any(
-        stream.hdr_format in {"hdr10", "hdr10plus", "dolby_vision"}
-        for stream in video_streams
+    aligned = pair_media_tracks(mi_videos, fp_videos, analysis_warnings)
+    mi_videos = [mi for mi, _fp in aligned]
+    fp_videos = [fp for _mi, fp in aligned]
+    primary = video_streams[0] if video_streams else None
+    is_hdr = bool(
+        primary is not None
+        and primary.hdr_format in {"hdr10", "hdr10plus", "dolby_vision"}
     )
-    has_hdr10plus = any(
-        stream.hdr_format == "hdr10plus" or getattr(stream, "has_hdr10plus", False)
-        for stream in video_streams
+    has_hdr10plus = bool(
+        primary is not None
+        and (
+            primary.hdr_format == "hdr10plus"
+            or getattr(primary, "has_hdr10plus", False)
+        )
     )
     dv_info = _resolve_dv_info(video_streams, mi_videos, fp_videos, analysis_warnings)
     legacy_profile = None

@@ -14,6 +14,8 @@ from .media_library_media_info_mapper import (
     _streams_from_media_info_with_sidecars,
 )
 from .media_library_types import _now
+from .path_syntax import path_compare_key
+from .media_library_analysis_merge import preserve_catalog_identity
 
 
 def record_media_file(db_path: str | Path, file_path: str | Path, tools: Any = None) -> None:
@@ -26,6 +28,12 @@ def record_media_file(db_path: str | Path, file_path: str | Path, tools: Any = N
     streams = _streams_from_media_info_with_sidecars(file_path, info)
     with closing(_connect(db)) as conn:
         with conn:
+            existing = conn.execute("SELECT * FROM media_items WHERE path_key=? AND active=1 AND exists_flag=1 ORDER BY id DESC LIMIT 1", (path_compare_key(str(file_path)),)).fetchone()
+            if existing is not None:
+                preserve_catalog_identity(item, existing)
+                conn.execute("DELETE FROM nfo_metadata WHERE media_id=?", (existing['id'],))
+                conn.execute("DELETE FROM nfo_provider_ids WHERE media_id=?", (existing['id'],))
+                conn.execute("DELETE FROM nfo_issues WHERE media_id=?", (existing['id'],))
             _insert_item(conn, item, streams)
             conn.execute("INSERT OR REPLACE INTO meta(key, value) VALUES('updated_at', ?)", (_now(),))
 

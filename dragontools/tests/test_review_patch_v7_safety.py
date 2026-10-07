@@ -38,11 +38,8 @@ def test_nfo_backup_transaction_rolls_back_if_final_install_fails(tmp_path, monk
     target.write_text("ORIGINAL", encoding="utf-8")
     plan = module.plan_nfo_target(target, "backup")
     real_replace = module.os.replace
-    calls = {"count": 0}
-
     def flaky_replace(src, dst):
-        calls["count"] += 1
-        if calls["count"] == 2:
+        if Path(dst) == target and '.__pending__' in Path(src).name:
             raise OSError("install failed")
         return real_replace(src, dst)
 
@@ -158,7 +155,8 @@ def test_output_contract_rejects_attachment_and_data_loss(monkeypatch, tmp_path)
         lambda *a, **k: SimpleNamespace(
             format_name="matroska,webm", duration_s=60.0, usable=True,
             video_streams=[{"codec_type": "video", "codec_name": "hevc", "width": 1920, "height": 1080}],
-            audio_streams=[], subtitle_streams=[], streams=({"codec_type": "video", "codec_name": "hevc", "width": 1920, "height": 1080},),
+            audio_streams=[], subtitle_streams=[], attached_picture_streams=[],
+            streams=({"codec_type": "video", "codec_name": "hevc", "width": 1920, "height": 1080},),
         ),
     )
     path = tmp_path / 'contract_aux_test.mkv'

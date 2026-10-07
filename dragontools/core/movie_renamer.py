@@ -43,7 +43,7 @@ from .movie_renamer_season_override import apply_series_episode_override, apply_
 from ..rules.renamer_rules import apply_title_exception
 from .movie_renamer_matching import candidate_status, select_score_stage, stage_warning
 from .movie_renamer_year_override import apply_year_override
-from .renamer_year_safety import apply_year_review
+from .renamer_identity_review import apply_rename_identity_review
 
 def _series_candidate_from_result(raw: Any, parsed: ParsedSeriesReleaseName) -> SeriesRenameCandidate | None:
     """Compatibility wrapper that preserves monkeypatchable alias rules."""
@@ -112,7 +112,7 @@ def build_movie_rename_proposal(
     target_path = source_path.with_name(target_name)
     target_exists = target_path.exists() and path_compare_key(target_path) != path_compare_key(source_path)
     status, warning = candidate_status(candidates, threshold=threshold, target_exists=target_exists)
-    status = apply_year_review(status, warnings, parsed.year, selected.year)
+    status = apply_rename_identity_review(status, warnings, parsed, selected, candidates)
     if warning:
         warnings.append(warning)
 
@@ -146,26 +146,17 @@ def build_series_rename_proposal(
     year_override: int | None = None,
 ) -> SeriesRenameProposal:
     source_path = Path(path)
-    parsed = parse_series_release_name(source_path)
-    if parsed is None:
-        fallback = parse_movie_release_name(source_path)
-        empty = ParsedSeriesReleaseName(
-            source_name=fallback.source_name,
-            suffix=fallback.suffix,
-            series=str(query_override or fallback.query_title).strip(),
-            season=0,
-            episode=0,
-            year=fallback.year,
-            warnings=tuple(fallback.warnings + ("Kein Serienmuster erkannt.",)),
-        )
-        if not force:
-            return SeriesRenameProposal(source_path=source_path, parsed=empty, status="not_series", warnings=empty.warnings)
-        parsed = empty
+    parsed, rejected = _parse_series_source(source_path, query_override, force)
+    if rejected is not None:
+        return rejected
 
     parsed = apply_year_override(parsed, year_override)
     parsed, season_issue = apply_series_season_override(parsed, season_override)
     parsed, episode_issue = apply_series_episode_override(parsed, episode_override)
     warnings = list(parsed.warnings)
+    if parsed.episode_mapping_required or parsed.episode <= 0:
+        return SeriesRenameProposal(source_path=source_path, parsed=parsed,
+            status='needs_episode_mapping', warnings=tuple(warnings + ['Bitte gültige Episode(n) explizit zuordnen.']))
     if episode_issue == "invalid":
         warnings.append("Ungültige Episode gewählt.")
         return SeriesRenameProposal(source_path=source_path, parsed=parsed, status="no_match",
@@ -207,12 +198,13 @@ def build_series_rename_proposal(
     selected = candidates[0] if candidates else None
     search_mode = "manual_series" if force or manual_query else "auto"
     if selected is None:
-        target_name = build_series_target_filename(
+        target_name = build_series_multi_target_filename(
             parsed.series,
             parsed.season,
-            parsed.episode,
-            default_episode_title(parsed.episode),
+            parsed.episode_numbers,
+            (),
             parsed.suffix,
+            title_mode="none" if len(parsed.episode_numbers) > 1 else "all",
         )
         target_path = source_path.with_name(target_name)
         return SeriesRenameProposal(
@@ -226,17 +218,18 @@ def build_series_rename_proposal(
             search_mode=search_mode,
         )
 
-    target_name = build_series_target_filename(
+    target_name = build_series_multi_target_filename(
         selected.series,
         selected.season,
-        selected.episode,
-        selected.episode_title or default_episode_title(selected.episode),
+        parsed.episode_numbers,
+        (selected.episode_title or default_episode_title(selected.episode),),
         parsed.suffix,
+        title_mode="first" if len(parsed.episode_numbers) > 1 else "all",
     )
     target_path = source_path.with_name(target_name)
     target_exists = target_path.exists() and path_compare_key(target_path) != path_compare_key(source_path)
     status, warning = candidate_status(candidates, threshold=threshold, target_exists=target_exists)
-    status = apply_year_review(status, warnings, parsed.year, selected.year)
+    status = apply_rename_identity_review(status, warnings, parsed, selected, candidates)
     if warning:
         warnings.append(warning)
 
@@ -309,3 +302,24 @@ __all__ = [
     "build_series_rename_proposal", "build_series_target_filename", "build_series_multi_target_filename", "build_target_filename", "parse_movie_release_name",
     "parse_series_release_name", "release_style_warnings", "rename_movie_file", "sanitize_filename_part",
 ]
+
+
+def _parse_series_source(source_path, query_override, force):
+    parsed = parse_series_release_name(source_path)
+    if parsed is None:
+        fallback = parse_movie_release_name(source_path)
+        empty = ParsedSeriesReleaseName(
+            source_name=fallback.source_name,
+            suffix=fallback.suffix,
+            series=str(query_override or fallback.query_title).strip(),
+            season=0,
+            episode=0,
+            year=fallback.year,
+            warnings=tuple(fallback.warnings + ("Kein Serienmuster erkannt.",)),
+            season_missing=True,
+        )
+        if not force:
+            return empty, SeriesRenameProposal(source_path=source_path, parsed=empty, status="not_series", warnings=empty.warnings)
+        parsed = empty
+
+    return parsed, None

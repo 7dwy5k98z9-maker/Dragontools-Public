@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Callable
+from ..core.strict_numbers import positive_integer
 
 
 class DVRpuService:
@@ -40,7 +41,7 @@ class DVRpuService:
             cmd += ["-m", str(mode)]
         cmd += ["extract-rpu", "-i", str(source)]
         if track_number is not None:
-            cmd += ["-t", str(int(track_number))]
+            cmd += ["-t", str(positive_integer(track_number))]
         cmd += ["-o", str(output_rpu)]
 
         self._log("DV: Extrahiere RPU …", "info")

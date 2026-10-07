@@ -6,6 +6,8 @@ import re
 from pathlib import Path
 
 from ..core.process_runner import tool_available
+from ..core.strict_numbers import nonnegative_integer
+from .verification_control import require_running
 from .duration_repair_models import MediaTimingInfo
 from .duration_repair_stream_guard import StreamInventory
 
@@ -61,10 +63,11 @@ def mkv_video_track_id(runtime, path: Path) -> int:
         [runtime.mkvmerge_path, "-J", str(path)],
         label="MKVToolNix-Videotrack-ID",
     )
+    require_running(run, getattr(runtime, 'worker', None))
     if run.returncode != 0:
         raise RuntimeError((run.stderr or run.stdout or "mkvmerge -J fehlgeschlagen.").strip())
     payload = json.loads(run.stdout or "{}")
     video_tracks = [track for track in (payload.get("tracks") or []) if track.get("type") == "video"]
     if len(video_tracks) != 1:
         raise ValueError(f"erwartet genau 1 Videotrack, gefunden {len(video_tracks)}")
-    return int(video_tracks[0]["id"])
+    return nonnegative_integer(video_tracks[0]["id"])

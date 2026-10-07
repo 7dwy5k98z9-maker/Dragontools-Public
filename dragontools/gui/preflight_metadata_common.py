@@ -7,6 +7,8 @@ from pathlib import Path
 import re
 from typing import Any, Callable
 
+from ..core.path_syntax import path_compare_key, normalize_user_path
+
 
 def safe_year(value: Any) -> int | None:
     try:
@@ -56,16 +58,43 @@ class MetadataLookupCache:
     online_series: dict[tuple[str, int | None], object] = field(default_factory=dict)
 
     def directory_exists(self, value: str) -> bool:
-        text = str(value or "").strip().rstrip("\\/")
+        text = normalize_user_path(str(value or "").strip())
         if not text:
             return False
-        key = text.casefold()
+        key = path_compare_key(text)
         if key not in self.dir_exists:
             try:
                 self.dir_exists[key] = Path(text).is_dir()
             except OSError:
                 self.dir_exists[key] = False
         return self.dir_exists[key]
+
+
+@dataclass
+class MetadataRequestGuard:
+    """Generation guard that prevents stale async lookup results from winning.
+
+    A newer lookup for the same widget invalidates every older generation.
+    The helper is Qt-free so the concurrency contract can be regression-tested
+    without a GUI runtime.
+    """
+
+    _generations: dict[int, int] = field(default_factory=dict)
+
+    def begin(self, target: object) -> int:
+        key = id(target)
+        generation = self._generations.get(key, 0) + 1
+        self._generations[key] = generation
+        return generation
+
+    def is_current(self, target: object, generation: int) -> bool:
+        return self._generations.get(id(target), 0) == int(generation)
+
+
+def metadata_job_identity(job: object) -> tuple[str, str] | None:
+    if not isinstance(job, tuple) or len(job) < 2:
+        return None
+    return str(job[0]), str(job[1])
 
 
 def series_folder_choices(

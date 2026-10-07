@@ -95,6 +95,7 @@ class MovieRenamerTableController(MovieRenamerYearStateMixin, MovieRenamerSeries
     def on_proposal_ready(self, row: int, proposal: RenameProposal) -> None:
         if row < 0 or row >= self.table.rowCount():
             return
+        self.set_row_accepted(row, False)
         self.set_row_proposal(row, proposal)
         self.set_item(row, self.columns.TYPE, "Serie" if isinstance(proposal, SeriesRenameProposal) else "Film", editable=False)
         self.set_item(row, self.columns.QUERY, self.proposal_query_text(proposal), editable=False)
@@ -114,6 +115,8 @@ class MovieRenamerTableController(MovieRenamerYearStateMixin, MovieRenamerSeries
             proposal.parsed.year,
             proposal.parsed.suffix,
         )
+        if proposal.status == 'needs_episode_mapping':
+            fallback = ''
         self.set_item(row, self.columns.TARGET, fallback, editable=True)
         self.set_item(row, self.columns.HINTS, "; ".join(proposal.warnings), editable=False)
         self.set_status(row, self.status_label(proposal.status))
@@ -140,7 +143,8 @@ class MovieRenamerTableController(MovieRenamerYearStateMixin, MovieRenamerSeries
             return
         decision = apply_candidate_decision(proposal, candidate_index, Path(self.row_path(row)))
         updated = decision.proposal
-        selected = updated.selected
+        if updated.selected != proposal.selected or updated.target_name != proposal.target_name:
+            self.set_row_accepted(row, False)
         if isinstance(updated, SeriesRenameProposal):
             self.set_item(row, self.columns.SERIES, updated.parsed.series, editable=False)
         self.set_row_proposal(row, updated)
@@ -194,6 +198,7 @@ class MovieRenamerTableController(MovieRenamerYearStateMixin, MovieRenamerSeries
             "not_movie": "🚫 Serie?",
             "not_series": "🚫 keine Serie",
             "needs_season": "⚠️ Staffel fehlt",
+            "needs_episode_mapping": "⚠️ Folgen zuordnen",
         }.get(status, status)
 
     def collect_rename_problems(self, rows: list[int]) -> list[str]:
@@ -205,9 +210,16 @@ class MovieRenamerTableController(MovieRenamerYearStateMixin, MovieRenamerSeries
             if not target_name:
                 problems.append(f"{source.name}: kein Zielname angegeben.")
                 continue
-            if not Path(target_name).suffix:
+            requested_suffix = Path(target_name).suffix
+            if requested_suffix and requested_suffix.casefold() != source.suffix.casefold():
+                problems.append(
+                    f"{source.name}: Container-Endung darf im Renamer nicht geändert werden "
+                    f"({source.suffix} -> {requested_suffix})."
+                )
+                continue
+            if not requested_suffix:
                 target_name += source.suffix
-            cleaned = sanitize_filename_part(Path(target_name).stem) + Path(target_name).suffix
+            cleaned = sanitize_filename_part(Path(target_name).stem) + source.suffix
             target = source.with_name(cleaned)
             key = path_compare_key(target)
             if key in seen_targets:

@@ -27,4 +27,24 @@ def normalize_worker_path(path: str) -> str:
     return path_compare_key(path)
 
 
-__all__ = ["RemoveFileStatus", "normalize_worker_path"]
+def file_override_for_path(mapping, input_path: str):
+    """Return a per-file override using the same canonical path semantics as the queue."""
+    if not mapping:
+        return None
+    try:
+        exact = mapping.get(input_path)
+    except AttributeError:
+        return None
+    if exact is not None:
+        return exact
+    wanted = normalize_worker_path(input_path)
+    for raw_path, value in mapping.items():
+        try:
+            if normalize_worker_path(raw_path) == wanted:
+                return value
+        except (TypeError, ValueError, OSError):
+            continue
+    return None
+
+
+__all__ = ["RemoveFileStatus", "normalize_worker_path", "file_override_for_path"]

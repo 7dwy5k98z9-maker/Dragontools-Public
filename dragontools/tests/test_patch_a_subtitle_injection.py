@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dragontools.tests.subtitle_command_fixtures import subtitle_command_validation
+
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -17,7 +19,7 @@ def test_mp4_injection_sets_language_and_forced_on_new_subtitle_without_probe(mo
 
     def fake_run_tool(cmd, **kwargs):
         calls.append(cmd)
-        out.write_bytes(b"video")
+        Path(cmd[-1]).write_bytes(b"video")
         return _ok_result()
 
     monkeypatch.setattr(module, "run_tool", fake_run_tool)
@@ -52,7 +54,7 @@ def test_mkv_ffmpeg_fallback_targets_appended_subtitle_after_existing_tracks(mon
         calls.append(cmd)
         if cmd[0].endswith("ffprobe.exe"):
             return _ok_result(stdout=json.dumps({"streams": [{"index": 4}, {"index": 7}]}))
-        out.write_bytes(b"video")
+        Path(cmd[-1]).write_bytes(b"video")
         return _ok_result()
 
     monkeypatch.setattr(module, "run_tool", fake_run_tool)
@@ -87,7 +89,7 @@ def test_ffmpeg_injection_explicitly_clears_forced_on_new_track(monkeypatch, tmp
 
     def fake_run_tool(cmd, **kwargs):
         seen["cmd"] = cmd
-        out.write_bytes(b"video")
+        Path(cmd[-1]).write_bytes(b"video")
         return _ok_result()
 
     monkeypatch.setattr(module, "run_tool", fake_run_tool)

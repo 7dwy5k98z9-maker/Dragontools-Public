@@ -35,12 +35,16 @@ class PacketAccumulator:
         self.digest.update(encoded)
         self.count += 1
         for key in ('pts_time', 'dts_time', 'duration_time'):
-            try:
-                value = float(packet.get(key))
-            except (TypeError, ValueError):
+            raw = packet.get(key)
+            if raw in (None, '', 'N/A'):
                 continue
-            if math.isfinite(value):
-                self.times[key] = max(value, self.times.get(key, value))
+            try:
+                value = float(raw)
+            except (TypeError, ValueError):
+                raise ValueError('Invalid packet timing') from None
+            if not math.isfinite(value) or (key == 'duration_time' and value < 0):
+                raise ValueError('Non-finite or negative packet duration')
+            self.times[key] = max(value, self.times.get(key, value))
 
 
 def stream_index(record, key):
@@ -62,6 +66,8 @@ def read_snapshot(stream):
                 raise ValueError('Duplicate ffprobe stream index')
             streams[index] = record.get('codec_type')
         else:
+            if record.get('pts_time') in (None, '', 'N/A'):
+                raise ValueError('Packet presentation timestamp is missing')
             if index not in packets:
                 packets[index] = PacketAccumulator()
             packets[index].add(record)

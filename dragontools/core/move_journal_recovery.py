@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import Any
 
 from .move_journal_utils import _normalize_status, _now, _remove_path
+from .move_transaction import publish_staged_no_replace
+from .transaction_identity import receipt_matches, renamed_receipt_matches
 
 
 @dataclass
@@ -31,6 +33,50 @@ class _RecoveryCounts:
         }
 
 
+
+
+def _collapse_same_inode_alias(
+    row: dict[str, Any],
+    source: Path | None,
+    dest: Path | None,
+    *,
+    source_exists: bool,
+    dest_exists: bool,
+    counts: _RecoveryCounts,
+) -> bool:
+    """Resolve the hardlink crash window without leaving a duplicate source name.
+
+    The file fast-path first creates a destination hardlink and only then removes
+    the source name.  A hard crash in between leaves both paths pointing at the
+    same regular-file inode. Only the durable receipts written before that
+    mutation authorize source cleanup; missing or changed proofs retain both.
+    """
+    if not (source_exists and dest_exists and source is not None and dest is not None):
+        return source_exists
+    try:
+        if source.is_symlink() or dest.is_symlink() or not source.is_file() or not dest.is_file():
+            return source_exists
+        src_key = os.path.normcase(os.path.abspath(str(source)))
+        dst_key = os.path.normcase(os.path.abspath(str(dest)))
+        if src_key == dst_key or not source.samefile(dest):
+            return source_exists
+        proof = row.get('commit_proof')
+        if not (isinstance(proof, dict)
+                and renamed_receipt_matches(source, proof.get('source'))
+                and renamed_receipt_matches(dest, proof.get('destination'))):
+            return source_exists
+        _remove_path(source)
+    except OSError:
+        return source_exists
+
+    row["cleanup_pending"] = False
+    row["cleanup_message"] = ""
+    row["message"] = "Hardlink-Commit nach Crash erkannt; Quellname sicher entfernt"
+    counts.cleaned += 1
+    counts.changed = True
+    return False
+
+
 def _recover_pending_source_cleanup(
     row: dict[str, Any],
     source: Path | None,
@@ -41,6 +87,11 @@ def _recover_pending_source_cleanup(
     counts: _RecoveryCounts,
 ) -> bool:
     if not (row.get("cleanup_pending") and dest_exists and source_exists and source is not None):
+        return source_exists
+    proof = row.get('commit_proof', {})
+    destination = Path(str(row.get('dest_path') or ''))
+    if not (receipt_matches(source, proof.get('source'))
+            and renamed_receipt_matches(destination, proof.get('destination'))):
         return source_exists
     try:
         _remove_path(source)
@@ -111,28 +162,40 @@ def _recover_backup_pairs(
             continue
         original = Path(original_text)
         backup = Path(backup_text)
+        if (original.parent.resolve() != backup.parent.resolve()
+                or not backup.name.startswith(original.name + '.__dragontools_backup__')
+                or backup.is_symlink()):
+            counts.kept += 1
+            remaining.append(pair)
+            continue
         if not backup.exists():
             counts.changed = True
             continue
         if commit_proven:
+            if not renamed_receipt_matches(backup, pair.get('receipt')):
+                counts.kept += 1
+                remaining.append(pair)
+                continue
             try:
                 _remove_path(backup)
             except OSError:
                 counts.failed += 1
-                remaining.append({"original": original_text, "backup": backup_text})
+                remaining.append(pair)
             else:
                 counts.cleaned += 1
                 counts.changed = True
             continue
         if ambiguous_state or original.exists():
             counts.kept += 1
-            remaining.append({"original": original_text, "backup": backup_text})
+            remaining.append(pair)
             continue
         try:
-            os.replace(str(backup), str(original))
+            if pair.get('receipt') and not renamed_receipt_matches(backup, pair['receipt']):
+                raise OSError('Backup wurde nach der Sicherung verändert.')
+            publish_staged_no_replace(backup, original)
         except OSError:
             counts.failed += 1
-            remaining.append({"original": original_text, "backup": backup_text})
+            remaining.append(pair)
         else:
             counts.restored += 1
             counts.changed = True
@@ -163,6 +226,14 @@ def recover_interrupted_backups(data: dict[str, Any]) -> dict[str, int]:
         status = _normalize_status(row.get("status"))
         phase = str(row.get("phase") or "")
 
+        source_exists = _collapse_same_inode_alias(
+            row,
+            source,
+            dest,
+            source_exists=source_exists,
+            dest_exists=dest_exists,
+            counts=counts,
+        )
         source_exists = _recover_pending_source_cleanup(
             row,
             source,
@@ -171,8 +242,10 @@ def recover_interrupted_backups(data: dict[str, Any]) -> dict[str, int]:
             phase=phase,
             counts=counts,
         )
-        commit_proven = dest_exists and not source_exists
-        ambiguous_state = dest_exists and source_exists
+        proof = row.get('commit_proof') if isinstance(row.get('commit_proof'), dict) else {}
+        commit_proven = (dest_exists and not source_exists and dest is not None
+            and renamed_receipt_matches(dest, proof.get('destination')))
+        ambiguous_state = dest_exists and not commit_proven
 
         pending_sidecars = list(sidecars_by_video.get(str(source_text), []) or [])
         if (

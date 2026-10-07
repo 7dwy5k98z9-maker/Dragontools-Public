@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from ..worker.log_dispatch import dispatch_log
 
 from ..core.conversion_artifacts import ConversionArtifactBundle
 from ..core.result_status import (
@@ -67,7 +68,10 @@ class ConversionResultFileEventsMixin:
         notifications = getattr(self, "_notifications", None)
         if notifications is not None:
             row = state.run_results.get(input_path, {})
-            notifications.on_file_result(input_path, status, str(row.get("message") or ""))
+            try:
+                notifications.on_file_result(input_path, status, str(row.get("message") or ""))
+            except Exception as exc:
+                dispatch_log(getattr(self, '_log', None), f'Benachrichtigung konnte nicht angezeigt werden: {exc}', 'warn')
 
         if input_path in state.pending_remove_paths:
             state.pending_remove_paths.discard(input_path)

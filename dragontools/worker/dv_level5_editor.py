@@ -7,6 +7,7 @@ from typing import Callable
 
 from .converter_utils import _parse_crop, _physical_crop_level5_json
 from .crop_geometry import normalize_crop_filter
+from .dv_level5_values import collect_level5_offsets
 
 
 class DVLevel5Editor:
@@ -85,6 +86,7 @@ class DVLevel5Editor:
             "info",
         )
 
+        rpu_final.unlink(missing_ok=True)
         level5_proc = run_cmd(
             [
                 self._dovi_tool_path,
@@ -138,6 +140,8 @@ class DVLevel5Editor:
             export_json.unlink(missing_ok=True)
             result = run_cmd(cmd, allow_error=True)
             rc = getattr(result, "returncode", result)
+            if rc in (124, 130):
+                return False
             if rc == 0 and export_json.exists() and export_json.stat().st_size > 0:
                 break
         else:
@@ -151,7 +155,11 @@ class DVLevel5Editor:
             return False
 
         offsets: list[tuple[int, int, int, int]] = []
-        self._collect_offsets(payload, offsets)
+        try:
+            self._collect_offsets(payload, offsets)
+        except ValueError as exc:
+            self._log(f"DV: Ungültige Level-5-Offsets: {exc}", "error")
+            return False
         if not offsets:
             self._log("DV: Level-5-Nachprüfung fand keine Active-Area-Offsets.", "error")
             return False
@@ -174,29 +182,8 @@ class DVLevel5Editor:
 
     @classmethod
     def _collect_offsets(cls, node, result: list[tuple[int, int, int, int]]) -> None:
-        if isinstance(node, dict):
-            aliases = (
-                ("left", "right", "top", "bottom"),
-                (
-                    "active_area_left_offset",
-                    "active_area_right_offset",
-                    "active_area_top_offset",
-                    "active_area_bottom_offset",
-                ),
-            )
-            for names in aliases:
-                if all(name in node for name in names):
-                    try:
-                        result.append(tuple(int(node[name]) for name in names))
-                    except (TypeError, ValueError):
-                        pass
-                    break
-            for value in node.values():
-                cls._collect_offsets(value, result)
-        elif isinstance(node, list):
-            for value in node:
-                cls._collect_offsets(value, result)
+        collect_level5_offsets(node, result)
 
     @staticmethod
     def _editor_ok(path: Path, proc=None) -> bool:
-        return getattr(proc, "returncode", 0) == 0 and path.exists() and path.stat().st_size > 0
+        return getattr(proc, "returncode", proc) == 0 and path.is_file() and path.stat().st_size > 0

@@ -47,10 +47,15 @@ def _subtitle_sidecar_streams(path: str | Path, start_index: int = 1000) -> list
         entries = list(video.parent.iterdir())
     except OSError:
         return []
+    file_names = {entry.name.casefold() for entry in entries if entry.is_file()}
     prefix = video.stem.casefold()
     streams: list[dict[str, Any]] = []
     for sidecar in sorted(entries, key=lambda entry: entry.name.casefold()):
         ext = sidecar.suffix.casefold()
+        if not sidecar.is_file():
+            continue
+        if ext == ".sub" and sidecar.with_suffix(".idx").name.casefold() in file_names:
+            continue
         if ext not in _SUBTITLE_SIDECAR_CODECS:
             continue
         if sidecar.stem.casefold() != prefix and not sidecar.stem.casefold().startswith(prefix + "."):

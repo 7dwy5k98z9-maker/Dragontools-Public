@@ -82,7 +82,25 @@ def _storage_group_key(path_value: str | None) -> str:
     if not path_value:
         return ""
     p = Path(path_value)
-    return (p.drive or p.anchor or str(p.parent)).lower()
+    if p.drive:
+        return f"drive:{p.drive.lower()}"
+
+    # On POSIX every absolute path has the same anchor ('/'), even when paths
+    # live on different mount points.  Grouping by the anchor therefore sums
+    # unrelated disks and can create a false batch-space warning.  Find the
+    # nearest existing ancestor and group by its actual device id instead.
+    current = p
+    while True:
+        try:
+            return f"dev:{current.stat().st_dev}"
+        except FileNotFoundError:
+            if current.parent == current:
+                break
+            current = current.parent
+        except OSError:
+            break
+
+    return f"path:{(p.anchor or str(p.parent)).lower()}"
 
 
 def _set_row_problem(row: dict[str, Any], *, error: bool = False) -> None:

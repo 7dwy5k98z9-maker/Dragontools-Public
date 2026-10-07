@@ -136,6 +136,7 @@ class ConvertWidgetComposition:
             get_subtitle_rules=owner._get_subtitle_rules,
             overwrite_original=lambda: owner.over_cb.isChecked(),
             get_tools=lambda: owner.tools,
+            get_preview_options=owner._rule_test_preview_options,
         )
         owner._move_preflight = MovePreflightController(
             state=owner._state,

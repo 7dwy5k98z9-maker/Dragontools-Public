@@ -41,7 +41,7 @@ def test_rules_dialog_storage_uses_atomic_json_writer(tmp_path, monkeypatch):
     path, payload = captured[0]
     assert path == tmp_path / "subtitle_rules.json"
     assert payload["mp4_sidecars_enabled"] is False
-    assert payload["_schema_version"] == 6
+    assert payload["_schema_version"] == 7
 
 
 def test_profile_manager_save_uses_atomic_json_writer(tmp_path, monkeypatch):
@@ -103,3 +103,74 @@ def test_profile_migration_rewrite_uses_atomic_json_writer(tmp_path, monkeypatch
     assert captured, "Eine migrierte Profildatei muss atomar zurückgeschrieben werden."
     assert captured[0][0] == path
     assert captured[0][1]["_schema_version"] == 3
+
+
+def test_profile_manager_failed_set_does_not_publish_unsaved_profile(tmp_path, monkeypatch):
+    import pytest
+
+    from dragontools.core import profile_manager as module
+
+    path = tmp_path / "h265_profiles.json"
+    manager = module.ProfileManager(path)
+
+    def fail_write(*_args, **_kwargs):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(module, "write_json_atomic", fail_write)
+    with pytest.raises(OSError, match="disk full"):
+        manager.set(
+            "unsaved",
+            {"label": "Unsaved", "codec": "h265", "encoder_options": {"encoder": "cpu"}},
+        )
+
+    assert "unsaved" not in manager._user
+    assert "unsaved" not in manager.data
+
+
+def test_profile_manager_failed_delete_keeps_profile_in_memory(tmp_path, monkeypatch):
+    import pytest
+
+    from dragontools.core import profile_manager as module
+
+    path = tmp_path / "h265_profiles.json"
+    manager = module.ProfileManager(path)
+    assert manager.set(
+        "keep_me",
+        {"label": "Keep", "codec": "h265", "encoder_options": {"encoder": "cpu"}},
+    )
+    before = manager.get("keep_me")
+
+    def fail_write(*_args, **_kwargs):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(module, "write_json_atomic", fail_write)
+    with pytest.raises(OSError, match="disk full"):
+        manager.delete("keep_me")
+
+    assert manager.get("keep_me") == before
+    assert "keep_me" in manager._user
+
+
+def test_profile_manager_migration_write_failure_does_not_break_profile_loading(tmp_path, monkeypatch):
+    import json
+
+    from dragontools.core import profile_manager as module
+
+    path = tmp_path / "h265_profiles.json"
+    path.write_text(json.dumps({
+        "_schema_version": 0,
+        "legacy": {"label": "Legacy", "crf": 22, "encoder_options": {"encoder": "cpu"}},
+    }), encoding="utf-8")
+    reports: list[tuple] = []
+
+    monkeypatch.setattr(
+        module,
+        "write_json_atomic",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("read only")),
+    )
+
+    manager = module.ProfileManager(path, reporter=lambda *args: reports.append(args))
+
+    assert manager.get("legacy")["codec"] == "h265"
+    assert any("nur für diese Sitzung" in str(args[0]) for args in reports)
+    assert json.loads(path.read_text(encoding="utf-8"))["_schema_version"] == 0

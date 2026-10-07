@@ -7,6 +7,7 @@ from pathlib import Path
 
 from ..core.path_syntax import path_compare_key
 from .process_control import terminate_process_tree, wait_while_paused
+from .log_dispatch import dispatch_log
 
 
 class ConverterControlService:
@@ -70,7 +71,7 @@ class ConverterControlService:
         else:
             worker._paused = True
             worker._pause_ev.clear()
-        worker._logger.info("⏸️ Pausiert.")
+        dispatch_log(worker._logger, "⏸️ Pausiert.")
 
     def resume(self) -> None:
         worker = self._worker
@@ -80,7 +81,7 @@ class ConverterControlService:
         else:
             worker._paused = False
             worker._pause_ev.set()
-        worker._logger.info("▶ Fortgesetzt.")
+        dispatch_log(worker._logger, "▶ Fortgesetzt.")
 
     def request_abort(self, mode: str = "sofort") -> None:
         worker = self._worker
@@ -143,6 +144,7 @@ class ConverterControlService:
             log=worker.log,
             attr_name="_current_process",
             label=f"FFmpeg ({Path(current_file).name})",
+            process=proc,
         )
 
     def clear_abort_request(self) -> bool:

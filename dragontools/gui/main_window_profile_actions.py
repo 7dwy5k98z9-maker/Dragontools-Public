@@ -31,6 +31,7 @@ class MainWindowProfileActionsMixin:
 
     def _toggle_dark(self, on: bool):
         self._dark = on
+        self.setStyleSheet(STYLE_DARK if on else STYLE_LIGHT)
         app = QApplication.instance()
         if app:
             app.setStyleSheet(STYLE_DARK if on else STYLE_LIGHT)

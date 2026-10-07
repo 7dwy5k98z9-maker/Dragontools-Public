@@ -113,3 +113,14 @@ def build_mp4_subtitle_storage_plan(
             external.append(stream)
 
     return MP4SubtitleStoragePlan(tuple(internal), tuple(external))
+
+
+def mkv_internal_subtitle_streams(streams, *, subtitle_rules=None, excluded_indices=()):
+    """Apply the shared MKV storage policy to already selected tracks."""
+    excluded = {int(index) for index in excluded_indices}
+    pgs_sidecar = pgs_original_storage(subtitle_rules) == "sidecar"
+    return [
+        stream for stream in _dedupe_streams(list(streams))
+        if int(stream.index) not in excluded
+        and not (pgs_sidecar and (stream.codec or "").lower() in {"hdmv_pgs_subtitle", "pgs"})
+    ]

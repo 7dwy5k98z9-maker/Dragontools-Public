@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from ..core.media_analyzer import analyze_media
+from .utility_media_analysis import analyze_owned_media
+from .quality_output_validation import finite_duration
 from ..core.quality_tester import (
     QualityComparisonResult,
     QualityComparisonSummary,
@@ -28,22 +30,25 @@ class QualityCompareService:
     def run(self, *, file_a: str, file_b: str, sample_count: int, sample_duration_s: int,
             manual_ranges: str, offset_b_s: float) -> None:
         if not self._validate_inputs(file_a, file_b, offset_b_s):
-            return
-        info_a = self.file_info(analyze_media(file_a, self._tools), file_a)
-        info_b = self.file_info(analyze_media(file_b, self._tools), file_b)
+            raise RuntimeError("Ungültige Vergleichsdateien.")
+        worker = getattr(self._metrics, 'worker', None)
+        info_a = self.file_info(analyze_owned_media(file_a, self._tools, worker=worker, analyzer=analyze_media), file_a)
+        info_b = self.file_info(analyze_owned_media(file_b, self._tools, worker=worker, analyzer=analyze_media), file_b)
         if not self._validate_media(info_a, info_b):
-            return
+            raise RuntimeError("Keine gültige Vergleichslaufzeit.")
         self._log_media_warnings(info_a, info_b)
         compare_duration = comparison_duration_limit(info_a.duration_s, info_b.duration_s, offset_b_s)
         if compare_duration < 1.0:
             self._log("❌ Mit dem gewählten Offset bleibt keine gemeinsame Vergleichslaufzeit.")
-            return
+            raise RuntimeError("Keine gemeinsame Vergleichslaufzeit.")
         segments = parse_quality_segments(manual_ranges, duration_s=compare_duration, default_duration_s=float(sample_duration_s))
         if not segments:
             segments = automatic_quality_segments(duration_s=compare_duration, count=sample_count, segment_duration_s=float(sample_duration_s))
         results = self._compare_segments(file_a, file_b, info_a, info_b, segments, offset_b_s)
         if self._is_aborted():
             return
+        if not results:
+            raise RuntimeError("Keine Vergleichssegmente ausgewertet.")
         self._emit_summary(info_a, info_b, results)
         self._progress(100)
 
@@ -61,9 +66,10 @@ class QualityCompareService:
         return True
 
     def _validate_media(self, info_a: QualityFileInfo, info_b: QualityFileInfo) -> bool:
-        if info_a.duration_s <= 0 or info_b.duration_s <= 0:
-            self._log("❌ Laufzeit konnte für mindestens eine Datei nicht bestimmt werden.")
-            return False
+        finite_duration(info_a.duration_s)
+        finite_duration(info_b.duration_s)
+        if any(info.width <= 0 or info.height <= 0 or not info.codec for info in (info_a, info_b)):
+            raise RuntimeError("Mindestens eine Vergleichsdatei enthält keine gültige Videospur.")
         delta = abs(info_a.duration_s - info_b.duration_s)
         if delta > max(1.0, min(info_a.duration_s, info_b.duration_s) * 0.005):
             self._log(f"⚠️ Laufzeiten unterscheiden sich um {delta:.3f}s. Bei abweichendem Schnitt oder Intro sind SSIM/VMAF ohne passenden Offset nicht aussagekräftig.")

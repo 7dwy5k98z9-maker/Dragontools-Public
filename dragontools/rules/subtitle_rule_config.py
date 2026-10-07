@@ -106,7 +106,7 @@ def migrate_subtitle_rules(
     raw = dict(rules or {})
     migrated = dict(raw)
     migration_messages: list[str] = []
-    legacy_language_rules = not any(
+    legacy_language_rules = _safe_bool(raw.get("_legacy_language_rules")) if "_legacy_language_rules" in raw else not any(
         key in raw
         for key in ("language_priority", "max_languages", "tracks_per_language", "fallback_if_no_priority_match")
     )
@@ -125,6 +125,21 @@ def migrate_subtitle_rules(
     migrated["fallback_if_no_priority_match"] = str(
         raw.get("fallback_if_no_priority_match", DEFAULT_SUBTITLE_RULES["fallback_if_no_priority_match"])
     )
+    _migrate_subtitle_exports(raw, migrated, migration_messages, priority)
+    migrated["burn_in_rules"] = _migrate_subtitle_burn_rules(raw, priority, migration_messages)
+    migrated["keep_rules"] = _migrate_subtitle_keep_rules(raw, legacy_language_rules, migration_messages)
+    migrated["_legacy_language_rules"] = legacy_language_rules
+    return finish_migration(
+        "subtitle_rules",
+        migrated,
+        raw=raw,
+        messages=migration_messages,
+        source_path=source_path,
+        reporter=reporter,
+    ).data
+
+
+def _migrate_subtitle_exports(raw, migrated, migration_messages, priority):
     if "preferred_languages" not in raw:
         migration_messages.append("Legacy-Sprache bevorzugt ergänzt")
     if "fallback_languages" not in raw:
@@ -177,6 +192,9 @@ def migrate_subtitle_rules(
     if "dv_extract_external_subs" in raw:
         migrated["dv_extract_external_subs"] = migrated["mp4_sidecars_enabled"]
 
+
+
+def _migrate_subtitle_burn_rules(raw, priority, migration_messages):
     burn_rules = dict(DEFAULT_SUBTITLE_RULES["burn_in_rules"])
     raw_burn_rules = raw.get("burn_in_rules") if isinstance(raw.get("burn_in_rules"), dict) else {}
     if isinstance(raw.get("burn_in_rules"), dict):
@@ -205,8 +223,11 @@ def migrate_subtitle_rules(
     burn_rules["forced_plausibility"] = normalize_forced_plausibility(
         burn_rules.get("forced_plausibility")
     )
-    migrated["burn_in_rules"] = burn_rules
+    return burn_rules
 
+
+
+def _migrate_subtitle_keep_rules(raw, legacy_language_rules, migration_messages):
     keep_rules = dict(DEFAULT_SUBTITLE_RULES["keep_rules"])
     if isinstance(raw.get("keep_rules"), dict):
         keep_rules.update(raw["keep_rules"])
@@ -223,13 +244,4 @@ def migrate_subtitle_rules(
                 keep_rules.get("keep_english_fallback", False),
             )
         )
-    migrated["keep_rules"] = keep_rules
-    migrated["_legacy_language_rules"] = legacy_language_rules
-    return finish_migration(
-        "subtitle_rules",
-        migrated,
-        raw=raw,
-        messages=migration_messages,
-        source_path=source_path,
-        reporter=reporter,
-    ).data
+    return keep_rules

@@ -53,6 +53,15 @@ class EncoderProfileService:
                 f"{exc}",
             )
             return
+        except OSError as exc:
+            QMessageBox.critical(
+                self._parent_widget,
+                "Profil nicht gespeichert",
+                "Die Profil-Datei konnte nicht sicher gespeichert werden. "
+                "Das bisherige Profil bleibt unverändert.\n\n"
+                f"{exc}",
+            )
+            return
         display = self._profile_manager.profile_display_name(key, payload)
         self._log("💾 Profil '" + display + "' gespeichert.")
         append_audit_event("Profil gespeichert", f"{display} | Schlüssel: {key}")

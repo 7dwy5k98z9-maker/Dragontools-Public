@@ -7,6 +7,13 @@ from dataclasses import dataclass, field
 from .models import AudioStream
 
 
+# Interior target-only material cannot be positioned safely from only the two
+# boundary anchors of a cut region.  Differences up to this tiny tolerance are
+# treated as timestamp/decoder noise and are padded at the end of the local
+# audio segment so following content remains aligned.
+INTERIOR_TARGET_EXTRA_TOLERANCE_S = 0.05
+
+
 @dataclass(slots=True)
 class AudioVideoMatcherSettings:
     analysis_width: int = 256
@@ -36,6 +43,8 @@ class VideoInfo:
     height: int = 0
     start_time_s: float = 0.0
     audio_streams: list[AudioStream] = field(default_factory=list)
+    file_identity: tuple[int, ...] | None = None
+    audio_start_offsets: dict[int, float] | None = None
 
 
 @dataclass(slots=True)
@@ -139,6 +148,7 @@ class AudioSyncPlan:
     filter_graph: str
     target_codec: str
     target_bitrate: str
+    target_language: str = ""
     warnings: list[str] = field(default_factory=list)
     blocked: bool = False
     block_reason: str = ""

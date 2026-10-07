@@ -5,7 +5,7 @@ from __future__ import annotations
 from PyQt6.QtWidgets import QComboBox, QVBoxLayout
 
 from ..core.path_syntax import user_path_name
-from .preflight_widget_common import _series_root_from_input
+from .preflight_widget_common import _series_root_from_input, current_series_base
 
 NO_SERIES_FOLDER_CHOICE = object()
 
@@ -24,9 +24,22 @@ def hide_series_folder_choices(widget) -> None:
         combo.setVisible(False)
 
 
+def series_folder_choices_active(widget) -> bool:
+    """A hidden parent does not revoke the user's explicit folder selection."""
+    combo = widget.__dict__.get("_folder_choice_combo")
+    if combo is None:
+        return False
+    hidden = getattr(combo, "isHidden", None)
+    return not hidden() if callable(hidden) else bool(combo.isVisible())
+
+
 def selected_series_folder_choice(widget, base: str, series_name: str):
     combo = widget.__dict__.get("_folder_choice_combo")
-    if combo is None or not combo.isVisible():
+    if not series_folder_choices_active(widget):
+        return NO_SERIES_FOLDER_CHOICE
+    context = widget.__dict__.get("_folder_choice_context")
+    if context is not None and context != (base, series_name):
+        hide_series_folder_choices(widget)
         return NO_SERIES_FOLDER_CHOICE
     data = combo.currentData()
     if data == "__new__":
@@ -49,6 +62,8 @@ def show_series_folder_choices(
     combo = widget.__dict__.get("_folder_choice_combo")
     if combo is None:
         return
+    widget._resolved_series_key = None
+    widget._resolved_series_dir = None
     combo.blockSignals(True)
     combo.clear()
     combo.addItem("Bitte Serienordner wählen", "")
@@ -60,6 +75,7 @@ def show_series_folder_choices(
     combo.setCurrentIndex(0)
     combo.blockSignals(False)
     combo.setVisible(True)
+    widget._folder_choice_context = (current_series_base(widget), widget._series_edit.text().strip())
     widget._metadata_hint.setText("  ⚠️ Mehrere passende Serienordner gefunden – bitte Zielordner auswählen.")
     widget._metadata_hint.setStyleSheet("color:#b45309; font-size:11px;")
     widget._metadata_hint.setVisible(True)
@@ -68,6 +84,6 @@ def show_series_folder_choices(
 
 def validate_series_folder_choice(widget) -> tuple[bool, str]:
     combo = widget.__dict__.get("_folder_choice_combo")
-    if combo is not None and combo.isVisible() and not combo.currentData():
+    if series_folder_choices_active(widget) and not combo.currentData():
         return False, "Bitte wähle den passenden Serienordner oder 'Neuen Ordner'."
     return True, ""

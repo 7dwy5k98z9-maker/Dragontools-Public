@@ -34,8 +34,8 @@ class AudioMuxThread(QThread):
         self.current_process: subprocess.Popen[str] | None = None
         self._process_lock = threading.Lock()
         self.tools = get_tool_paths()
-        self._plan_service = AudioMuxPlanService(tools=self.tools)
-        self._output_verifier = AudioMuxOutputVerifier(ffprobe_path=str(self.tools.ffprobe))
+        self._plan_service = AudioMuxPlanService(tools=self.tools, worker=self)
+        self._output_verifier = AudioMuxOutputVerifier(ffprobe_path=str(self.tools.ffprobe), worker=self)
         self._job_runner = AudioMuxJobRunner(self, planner=self._plan_service, verifier=self._output_verifier)
 
     def request_abort(self, mode: str = "sofort") -> None:
@@ -86,9 +86,10 @@ class AudioMuxThread(QThread):
             full, label="Audio-Mux ffmpeg", timeout_s=get_timeout("worker_media_process"),
             timeout_mode="inactivity", worker=self,
             log=lambda msg, level="info": self.log_line.emit(msg), stdout_line=_progress_line,
+            abort_on_request=True,
         )
         if result.aborted:
-            return result.returncode
+            return 130
         if result.timed_out:
             raise RuntimeError("ffmpeg wurde wegen Inaktivitäts-Timeout abgebrochen.")
         if not result.ok:

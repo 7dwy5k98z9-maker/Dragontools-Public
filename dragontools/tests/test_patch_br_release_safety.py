@@ -21,15 +21,15 @@ def test_restore_checks_qsettings_status_and_rolls_back_files(tmp_path):
     docs = tmp_path / 'docs'
     (docs / 'rules').mkdir(parents=True)
     rule = docs / 'rules' / 'audio_rules.json'
-    rule.write_bytes(b'new')
+    rule.write_bytes(b'{"value":"new"}')
     archive = tmp_path / 'backup.zip'
     export_backup(archive, settings=FakeSettings({'new': 2}), documents_dir=docs)
-    rule.write_bytes(b'old')
+    rule.write_bytes(b'{"value":"old"}')
     settings = FailingStatus({'old': 1})
     with pytest.raises(OSError, match='gespeichert'):
         restore_backup(archive, settings=settings, documents_dir=docs)
     assert settings.values == {'old': 1}
-    assert rule.read_bytes() == b'old'
+    assert rule.read_bytes() == b'{"value":"old"}'
 
 
 def test_real_qsettings_sync_failure_is_detected(tmp_path):
@@ -126,8 +126,11 @@ def test_cross_volume_directory_success_verifies_before_source_removal(tmp_path,
     source, target = tmp_path / 'source', tmp_path / 'target'
     source.mkdir(); target.mkdir()
     (source / 'file').write_bytes(b'full content')
-    def cross_volume(*_args):
-        raise OSError(errno.EXDEV, 'different volumes')
+    real_rename = module.os.rename
+    def cross_volume(src, dst, *args, **kwargs):
+        if Path(src) == source:
+            raise OSError(errno.EXDEV, 'different volumes')
+        return real_rename(src, dst, *args, **kwargs)
     monkeypatch.setattr(module.os, 'rename', cross_volume)
     service = MoveFileService(conflict_mode='skip', log=lambda *_: None,
                               wait=lambda: None, abort_immediately=lambda: False, journal=None)

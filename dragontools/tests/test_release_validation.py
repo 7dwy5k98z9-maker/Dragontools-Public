@@ -369,7 +369,7 @@ def test_release_validation_warns_about_private_paths(tmp_path):
     from dragontools.core.release_validation import validate_release
 
     root = tmp_path
-    (root / "help.html").write_text(r"C:\Users\<USER>\Documents\DragonTools", encoding="utf-8")
+    (root / "help.html").write_text(r"C:\Users" + r"\PrivatePerson\Documents\DragonTools", encoding="utf-8")
 
     checks = validate_release(root)
 
@@ -451,10 +451,10 @@ def test_source_only_manifest_makes_source_archive_self_consistent(tmp_path):
     _write_json(config / "default_renamer_rules.json", {"_schema_version": 3})
     _write_json(config / "default_profiles.json", {"_schema_version": 3})
     (root / "requirements-runtime.txt").write_text(
-        "PyQt6>=6.4,<7\ncryptography>=42,<51\ndefusedxml>=0.7.1,<1\n", encoding="utf-8"
+        "PyQt6>=6.4,<7\ncryptography>=42,<51\ndefusedxml>=0.7.1,<1\npackaging>=26.2,<27\n", encoding="utf-8"
     )
     (root / "requirements-test.txt").write_text(
-        "-r requirements-runtime.txt\npytest>=8\npytest-qt>=4.4\n", encoding="utf-8"
+        "-r requirements-runtime.txt\npytest>=8,<10\npytest-qt>=4.4,<5\npypdf>=5,<7\n", encoding="utf-8"
     )
     (root / "pytest.ini").write_text(
         "[pytest]\nqt_api = pyqt6\nmarkers =\n    media_integration: real media tests\n    dv_hdr_integration: real DV/HDR tests\n",
@@ -526,10 +526,10 @@ def test_package_only_manifest_validates_code_only_release(tmp_path):
     _write_json(config / "default_renamer_rules.json", {"_schema_version": 3})
     _write_json(config / "default_profiles.json", {"_schema_version": 3})
     (root / "requirements-runtime.txt").write_text(
-        "PyQt6>=6.4,<7\ncryptography>=42,<51\ndefusedxml>=0.7.1,<1\n", encoding="utf-8"
+        "PyQt6>=6.4,<7\ncryptography>=42,<51\ndefusedxml>=0.7.1,<1\npackaging>=26.2,<27\n", encoding="utf-8"
     )
     (root / "requirements-test.txt").write_text(
-        "-r requirements-runtime.txt\npytest>=8\npytest-qt>=4.4\n", encoding="utf-8"
+        "-r requirements-runtime.txt\npytest>=8,<10\npytest-qt>=4.4,<5\npypdf>=5,<7\n", encoding="utf-8"
     )
     (root / "pytest.ini").write_text(
         "[pytest]\nqt_api = pyqt6\nmarkers =\n    media_integration: real media tests\n    dv_hdr_integration: real DV/HDR tests\n",

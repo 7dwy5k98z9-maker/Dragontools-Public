@@ -9,6 +9,7 @@ GUI bookkeeping and move preparation.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from copy import deepcopy
 from typing import Any, Iterable
 
 
@@ -36,9 +37,9 @@ class ArtifactRegistry:
     def publish(self, bundle: "ConversionArtifactBundle") -> None:
         key = bundle.input_path
         self.sidecar_outputs[key] = list(bundle.sidecars)
-        self.postprocess_outputs[key] = [dict(item) for item in bundle.postprocess]
+        self.postprocess_outputs[key] = deepcopy(list(bundle.postprocess))
         if bundle.failure:
-            self.failure_details[key] = dict(bundle.failure)
+            self.failure_details[key] = deepcopy(bundle.failure)
         else:
             self.failure_details.pop(key, None)
 
@@ -51,6 +52,11 @@ class ConversionArtifactBundle:
     postprocess: tuple[dict, ...] = ()
     failure: dict = field(default_factory=dict)
     status: str = ""
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, 'sidecars', tuple(self.sidecars))
+        object.__setattr__(self, 'postprocess', tuple(deepcopy(self.postprocess)))
+        object.__setattr__(self, 'failure', deepcopy(self.failure))
 
     @classmethod
     def from_worker(

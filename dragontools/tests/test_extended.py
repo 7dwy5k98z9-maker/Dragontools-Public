@@ -528,7 +528,7 @@ class TestComputeAudioTrackPlan:
                 "stereo": {
                     "max_channels": 2,
                     "target_codec": "aac",
-                    "max_bitrate_k": 192,
+                    "max_bitrate_k": 256,
                     "copy_min_bitrate_k": 192,
                     "copy_max_bitrate_k": 256,
                 },
@@ -734,14 +734,14 @@ class TestComputeAudioTrackPlan:
         assert plan[0].target_channels == 1
         assert plan[0].target_bitrate == 128_000
 
-    def test_stereo_default_transkodiert_auf_aac_192(self):
+    def test_stereo_default_transkodiert_auf_aac_256(self):
         compute_audio_track_plan = self._try_import()
         stream = _make_audio_stream(codec="mp3", channels=2, bitrate=320_000)
         plan = compute_audio_track_plan([stream], None, "mkv", rules=self._default_rules())
         assert plan[0].needs_transcode is True
         assert plan[0].target_codec == "aac"
         assert plan[0].target_channels == 2
-        assert plan[0].target_bitrate == 192_000
+        assert plan[0].target_bitrate == 256_000
 
     def test_stereo_aac_innerhalb_kopierbereich_wird_kopiert(self):
         compute_audio_track_plan = self._try_import()
@@ -759,7 +759,7 @@ class TestComputeAudioTrackPlan:
         assert plan[0].target_codec == "aac"
         assert plan[0].target_bitrate == 128_000
 
-    def test_stereo_mp3_128_wird_zu_aac_128_statt_aac_192(self):
+    def test_stereo_mp3_128_wird_zu_aac_128_statt_aac_256(self):
         compute_audio_track_plan = self._try_import()
         stream = _make_audio_stream(codec="mp3", channels=2, bitrate=128_000)
         plan = compute_audio_track_plan([stream], None, "mkv", rules=self._default_rules())
@@ -774,7 +774,7 @@ class TestComputeAudioTrackPlan:
         plan = compute_audio_track_plan([stream], None, "mkv", rules=self._default_rules())
         assert plan[0].needs_transcode is True
         assert plan[0].target_codec == "aac"
-        assert plan[0].target_bitrate == 192_000
+        assert plan[0].target_bitrate == 256_000
 
     def test_aac_ist_nicht_erzwungen_wenn_stereo_codec_geaendert_wird(self):
         compute_audio_track_plan = self._try_import()
@@ -803,7 +803,7 @@ class TestComputeAudioTrackPlan:
         assert migrated["channel_rules"]["stereo"]["copy_min_bitrate_k"] == 192
         assert migrated["channel_rules"]["stereo"]["copy_max_bitrate_k"] == 256
 
-    def test_legacy_stereo_default_256_wird_auf_kopierbereich_migriert(self):
+    def test_legacy_stereo_default_256_bleibt_als_zielbitrate_erhalten(self):
         from dragontools.rules.audio_rules import migrate_audio_rules
 
         legacy = self._default_rules()
@@ -815,7 +815,7 @@ class TestComputeAudioTrackPlan:
 
         migrated = migrate_audio_rules(legacy)
 
-        assert migrated["channel_rules"]["stereo"]["max_bitrate_k"] == 192
+        assert migrated["channel_rules"]["stereo"]["max_bitrate_k"] == 256
         assert migrated["channel_rules"]["stereo"]["copy_min_bitrate_k"] == 192
         assert migrated["channel_rules"]["stereo"]["copy_max_bitrate_k"] == 256
 

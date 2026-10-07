@@ -12,3 +12,4 @@ class EncodePlan:
     vf_args: list
     audio_args: list
     audio_input_args: list = field(default_factory=list)
+    encoder_options: dict | None = None

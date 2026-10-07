@@ -2,6 +2,7 @@
 from __future__ import annotations
 import os
 from PyQt6.QtWidgets import QFileDialog
+from .conversion_queue_admission import admit_live_queue_paths
 from .drop_path_extractor import (
     _debug_mime_data, _extract_dropped_local_path, _extract_paths_from_mime_data, _iter_video_files_in_folder,
     _log_drop_rejection, _log_long_path_dragdrop_warning, _warn_non_video_file,
@@ -90,33 +91,10 @@ class ConvertWidgetQueueAddMixin:
             self._sync_total_files()
             return
 
-        accepted: list[str] = []
-        rejected: list[str] = []
-        for path in paths:
-            try:
-                ok = thread.add_file(path)
-                if ok is not False:
-                    self.log(f"➕ Zur Queue hinzugefügt: {display_name(path)}", "info")
-                    accepted.append(path)
-                else:
-                    rejected.append(path)
-            except Exception as exc:
-                self.log(
-                    f"Live-Hinzufuegen fehlgeschlagen: {display_name(path)} - {exc}",
-                    "warn",
-                )
-                self.log(
-                    f"Betroffener Pfad (Laenge {len(strip_long_path_prefix(path))}): "
-                    f"{strip_long_path_prefix(path)}",
-                    "warn",
-                )
-                rejected.append(path)
-
-        self._remove_rejected_from_gui(rejected)
-        self.sync_queue_order()
+        accepted = admit_live_queue_paths(self, paths,
+            remove_rejected=self._remove_rejected_from_gui, sync_order=self.sync_queue_order)
         if accepted:
             self._refresh_labels(accepted)
-            self.maybe_preflight_new_files(accepted)
 
         self._sync_total_files()
 
@@ -129,6 +107,9 @@ class ConvertWidgetQueueAddMixin:
             "",
             f"Videodateien ({VIDEO_FILE_DIALOG_PATTERNS});;Alle (*)",
         )
+
+        if not self.guard_queue_edit_allowed("Dateien hinzufügen"):
+            return
 
         added: list[str] = []
         for path in files:
@@ -149,29 +130,12 @@ class ConvertWidgetQueueAddMixin:
         state = self.state
         thread = state.thread
         if thread and hasattr(thread, "add_file"):
-            rejected: list[str] = []
-            for path in added:
-                try:
-                    ok = thread.add_file(path)
-                    if ok is False:
-                        rejected.append(path)
-                except Exception as exc:
-                    self.log(
-                        f"Live-Hinzufuegen fehlgeschlagen: {display_name(path)} - {exc}",
-                        "warn",
-                    )
-                    self.log(
-                        f"Betroffener Pfad (Laenge {len(strip_long_path_prefix(path))}): "
-                        f"{strip_long_path_prefix(path)}",
-                        "warn",
-                    )
-                    rejected.append(path)
-            self._remove_rejected_from_gui(rejected)
-            added = [p for p in added if p not in rejected]
-            self.sync_queue_order()
+            added = admit_live_queue_paths(self, added,
+                remove_rejected=self._remove_rejected_from_gui, sync_order=self.sync_queue_order)
+        elif added:
+            self.maybe_preflight_new_files(added)
         if added:
             self._refresh_labels(added)
-            self.maybe_preflight_new_files(added)
 
         self._sync_total_files()
 
@@ -180,6 +144,8 @@ class ConvertWidgetQueueAddMixin:
             return
         folder = QFileDialog.getExistingDirectory(self.parent_widget, "Ordner wählen")
         if not folder:
+            return
+        if not self.guard_queue_edit_allowed("Ordner hinzufügen"):
             return
 
         added: list[str] = []
@@ -194,28 +160,11 @@ class ConvertWidgetQueueAddMixin:
         state = self.state
         thread = state.thread
         if thread and hasattr(thread, "add_file"):
-            rejected: list[str] = []
-            for path in added:
-                try:
-                    ok = thread.add_file(path)
-                    if ok is False:
-                        rejected.append(path)
-                except Exception as exc:
-                    self.log(
-                        f"Live-Hinzufuegen fehlgeschlagen: {display_name(path)} - {exc}",
-                        "warn",
-                    )
-                    self.log(
-                        f"Betroffener Pfad (Laenge {len(strip_long_path_prefix(path))}): "
-                        f"{strip_long_path_prefix(path)}",
-                        "warn",
-                    )
-                    rejected.append(path)
-            self._remove_rejected_from_gui(rejected)
-            added = [p for p in added if p not in rejected]
-            self.sync_queue_order()
+            added = admit_live_queue_paths(self, added,
+                remove_rejected=self._remove_rejected_from_gui, sync_order=self.sync_queue_order)
+        elif added:
+            self.maybe_preflight_new_files(added)
         if added:
             self._refresh_labels(added)
-            self.maybe_preflight_new_files(added)
 
         self._sync_total_files()

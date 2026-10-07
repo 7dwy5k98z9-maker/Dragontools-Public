@@ -1,4 +1,6 @@
 -r requirements-runtime.txt
 -r requirements-optional.txt
+pefile>=2024.8.26,<2027; sys_platform == 'win32'
 PyInstaller>=6.10,<7
 pyinstaller-hooks-contrib>=2025.0,<2027
+pypdf>=5,<7

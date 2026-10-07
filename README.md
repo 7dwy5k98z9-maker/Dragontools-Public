@@ -1,13 +1,13 @@
-# DragonTools V9.8.7
+# DragonTools V9.9.0
 
-> DragonTools V9.8.7 konsolidiert den Direct-MKV-Dolby-Vision-Pfad, die konservative Frame-Mismatch-Teilreparatur, den manuellen Watchfolder-Sofortscan und den nachgezogenen Release-Smoke für den nativen PGS-Parser. Die aktuelle technische Historie steht in `PATCH.md`. Eine vollständige EXE-/Hardware-Abnahme bleibt davon getrennt.
+> Stand 07.10.2026: Dragon Tools V9.9.0 übernimmt die Korrekturen der 29 Patch-/Review-Schritte, die automatische TheTVDB-Token-Erneuerung und den gezielten Fallback bei beschädigter Dolby-Vision-RPU. Die Fachkapitel erläutern die wirksamen Datei-Profile, sichere Ausgabeinstallation, abbrechbare Quellbildprüfung und konsistente Pipeline-Verträge. Einzelne Worker: Rechtsklick → pausieren/fortsetzen. Die technische Historie steht in `PATCH.md`.
 
 DragonTools ist eine Windows-Anwendung zur Analyse, Konvertierung und Verwaltung von Video-, Audio- und Untertiteldateien. Das Projekt bündelt die benötigten Drittanbieterprogramme nicht im Git-Repository. Sie müssen separat von den jeweiligen Projektseiten heruntergeladen werden.
 
 
-## Stand 9.8.7 – 02.10.2026
+## Stand 9.9.0 – 07.10.2026
 
-**Release-Schwerpunkte V9.8.7:** Dolby-Vision-Profil 5/7/8 liest die RPU bei Matroska direkt aus dem Originalcontainer und encodiert auch den Bildpfad direkt aus der MKV; die früheren normalen `source.hevc`-/`p8.hevc`-Zwischenstufen entfallen. Ein verifizierter Frame-Mismatch kann unter engen Bedingungen durch einen lokalisierten GOP-/IRAP-basierten Teil-Reencode repariert werden; unsichere Fälle bleiben fail-closed. Der neue Button **„Watchfolder durchsuchen“** zieht vollständig geschriebene neue Dateien manuell in die bestehende Queue nach, auch wenn die Watch-Automatik ausgeschaltet ist. `core/pgs_display_set.py` ist jetzt verpflichtender Bestandteil des Release-Smokes.
+**Release-Schwerpunkte V9.9.0:** 29 abgeschlossene Review-Schritte, einzeln steuerbare Worker, aufgenommene Dateioptionen, verlässliche Zielwahl, geprüfte Spurmetadaten und wiederholbare Recovery bei späten Fehlern. TheTVDB-Token-Erneuerung, Quell-RPU-Fallback und asynchrone Quellbildprüfung bleiben enthalten.
 
 Normalisierter FFmpeg-AutoCrop ist die verbindliche physische DV-Crop-Quelle. Finaler RPU-Nachweis schützt das Original auch bei exakter Geometrie. Zieländerungen während laufender Aufträge sind an der Move-Transaktionsgrenze abgesichert. Renamer unterstützt Staffel-, Episoden- und Jahreskorrekturen. Queue-Reihenfolgeaktionen sind in Haupt- und Zoomfenster verfügbar; der HDR10+-Generator ist gegen fehlende Farbraumdaten und hängende Analyseprozesse gehärtet.
 
@@ -28,7 +28,77 @@ Normalisierter FFmpeg-AutoCrop ist die verbindliche physische DV-Crop-Quelle. Fi
 
 Abbruch ist kooperativ: Ein bereits abgeschlossenes atomares Dateisystem-Replace kann nicht rückwirkend verhindert werden. Die Prüfung liegt unmittelbar vor dem Commit und beim Containerwechsel nochmals vor dem Original-Cleanup; bei einem dort erkannten Abbruch wird die Installation zurückgerollt. Bereits sicher installierte Ausgaben werden nicht blind gelöscht.
 
-Aktueller Quellstand einschließlich des eigenständigen Dragon-HDR10+-Generators: **1.064 Python-Dateien/Programme, 165.934 Gesamtzeilen und 140.321 Codezeilen** (nichtleer, keine reinen Kommentarzeilen). Die Testbereiche umfassen 281 Python-Dateien, davon 276 `test_*.py` mit **2.037 statisch erkannten Testfunktionen**. Produktivcode einschließlich Einstiegspunkt und Generator-Source: **783 Python-Dateien, 114.420 Gesamtzeilen und 98.586 Codezeilen**.**
+Aktueller Quellstand vom 07.10.2026: **1.298 Python-Dateien/Programme, 208.363 Gesamtzeilen und 176.045 Codezeilen (nichtleer, keine reinen Kommentarzeilen). Testpakete: 376 Python-Dateien, davon 370 test_*.py mit 3.293 statisch erkannten Testfunktionen. Produktivcode ohne Tests: 922 Dateien, 129.338 Gesamtzeilen und 111.387 Codezeilen.** Inventar pro Datei: `PROJECT_INVENTORY_9.9.0.json`.
+
+| Testübersicht | Anzahl |
+|---|---:|
+| Testdateien | 370 |
+| Statisch erkannte Testfunktionen | 3.293 |
+| Bestandene Testfälle der Gesamtsuite (Abnahme Patch 29) | 5.152 |
+| Bestandene native DV/HDR-Testfälle | 23 |
+| Bestandene Testfälle insgesamt | **5.175** |
+
+Abnahme vom 07.10.2026: 14 Tests im allgemeinen Lauf und 2 im nativen Lauf übersprungen. Die beiden Läufe prüfen getrennte Fälle; zusätzliche Fokus- und Exportprüfungen werden nicht nochmals zur Gesamtzahl addiert. Parametrisierte Testfälle erklären den Unterschied zur Zahl statischer Testfunktionen.
+
+### Verhalten nach den Review-Patches
+
+**Einstellungen und Backups:** Einstellungen werden vor dem Speichern vollständig validiert; versteckte Dialogbereiche werden nicht unbeabsichtigt mitgeschrieben. Nicht entschlüsselbare DPAPI-Secrets bleiben erhalten. Backup-Restore prüft Format, Typen und Secret-Verfügbarkeit vor Änderungen und schreibt Dateien mit atomarem Austausch. Fehlgeschlagene Profilpersistenz veröffentlicht keinen neuen In-Memory-Stand. Timeout-Einstellungen behalten vorhandene Sekundenwerte.
+
+**Prozesse und Diagnose:** Timeout und Sofortabbruch beenden den zum Auftrag gehörenden Prozessbaum. Leere Logpfade, Symlinks und Junctions werden vor destruktiven Hilfsoperationen abgewiesen. Parallele Logs und Berichte erhalten getrennte Dateinamen; Diagnosepakete maskieren Zugangsdaten und prüfen die Herkunft der eingelesenen Dateien. Ein nicht verfügbares Tool oder ein fehlgeschlagener Prozessstart wird als Fehler gemeldet.
+
+**Primärvideo und HDR Erkennung:** Analyse und Pipelinewahl beziehen sich auf die primäre Videospur. FFmpeg-Streamindex und Matroska-Tracknummer bleiben getrennte Kennungen. HDR10+ oder Dolby Vision auf einer zweiten Videospur schaltet die primäre Pipeline nicht um. BT.2020-Primaries allein beweisen kein HDR. Unplausible Einheiten, fehlende Probewerte und widersprüchliche DV-Profile werden konservativ ausgewertet; der Medienvertrag prüft auch das erwartete DV-Profil.
+
+**Vorschau und Datei Overrides:** Preflight, Regelvorschau, Medieninfo und Worker verwenden die wirksamen Einstellungen pro Datei. Globale Werte, zugewiesenes Encoderprofil und direkte Datei-Overrides werden in derselben Priorität zusammengeführt. DV-/HDR10+-Erhalt, Generatoranforderung und Container dürfen dadurch nicht auseinanderlaufen. Ungültige Container werden sichtbar abgelehnt. Verspätete Metadatenantworten überschreiben keine neuere Benutzereingabe.
+
+**Encode Planung und Bildproben:** Unbekannte Pipelinebezeichnungen werden als Fehler beendet. Auto-Crop, IMAX und Frame-Probes übernehmen keine Ergebnisse eines fehlgeschlagenen Tools. Eine nicht mehr vorhandene Bilduntertitel-Auswahl brennt keine andere Spur ersatzweise ein. Windows-Pfadvarianten führen zum selben Datei-Override; Encoderregler und gespeicherte Optionen werden vor dem Einsatz auf gültige Werte geprüft.
+
+**Laufsteuerung und Übergabe:** Der Start-Lock bleibt beim Übergang von Konvertierung zu Verschieben aktiv; auch Move-Only besitzt einen Doppelstartschutz. Aktive Ergebnis- und Recovery-Zustände bleiben beim Bearbeiten der Queue erhalten. Fehlgeschlagene Workerstarts lösen reservierte Zustände kontrolliert auf. Logging- und Benachrichtigungsfehler dürfen ein verifiziertes Medienergebnis nicht in einen falschen Abschlusszustand versetzen. Pause steuert auch den aktiven Move-Worker.
+
+**Dolby Vision und beschädigte RPU:** DV-Erhalt verlangt finale RPU-Evidenz im tatsächlichen Bitstream und eine verlässliche Frame-Parität; Containersignalisierung allein genügt nicht. Bei der Quell-RPU-Extraktion in STEP 3/7 können eindeutig unbrauchbare RPUs oder die dovi_tool-Signatur Invalid RPU last byte den konfigurierten einmaligen Neuplanungsversuch auslösen. Nur Dolby Vision wird für diese Datei deaktiviert. HDR10+-Policy, Audio, Untertitel und Encoderprofil bleiben erhalten. Dieselbe Signatur bei Injection oder Verifikation sowie andere DV-Fehler bleiben harte Fehler.
+
+**DV Remux und finale Installation:** DV-Remux verwendet die ausgewählte Videospur und die zum jeweiligen Tool passende Trackkennung. Finale Verifikation prüft die echte RPU sowie erwartete Track- und Default-Flags. MOV_TEXT wird für MKV als SRT geplant. Unbekannte Container werden abgelehnt. Ein rechtzeitig erkannter Abbruch verhindert den finalen Commit; bei einem Verifikationsfehler bleibt ein brauchbarer Kandidat für Diagnose und Wiederaufnahme erhalten.
+
+**HDR10 Plus Erzeugung und Verifikation:** Der HDR10+-Postprozess erzeugt, injiziert und verifiziert Metadaten im fertigen Output. Planner und Generator prüfen denselben PQ-/BT.2020-Quellvertrag. JSON-Struktur, Frameanzahl, Generatorausgabe und injizierter Bitstream müssen zusammenpassen. Bei einem Pflichtfehler bleibt der Job fehlgeschlagen; verwertbare Video-, JSON- und Bitstream-Kandidaten bleiben erhalten. AV1 übernimmt bildabhängige HDR10+-Metadaten nach Bildänderungen nicht ungeprüft.
+
+**SDR zu HDR Auftragszuordnung:** ComfyUI-Output und Manifest müssen zum aktuellen Auftrag gehören; ein alter erfolgreicher Output bestätigt keinen neuen Job. Nach einem Fehler der History/API wird ein bereits gesendeter Auftrag kontrolliert abgebrochen. Auch der letzte Encoder- oder Mux-Schritt erhält die wirksamen Einstellungen des jeweiligen Datei-Overrides.
+
+**Audio und Synchronität:** Audioplan, FFmpeg-Mapping, Tracktitel und Default-Flags beschreiben dieselben ausgewählten Streams. Ein Abbruch während der Abschlussprüfung verhindert den Audio-Mux-Commit. Kanal-, Sprach- und Codecentscheidungen werden konservativ normalisiert. Bereits geprüfte Quellen werden bei einem fehlgeschlagenen Staging- oder Installationsschritt nicht überschrieben.
+
+**Untertitel und OCR:** Untertitel behalten eindeutige Streamzuordnung, Sprache und Flags. Die MP4-Policy unterscheidet interne Textspuren von externen Bilduntertiteln; MOV_TEXT wird bei MKV-Zielen konvertiert. Ein fehlgeschlagener PGS-/VobSub-OCR-Lauf entfernt keine originale Bilduntertitelspur. Pflicht-Sidecars müssen vollständig erzeugt sein, bevor ein Auftrag als erfolgreich veröffentlicht wird. Lange Hilfsprozesse verwenden denselben Abbruch- und Timeoutvertrag wie der Job.
+
+**Output und Reparatur:** Der finale Soll-/Ist-Vergleich prüft Video, dynamische HDR-Metadaten, Audio, Untertitel, Dauer und geplanten Container. Reparaturkandidaten werden getrennt erzeugt und erneut verifiziert. Unsichere Timestamp- oder Frame-Ergebnisse werden nicht als Erfolg installiert. Ein Pflichtfehler nach dem Encode schützt verwertbare Kandidaten vor generischem Cleanup und sperrt Auto-Move sowie den Erfolgsstatus.
+
+**NFO und Nachbearbeitung:** Vorbereitete NFO-Dateien werden erst nach erfolgreicher Konvertierung und Verifikation committed. Nachbearbeitung, Trickplay und Jellyfin-Refresh bleiben an den tatsächlichen Ergebnis- und Zielpfad gebunden. Ein fehlgeschlagener Pflichtschritt darf weder einen zweiten asynchronen Auftrag auslösen noch einen zuvor fehlgeschlagenen Medienjob nachträglich als Erfolg melden.
+
+**Verschieben und Wiederaufnahme:** Move prüft Zielkonflikte, Sidecars, Journale und Pfadidentität an der Transaktionsgrenze. Der im Preflight bestätigte Zielpfad bleibt maßgeblich. Datenträgerübergreifende Transfers werden vollständig gestaged und verifiziert, bevor die Quelle entfernt wird. Abbruch, fehlgeschlagener Rollback und ausstehendes Cleanup bleiben im Journal sichtbar; Recovery darf keinen unvollständigen Transfer als abgeschlossen behandeln.
+
+**Watch Folder und parallele Queue:** Watch-Intake und Live-Queue ordnen Dateien und Profile eindeutig zu und verhindern Doppelstarts. Bereits manuell eingereihte Dateien werden nicht nachträglich als Watch-Aufträge übernommen. Geänderte Worker-Limits starten nur zulässige wartende Jobs; bei Pause und Abbruch kommen keine neuen hinzu. Journale und Wiederaufnahme behalten den richtigen Auftrag und den tatsächlichen Bearbeitungszustand. Bei mehreren aktiven Workern öffnet ein Rechtsklick auf die laufende Videodatei „Worker pausieren“ beziehungsweise „Worker fortsetzen“. Nur der zugehörige Worker wird angehalten; andere Worker laufen weiter. Die pausierte Datei belegt ihren Worker-Platz weiter. Eine globale Pause hat Vorrang, und alte Menüaktionen können keinen neuen Auftrag steuern.
+
+**ISO Merge und MP4 Remux:** ISO-Import, Merge und normaler MP4-Remux verwenden geprüfte Toolresultate und getrennte Staging-Ausgaben. Der normale MP4-Copy-Pfad lehnt dynamisches HDR ab, wenn dessen Erhalt nicht nachgewiesen werden kann. Genau eine geplante Videospur wird übernommen. Audiozeitversatz bleibt erhalten; Abbruch vor der Installation schützt das Original und kontrolliert zugehörige Sidecars.
+
+**Renamer und Episodenzuordnung:** Namensparser, Staffelkorrektur, Episodenmapping und Vorschlagsanzeige verwenden denselben Datensatz. Ungültige Episodenwerte und mehrdeutige Zuordnungen werden nicht still ausgeführt. Benutzerauswahl und manuelle Korrekturen bleiben erhalten; die endgültige Dateiumbenennung erfolgt erst nach bestätigtem Vorschlag.
+
+**Online Metadaten und TheTVDB Token:** Ein optional manuell hinterlegtes TheTVDB-Bearer-Token wird zunächst verwendet. Fehlt es oder wird es als nicht autorisiert abgelehnt, fordert DragonTools mit gültigem API-Key und optionalem Subscriber-PIN ein neues Token an, speichert es über die Secret-/DPAPI-Verwaltung und wiederholt den fehlgeschlagenen Request genau einmal. Parallele Clients teilen einen Refresh-Lock und können ein bereits erneuertes Token übernehmen. Speicherfehler werden protokolliert; ein gültiges neues Token bleibt für die Sitzung nutzbar. Transiente Providerfehler werden nicht als dauerhafter Kein-Treffer-Cache gespeichert; Provider-IDs und Titelidentität werden vor automatischer Übernahme geprüft.
+
+**Mediathek und SQLite:** Mediathek-Schema, Migration, Scan und Suche erhalten die plattformgerechte Pfadidentität. Normalisierte Pfadschlüssel verhindern doppelte Datensätze für dieselbe Windows-Datei. Stream-Snapshots werden zusammen mit dem Mediendatensatz aktualisiert; NFO-Import und Fix Queue prüfen Datenherkunft und Quelländerungen. Bestehende Datenbanken werden vor darauf aufbauenden Abfragen migrationssicher ergänzt.
+
+**Hauptfenster und Tab Lebenszyklus:** Mindestens ein Haupt-Tab bleibt sichtbar. Beim Start wird die vollständige Tab-Liste vor der Sichtbarkeitsprüfung angelegt; sind alle Tabs gespeichert ausgeblendet, wird bevorzugt der Standardcodec-Tab wieder geöffnet und gespeichert. Geladene versteckte Tabs erhalten neue Einstellungen. MediaInfo- und Quellbild-Worker nehmen am globalen Shutdown teil; spätere Startcallbacks sind an den Fenster-Lebenszyklus gebunden. Nicht geladene entfernte Tab-Widgets werden freigegeben.
+
+**Datei-Profile und verbindlicher Zielordner:** Die im Preflight ausgewählte Serienfassung und der geplante Zielordner bleiben nach dem Schließen des Dialogs verbindlich. Titel, Jahr und Medienbereich gehören zur Auswahl; Änderungen verwerfen alte Auflösungen. Dateioptionen, Profile und Warteschlangeneinträge werden tief aufgenommen. Ungültige CRF-/Trackwerte werden vor dem Start abgewiesen; spätere GUI-Änderungen verändern laufende Aufträge nicht.
+
+**Qualität, Quellbildprüfung und Matcher:** Die Quellbildprüfung läuft im Hintergrund und lässt sich bei Tool-Aufrufen abbrechen. Qualitätssuche und Auswertung prüfen tatsächlich erzeugte Dateien und die maßgebliche Ausgabegeometrie; temporäre Ergebnisse gehören zum jeweiligen Auftrag. Der Matcher unterscheidet Offset, Drift und Schnittbereiche. Zusätzliche Zielbereiche ohne passende deutsche Audioentsprechung werden nicht unsicher automatisch zugeordnet.
+
+**Release und Datenschutzprüfung:** Version 9.9.0 ist zentral definiert. Öffentliche Quellarchive prüfen private Pfade und Secret-Literale in Text, Python, DOCX und PDF; ihre Archivinstallation schützt vorhandene Dateien. Build- und CI-Anforderungen verwenden denselben Laufzeitvertrag. Ein Windows-Smoke prüft echte Qt-Widgets, JPEG und OpenCV. Die Source-Abnahme ist keine vollständige Hardware- oder Tool-Bundle-Abnahme; dokumentierte optionale Komponenten benötigen gesonderte Nachweise.
+
+**Auftragsbesitz und Abschluss der Nachbearbeitung:** Die asynchrone Nachbearbeitung gilt erst als abgeschlossen, wenn auch ihre registrierten terminalen Rückmeldungen abgearbeitet sind. Gleichzeitig Wartende sehen denselben Abschluss beziehungsweise Fehler. Defaults und Dateioptionen werden vor externen Erkennungen tief aufgenommen. Metadatenanwendung, Geometrieplanung und Move-Ergebnis besitzen klare gemeinsame Grenzen; die dokumentierten Architekturgrenzen wurden nicht zur Umgehung von Prüfungen erhöht.
+
+**Spurverträge und Container-Metadaten:** Preflight, Planung und Laufzeit verwenden dieselben effektiven Container- und Dateioptionen. Audio-/Untertitel-Titel, Sprache sowie Default-/Forced-Auswahl werden nach dem Mux zurückgelesen. MKV-Audio-Forced und MP4-Untertitel-Forced werden passend zum Container gesetzt; eine Audio-Forced-Auswahl wird in MP4 nicht als Untertitelrolle ausgegeben. MP4-Metadaten werden am eigenen Kandidaten vor der rein lesenden Verifikation abgeschlossen. Quell-Streamindizes bleiben von Output-Spur-IDs getrennt.
+
+**Fehler, Wiederaufnahme und Recovery-Dateien:** Scheitert ein Pflichtschritt nach erfolgreicher Videoverifikation, bleibt der brauchbare Kandidat erhalten und der Auftrag im Fehlerstatus. Das gilt auch beim späten Abbruch. Gesperrte Sidecar-Rollbacks behalten Journal, Staging und Backups und lassen sich nach Freigabe wiederholen. Vorbereitete NFO-Dateien behalten einen Besitzer bis zur sicheren Bereinigung. Beim Verschieben wird der Identitätsnachweis vor dem Hardlink gespeichert; ohne passenden gespeicherten Nachweis bleiben Quelle und Ziel bei Recovery erhalten.
+
+**Abschlussprüfung und dokumentierte Grenzen:** Bei der dokumentierten Abnahme nach Patch 28 wurden alle damaligen Patch-/Review-Schritte nacheinander mit Bericht und geprüftem Projekt-ZIP abgeschlossen. Die finale Prüfung umfasst die eingeschränkte Pairwise-Vertragsmatrix, reale FFmpeg-Dateien, native DV/HDR10+-Rückleseprüfungen und längere parallele Queue-Abläufe mit Umordnen, einzelner Pause und verspäteten Rückmeldungen. AV1-DV/HDR10+-Beta-Pfade sind gesonderte Planungsnachweise; nicht jede Matrixkombination wurde nativ kodiert. Test-Skips und fehlende optionale Hardware-/Online-/Generator-EXE-Abnahmen sind in PATCH_28_REPORT.md ausdrücklich aufgeführt.
+
+**Frühe DV Prüfung und sichere Filmersetzung:** Vor einem HEVC-Dolby-Vision-Encode wird die vollständig gelesene Quell-RPU schnell anhand vorhandener Frame-Metadaten oder einer Schätzung aus Videodauer und Bildrate auf plausible Länge geprüft. Eine vollständige Quellvideozählung entfällt. Kleine Abweichungen werden toleriert; der exakte RPU-/Frame-Abgleich nach dem Encode bleibt verbindlich. Der AV1-DV-Pfad prüft weiterhin die tatsächlich vorhandenen und gelesenen RPU-Daten. Offensichtlich unbrauchbare RPUs können ausschließlich für diese Datei einen erneuten Plan ohne Dolby Vision auslösen. Die Option steht unter Einstellungen → Quellbildprüfung → Dolby Vision – Quell-RPU und ist standardmäßig eingeschaltet. HDR10+, Audio-, Untertitel-, Qualitäts- und Dateioptionen bleiben erhalten. Bei ausgeschalteter Fallback-Option führen unbrauchbare RPUs zu einem Fehler. Spur-/Toolfehler und Abbruch lösen keinen Wechsel ohne DV aus. Fehlt eine brauchbare Framezahl für den schnellen Vergleich, wird dies protokolliert und der exakte Abgleich nach dem Encode bleibt erforderlich. Vor und nach dem Encode werden getrennte Prüfergebnisse protokolliert. MKV-Muxer übernehmen aus jeder Audio-/Untertitelquelle nur ausdrücklich ausgewählte Spuren; nicht ausgewählte gleiche Untertitel blockieren eine eindeutig ausgewählte PGS-Spur nicht. Der fertige Medienvertrag wird vor dem Ersetzen geprüft. Filmersetzung und Matching verwenden dieselbe Normalisierung für Unicode, Bindestriche, Apostrophe und Dateinamen. Jahr, Edition, vorhandene Metadata-IDs und Mehrdeutigkeit schützen verschiedene Filme. Vorbereitete Identität und Ziel bleiben verbindlich; gescheiterte Dateitausche bewahren den guten Altbestand und Recovery-Dateien. PATCH_29_REPORT.md erläutert Prüfungen und Grenzen.
 
 **V9.8.6 Patch BH:** Bei Dolby-Vision-Jobs wird der Encode-Slot direkt nach erfolgreichem HEVC-Encode freigegeben. DV/HDR10+-Injection und Final-Mux der vorherigen Datei können dadurch parallel zum Encode der nächsten Queue-Datei weiterlaufen, ohne die konfigurierte Zahl gleichzeitiger Encodes zu überschreiten. Der Dragon HDR10+ Generator meldet während langer Bildanalysen regelmäßig Frames, Prozent, Analyse-FPS, Laufzeit und ETA.
 
@@ -58,6 +128,12 @@ Wichtige Änderungen dieses historischen Stands:
 - **Technical Review Patch v4:** Release-Validierung, Timestamp-Kandidatenprüfung, Strip-Only, Audio-/Video-Time-Mapping, Qualitätsvergleich und -test, Streamargumente, finaler DV-Mux, Conversion-Fortschritt sowie ISO-Eingabeverarbeitung besitzen getrennte Fachservices. Die bisherigen Fassaden und Kompatibilitätshooks bleiben erhalten.
 
 Der aktuell vermessene Quellstand umfasst **787 Python-Dateien einschließlich `DragonToolsV9.py`**, rund **119.402 Gesamtzeilen** und **101.135 nichtleere/nicht reine Kommentarzeilen**. Im Testpaket liegen **172 Python-Dateien**, davon **169 `test_*.py`** mit **1.245 statisch erkennbaren Testfunktionen**. In einem Package-only-Archiv ohne Einstiegspunkt werden entsprechend 786 Python-Dateien gezählt. Die lokale Abschlussprüfung am 13.09.2026 ergab **1.269 bestandene und 2 übersprungene Tests**; die beiden Skips benötigen reale DV/HDR-Testmedien und externe Werkzeuge.
+
+## Öffentliche Ausgabe – 08.10.2026
+
+Frische Abnahme dieser öffentlichen Ausgabe: **5.160 bestandene, 27 übersprungene Standardtests; 24 DV/HDR-Integrationstests wurden abgewählt.** Die übersprungenen Fälle benötigen optionale Komponenten, externe Medienwerkzeuge oder Betriebssystemfunktionen. Zusätzlich bestehen Datenschutzprüfung, Syntaxprüfung, Werkzeug-Ausschlussprüfung und der Starttest der fertig gebauten EXE.
+
+Diese Ausgabe übernimmt den aktuellen Stand von 9.9.0 einschließlich aller 29 Review-Schritte, des korrigierten Warteschlangenabschlusses nach dem Verschieben und der schnellen HEVC-Dolby-Vision-RPU-Plausibilitätsprüfung. Die EXE wird mit ihren Python-/Qt-Laufzeitdateien als vollständiges Windows-Paket veröffentlicht. Externe Medienwerkzeuge sind nicht enthalten. Paket und SHA-256-Prüfsumme stehen im [Release v9.9.0](https://github.com/7dwy5k98z9-maker/Dragontools-Releases/releases/tag/v9.9.0).
 
 ## Voraussetzungen
 
@@ -152,7 +228,7 @@ Beim Start aus dem Quellcode sucht DragonTools Werkzeuge in dieser Reihenfolge:
 2. im Windows-`PATH`,
 3. in den bekannten Unterordnern von `third_party`.
 
-Die Pfade können in DragonTools unter den Einstellungen für externe Werkzeuge ausgewählt werden. Das ist praktisch, wenn die Programme bereits an anderer Stelle installiert sind. Für `build_v9.bat` müssen sie trotzdem in der oben beschriebenen `third_party`-Struktur vorhanden sein.
+Die Pfade können in DragonTools unter den Einstellungen für externe Werkzeuge ausgewählt werden. Das ist praktisch, wenn die Programme bereits an anderer Stelle installiert sind. Der öffentliche `build_v9.bat` erstellt das Paket ohne diese Medienwerkzeuge. Für den Build müssen sie daher nicht in `third_party` liegen; ihre Pfade werden für die spätere Medienverarbeitung eingerichtet.
 
 ## Empfohlene Ordnerstruktur
 
@@ -244,6 +320,8 @@ Der Regel-/Profil-Simulator zeigt neben Quelle, Pipeline, HDR/DV, Audio, Unterti
 
 ## Windows-Anwendung bauen
 
+Nach dem abschließenden Verschieben wird die Dateiliste nach Bestätigung des Batch-Abschlussdialogs zuverlässig geleert. Die bis zum Ende gehaltene Startsperre wird während der Abschlussbereinigung nicht als neuer Startvorgang gewertet. Tatsächlich laufende Verschiebevorgänge und doppelte Starts bleiben gesperrt; fehlgeschlagene Dateien können weiterhin gezielt erneut eingereiht werden.
+
 Installiere zunächst die Build-Abhängigkeiten:
 
 ```powershell
@@ -256,7 +334,11 @@ Kontrolliere anschließend, dass alle externen Werkzeuge unter `third_party` vor
 build_v9.bat
 ```
 
-Der fertige Build wird unter `dist/DragonToolsV9.8.7/` abgelegt. `build/` und `dist/` sind lokale Ausgaben und werden nicht in Git gespeichert.
+Im privaten Entwicklungsrepository erstellt der Builder ohne Argumente (auch beim Doppelklick) einen privaten Build: Die PDF-Datenschutzprüfung wird ausgelassen, sodass ein fehlendes `pypdf` den Build nicht blockiert. `build_v9.bat --private` wählt denselben Modus ausdrücklich. Alle übrigen Release-, Konfigurations- und EXE-Smoke-Prüfungen bleiben aktiv.
+
+In dieser öffentlichen Arbeitskopie erstellt `build_v9.bat` auch ohne Argumente einen öffentlichen Build mit PDF-Datenschutzprüfung. `build_v9.bat --public` wählt den Modus ausdrücklich. Fehlt `pypdf` oder ist seine Version ungeeignet, installiert/repariert der Builder `pypdf>=5,<7` und prüft danach erneut. Externe Medienwerkzeuge werden weder benötigt noch mitgeliefert. Der private Entwicklungsbuilder verwendet ohne Argumente weiterhin den privaten Modus; seine übrigen Release- und EXE-Prüfungen bleiben aktiv.
+
+Der fertige Build wird unter `dist/DragonToolsV9.9.0/` abgelegt. `build/` und `dist/` sind lokale Ausgaben und werden nicht in Git gespeichert.
 
 ## Programm-Updates über GitHub
 
@@ -288,7 +370,3 @@ git push
 - Die Drittanbieterprogramme werden durch `.gitignore` ausgeschlossen.
 - Große fertige Programmpakete gehören später in einen GitHub Release und nicht direkt in die Git-Historie.
 - Medien dürfen nur im Rahmen der jeweils geltenden Rechte und Gesetze verarbeitet werden.
-
-## Öffentliche Veröffentlichung 9.8.7
-
-Diese Arbeitskopie enthält den anonymisierten Stand 9.8.7 vom 02.10.2026. Der öffentliche Builder übernimmt die aktuelle Build-Sicherung und den finalen EXE-Starttest, bindet jedoch keine externen Medienwerkzeuge ein. Python-/Qt-Laufzeitbibliotheken bleiben enthalten. Die aktuellen Release-Hinweise und die transparent dokumentierten Testgrenzen stehen in `RELEASE_NOTES_v9.8.7.md`.

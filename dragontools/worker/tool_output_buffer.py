@@ -12,6 +12,7 @@ class ToolOutputBuffer:
         self.size = 0
         self.truncated = False
         self.released = False
+        self.read_error = ""
         self.lock = Lock()
 
     def append(self, text):
@@ -30,6 +31,10 @@ class ToolOutputBuffer:
     def text(self):
         with self.lock:
             return ''.join(self.lines).rstrip('\r\n')
+
+    def mark_read_failure(self, error):
+        with self.lock:
+            self.read_error = str(error)
 
     def release(self):
         with self.lock:

@@ -11,6 +11,7 @@ from .converter_audio_args import build_audio_args, build_audio_input_args
 from .converter_subtitle_args import build_subtitle_args
 from .converter_video_filter_args import base_vf_args as _base_vf_args, image_burn_vf_args as _image_burn_vf_args
 from .tool_runner import run_tool
+from ..core.media_stream_selection import primary_ffmpeg_video_index, pin_primary_video_selector
 
 
 def _subtitle_rules(worker):
@@ -60,12 +61,16 @@ class ConverterStreamArgsHelper:
 
     def text_burn_vf_args(self, input_path: str, output_path: str, burn_sub, pre_filters: list[str], post_filters: list[str] | None = None) -> list:
         worker = self.worker
-        sub_tmp = tempfile.NamedTemporaryFile(suffix=".srt", delete=False, dir=Path(output_path).parent)
+        source_codec = str(getattr(burn_sub, "codec", "") or "").strip().lower()
+        preserve_ass = source_codec in {"ass", "ssa"}
+        temp_suffix = ".ass" if preserve_ass else ".srt"
+        temp_codec = "ass" if preserve_ass else "srt"
+        sub_tmp = tempfile.NamedTemporaryFile(suffix=temp_suffix, delete=False, dir=Path(output_path).parent)
         sub_tmp.close()
         sub_tmp_path = sub_tmp.name
         completed = run_tool(
             [_tools(worker).ffmpeg, "-y", "-nostdin", "-loglevel", "error", "-i", input_path,
-             "-map", f"0:{burn_sub.index}", "-c:s", "srt", sub_tmp_path],
+             "-map", f"0:{burn_sub.index}", "-c:s", temp_codec, sub_tmp_path],
             label=f"Burn-In Untertitel #{burn_sub.index}", timeout_s=300, worker=worker, log=worker.log,
         )
         ok = completed.returncode == 0 and not completed.aborted and not completed.timed_out
@@ -75,7 +80,14 @@ class ConverterStreamArgsHelper:
         elif completed.timed_out:
             detail = detail or "Timeout"
         if ok and Path(sub_tmp_path).exists() and Path(sub_tmp_path).stat().st_size > 0:
-            filters = pre_filters + [f"subtitles='{_esc(sub_tmp_path)}'"] + list(post_filters or [])
+            subtitle_filter = f"subtitles='{_esc(sub_tmp_path)}'"
+            if preserve_ass:
+                # ASS/SSA positioning belongs to the source canvas. Render it
+                # before crop/scale so absolute signs/placements transform with
+                # the picture instead of being reinterpreted on a new canvas.
+                filters = [subtitle_filter] + list(pre_filters) + list(post_filters or [])
+            else:
+                filters = list(pre_filters) + [subtitle_filter] + list(post_filters or [])
             _set_burn_sub_tmp(worker, sub_tmp_path)
             return ["-map", "0:v:0", "-vf", ",".join(filters)]
         worker.log("❌ Geplanter Burn-In konnte nicht vorbereitet werden; die Konvertierung wird nicht ohne den vorgesehenen Untertitel fortgesetzt.", "error")
@@ -94,13 +106,16 @@ class ConverterStreamArgsHelper:
 
     def build_vf_args(self, input_path: str, output_path: str, mi, burn_sub_or_vf, pre_filters: list[str], post_filters: list[str] | None = None) -> list:
         if not burn_sub_or_vf or isinstance(burn_sub_or_vf, list):
-            return self.base_vf_args(pre_filters, post_filters)
-        burn_sub = burn_sub_or_vf
-        from ..rules.subtitle_rules import IMAGE_SUBTITLE_CODECS, TEXT_SUBTITLE_CODECS
-        codec = (burn_sub.codec or "").lower()
-        if codec in TEXT_SUBTITLE_CODECS:
-            return self.text_burn_vf_args(input_path, output_path, burn_sub, pre_filters, post_filters)
-        if codec in IMAGE_SUBTITLE_CODECS:
-            return self.image_burn_vf_args(mi, burn_sub, pre_filters, post_filters)
-        self.worker.log(f"❌ Burn-Sub #{burn_sub.index} hat einen nicht unterstützten Codec: {burn_sub.codec!r}", "error")
-        raise BurnSubtitlePreparationError(f"Geplanter Burn-In verwendet einen nicht unterstützten Codec: {burn_sub.codec!r}.")
+            args = self.base_vf_args(pre_filters, post_filters)
+        else:
+            burn_sub = burn_sub_or_vf
+            from ..rules.subtitle_rules import IMAGE_SUBTITLE_CODECS, TEXT_SUBTITLE_CODECS
+            codec = (burn_sub.codec or "").lower()
+            if codec in TEXT_SUBTITLE_CODECS:
+                args = self.text_burn_vf_args(input_path, output_path, burn_sub, pre_filters, post_filters)
+            elif codec in IMAGE_SUBTITLE_CODECS:
+                args = self.image_burn_vf_args(mi, burn_sub, pre_filters, post_filters)
+            else:
+                self.worker.log(f"❌ Burn-Sub #{burn_sub.index} hat einen nicht unterstützten Codec: {burn_sub.codec!r}", "error")
+                raise BurnSubtitlePreparationError(f"Geplanter Burn-In verwendet einen nicht unterstützten Codec: {burn_sub.codec!r}.")
+        return pin_primary_video_selector(args, primary_ffmpeg_video_index(mi))

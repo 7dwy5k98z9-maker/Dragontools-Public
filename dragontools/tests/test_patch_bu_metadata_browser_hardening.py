@@ -18,6 +18,10 @@ GUI_SOURCE = ROOT / "dragontools" / "gui" / "movie_renamer_metadata_browser.py"
 def _source() -> str:
     text = GUI_SOURCE.read_text(encoding="utf-8")
     ast.parse(text)
+    for name in ['movie_renamer_browser_mapping.py', 'movie_renamer_browser_runtime.py']:
+        module = (GUI_SOURCE.parent / name).read_text(encoding='utf-8')
+        ast.parse(module)
+        text += '\n' + module
     return text
 
 

@@ -140,6 +140,12 @@ def resolve_pipeline_context(
         global_preserve_dv=global_preserve_dv,
         global_preserve_hdrplus=global_preserve_hdrplus,
     )
+    per_file_hdr10plus_generator = ov.get("generate_hdr10plus")
+    effective_hdr10plus_generator_enabled = (
+        bool(per_file_hdr10plus_generator)
+        if per_file_hdr10plus_generator is not None
+        else bool(hdr10plus_generator_enabled)
+    )
     source_codec = classify_source_codec(media_info)
     source_has_dv, source_has_hdrplus = source_dynamic_hdr_flags(media_info)
     state = make_initial_policy_state(
@@ -159,7 +165,9 @@ def resolve_pipeline_context(
     )
     generation = apply_dv_preservation_guard(
         decide_hdr10plus_generation(
-            media_info, target_codec=target_codec, enabled=bool(hdr10plus_generator_enabled),
+            media_info,
+            target_codec=target_codec,
+            enabled=effective_hdr10plus_generator_enabled,
             tool_available=bool(hdr10plus_generator_available),
         ),
         source_has_dv=source_has_dv, effective_preserve_dv=state.effective_dv,
@@ -196,6 +204,9 @@ def resolve_pipeline_context(
         "override": ov,
         "per_file_preserve_dv": per_file_dv,
         "per_file_preserve_hdrplus": per_file_hdp,
+        "per_file_generate_hdr10plus": per_file_hdr10plus_generator,
+        "effective_hdr10plus_generator_enabled": effective_hdr10plus_generator_enabled,
+        "hdr10plus_generator_available": bool(hdr10plus_generator_available),
         "requested_preserve_dv": requested_dv,
         "requested_preserve_hdrplus": requested_hdp,
         "effective_preserve_dv": state.effective_dv,

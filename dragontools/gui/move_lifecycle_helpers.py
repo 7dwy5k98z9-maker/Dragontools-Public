@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
+import math
 
 
 def merge_restored_target_paths(paths: dict, restored_context: dict) -> dict:
@@ -16,7 +17,7 @@ def merge_restored_target_paths(paths: dict, restored_context: dict) -> dict:
 
 
 def format_move_eta(eta_s: float) -> str:
-    if eta_s < 0:
+    if not math.isfinite(eta_s) or eta_s < 0:
         return ""
     if eta_s < 60:
         return f"Verschieben – noch ca. {int(eta_s)} s"
@@ -36,7 +37,30 @@ def retire_move_thread(state, move_thread) -> None:
         return
     if move_thread not in retired:
         retired.append(move_thread)
-    del retired[:-8]
+    stopped = [worker for worker in retired if not _worker_running(worker)]
+    removable = {id(worker) for worker in stopped[:-8]}
+    retired[:] = [worker for worker in retired if id(worker) not in removable]
+
+
+def _worker_running(worker):
+    try:
+        return bool(getattr(worker, 'isRunning', lambda: False)())
+    except RuntimeError:
+        return False
+
+
+def claim_move_finish(worker):
+    if worker is None or getattr(worker, '_dragontools_move_finalized', False):
+        return False
+    worker._dragontools_move_finalized = True
+    return True
+
+
+def owned_move_callback(state, worker, callback, *args):
+    if state.move_thread is worker:
+        from ..core.callback_dispatch import invoke_callback
+        return invoke_callback(callback, *args)
+    return None
 
 
 def successful_video_sources(move_log: list) -> set[str]:

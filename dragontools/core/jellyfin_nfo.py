@@ -20,6 +20,7 @@ def write_movie_nfo(
     video_path: str | Path | None = None,
     ffprobe_path: str = "",
     include_fileinfo: bool = True,
+    planned_fileinfo: dict[str, Any] | None = None,
 ) -> Path:
     target = Path(path)
     root = ET.Element("movie")
@@ -35,10 +36,20 @@ def write_movie_nfo(
     _add_text(root, "runtime", suggestion.runtime_min)
     _add_text(root, "rating", _format_float(suggestion.vote_average))
     _add_text(root, "mpaa", suggestion.certification)
-    _add_text(root, "id", suggestion.imdb_id or suggestion.tmdb_id)
-    _add_text(root, "tmdbid", suggestion.tmdb_id)
+    provider = str(getattr(suggestion, "provider", "tmdb") or "tmdb").lower()
+    provider_movie_id = getattr(suggestion, "provider_id", None) or suggestion.tmdb_id
+    _add_text(root, "id", suggestion.imdb_id or provider_movie_id)
+    if provider == "thetvdb":
+        _add_text(root, "tvdbid", provider_movie_id)
+    else:
+        _add_text(root, "tmdbid", provider_movie_id)
     _add_text(root, "imdbid", suggestion.imdb_id)
-    _add_uniqueid(root, "tmdb", suggestion.tmdb_id, default=not bool(suggestion.imdb_id))
+    _add_uniqueid(
+        root,
+        "tvdb" if provider == "thetvdb" else "tmdb",
+        provider_movie_id,
+        default=not bool(suggestion.imdb_id),
+    )
     _add_uniqueid(root, "imdb", suggestion.imdb_id, default=bool(suggestion.imdb_id))
     _add_text(root, "trailer", suggestion.trailer_url)
     _add_many(root, "country", suggestion.countries)
@@ -54,7 +65,13 @@ def write_movie_nfo(
         _add_text(root, "collectionnumber", suggestion.collection_id)
 
     _add_actors(root, suggestion.actors)
-    _append_fileinfo(root, video_path, ffprobe_path, include_fileinfo)
+    _append_fileinfo(
+        root,
+        video_path,
+        ffprobe_path,
+        include_fileinfo,
+        planned_fileinfo=planned_fileinfo,
+    )
     _write_xml(target, root)
     return target
 
@@ -66,6 +83,7 @@ def write_episode_nfo(
     video_path: str | Path | None = None,
     ffprobe_path: str = "",
     include_fileinfo: bool = True,
+    planned_fileinfo: dict[str, Any] | None = None,
 ) -> Path:
     target = Path(path)
     root = ET.Element("episodedetails")
@@ -91,7 +109,13 @@ def write_episode_nfo(
     _add_many(root, "director", suggestion.directors)
     _add_many(root, "credits", suggestion.writers)
     _add_actors(root, suggestion.actors)
-    _append_fileinfo(root, video_path, ffprobe_path, include_fileinfo)
+    _append_fileinfo(
+        root,
+        video_path,
+        ffprobe_path,
+        include_fileinfo,
+        planned_fileinfo=planned_fileinfo,
+    )
     _write_xml(target, root)
     return target
 
@@ -112,7 +136,8 @@ def build_fileinfo(video_path: str | Path, ffprobe_path: str) -> ET.Element | No
                 (
                     "format=duration,bit_rate:"
                     "stream=index,codec_type,codec_name,width,height,display_aspect_ratio,"
-                    "avg_frame_rate,bit_rate,channels,sample_rate:stream_tags=language,title"
+                    "avg_frame_rate,bit_rate,channels,sample_rate:stream_tags=language,title:"
+                    "stream_disposition=attached_pic"
                 ),
                 "-of",
                 "json",
@@ -143,12 +168,67 @@ def build_fileinfo(video_path: str | Path, ffprobe_path: str) -> ET.Element | No
             continue
         typ = str(stream.get("codec_type") or "").lower()
         if typ == "video":
+            disposition = stream.get("disposition") or {}
+            if isinstance(disposition, dict) and bool(disposition.get("attached_pic", 0)):
+                # Album/cover art is represented by ffprobe as a video stream,
+                # but it is not a playable video track and must not become a
+                # second <video> entry in Jellyfin/Kodi streamdetails.
+                continue
             _append_video_stream(streamdetails, stream, format_data)
         elif typ == "audio":
             _append_audio_stream(streamdetails, stream)
         elif typ == "subtitle":
             _append_subtitle_stream(streamdetails, stream)
     return root if list(streamdetails) else None
+
+
+def build_planned_fileinfo(media_info: Any, media_contract: Any) -> dict[str, Any] | None:
+    """Build Jellyfin ``fileinfo`` data from DragonTools' final media plan.
+
+    This is used by the NFO "during conversion" mode.  At that point the final
+    video cannot be probed yet, but the workflow already knows the intended
+    video codec/dimensions and the exact audio/subtitle track plan.  Values that
+    cannot be known reliably before encoding (for example final bitrate) are
+    intentionally omitted instead of guessed.
+    """
+    if media_contract is None:
+        return None
+    primary = getattr(media_info, "primary_video", None) if media_info is not None else None
+    duration_s = getattr(media_info, "duration_s", None) if media_info is not None else None
+    if not duration_s and primary is not None:
+        duration_s = getattr(primary, "duration_s", None)
+
+    expected_width = getattr(media_contract, "expected_width", None)
+    expected_height = getattr(media_contract, "expected_height", None)
+    if expected_width is None and expected_height is None and primary is not None:
+        expected_width = getattr(primary, "width", None)
+        expected_height = getattr(primary, "height", None)
+    video: dict[str, Any] = {
+        "codec": getattr(media_contract, "video_codec", "") or "",
+        "width": expected_width,
+        "height": expected_height,
+        "durationinseconds": _duration_seconds(duration_s),
+        "framerate": getattr(primary, "frame_rate", None) if primary is not None else None,
+    }
+
+    audio = [
+        {
+            "codec": getattr(track, "codec", "") or "",
+            "language": getattr(track, "language", "") or "",
+            "channels": getattr(track, "channels", None),
+        }
+        for track in (getattr(media_contract, "audio_tracks", ()) or ())
+    ]
+    subtitle = [
+        {
+            "codec": getattr(track, "codec", "") or "",
+            "language": getattr(track, "language", "") or "",
+        }
+        for track in (getattr(media_contract, "subtitle_tracks", ()) or ())
+    ]
+    if not any(value not in (None, "", 0) for value in video.values()) and not audio and not subtitle:
+        return None
+    return {"video": [video], "audio": audio, "subtitle": subtitle}
 
 
 def _append_video_stream(parent: ET.Element, stream: dict[str, Any], format_data: dict[str, Any]) -> None:
@@ -182,12 +262,48 @@ def _append_fileinfo(
     video_path: str | Path | None,
     ffprobe_path: str,
     include_fileinfo: bool,
+    *,
+    planned_fileinfo: dict[str, Any] | None = None,
 ) -> None:
-    if not include_fileinfo or video_path is None:
+    if not include_fileinfo:
         return
-    fileinfo = build_fileinfo(video_path, ffprobe_path)
+    # Once a verified output exists, prefer its actual stream metadata over
+    # the pre-encode plan.  The planned data remains a safe fallback for the
+    # "during conversion" preparation phase or for a late probe failure.
+    fileinfo = None
+    if video_path is not None and ffprobe_path:
+        fileinfo = build_fileinfo(video_path, ffprobe_path)
     if fileinfo is not None:
         root.append(fileinfo)
+        return
+    if planned_fileinfo is not None:
+        fileinfo = _planned_fileinfo_element(planned_fileinfo)
+        if fileinfo is not None:
+            root.append(fileinfo)
+
+
+def _planned_fileinfo_element(data: dict[str, Any]) -> ET.Element | None:
+    root = ET.Element("fileinfo")
+    streamdetails = ET.SubElement(root, "streamdetails")
+    for stream in data.get("video", ()) or ():
+        if not isinstance(stream, dict):
+            continue
+        video = ET.SubElement(streamdetails, "video")
+        for tag in ("codec", "width", "height", "aspect", "bitrate", "durationinseconds", "framerate"):
+            _add_text(video, tag, stream.get(tag))
+    for stream in data.get("audio", ()) or ():
+        if not isinstance(stream, dict):
+            continue
+        audio = ET.SubElement(streamdetails, "audio")
+        for tag in ("codec", "language", "channels", "bitrate", "samplingrate"):
+            _add_text(audio, tag, stream.get(tag))
+    for stream in data.get("subtitle", ()) or ():
+        if not isinstance(stream, dict):
+            continue
+        subtitle = ET.SubElement(streamdetails, "subtitle")
+        for tag in ("language", "codec"):
+            _add_text(subtitle, tag, stream.get(tag))
+    return root if list(streamdetails) else None
 
 
 def _add_text(parent: ET.Element, tag: str, value: Any) -> None:

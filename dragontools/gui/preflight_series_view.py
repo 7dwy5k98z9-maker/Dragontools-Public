@@ -14,7 +14,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ..core.path_syntax import user_path_name
-from .preflight_series_choices import hide_series_folder_choices, install_series_folder_choice
+from .preflight_series_choices import hide_series_folder_choices, install_series_folder_choice, series_folder_choices_active
 from .preflight_widget_common import _fmt_path
 from ..core.callback_dispatch import invoke_callback, is_callback_like
 
@@ -156,7 +156,7 @@ class SeriesWidgetViewMixin:
 
     def _series_text_changed(self) -> None:
         combo = self.__dict__.get("_folder_choice_combo")
-        if combo is not None and combo.isVisible():
+        if combo is not None and series_folder_choices_active(self):
             hide_series_folder_choices(self)
             self._resolved_series_key = None
             self._resolved_series_dir = None

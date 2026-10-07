@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 
 from .dv_crop_reconcile import read_level5_offsets
 from .dv_pipeline_timeouts import timeout_hevc_extract as _TIMEOUT_HEVC_EXTRACT, timeout_rpu_extract as _TIMEOUT_RPU_EXTRACT
@@ -35,22 +36,63 @@ class DVFinalMetadataVerifier:
             missing_hdr = bool(require_hdr10plus and not inspection.hdr10plus)
             state.verified_dolby_vision = state.verified_dolby_vision or not missing_dv
             state.verified_hdr10plus = state.verified_hdr10plus or (require_hdr10plus and not missing_hdr)
+
+            expected_profile = self._expected_output_profile(req)
+            reported_profile = self._profile_major(getattr(inspection, "dolby_vision_profile", None))
+            if not missing_dv and expected_profile is not None and reported_profile is not None and reported_profile != expected_profile:
+                reason = (
+                    "Finales Dolby-Vision-Profil entspricht nicht dem normalisierten Encode-Vertrag: "
+                    f"erwartet P{expected_profile}, MediaInfo meldet P{reported_profile}"
+                )
+                if self._temp_state is not None:
+                    self._temp_state.record_failure(reason=reason, stage="STEP 7/7 Finale DV-Verifikation")
+                state.verified_dolby_vision = False
+                self._log(f"❌ [DV][VERIFY] {reason}.", "error")
+                return False
+
+            container = str(getattr(req, "container", "") or "").upper() or "AUSGABE"
             if not missing_dv and not missing_hdr:
-                container = str(getattr(req, "container", "mp4") or "mp4").upper()
-                if not strict_crop:
-                    self._log(f"✅ [DV][VERIFY] Finales {container}: Dolby Vision {dv_label} | HDR10+ {hdr_label}", "info")
-                    return True
-                self._log(f"ℹ️  [DV][VERIFY] Physischer Crop aktiv – finale RPU wird im {container} zusätzlich bytegenau gegen die verifizierte Crop-RPU geprüft.", "info")
-                return verify_fallback(state, runner, verify_dv=True, verify_hdr10plus=False)
-            missing = [name for name, flag in (("Dolby Vision", missing_dv), ("HDR10+", missing_hdr)) if flag]
-            self._log("⚠️  [DV][VERIFY] MediaInfo bestätigt " + " / ".join(missing) + " nicht. Starte Bitstream-Fallbackprüfung.", "warn")
+                detail = "physischer Crop aktiv; " if strict_crop else ""
+                self._log(
+                    f"ℹ️  [DV][VERIFY] Finales {container}: Dolby Vision {dv_label} | HDR10+ {hdr_label}; "
+                    f"{detail}finaler RPU-Nachweis wird zusätzlich aus dem Bitstream geführt.",
+                    "info",
+                )
+            else:
+                missing = [name for name, flag in (("Dolby Vision", missing_dv), ("HDR10+", missing_hdr)) if flag]
+                self._log(
+                    "⚠️  [DV][VERIFY] MediaInfo bestätigt " + " / ".join(missing)
+                    + " nicht. Starte Bitstream-Fallbackprüfung.",
+                    "warn",
+                )
         else:
             detail = next((w for w in inspection.warnings if w), "keine Videospur erkannt")
             self._log(f"⚠️  [DV][VERIFY] MediaInfo-Ergebnis unklar ({detail}). Starte Bitstream-Fallbackprüfung.", "warn")
-        ok = verify_fallback(
-            state, runner, verify_dv=bool(missing_dv or strict_crop), verify_hdr10plus=missing_hdr
+
+        # Container signalling alone is not proof that the final HEVC payload still
+        # contains an RPU.  Always re-extract the final video and prove RPU presence.
+        # This also sets ``final_rpu_checked`` so the workflow replacement guard can
+        # preserve a valuable candidate instead of replacing the source blindly.
+        return verify_fallback(
+            state, runner, verify_dv=True, verify_hdr10plus=require_hdr10plus
         )
-        return ok
+
+    @staticmethod
+    def _profile_major(value) -> int | None:
+        text = str(value or "").strip()
+        if not text or text.casefold() in {"ja", "yes", "true"}:
+            return None
+        match = re.search(r"(?i)(?:profile\s*)?(\d{1,2})(?:\.\d+)?", text)
+        return int(match.group(1)) if match else None
+
+    @staticmethod
+    def _expected_output_profile(request) -> int | None:
+        try:
+            source_profile = int(getattr(request, "profile_major", None))
+        except (TypeError, ValueError):
+            return None
+        # The HEVC encode core normalizes P5/P7/P8 RPUs to P8.1 before injection.
+        return 8 if source_profile in {5, 7, 8} else None
 
     @staticmethod
     def _dv_label(inspection) -> str:
@@ -181,6 +223,8 @@ class DVFinalMetadataVerifier:
                 )
             except Exception:
                 rc = -1
+            if rc in (124, 130):
+                return
             if rc == 0 and export_json.exists() and export_json.stat().st_size > 0:
                 try:
                     offsets = read_level5_offsets(export_json)

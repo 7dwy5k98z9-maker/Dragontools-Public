@@ -7,6 +7,7 @@ from contextlib import closing
 from pathlib import Path
 from typing import Any, Iterable
 
+from .media_library_publication import publish_library
 from .media_library_db import _connect, _snapshot_database, backup_database, initialize_database
 from .media_library_jellyfin_items import build_jellyfin_item
 from .media_library_jellyfin_metadata import (
@@ -145,6 +146,8 @@ def import_jellyfin_database(
     if not source.exists():
         raise FileNotFoundError(f"Jellyfin-Datenbank nicht gefunden: {source}")
     target = Path(target_db_path)
+    if source.resolve() == target.resolve() or (target.exists() and source.samefile(target)):
+        raise ValueError("Jellyfin-Quelle und DragonTools-Ziel dürfen nicht dieselbe Datei sein.")
     target.parent.mkdir(parents=True, exist_ok=True)
     mappings_list = list(mappings)
     warnings: list[str] = []
@@ -154,7 +157,9 @@ def import_jellyfin_database(
 
     with tempfile.TemporaryDirectory(prefix="dragontools_jellyfin_import_", dir=str(target.parent)) as tmp:
         tmp_dir = Path(tmp)
-        source_copy = tmp_dir / source.name
+        source_dir = tmp_dir / "source"
+        source_dir.mkdir()
+        source_copy = source_dir / source.name
         _snapshot_database(source, source_copy, source_read_only=True)
         tmp_db = tmp_dir / DEFAULT_DB_FILENAME
         initialize_database(tmp_db)
@@ -179,7 +184,7 @@ def import_jellyfin_database(
 
         replacement_db = tmp_dir / f".{DEFAULT_DB_FILENAME}.ready"
         _snapshot_database(tmp_db, replacement_db)
-        os.replace(replacement_db, target)
+        publish_library(replacement_db, target, replace_file=os.replace)
 
     if logger:
         logger(f"Mediathek-DB importiert: {imported_items} Einträge, {imported_streams} Streams.")

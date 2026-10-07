@@ -23,7 +23,7 @@ def owner_widget(qtbot, tmp_path):
     owner.settings.setValue(SET_KEY_PARALLEL_CPU_JOBS, 1)
     owner.settings.setValue(SET_KEY_PARALLEL_GPU_JOBS, 2)
     owner._state = SimpleNamespace(thread=None, move_thread=None, start_reserved=False)
-    owner._enc_settings = SimpleNamespace(_active_encoder=lambda: "cpu")
+    owner._enc_settings = SimpleNamespace(active_encoder=lambda: "cpu")
     owner._log = Mock()
     return owner
 
@@ -66,7 +66,7 @@ def test_idle_defaults_follow_encoder_and_serial_modes_disable_control(qtbot, tm
     control = ParallelWorkerControl(owner)
     control.refresh()
     assert control.spin.value() == 1
-    owner._enc_settings._active_encoder = lambda: "nvenc"
+    owner._enc_settings.active_encoder = lambda: "nvenc"
     control.refresh()
     assert control.spin.value() == 2
     control.spin.setValue(3)

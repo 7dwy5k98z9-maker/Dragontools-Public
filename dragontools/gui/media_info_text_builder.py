@@ -353,6 +353,7 @@ def build_media_info_text(
     global_preserve_hdrplus: bool = True,
     standard_container: str = "mkv",
     dv_container: str = "mp4",
+    preview_options: dict[str, Any] | None = None,
 ) -> str:
     """Erzeugt den vollständigen DragonTools-Medieninfo-/Rules-Preview-Text."""
     lines: list[str] = [
@@ -367,6 +368,9 @@ def build_media_info_text(
         "========= Rules Preview =========",
     ]
     try:
+        options = dict(preview_options or {})
+        options.setdefault("standard_container", standard_container)
+        options.setdefault("dv_container", dv_container)
         preview = _build_rules_preview(
             file_path,
             codec=codec,
@@ -376,8 +380,7 @@ def build_media_info_text(
             media_info=mi,
             global_preserve_dv=global_preserve_dv,
             global_preserve_hdrplus=global_preserve_hdrplus,
-            standard_container=standard_container,
-            dv_container=dv_container,
+            **options,
         )
     except Exception as exc:
         lines.extend(["Rules Preview konnte nicht erstellt werden.", f"Fehler: {exc}"])

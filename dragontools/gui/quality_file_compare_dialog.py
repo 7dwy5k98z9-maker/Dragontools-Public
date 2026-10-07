@@ -28,6 +28,7 @@ from ..core.path_syntax import VIDEO_EXTENSIONS, is_video_file, path_compare_key
 from ..worker.quality_compare_thread import QualityCompareThread
 from .info_button import InfoButton
 from .ui_helpers import install_persistent_window_geometry
+from .quality_worker_lifecycle import start_owned_quality_worker, connect_quality_worker
 
 
 class QualityFileCompareDialog(QDialog):
@@ -171,7 +172,7 @@ class QualityFileCompareDialog(QDialog):
         self.offset_b.setValue(-self.offset_b.value())
 
     def _start(self) -> None:
-        if self._worker and self._worker.isRunning():
+        if self._worker is not None:
             return
         file_a = self.file_a_edit.text().strip()
         file_b = self.file_b_edit.text().strip()
@@ -190,9 +191,7 @@ class QualityFileCompareDialog(QDialog):
         self.summary.setVisible(False)
         self.log.clear()
         self.progress.setValue(0)
-        self._set_running(True)
-
-        worker = QualityCompareThread(
+        factory = lambda: QualityCompareThread(
             file_a,
             file_b,
             sample_count=self.segment_count.value(),
@@ -201,13 +200,21 @@ class QualityFileCompareDialog(QDialog):
             offset_b_s=self.offset_b.value(),
             parent=self,
         )
-        self._worker = worker
-        worker.log_line.connect(self.log.appendPlainText)
-        worker.progress.connect(self.progress.setValue)
-        worker.result_ready.connect(self._add_result)
-        worker.summary_ready.connect(self._show_summary)
-        worker.finished.connect(self._finished)
-        worker.start()
+        start_owned_quality_worker(self, factory=factory, wire=self._wire_worker,
+            set_running=self._set_running, report_error=lambda message: self.log.appendPlainText(f"❌ Start fehlgeschlagen: {message}"))
+
+    def _wire_worker(self, worker) -> None:
+        connect_quality_worker(self, worker, log_line=self.log.appendPlainText, progress=self.progress.setValue,
+            result_ready=self._add_result, summary_ready=self._show_summary, finished=self._finished)
+
+    def iter_shutdown_workers(self) -> tuple:
+        return (self._worker,) if self._worker is not None else ()
+
+    def reject(self) -> None:
+        if self._worker is not None:
+            QMessageBox.information(self, "Dateivergleich", "Bitte den laufenden Vergleich zuerst abbrechen.")
+            return
+        super().reject()
 
     @staticmethod
     def _valid_video(path: str) -> bool:
@@ -287,7 +294,7 @@ class QualityFileCompareDialog(QDialog):
         self.summary.setVisible(True)
 
     def closeEvent(self, event: QCloseEvent) -> None:
-        if self._worker and self._worker.isRunning():
+        if self._worker is not None:
             QMessageBox.information(self, "Dateivergleich", "Bitte den laufenden Vergleich zuerst abbrechen.")
             event.ignore()
             return

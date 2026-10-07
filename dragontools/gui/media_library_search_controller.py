@@ -39,6 +39,8 @@ class MediaLibrarySearchController:
         self._refresh_stats = refresh_stats
         self._last_rows: list[dict[str, Any]] = []
         self._last_search_request: dict[str, str] | None = None
+        self._last_search_db_path: str | None = None
+        self._active_search_db_path: str | None = None
         self._search_thread: MediaLibrarySearchThread | None = None
         self._pending_search: tuple[str, dict[str, str]] | None = None
 
@@ -92,7 +94,7 @@ class MediaLibrarySearchController:
         # repeated filter changes from queueing several expensive DB scans.
         self._pending_search = (self._get_db_path(), request)
         self._view.search_result_label.setText("Suche läuft …")
-        if self._search_thread is None or not self._search_thread.isRunning():
+        if self._search_thread is None:
             self._start_pending_search()
 
     def _start_pending_search(self) -> None:
@@ -107,6 +109,7 @@ class MediaLibrarySearchController:
             parent=self._parent,
         )
         self._search_thread = thread
+        self._active_search_db_path = db_path
         thread.completed.connect(self._on_search_completed)
         thread.finished.connect(self._on_search_thread_finished)
         thread.start()
@@ -121,6 +124,7 @@ class MediaLibrarySearchController:
             QMessageBox.critical(self._parent, "Mediathek-Suche", str(error))
             return
         self._last_search_request = dict(request)
+        self._last_search_db_path = self._active_search_db_path
         self._last_rows = list(rows or [])
         self._render_search_rows(self._last_rows, self._last_search_request)
 
@@ -165,7 +169,7 @@ class MediaLibrarySearchController:
         try:
             request = self._last_search_request
             target, exported_count = self._service.export_search_csv(
-                self._get_db_path(),
+                self._last_search_db_path or self._get_db_path(),
                 request["preset"],
                 request["text"],
                 file_name,

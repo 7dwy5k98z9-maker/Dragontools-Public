@@ -6,6 +6,7 @@ from typing import Callable
 
 from ..core.callback_dispatch import invoke_callback
 from ..core.path_syntax import path_compare_key
+from ..core.preflight_metadata_identity import with_planned_metadata
 
 
 class ConversionWorkerLifecycle:
@@ -34,10 +35,21 @@ class ConversionWorkerLifecycle:
         self._default_codec = default_codec
         self._collect_encoder_options = collect_encoder_options
 
+    @staticmethod
+    def _worker_is_running(worker) -> bool:
+        if worker is None:
+            return False
+        try:
+            return bool(worker.isRunning())
+        except (AttributeError, RuntimeError, TypeError):
+            # A Qt wrapper can outlive the underlying C++ QThread briefly.
+            # Stale references must not break start/abort/pause decisions.
+            return False
+
     def active_worker(self):
-        if self._state.thread and self._state.thread.isRunning():
+        if self._worker_is_running(self._state.thread):
             return self._state.thread
-        if self._state.move_thread and self._state.move_thread.isRunning():
+        if self._worker_is_running(self._state.move_thread):
             return self._state.move_thread
         return None
 
@@ -58,7 +70,7 @@ class ConversionWorkerLifecycle:
         return tuple(result)
 
     def toggle_pause(self) -> None:
-        thread = self._state.thread
+        thread = self.active_worker()
         if not thread:
             return
         if not (hasattr(thread, "pause") and hasattr(thread, "resume")):
@@ -77,7 +89,7 @@ class ConversionWorkerLifecycle:
 
     def is_file_active(self, path: str) -> bool:
         worker = self._state.thread
-        if worker is None or not worker.isRunning() or not path:
+        if not self._worker_is_running(worker) or not path:
             return False
         if hasattr(worker, "is_current"):
             try:
@@ -90,7 +102,7 @@ class ConversionWorkerLifecycle:
 
     def terminate_current_ffmpeg(self, path: str) -> bool:
         worker = self._state.thread
-        if worker is None or not worker.isRunning() or not hasattr(worker, "terminate_current_ffmpeg"):
+        if not self._worker_is_running(worker) or not hasattr(worker, "terminate_current_ffmpeg"):
             self._log("Kein abbrechbarer FFmpeg-Prozess für diese Datei aktiv.", "warn")
             return False
         try:
@@ -133,20 +145,27 @@ class ConversionWorkerLifecycle:
         self._refresh_queue()
 
     def connect_worker_signals(self, worker, total_progress_slot) -> None:
-        worker.log_line.connect(lambda message: invoke_callback(self._log, message))
-        worker.file_progress.connect(self._result_service.on_file_progress)
-        worker.file_result.connect(self._progress.on_file_result_cleanup)
-        worker.file_result.connect(self._result_service.on_file_result)
+        def current_run(callback):
+            def dispatch(*args):
+                if self._state.thread is worker:
+                    return invoke_callback(callback, *args)
+                return None
+            return dispatch
+
+        worker.log_line.connect(current_run(self._log))
+        worker.file_progress.connect(current_run(self._result_service.on_file_progress))
+        worker.file_result.connect(current_run(self._progress.on_file_result_cleanup))
+        worker.file_result.connect(current_run(self._result_service.on_file_result))
         if hasattr(worker, "encode_stage_complete"):
-            worker.encode_stage_complete.connect(self._progress.on_encode_stage_complete)
-        worker.progress.connect(lambda value: invoke_callback(total_progress_slot, value))
+            worker.encode_stage_complete.connect(current_run(self._progress.on_encode_stage_complete))
+        worker.progress.connect(current_run(total_progress_slot))
         if hasattr(worker, "dv_crop_decision_requested"):
             from .dv_crop_dialog import show_dv_crop_decision
             worker.dv_crop_decision_requested.connect(
-                lambda payload, active_worker=worker: show_dv_crop_decision(active_worker, payload, log=self._log)
+                current_run(lambda payload: show_dv_crop_decision(worker, payload, log=self._log))
             )
-        worker.finished.connect(self._progress.clear_active_progress_display)
-        worker.finished.connect(self._result_service.on_finished)
+        worker.finished.connect(current_run(self._progress.clear_active_progress_display))
+        worker.finished.connect(current_run(self._result_service.on_finished))
 
     def start_worker_ui_state(
         self,
@@ -173,10 +192,70 @@ class ConversionWorkerLifecycle:
                 "error",
             )
             return False
-        self._log(start_message)
-        self._progress.refresh_queue_after_file_progress(0)
-        worker.start()
+        try:
+            # From this point on a durable active journal already exists. Any
+            # synchronous failure before/inside QThread.start() must roll the
+            # whole start transaction back, not leave a fake recovery run.
+            self._log(start_message)
+            self._progress.refresh_queue_after_file_progress(0)
+            worker.start()
+            self._archive_restored_job_journal(status="resumed_by_run")
+        except (RuntimeError, OSError, TypeError, ValueError) as exc:
+            self._rollback_failed_worker_start(exc)
+            return False
         return True
+
+    def _archive_restored_job_journal(self, *, status: str) -> bool:
+        path = str(getattr(self._state, "restored_job_journal_path", "") or "")
+        if not path:
+            return True
+        try:
+            from ..core.job_journal import archive_job_journal_path
+
+            archive_job_journal_path(path, status=status)
+        except Exception as exc:
+            self._log(
+                f"⚠️ Vorgänger-Job-Journal konnte noch nicht archiviert werden: {exc}",
+                "warn",
+            )
+            return False
+        self._state.restored_job_journal_path = ""
+        return True
+
+    def _rollback_failed_worker_start(self, exc: Exception) -> None:
+        """Restore a retryable GUI/session state when ``QThread.start`` fails.
+
+        The journal is already durable at this point, so leaving it marked as an
+        active run would create a false crash-recovery entry on the next launch.
+        """
+        journal = getattr(self._state, "job_journal", None)
+        if journal is not None:
+            try:
+                journal.finish_run(status="start_failed")
+            except Exception as journal_exc:
+                self._log(
+                    f"⚠️ Fehlgeschlagenen Start konnte das Job-Journal nicht abschließen: {journal_exc}",
+                    "warn",
+                )
+        self._state.job_journal = None
+        self._state.job_journal_current_path = None
+        current_paths = getattr(self._state, "job_journal_current_paths", None)
+        if current_paths is not None:
+            current_paths.clear()
+        self._state.current_log_path = None
+        self._set_start_enabled(True)
+        self._ui.abort_btn.setEnabled(False)
+        pause_btn = getattr(self._ui, "pause_btn", None)
+        if pause_btn is not None:
+            pause_btn.setEnabled(False)
+            if hasattr(pause_btn, "setText"):
+                pause_btn.setText("⏸ Pause")
+        curlog_btn = getattr(self._ui, "curlog_btn", None)
+        if curlog_btn is not None:
+            curlog_btn.setEnabled(False)
+        self._set_abort_button_default()
+        self._log(f"❌ Worker konnte nicht gestartet werden: {exc}", "error")
+        self._refresh_queue()
 
     def start_job_journal(self, worker, *, mode: str, files: list[str]) -> bool:
         try:
@@ -188,6 +267,8 @@ class ConversionWorkerLifecycle:
                 mode=mode,
                 log_file=getattr(worker, "log_file_path", "") or "",
                 encoder=str(self._collect_encoder_options().get("encoder", "")),
+                file_overrides=with_planned_metadata(self._state.file_overrides,
+                    getattr(self._state, 'planned_targets', {})),
                 on_write_error=lambda msg: self._log(
                     f"❌ {msg} – Start wird aus Sicherheitsgründen abgebrochen.", "error"
                 ),

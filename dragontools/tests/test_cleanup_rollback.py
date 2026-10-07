@@ -114,13 +114,13 @@ def test_replace_same_path_rolls_original_back_on_failure(tmp_path, monkeypatch)
         lambda **_kwargs: (True, None),
     )
 
-    real_replace = transaction_module.os.replace
+    real_replace = transaction_module.os.rename
     def fake_replace(src, dst):
         if Path(src) == output and Path(dst) == source:
             raise OSError("simulierter Replace-Fehler")
         return real_replace(src, dst)
 
-    monkeypatch.setattr(transaction_module.os, "replace", fake_replace)
+    monkeypatch.setattr(transaction_module.os, "rename", fake_replace)
     logs = []
     service = ReplaceService(
         overwrite_original=True,

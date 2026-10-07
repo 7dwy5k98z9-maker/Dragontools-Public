@@ -17,11 +17,18 @@ class OutputPathService:
         self._codec = codec
         self._overwrite_original = overwrite_original
 
-    def resolve_output_path(self, input_path: str, container: str) -> tuple[Path, str]:
+    def resolve_output_path(
+        self, input_path: str, container: str, *, codec: str | None = None
+    ) -> tuple[Path, str]:
         stem = Path(input_path).stem
         base_dir = Path(input_path).parent
+        tag_codec = str(codec or self._codec or "").strip().lower()
+        if tag_codec in {"hevc", "hvc1", "hev1", "x265"}:
+            tag_codec = "h265"
+        elif tag_codec in {"avc", "avc1", "x264"}:
+            tag_codec = "h264"
         tag = {"h264": "H264", "h265": "H265", "av1": "AV1"}.get(
-            self._codec, self._codec.upper()
+            tag_codec, tag_codec.upper()
         )
         if self._overwrite_original:
             tmp_dir = self.temp_overwrite_dir(base_dir)

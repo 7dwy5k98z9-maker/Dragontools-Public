@@ -172,12 +172,21 @@ def test_renamer_restarts_rejected_late_job_and_ignores_old_finish(monkeypatch, 
     monkeypatch.setattr(subject, 'config_from_settings', lambda *a, **kw: object())
     view = SimpleNamespace(table=SimpleNamespace(rowCount=lambda: 1), set_busy=Mock(), status_lbl=Mock())
     owner = subject.MovieRenamerResolveCoordinator(None, None, Mock(), view)
+    owner.table_controller.find_row_by_path.return_value = 0
+    owner.table_controller.row_year_override.return_value = None
     owner.thread = old
     owner.start_jobs([(0, 'late.mkv', '', '', False, None, None)], automatic=False, priority=True)
     if accepted:
         factory.assert_not_called()
         assert owner.thread is old
     else:
+        factory.assert_not_called()
+        assert owner.thread is old
+        # A closed queue does not prove that its native thread has stopped.
+        # Preserve that owner, then launch the queued request after completion.
+        monkeypatch.setattr(subject.QTimer, 'singleShot', lambda delay, fn: fn())
+        old.isRunning.return_value = False
+        owner.on_finished(old)
         new.start.assert_called_once()
         assert factory.call_args.args[0][0][1] == 'late.mkv'
         owner.on_finished(old)

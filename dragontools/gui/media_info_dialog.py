@@ -42,6 +42,13 @@ from .ui_helpers import install_persistent_window_geometry, save_window_geometry
 
 
 
+
+_ACTIVE_MEDIA_INFO_THREADS: dict[int, QThread] = {}
+
+def active_media_info_workers() -> tuple[QThread, ...]:
+    """Liefert laufende MediaInfo-Worker fuer den globalen App-Shutdown."""
+    return tuple(_ACTIVE_MEDIA_INFO_THREADS.values())
+
 class _MediaInfoLoadThread(QThread):
     loaded = pyqtSignal(object)
     failed = pyqtSignal(str)
@@ -58,6 +65,7 @@ class _MediaInfoLoadThread(QThread):
         global_preserve_hdrplus: bool,
         standard_container: str,
         dv_container: str,
+        preview_options: dict[str, Any] | None = None,
         parent=None,
     ) -> None:
         super().__init__(parent)
@@ -70,6 +78,7 @@ class _MediaInfoLoadThread(QThread):
         self.global_preserve_hdrplus = bool(global_preserve_hdrplus)
         self.standard_container = str(standard_container or DEFAULT_OUTPUT_CONTAINER_STANDARD)
         self.dv_container = str(dv_container or DEFAULT_OUTPUT_CONTAINER_DV)
+        self.preview_options = dict(preview_options or {})
 
     def run(self) -> None:
         try:
@@ -85,6 +94,7 @@ class _MediaInfoLoadThread(QThread):
                 global_preserve_hdrplus=self.global_preserve_hdrplus,
                 standard_container=self.standard_container,
                 dv_container=self.dv_container,
+                preview_options=self.preview_options,
             )
             details = build_mediainfo_display_details(self.file_path, media_info=mi)
         except Exception as exc:
@@ -105,6 +115,7 @@ class MediaInfoDialog(QDialog):
         planned_target: str | None = None,
         subtitle_rules: dict | None = None,
         codec: str = "h265",
+        preview_options: dict[str, Any] | None = None,
     ):
         super().__init__(parent)
         self.file_path = file_path
@@ -112,6 +123,7 @@ class MediaInfoDialog(QDialog):
         self.planned_target = planned_target
         self.subtitle_rules = dict(subtitle_rules or {})
         self.codec = codec
+        self.preview_options = dict(preview_options or {})
         self._load_thread: _MediaInfoLoadThread | None = None
         self._closed = False
 
@@ -194,12 +206,15 @@ class MediaInfoDialog(QDialog):
                 DEFAULT_OUTPUT_CONTAINER_DV,
                 allowed=("mkv", "mp4"),
             ),
+            preview_options=self.preview_options,
             parent=app,
         )
         self._load_thread.loaded.connect(self._on_info_loaded)
         self._load_thread.failed.connect(self._on_info_failed)
         self._load_thread.finished.connect(self._on_load_finished)
         self._load_thread.finished.connect(self._load_thread.deleteLater)
+        _ACTIVE_MEDIA_INFO_THREADS[id(self._load_thread)] = self._load_thread
+        self._load_thread.finished.connect(lambda worker=self._load_thread: _ACTIVE_MEDIA_INFO_THREADS.pop(id(worker), None))
         self._load_thread.start()
 
     def _on_info_loaded(self, payload: object) -> None:

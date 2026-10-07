@@ -2,6 +2,8 @@
 """Tab-, Lazy-Loading- und Converter-Handoff-Logik des MainWindow."""
 from __future__ import annotations
 
+from .dialog_ownership import exec_owned_dialog
+
 import logging
 import traceback
 
@@ -17,7 +19,7 @@ from PyQt6.QtWidgets import (
 )
 
 from .tab_manager import TabManagerDialog, get_visible_tabs
-from .tab_lazy_loading import find_tab_index, replace_tab_content, show_tab_load_error
+from .tab_lazy_loading import cached_tab_widget, find_tab_index, replace_tab_content, show_tab_load_error
 
 
 _LOG = logging.getLogger(__name__)
@@ -50,6 +52,21 @@ class _TabBar(QTabBar):
         super().mouseReleaseEvent(e)
 
 
+
+def ensure_one_visible_tab(owner, visible: dict[str, bool]) -> dict[str, bool]:
+    """Garantiert mindestens einen sichtbaren Haupt-Tab."""
+    state = dict(visible or {})
+    keys = [key for key, _label in owner._tab_defs]
+    if any(state.get(key, True) for key in keys):
+        return state
+
+    preferred = owner._settings.value("defaults/codec", "h265", type=str)
+    fallback = preferred if preferred in keys else (keys[0] if keys else "")
+    if fallback:
+        state[fallback] = True
+        owner.set_tab_visible_setting(fallback, True)
+    return state
+
 class MainWindowTabsMixin:
     """Kapselt Tab-Lifecycle, Lazy Loading und Tab-Handoffs."""
 
@@ -67,8 +84,6 @@ class MainWindowTabsMixin:
         self.tabs.currentChanged.connect(self._on_tab_activate)
         self.setCentralWidget(self.tabs)
 
-        visible = get_visible_tabs()
-
         # Tabs in fester Reihenfolge anlegen – aber Widget erst bei Aktivierung laden
         self._tab_defs = [
             ("h265",     "H.265 / DV / HDR10+"),
@@ -83,6 +98,8 @@ class MainWindowTabsMixin:
             ("movie_renamer", "Renamer"),
             ("quality_tester", "Qualitätstester"),
         ]
+
+        visible = ensure_one_visible_tab(self, get_visible_tabs())
 
         for key, label in self._tab_defs:
             if not visible.get(key, True):
@@ -125,13 +142,24 @@ class MainWindowTabsMixin:
         key = self.tabs.tabBar().tabData(idx)
         if key is None:
             return
-        if self._tab_widgets.get(key) is not None:
+        if cached_tab_widget(self, key) is not None:
             return   # schon erfolgreich geladen
+
+        pending = getattr(self, "_tab_load_in_progress", None)
+        if pending is None:
+            pending = self._tab_load_in_progress = set()
+        if key in pending:
+            return
+        pending.add(key)
 
         label = self._tab_label(key)
         try:
             widget = self._create_tab_widget(key)
         except Exception as exc:
+            idx = find_tab_index(self, str(key))
+            if idx < 0:
+                _LOG.exception("Ausgeblendeter Lazy-Tab '%s' konnte nicht geladen werden", key)
+                return
             show_tab_load_error(
                 self, idx=idx, key=str(key), label=label, error=exc,
                 traceback_text=traceback.format_exc(), logger=_LOG,
@@ -140,13 +168,23 @@ class MainWindowTabsMixin:
                 ),
             )
             return
+        finally:
+            pending.discard(key)
 
         if widget is None:
             _LOG.error("Unbekannter Lazy-Tab-Key '%s' – Factory lieferte kein Widget", key)
             return
 
         self._tab_widgets[key] = widget
-        replace_tab_content(self, idx, widget, str(key), label)
+        idx = find_tab_index(self, str(key))
+        if idx >= 0:
+            replace_tab_content(self, idx, widget, str(key), label)
+        else:
+            # A constructor may process Qt events; the user can hide this tab
+            # before it returns. Keep its state owned and cached without
+            # replacing the unrelated tab that now occupies the old index.
+            widget.setParent(self.tabs)
+            widget.hide()
 
     def _tab_label(self, key: str) -> str:
         return {
@@ -199,10 +237,16 @@ class MainWindowTabsMixin:
     def _on_tab_close(self, idx: int):
         if self.tabs.count() <= 1:
             return   # letzten Tab nicht schließen
-        key   = self.tabs.tabBar().tabData(idx)
+        key = self.tabs.tabBar().tabData(idx)
+        removed_widget = self.tabs.widget(idx)
         if key:
             self._closed_tabs.append((key, idx))
         self.tabs.removeTab(idx)
+        # Echte geladene Tabs bleiben im Lazy-Cache und koennen direkt wieder
+        # eingehangen werden. Placeholder/Fehlerwidgets sind nicht gecacht und
+        # muessen explizit freigegeben werden; removeTab() loescht sie nicht.
+        if removed_widget is not None and self._tab_widgets.get(key) is None:
+            removed_widget.deleteLater()
         self._set_tab_visible_setting(key, False)
 
     def _close_current_tab(self):
@@ -232,8 +276,13 @@ class MainWindowTabsMixin:
 
     def _reopen_tab(self, key: str, preferred_idx: int):
         self._set_tab_visible_setting(key, True)
+        visible_index = find_tab_index(self, key)
+        if visible_index >= 0:
+            self.tabs.setCurrentIndex(visible_index)
+            self._ensure_tab_loaded(visible_index)
+            return
         label    = self._tab_label(key)
-        existing = self._tab_widgets.get(key)
+        existing = cached_tab_widget(self, key)
         if existing is not None:
             idx = min(preferred_idx, self.tabs.count())
             self.tabs.insertTab(idx, existing, label)
@@ -249,6 +298,9 @@ class MainWindowTabsMixin:
             self._ensure_tab_loaded(idx)
 
     def _set_tab_visible_setting(self, key: str | None, visible: bool) -> None:
+        self.set_tab_visible_setting(key, visible)
+
+    def set_tab_visible_setting(self, key: str | None, visible: bool) -> None:
         if not key:
             return
         self._settings.setValue(f"tabs/visible/{key}", bool(visible))
@@ -269,18 +321,21 @@ class MainWindowTabsMixin:
 
     def _open_tab_manager(self):
         dlg = TabManagerDialog(self)
-        if dlg.exec():
+        if exec_owned_dialog(dlg):
             self._apply_tab_visibility()
 
     def _apply_tab_visibility(self):
-        visible = get_visible_tabs()
+        visible = ensure_one_visible_tab(self, get_visible_tabs())
         existing_keys = {self.tabs.tabBar().tabData(i) for i in range(self.tabs.count())}
 
         # Tabs ausblenden die deaktiviert wurden
         for i in range(self.tabs.count() - 1, -1, -1):
             key = self.tabs.tabBar().tabData(i)
             if key and not visible.get(key, True):
+                removed_widget = self.tabs.widget(i)
                 self.tabs.removeTab(i)
+                if removed_widget is not None and self._tab_widgets.get(key) is None:
+                    removed_widget.deleteLater()
                 existing_keys.discard(key)
 
         # Tabs hinzufügen die aktiviert wurden
@@ -309,34 +364,17 @@ class MainWindowTabsMixin:
         if not paths:
             return
         # Bevorzugte Reihenfolge: h265 → h264 → av1
-        for key in ("h265", "h264", "av1"):
-            widget = self._tab_widgets.get(key)
+        priority = ("h265", "h264", "av1")
+        loaded = [key for key in priority if cached_tab_widget(self, key) is not None]
+        visible = [key for key in priority if find_tab_index(self, key) >= 0]
+        for key in loaded or visible or ("h265",):
+            widget = self._ensure_converter_widget(key)
             if widget is not None and widget.__class__.__name__ == "ConvertWidget":
-                # Tab in den Vordergrund bringen
-                for i in range(self.tabs.count()):
-                    if self.tabs.tabBar().tabData(i) == key:
-                        self.tabs.setCurrentIndex(i)
-                        break
                 widget.add_dropped_files(paths)
-                n = len(paths)
                 self.statusBar().showMessage(
-                    f"✅ {n} Datei(en) vom ISO-Tab an {self._tab_label(key)} übergeben.", 5000
+                    f"✅ {len(paths)} Datei(en) vom ISO-Tab an {self._tab_label(key)} übergeben.", 5000
                 )
                 return
-        # Kein ConvertWidget geladen → ersten Codec-Tab laden und erneut versuchen
-        for key in ("h265", "h264", "av1"):
-            for i in range(self.tabs.count()):
-                if self.tabs.tabBar().tabData(i) == key:
-                    self._ensure_tab_loaded(i)
-                    widget = self._tab_widgets.get(key)
-                    if widget is not None and widget.__class__.__name__ == "ConvertWidget":
-                        self.tabs.setCurrentIndex(i)
-                        widget.add_dropped_files(paths)
-                        n = len(paths)
-                        self.statusBar().showMessage(
-                            f"✅ {n} Datei(en) vom ISO-Tab an {self._tab_label(key)} übergeben.", 5000
-                        )
-                        return
         QMessageBox.warning(
             self,
             "Übergabe fehlgeschlagen",

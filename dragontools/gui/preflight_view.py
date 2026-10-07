@@ -36,7 +36,7 @@ def build_preflight_view(dialog, files, tv_path, anime_path, filme_path, *, seri
 
     # ── Dateien analysieren und gruppieren ────────────────────────
     # Serien: {series_name: [parsed_file_infos]}
-    series_groups: dict[str, list[dict]] = defaultdict(list)
+    series_groups: dict[tuple[str, int | None], list[dict]] = defaultdict(list)
     films: list[str] = []
 
     for path in files:
@@ -45,7 +45,7 @@ def build_preflight_view(dialog, files, tv_path, anime_path, filme_path, *, seri
         # Online-Metadatensuche exakt mit dem Renamer ueberein.
         parsed = parse_series_release_name(user_path_name(path))
         if parsed and parsed.series:
-            series_groups[parsed.series].append({
+            series_groups[(parsed.series, parsed.year)].append({
                 "path": path,
                 "season": parsed.season,
                 "episode": parsed.episode,
@@ -63,7 +63,7 @@ def build_preflight_view(dialog, files, tv_path, anime_path, filme_path, *, seri
             f"({len(series_groups)} Gruppe{'n' if len(series_groups)>1 else ''})</span>")
         inner_v.addWidget(grp_lbl)
 
-        for sn, entries in sorted(series_groups.items()):
+        for (sn, _year), entries in sorted(series_groups.items(), key=lambda pair: (pair[0][0], pair[0][1] or 0)):
             w = SeriesGroupWidget(
                 sn, entries, tv_path, anime_path,
                 default_type=series_default_type,

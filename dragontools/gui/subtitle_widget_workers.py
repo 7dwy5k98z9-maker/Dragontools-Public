@@ -2,7 +2,6 @@
 """QThread-Worker für Extraktion, Injection und Untertitelkonvertierung."""
 from __future__ import annotations
 
-import os
 import threading
 import traceback
 from pathlib import Path
@@ -182,7 +181,7 @@ class _InjectWorker(_SubWorker):
                             self.language, self.tools.ffmpeg,
                             logger=self.log.emit,
                             subtitle_codec="mov_text",
-                            map_existing_subtitles=False,
+                            map_existing_subtitles=True,
                             worker=self,
                             forced=self.forced,
                             ffprobe=self.tools.ffprobe,
@@ -194,6 +193,7 @@ class _InjectWorker(_SubWorker):
                         self.language, self.forced,
                         logger=self.log.emit,
                         mkvmerge=self.tools.mkvmerge,
+                        ffprobe=self.tools.ffprobe,
                         title=self.title,
                         worker=self,
                     )
@@ -243,12 +243,12 @@ class _ConvertWorker(_SubWorker):
                     if self.mode == "srt2ass":
                         if Path(path).suffix.lower() != ".srt":
                             raise ValueError("SRT -> ASS unterstützt nur .srt-Dateien.")
-                        out = os.path.join(self.out_dir, Path(path).stem + ".ass")
+                        out = str(_unique_output_path(Path(self.out_dir) / (Path(path).stem + ".ass")))
                         srt_to_ass(path, out, style=build_ass_style(self.font_family, self.font_size))
                     elif self.mode == "txt2srt":
                         if Path(path).suffix.lower() != ".txt":
                             raise ValueError("TXT -> SRT unterstützt nur .txt-Dateien.")
-                        out = os.path.join(self.out_dir, Path(path).stem + ".srt")
+                        out = str(_unique_output_path(Path(self.out_dir) / (Path(path).stem + ".srt")))
                         txt_to_srt(path, out)
                         self.log.emit(
                             f"  ℹ️ SRT speichert keine Schriftart/-größe; Vorschau: "
@@ -257,10 +257,10 @@ class _ConvertWorker(_SubWorker):
                     elif self.mode == "txt2ass":
                         if Path(path).suffix.lower() != ".txt":
                             raise ValueError("TXT -> ASS unterstützt nur .txt-Dateien.")
-                        out = os.path.join(self.out_dir, Path(path).stem + ".ass")
+                        out = str(_unique_output_path(Path(self.out_dir) / (Path(path).stem + ".ass")))
                         txt_to_ass(path, out, style=build_ass_style(self.font_family, self.font_size))
                     else:
-                        out = os.path.join(self.out_dir, Path(path).stem + ".txt")
+                        out = str(_unique_output_path(Path(self.out_dir) / (Path(path).stem + ".txt")))
                         subtitle_to_txt(path, out)
                     self.log.emit(f"  ✅ → {Path(out).name}")
                 except Exception as e:

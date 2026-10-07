@@ -3,8 +3,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from datetime import datetime
 from pathlib import Path
+from dragontools.core.json_io import atomic_write_json
 
 MANIFEST_NAME = "SNAPSHOT_CONTENTS.json"
 EXCLUDED_DIR_NAMES = frozenset(
@@ -41,11 +43,26 @@ def _excluded(relative: Path) -> bool:
 
 def iter_snapshot_files(root: str | Path) -> list[Path]:
     base = Path(root).resolve()
-    files = [
-        path
-        for path in base.rglob("*")
-        if path.is_file() and not _excluded(path.relative_to(base))
-    ]
+    files = []
+    for directory, names, filenames in os.walk(base):
+        current = Path(directory)
+        kept = []
+        for name in names:
+            path = current / name
+            if _excluded(path.relative_to(base) / '__placeholder__'):
+                continue
+            if path.is_symlink() or path.is_junction():
+                raise RuntimeError(f"Verknüpfung im Snapshot nicht erlaubt: {path}")
+            kept.append(name)
+        names[:] = kept
+        for name in filenames:
+            path = current / name
+            if _excluded(path.relative_to(base)):
+                continue
+            if path.is_symlink():
+                raise RuntimeError(f"Verknüpfung im Snapshot nicht erlaubt: {path}")
+            if path.is_file():
+                files.append(path)
     return sorted(files, key=lambda path: path.relative_to(base).as_posix().casefold())
 
 
@@ -82,7 +99,7 @@ def write_snapshot_manifest(root: str | Path) -> Path:
     base = Path(root).resolve()
     target = base / MANIFEST_NAME
     payload = build_snapshot_manifest(base)
-    target.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    atomic_write_json(target, payload)
     return target
 
 
@@ -91,9 +108,11 @@ def verify_snapshot_manifest(root: str | Path) -> list[str]:
     target = base / MANIFEST_NAME
     try:
         payload = json.loads(target.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         return [f"Manifest unlesbar: {exc}"]
 
+    if not isinstance(payload, dict):
+        return ["Manifest ist kein JSON-Objekt"]
     expected = payload.get("files_sha256")
     if not isinstance(expected, dict):
         return ["files_sha256 fehlt oder ist kein Objekt"]

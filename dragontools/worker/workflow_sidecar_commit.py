@@ -34,17 +34,18 @@ class WorkflowSidecarCommitService:
             tx.commit()
             journal.set_status("sidecars_committed", fatal=False)
         except Exception as exc:
-            self._rollback_failed_commit(tx, journal, exc)
+            self._rollback_failed_commit(tx, journal, exc, ctx=ctx)
         if store_result:
             self.store(ctx, tx, sidecars)
             if video_committed:
                 self.finish_journal(tx)
         return tx
 
-    def _rollback_failed_commit(self, tx, journal, exc) -> None:
+    def _rollback_failed_commit(self, tx, journal, exc, *, ctx) -> None:
         try:
             tx.rollback()
         except Exception as rollback_exc:
+            ctx.keep_failed_output = True
             self._logger.error(
                 "Sidecar-Commit und anschließender Rollback sind fehlgeschlagen; "
                 f"Recovery-Journal bleibt erhalten: commit={exc}; rollback={rollback_exc}"
@@ -77,6 +78,7 @@ class WorkflowSidecarCommitService:
         try:
             tx.rollback()
         except SidecarCommitError as exc:
+            ctx.keep_failed_output = True
             self._logger.error(f"Sidecar-Rollback unvollstaendig: {exc}")
             raise RuntimeError(f"Sidecar-Rollback unvollstaendig: {exc}") from exc
         ctx.sidecar_paths = list(source_paths)

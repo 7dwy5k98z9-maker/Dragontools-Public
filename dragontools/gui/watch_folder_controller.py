@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from collections import defaultdict
 
 from PyQt6.QtCore import QObject, QThread, QTimer, pyqtSignal
 
@@ -14,6 +13,8 @@ from ..core.settings_watch import (
 from ..core.watch_folder import WatchFolderCandidate, WatchFolderScanner
 from ..core.path_syntax import path_compare_key
 from ..core.callback_dispatch import invoke_callback, is_callback_like
+
+from .watch_folder_intake import dispatch_watch_candidates
 
 _LOG = logging.getLogger(__name__)
 
@@ -61,6 +62,7 @@ class WatchFolderController(QObject):
         self._stopped = False
         self._manual_scan_requested = False
         self._rules = []
+        self._scan_generation = 0
         self._pending: dict[str, WatchFolderCandidate] = {}
         self._scanner = WatchFolderScanner(
             stable_seconds=watch_stable_seconds(settings),
@@ -71,6 +73,7 @@ class WatchFolderController(QObject):
     def refresh_settings(self, *, initial: bool = False) -> None:
         if self._stopped:
             return
+        self._scan_generation += 1
         self._rules = load_watch_rules(self._settings)
         self._scanner.set_stable_seconds(watch_stable_seconds(self._settings))
         interval_ms = watch_scan_interval(self._settings) * 1000
@@ -95,6 +98,9 @@ class WatchFolderController(QObject):
                 return False
         self._persist_state()
         return True
+
+    def iter_shutdown_workers(self):
+        return (self._thread,) if self._thread is not None else ()
 
     def scan_now(self) -> bool:
         """Run an explicit Watch-Folder scan, independent of the global auto-scan toggle.
@@ -135,12 +141,16 @@ class WatchFolderController(QObject):
             parent=self,
         )
         self._thread = thread
+        generation = self._scan_generation
         thread.completed.connect(
-            lambda candidates, is_manual=manual: self._handle_candidates(
+            lambda candidates, is_manual=manual, origin=thread: self._handle_candidates(
                 candidates, manual=is_manual
-            )
+            ) if origin is self._thread and generation == self._scan_generation else None
         )
-        thread.failed.connect(self._handle_failure)
+        thread.failed.connect(
+            lambda message, origin=thread: self._handle_failure(message)
+            if origin is self._thread and not self._stopped else None
+        )
         thread.finished.connect(lambda t=thread: self._thread_finished(t))
         if manual:
             self._status("Watch-Folder: manuelle Suche läuft …")
@@ -177,40 +187,10 @@ class WatchFolderController(QObject):
             if manual:
                 self._status("Watch-Folder: keine neuen Dateien gefunden.")
             return
-        grouped: dict[tuple[str, str, bool], list[WatchFolderCandidate]] = defaultdict(list)
-        for candidate in candidates:
-            # Ein manueller Scan soll fehlende Dateien in die bestehende Queue
-            # aufnehmen, aber im Leerlauf keinen neuen Lauf überraschend starten.
-            # Bei einem bereits laufenden Worker werden die Dateien über den
-            # bestehenden Live-Queue-Pfad trotzdem sofort nachgereicht.
-            auto_start = False if manual else candidate.auto_start
-            grouped[(candidate.codec, candidate.profile_key, auto_start)].append(candidate)
-
-        queued = 0
-        for (codec, profile_key, auto_start), group in grouped.items():
-            for candidate in group:
-                self._pending[path_compare_key(candidate.path)] = candidate
-            paths = [candidate.path for candidate in group]
-            try:
-                handled = set(self._enqueue_callback(
-                    codec=codec,
-                    paths=paths,
-                    profile_key=profile_key,
-                    auto_start=auto_start,
-                    completion_callback=self._handle_conversion_result,
-                ) or [])
-            except Exception:
-                _LOG.exception("Watch-Folder-Übergabe an Converter fehlgeschlagen")
-                handled = set()
-
-            for candidate in group:
-                key = path_compare_key(candidate.path)
-                if candidate.path in handled:
-                    queued += 1
-                else:
-                    current = self._pending.get(key)
-                    if current == candidate:
-                        self._pending.pop(key, None)
+        queued = dispatch_watch_candidates(
+            candidates, pending=self._pending, enqueue=self._enqueue_callback,
+            complete=self._handle_conversion_result, manual=manual, log=_LOG,
+        )
 
         if queued:
             prefix = "Watch-Folder manuell" if manual else "Watch-Folder"
@@ -222,25 +202,26 @@ class WatchFolderController(QObject):
             self._status("Watch-Folder: keine neuen Dateien außerhalb der bestehenden Queue gefunden.")
 
     def _candidate_conflicts_with_pending(self, candidate: WatchFolderCandidate) -> bool:
-        """Defer a changed source while its previous signature is still running.
-
-        The same signature is intentionally offered to the queue again on every
-        scan. Queue de-duplication makes that cheap and it lets a manually removed
-        watch item be re-enqueued instead of remaining stuck in pending state.
-        """
+        """Keep an existing source reservation and its selected profile authoritative."""
         current = self._pending.get(path_compare_key(candidate.path))
-        return bool(current is not None and current.signature != candidate.signature)
+        return bool(current is not None and (
+            current.signature, current.codec, current.profile_key
+        ) != (candidate.signature, candidate.codec, candidate.profile_key))
 
-    def _handle_conversion_result(self, input_path: str, success: bool) -> None:
+    def _handle_conversion_result(
+        self, input_path: str, success: bool, output_path: str = ""
+    ) -> None:
         key = path_compare_key(input_path)
         candidate = self._pending.pop(key, None)
         if candidate is None:
             return
         if success:
-            # The job may have replaced the watched source in-place.  Persist
-            # the final output signature, not the pre-conversion signature, or
-            # the Watch-Folder would enqueue DragonTools' own result again.
-            self._scanner.acknowledge_current(candidate)
+            # A final signature is owned by DragonTools only when the committed
+            # output replaced this exact watched pathname.  Otherwise an
+            # external writer may have changed the source while conversion was
+            # running; acknowledge only the originally processed signature so
+            # that the newer revision is scanned again.
+            self._scanner.acknowledge_success(candidate, output_path=output_path)
             self._persist_state()
             self._status(f"Watch-Folder: erfolgreich verarbeitet: {input_path}")
         else:

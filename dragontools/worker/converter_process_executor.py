@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 import subprocess
+import queue
 import threading
 import time
 from pathlib import Path
 
 from ..core.process_runner import subprocess_no_window_kwargs as _no_window_kwargs
+from ..core.owned_process import spawn_owned_process, close_owned_job
+from .tool_runner import run_tool
+from .tool_output_buffer import ToolOutputBuffer
+from .tool_text_output import _start_text_drain, _dispatch_callbacks, _finish_text_drains
 from .process_control import terminate_process_tree
 from .tool_process_lifecycle import ProcessLifecycle, close_process_streams, current_process_attr, process_group_kwargs, worker_lock
 
@@ -41,6 +46,35 @@ def _is_x265_runtime_diagnostic(text: str) -> bool:
     )
 
 
+def _stop_owned_converter(lifecycle):
+    try:
+        if lifecycle.proc is not None and lifecycle.proc.poll() is None:
+            lifecycle.terminate()
+    finally:
+        close_owned_job(lifecycle.proc)
+
+
+def _wait_progress_process(lifecycle, progress_errors, callback_queue):
+    minutes = max(1, int(round(float(lifecycle.timeout_s) / 60))) if lifecycle.timeout_s is not None else 0
+    while True:
+        _dispatch_callbacks(callback_queue, label=lifecycle.label, log=lifecycle.log)
+        if progress_errors:
+            raise progress_errors[0]
+        polled = lifecycle.proc.poll()
+        if polled is not None:
+            return int(polled)
+        lifecycle.handle_pause()
+        rc = lifecycle.handle_abort()
+        if rc is not None:
+            return rc
+        rc = lifecycle.handle_timeout(display="minutes", message=(
+            f"❌ {lifecycle.label}: Keine ffmpeg-Rückmeldung seit {minutes} Min – Prozess wird abgebrochen."
+            if lifecycle.timeout_s is not None else None))
+        if rc is not None:
+            return rc
+        time.sleep(0.1)
+
+
 class ConverterProcessExecutor:
     def __init__(self, worker) -> None:
         self.worker = worker
@@ -68,110 +102,18 @@ class ConverterProcessExecutor:
             log=self.worker.log, timeout_mode=timeout_mode, file_path=path,
         )
     def run(self, cmd, *, timeout_s: int | None = None, label: str = "Subprozess") -> int:
-        timeout_s = 14_400 if timeout_s is None else timeout_s
-        full = [str(part) for part in cmd]
-        lifecycle = self._lifecycle(full, label=label, timeout_s=timeout_s)
-        lifecycle.mark_starting()
-        proc = subprocess.Popen(
-            full,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            stdin=subprocess.DEVNULL,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            **_popen_kwargs(),
-        )
-        lifecycle.register(proc)
-        def drain_stdout() -> None:
-            try:
-                if proc.stdout is None:
-                    return
-                for _line in proc.stdout:
-                    lifecycle.note_activity()
-            except (OSError, ValueError):
-                return
-        thread = threading.Thread(target=drain_stdout, daemon=True)
-        thread.start()
-        rc: int | None = None
-        try:
-            while True:
-                polled = proc.poll()
-                if polled is not None:
-                    rc = int(polled)
-                    break
-                lifecycle.handle_pause()
-                abort_rc = lifecycle.handle_abort()
-                if abort_rc is not None:
-                    rc = abort_rc
-                    break
-                timeout_rc = lifecycle.handle_timeout(display="seconds")
-                if timeout_rc is not None:
-                    rc = timeout_rc
-                    break
-                time.sleep(0.1)
-        finally:
-            thread.join(timeout=2)
-            lifecycle.finish(rc)
-            close_process_streams(proc)
-            if thread.is_alive():
-                thread.join(timeout=0.5)
-        return int(rc if rc is not None else 1)
+        result = run_tool(cmd, label=label, timeout_s=14_400 if timeout_s is None else timeout_s,
+                          worker=self.worker, log=self.worker.log,
+                          stdout_file=subprocess.DEVNULL, merge_stderr=True)
+        return result.returncode
+
     def run_capture(self, cmd, *, timeout_s: int | None = None, label: str = "Tool-Prozess") -> tuple[int, str, str]:
-        timeout_s = 14_400 if timeout_s is None else timeout_s
         full = [str(part) for part in cmd]
         if full and Path(full[0]).stem.lower() == "ffmpeg" and "-nostdin" not in full:
             full = [full[0], "-nostdin"] + full[1:]
-        lifecycle = self._lifecycle(full, label=label, timeout_s=timeout_s)
-        lifecycle.mark_starting()
-        proc = subprocess.Popen(
-            full,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            stdin=subprocess.DEVNULL,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            **_popen_kwargs(),
-        )
-        lifecycle.register(proc)
-        rc: int | None = None
-        stdout = stderr = ""
-        try:
-            while True:
-                lifecycle.handle_pause()
-                abort_rc = lifecycle.handle_abort()
-                if abort_rc is not None:
-                    rc = abort_rc
-                    break
-                # A completed child always wins over an absolute timeout after a pause.
-                polled = proc.poll()
-                if polled is not None:
-                    stdout, stderr = proc.communicate()
-                    rc = int(polled)
-                    break
-
-                timeout_rc = lifecycle.handle_timeout(display="seconds")
-                if timeout_rc is not None:
-                    rc = timeout_rc
-                    break
-                try:
-                    stdout, stderr = proc.communicate(timeout=0.2)
-                    rc = int(proc.returncode or 0)
-                    break
-                except subprocess.TimeoutExpired:
-                    continue
-            if rc in {124, 130}:
-                try:
-                    out, err = proc.communicate(timeout=3)
-                    stdout = stdout or out or ""
-                    stderr = stderr or err or ""
-                except subprocess.TimeoutExpired:
-                    pass
-        finally:
-            lifecycle.finish(rc)
-            close_process_streams(proc)
-        return int(rc if rc is not None else 1), stdout or "", stderr or ""
+        result = run_tool(full, label=label, timeout_s=14_400 if timeout_s is None else timeout_s,
+                          worker=self.worker, log=self.worker.log)
+        return result.returncode, result.stdout, result.stderr
 
     def run_progress(self, cmd, path, dur_ms, *, timeout_s, label: str, probe_frames, read_progress) -> int:
         worker = self.worker
@@ -202,7 +144,7 @@ class ConverterProcessExecutor:
             if verbose:
                 verbose.write(f"[FFMPEG FINAL CMD] {_cmd_for_log(full)}")
         _set_last_stderr(worker, "")
-        stderr_lines: list[str] = []
+        stderr_lines = ToolOutputBuffer(limit=256 * 1024)
         lifecycle = self._lifecycle(
             full,
             label=label,
@@ -211,76 +153,54 @@ class ConverterProcessExecutor:
             path=path,
         )
         lifecycle.mark_starting()
-        proc = subprocess.Popen(
-            full,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            stdin=subprocess.DEVNULL,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            bufsize=1,
-            **_popen_kwargs(),
+        proc = spawn_owned_process(
+            full, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL,
+            text=True, encoding="utf-8", errors="replace", bufsize=1, **_popen_kwargs(),
         )
-        lifecycle.register(proc)
-        def note_activity() -> None:
-            lifecycle.note_activity()
-        def drain_stderr() -> None:
-            try:
-                if proc.stderr is None:
-                    return
-                verbose = getattr(worker, "_verbose_logger", None)
-                for line in proc.stderr:
-                    note_activity()
-                    text = line.rstrip()
-                    if text:
-                        stderr_lines.append(text)
-                        if verbose is not None and _is_x265_runtime_diagnostic(text):
-                            verbose.write(f"[X265 RUNTIME] {text}")
-            except (OSError, ValueError):
-                return
+        callback_queue = queue.Queue(maxsize=256)
+        stop = threading.Event()
+        progress_errors = []
+        stderr_thread = progress_thread = None
+        rc = None
+        verbose = getattr(worker, "_verbose_logger", None)
 
-        stderr_thread = threading.Thread(target=drain_stderr, daemon=True)
-        progress_thread = threading.Thread(
-            target=read_progress,
-            args=(proc, path, dur_ms, total_frames, note_activity),
-            daemon=True,
-        )
-        stderr_thread.start()
-        progress_thread.start()
-        rc: int | None = None
+        def log_runtime_line(text):
+            if verbose is not None and _is_x265_runtime_diagnostic(text):
+                verbose.write(f"[X265 RUNTIME] {text}")
+
+        def consume_progress():
+            try:
+                read_progress(proc, path, dur_ms, total_frames, lifecycle.note_activity)
+            except BaseException as exc:
+                progress_errors.append(exc)
+
         try:
-            while True:
-                polled = proc.poll()
-                if polled is not None:
-                    rc = int(polled)
-                    break
-                lifecycle.handle_pause()
-                abort_rc = lifecycle.handle_abort()
-                if abort_rc is not None:
-                    rc = abort_rc
-                    break
-                minutes = max(1, int(round(float(timeout_s) / 60))) if timeout_s is not None else 0
-                timeout_rc = lifecycle.handle_timeout(
-                    display="minutes",
-                    message=(
-                        f"❌ {label}: Keine ffmpeg-Rückmeldung seit {minutes} Min – Prozess wird abgebrochen."
-                        if timeout_s is not None
-                        else None
-                    ),
-                )
-                if timeout_rc is not None:
-                    rc = timeout_rc
-                    break
-                time.sleep(0.5)
+            lifecycle.register(proc)
+            stderr_thread = _start_text_drain(proc.stderr, stderr_lines,
+                log_runtime_line if verbose is not None else None, callback_queue, lifecycle, stop)
+            progress_thread = threading.Thread(target=consume_progress, daemon=True)
+            progress_thread.start()
+            rc = _wait_progress_process(lifecycle, progress_errors, callback_queue)
         finally:
-            progress_thread.join(timeout=2)
-            stderr_thread.join(timeout=2)
-            _set_last_stderr(worker, "\n".join(stderr_lines[-10:]))
-            lifecycle.finish(rc)
-            close_process_streams(proc)
-            if progress_thread.is_alive():
-                progress_thread.join(timeout=0.5)
-            if stderr_thread.is_alive():
-                stderr_thread.join(timeout=0.5)
+            try:
+                _stop_owned_converter(lifecycle)
+                drained = _finish_text_drains((progress_thread, stderr_thread), callback_queue,
+                                              label=label, log=worker.log)
+                if rc == 0 and (not drained or stderr_lines.read_error):
+                    rc = 75
+                    stderr_lines.append(f"\nTool-Ausgabe unvollständig: {stderr_lines.read_error}")
+                if progress_errors and rc in {None, 0}:
+                    rc = 1
+                diagnostic = "\n".join(stderr_lines.text().splitlines()[-10:])
+                if stderr_lines.truncated:
+                    diagnostic = "[Diagnoseausgabe gekürzt]\n" + diagnostic
+                _set_last_stderr(worker, diagnostic)
+                lifecycle.finish(rc)
+            finally:
+                stop.set()
+                close_owned_job(proc)
+                close_process_streams(proc)
+                stderr_lines.release()
+        if progress_errors:
+            raise progress_errors[0]
         return int(rc if rc is not None else 1)

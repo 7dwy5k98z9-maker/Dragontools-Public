@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 
+from .dv_filter_graph import prepend_video_filter, append_video_filter
+
 _DV_SETPARAMS = (
     "setparams=range=limited"
     ":colorspace=bt2020nc"
@@ -32,12 +34,14 @@ def _dv_p5_libplacebo_filter(pixel_format: str) -> str:
     )
 
 
-def build_dv5_libplacebo_vf(vf_args: list, *, pixel_format: str = "p010le") -> list:
+def build_dv5_libplacebo_vf(vf_args: list, *, pixel_format: str = "p010le", source_stream_index: int | None = None) -> list:
     """Build ffmpeg filter args for DV Profile 5 base-layer conversion."""
     cleaned: list = []
     i = 0
     while i < len(vf_args):
-        if vf_args[i] == "-map" and i + 1 < len(vf_args):
+        # A complex graph maps its filtered output. A simple -vf still
+        # needs the explicit source mapping to prevent automatic selection.
+        if "-filter_complex" in vf_args and vf_args[i] == "-map" and i + 1 < len(vf_args):
             if str(vf_args[i + 1]) in ("0:v", "0:v:0", "1:v", "1:v:0"):
                 i += 2
                 continue
@@ -47,13 +51,12 @@ def build_dv5_libplacebo_vf(vf_args: list, *, pixel_format: str = "p010le") -> l
     if "-filter_complex" in cleaned:
         fc_idx = cleaned.index("-filter_complex")
         chain = cleaned[fc_idx + 1]
-        if "[0:v:0]" in chain:
-            chain = chain.replace("[0:v:0]", f"[0:v:0]{_dv_p5_libplacebo_filter(pixel_format)},", 1)
-        else:
-            chain = f"{_dv_p5_libplacebo_filter(pixel_format)},{chain}"
+        chain = prepend_video_filter(str(chain), _dv_p5_libplacebo_filter(pixel_format), source_stream_index=source_stream_index)
         cleaned[fc_idx + 1] = chain
         return cleaned
 
+    if "-map" not in cleaned:
+        cleaned += ["-map", "0:v:0"]
     try:
         vf_idx = cleaned.index("-vf")
         old_chain = cleaned[vf_idx + 1]
@@ -69,6 +72,7 @@ def inject_dv_colorspace(
     is_p5: bool = False,
     *,
     pixel_format: str = "p010le",
+    source_stream_index: int | None = None,
 ) -> list:
     """Inject stable DV color metadata using the encoder-native 10-bit format."""
     result = list(vf_args)
@@ -83,21 +87,8 @@ def inject_dv_colorspace(
         fc_idx = result.index("-filter_complex")
         old_chain = result[fc_idx + 1]
 
-        video_label = next((label for label in ("[1:v:0]", "[0:v:0]") if label in old_chain), None)
-        if video_label is not None:
-            tail = old_chain[old_chain.index(video_label) + len(video_label) :]
-            if tail.startswith("["):
-                old_chain = old_chain.replace(
-                    video_label,
-                    f"{video_label}{vf_prefix.rstrip(',')}[_dvfmt];[_dvfmt]",
-                    1,
-                )
-            else:
-                old_chain = old_chain.replace(video_label, f"{video_label}{vf_prefix}", 1)
-        if "[vout]" in old_chain:
-            old_chain = old_chain.replace("[vout]", f"{vf_suffix}[vout]")
-        else:
-            old_chain += vf_suffix
+        old_chain = prepend_video_filter(str(old_chain), vf_prefix.rstrip(","), source_stream_index=source_stream_index)
+        old_chain = append_video_filter(old_chain, result, vf_suffix.lstrip(","))
 
         result[fc_idx + 1] = old_chain
         return result

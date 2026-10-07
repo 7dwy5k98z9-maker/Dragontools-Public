@@ -8,11 +8,15 @@ serve all SxxExx files of that season.
 from __future__ import annotations
 
 from pathlib import Path
+from copy import deepcopy
 from typing import Any
 
+from .online_metadata_identity import validate_tmdb_episode
 from .online_metadata_common import (
     EpisodeMetadataSuggestion,
     OnlineMetadataError,
+    OnlineMetadataNotFoundError,
+    OnlineMetadataResponseError,
     _float_or_none,
     _int_or_none,
     _year_from_date,
@@ -41,7 +45,7 @@ class TmdbRenamerBatchMixin:
             if force_refresh or cache is None:
                 return None
             value = cache.get(key)
-            return dict(value) if isinstance(value, dict) else None
+            return deepcopy(value) if isinstance(value, dict) else None
 
         if lock is None:
             existing = cached()
@@ -52,9 +56,10 @@ class TmdbRenamerBatchMixin:
                 {"language": lang},
                 force_refresh=force_refresh,
             )
+            validate_tmdb_episode(payload, season)
             if cache is not None:
-                cache[key] = dict(payload)
-            return dict(payload)
+                cache[key] = deepcopy(payload)
+            return deepcopy(payload)
 
         with lock:
             existing = cached()
@@ -65,9 +70,10 @@ class TmdbRenamerBatchMixin:
                 {"language": lang},
                 force_refresh=force_refresh,
             )
+            validate_tmdb_episode(payload, season)
             if cache is not None:
-                cache[key] = dict(payload)
-            return dict(payload)
+                cache[key] = deepcopy(payload)
+            return deepcopy(payload)
 
     def resolve_renamer_episode_candidates(
         self,
@@ -174,9 +180,22 @@ class TmdbRenamerBatchMixin:
                 force_refresh=False,
             )
 
+        validate_tmdb_episode(details, season, episode)
         episode_id = _int_or_none(details.get("id"))
         if episode_id is None:
-            return None
+            try:
+                details = self.tv_episode_details(
+                    tv_id, season, episode,
+                    append_to_response="credits,external_ids",
+                    force_refresh=True,
+                )
+            except OnlineMetadataNotFoundError:
+                return None
+            episode_id = _int_or_none(details.get("id"))
+            if episode_id is None:
+                raise OnlineMetadataResponseError(
+                    "TMDB-Episodendetail enthält keine gültige ID."
+                )
         title, title_is_fallback = normalize_episode_metadata_title(
             details.get("name"),
             episode,
@@ -196,6 +215,7 @@ class TmdbRenamerBatchMixin:
             except OnlineMetadataError:
                 refreshed = None
             if isinstance(refreshed, dict) and refreshed:
+                validate_tmdb_episode(refreshed, season, episode)
                 details = refreshed
                 episode_id = _int_or_none(details.get("id")) or episode_id
                 title, title_is_fallback = normalize_episode_metadata_title(
@@ -206,7 +226,7 @@ class TmdbRenamerBatchMixin:
 
         show_name = str(record.get("name") or query).strip() or query
         original_show_name = str(record.get("original_name") or show_name).strip() or show_name
-        first_air_year = _year_from_date(record.get("first_air_date")) or query_year
+        first_air_year = _year_from_date(record.get("first_air_date"))
         return EpisodeMetadataSuggestion(
             query_series=query,
             series_tmdb_id=tv_id,
@@ -238,13 +258,15 @@ class TmdbRenamerBatchMixin:
     ) -> dict[str, Any] | None:
         try:
             payload = self.tv_season_details(tv_id, season, language=language)
-        except OnlineMetadataError:
+        except OnlineMetadataNotFoundError:
             return None
+        validate_tmdb_episode(payload, season)
         for item in payload.get("episodes") or []:
             if not isinstance(item, dict):
                 continue
             number = _int_or_none(item.get("episode_number") or item.get("number"))
             if number == int(episode):
+                validate_tmdb_episode(item, season, episode)
                 return dict(item)
         return None
 

@@ -38,6 +38,72 @@ def worker_settings_snapshot(settings=None):
         raise RuntimeError("Worker-Einstellungen konnten nicht geladen werden.")
     return SettingsSnapshot(source)
 
+
+def raw_settings_snapshot(settings) -> dict[str, Any]:
+    """Capture QSettings values exactly as stored, including DPAPI blobs.
+
+    This snapshot is intended for transactional rollback.  It must not pass
+    sensitive values through :func:`read_secret`, because an encrypted value
+    can be temporarily undecryptable (different Windows account/machine,
+    damaged user profile, etc.) while still being valuable data that must not
+    be overwritten.
+    """
+    if settings is None:
+        return {}
+    return {
+        str(key): deepcopy(settings.value(key))
+        for key in settings.allKeys()
+    }
+
+
+def sync_settings_checked(settings) -> None:
+    """Persist a QSettings-like store and fail on a reported storage error."""
+    settings.sync()
+    status_fn = getattr(settings, "status", None)
+    if callable(status_fn):
+        status = status_fn()
+        if getattr(status, "value", status) != 0:
+            raise OSError(f"Einstellungen konnten nicht gespeichert werden: {status}")
+
+
+def restore_raw_settings_snapshot(
+    settings,
+    snapshot: dict[str, Any],
+    *,
+    sync: bool = True,
+) -> None:
+    """Restore an exact in-memory settings snapshot without secret re-encoding."""
+    settings.clear()
+    for key, value in snapshot.items():
+        settings.setValue(str(key), deepcopy(value))
+    if sync:
+        sync_settings_checked(settings)
+
+
+def save_settings_transaction(settings, writers: Iterable) -> bool:
+    """Run settings writers transactionally.
+
+    Writers are callables returning ``False`` for validation failure and any
+    other value for success.  If a later section rejects the save, or if a
+    writer/sync raises, every QSettings value is restored to the exact raw
+    state from before the first writer.  This prevents the Settings dialog
+    from partially committing earlier sections when a later section fails.
+    """
+    snapshot = raw_settings_snapshot(settings)
+    try:
+        for writer in writers:
+            if writer() is False:
+                restore_raw_settings_snapshot(settings, snapshot)
+                return False
+        sync_settings_checked(settings)
+        return True
+    except Exception:
+        try:
+            restore_raw_settings_snapshot(settings, snapshot)
+        except Exception:
+            _LOG.exception("QSettings-Rollback nach fehlgeschlagenem Speichern ist fehlgeschlagen.")
+        raise
+
 SET_KEY_UI_SECTION_PREFIX = "ui/sections"
 
 
@@ -141,6 +207,10 @@ __all__ = [
     "app_qsettings",
     "SettingsSnapshot",
     "worker_settings_snapshot",
+    "raw_settings_snapshot",
+    "sync_settings_checked",
+    "restore_raw_settings_snapshot",
+    "save_settings_transaction",
     "settings_value",
     "settings_bool",
     "settings_int",

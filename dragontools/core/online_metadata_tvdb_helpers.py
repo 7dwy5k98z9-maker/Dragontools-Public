@@ -2,8 +2,13 @@
 from __future__ import annotations
 
 import re
+from .online_metadata_identity import provider_id
 from typing import Any
 
+from .online_metadata_tvdb_localization import (
+    _tvdb_language_candidates, _tvdb_localized_title, _tvdb_localized_overview,
+    _tvdb_text, _metadata_text_value, _tvdb_language_code,
+)
 from .online_metadata_common import (
     _int_or_none,
     _year_from_date,
@@ -37,14 +42,14 @@ def _episodes_from_tvdb_response(data: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def _tvdb_record_id(record: dict[str, Any]) -> int | None:
-    for key in ("provider_id", "tvdb_id", "tvdbId", "id", "movieId", "seriesId", "objectID", "object_id"):
+    for key in ("tvdb_id", "tvdbId", "id", "movieId", "seriesId", "objectID", "object_id", "provider_id"):
         value = record.get(key)
-        numeric = _int_or_none(value)
+        numeric = provider_id(value)
         if numeric is not None:
             return numeric
-        match = re.search(r"(\d+)$", str(value or ""))
+        match = re.fullmatch(r"(?:series|movie|episode)-(\d+)", str(value or ""))
         if match:
-            return int(match.group(1))
+            return provider_id(match.group(1))
     return None
 
 
@@ -72,191 +77,15 @@ def _tvdb_remote_id(record: dict[str, Any], provider: str) -> str:
     return ""
 
 
-def _tvdb_language_candidates(value: str) -> tuple[str, ...]:
-    raw = str(value or "").strip().lower()
-    tvdb = _tvdb_language_code(raw)
-    short = raw.split("-", 1)[0] if raw else ""
-    values: list[str] = []
-    for candidate in (tvdb, raw, short):
-        if candidate and candidate not in values:
-            values.append(candidate)
-    return tuple(values)
 
 
-def _tvdb_localized_title(record: dict[str, Any], language: str) -> str:
-    """Liest den Titel in der gewünschten TheTVDB-Sprache.
-
-    TheTVDB v4 liefert je nach Endpoint mehrere Formen:
-    - SearchResult: ``name_translated`` und teils ``translations`` als Sprach-Dict
-    - ``extended?meta=translations``: ``translations.nameTranslations`` als
-      Liste von Translation-Records (``language`` + ``name``)
-    - ältere/abweichende Antworten mit verschachtelten Dicts.
-
-    Exakte Sprachübersetzungen werden immer vor Originaltitel/Alias-Fallbacks
-    bevorzugt. Dadurch überschreibt z.B. ein japanischer Originaltitel nicht
-    mehr einen vorhandenen deutschen/englischen Namen.
-    """
-    if not isinstance(record, dict):
-        return ""
-    candidates = _tvdb_language_candidates(language)
-
-    def from_translation_list(items: Any) -> str:
-        if not isinstance(items, list):
-            return ""
-        for code in candidates:
-            for item in items:
-                if not isinstance(item, dict):
-                    continue
-                lang = str(
-                    item.get("language")
-                    or item.get("languageCode")
-                    or item.get("language_code")
-                    or item.get("code")
-                    or ""
-                ).strip().lower()
-                if lang != code:
-                    continue
-                text = _tvdb_text(item, "name", "title")
-                if text:
-                    return text
-        return ""
-
-    translations = record.get("translations")
-    if isinstance(translations, dict):
-        # Search-/Simple-Form: {"eng": "Title", "deu": "Titel"}
-        for code in candidates:
-            text = _metadata_text_value(translations.get(code))
-            if text:
-                return text
-
-        # Offizielle TranslationExtended-Form:
-        # {"nameTranslations": [{"language": "eng", "name": "..."}, ...]}
-        for key in (
-            "nameTranslations",
-            "name_translations",
-            "names",
-            "titles",
-            "name",
-            "title",
-        ):
-            nested = translations.get(key)
-            text = from_translation_list(nested)
-            if text:
-                return text
-            if isinstance(nested, dict):
-                for code in candidates:
-                    text = _metadata_text_value(nested.get(code))
-                    if text:
-                        return text
-
-        # Einzelner Translation-Record als Dict.
-        lang = str(
-            translations.get("language")
-            or translations.get("languageCode")
-            or translations.get("language_code")
-            or ""
-        ).strip().lower()
-        if lang in candidates:
-            text = _tvdb_text(translations, "name", "title")
-            if text:
-                return text
-
-    text = from_translation_list(translations)
-    if text:
-        return text
-
-    # Manche Antworten führen Übersetzungen direkt als Sprach-Dict.
-    for key in ("nameTranslations", "name_translations"):
-        value = record.get(key)
-        if isinstance(value, dict):
-            for code in candidates:
-                text = _metadata_text_value(value.get(code))
-                if text:
-                    return text
-        # Eine Liste aus Strings bedeutet bei TVDB normalerweise nur
-        # "für diese Sprachen existiert eine Übersetzung" und enthält keinen
-        # Titeltext; sie darf deshalb nicht als Titel verwendet werden.
-
-    # Sprachgebundene Aliase sind besser als ein fremdsprachiger Originaltitel.
-    aliases = record.get("aliases")
-    if isinstance(aliases, list):
-        for code in candidates:
-            for alias in aliases:
-                if not isinstance(alias, dict):
-                    continue
-                lang = str(
-                    alias.get("language")
-                    or alias.get("languageCode")
-                    or alias.get("language_code")
-                    or ""
-                ).strip().lower()
-                if lang == code:
-                    text = _tvdb_text(alias, "name", "title")
-                    if text:
-                        return text
-
-    # SearchResult: vom Search-Endpoint für die angeforderte Sprache
-    # berechneter Titel. Erst nach expliziten Translation-Records nutzen.
-    translated = _metadata_text_value(record.get("name_translated"))
-    original = _metadata_text_value(record.get("name"))
-    # Wenn TheTVDB mangels Übersetzung lediglich den Originaltitel nochmals
-    # als name_translated liefert, behandeln wir das nicht als erfolgreiche
-    # Lokalisierung. So kann die konfigurierte Fallback-Sprache noch greifen.
-    if translated and compare_metadata_text(translated) != compare_metadata_text(original):
-        return translated
-    return ""
-
-def _tvdb_text(record: dict[str, Any], *keys: str) -> str:
-    for key in keys:
-        value = record.get(key)
-        text = _metadata_text_value(value)
-        if text:
-            return text
-    return ""
 
 
-def _metadata_text_value(value: Any) -> str:
-    if value is None:
-        return ""
-    if isinstance(value, str):
-        return value.strip()
-    if isinstance(value, dict):
-        for key in ("deu", "de", "eng", "en", "name", "title", "overview"):
-            text = _metadata_text_value(value.get(key))
-            if text:
-                return text
-        for item in value.values():
-            text = _metadata_text_value(item)
-            if text:
-                return text
-    if isinstance(value, list):
-        for item in value:
-            text = _metadata_text_value(item)
-            if text:
-                return text
-    return ""
 
 
-def _tvdb_language_code(value: str) -> str:
-    code = str(value or "").strip().lower()
-    mapping = {
-        "de": "deu",
-        "de-de": "deu",
-        "ger": "deu",
-        "deu": "deu",
-        "en": "eng",
-        "en-us": "eng",
-        "en-gb": "eng",
-        "eng": "eng",
-        "ja": "jpn",
-        "ja-jp": "jpn",
-        "jpn": "jpn",
-        "fr": "fra",
-        "fr-fr": "fra",
-        "fre": "fra",
-        "fra": "fra",
-    }
-    return mapping.get(code, code[:3] if len(code) >= 3 else code or "eng")
+
+
+
 
 
 def _year_from_tvdb_record(record: dict[str, Any]) -> int | None:

@@ -7,6 +7,7 @@ from .duration_repair_models import MediaTimingInfo, TimestampRepairResult
 from .duration_repair_stream_guard import RepairStreamGuard, StreamInventory
 from .duration_timestamp_candidate_archive import RejectedTimestampArchive
 from .duration_timestamp_candidate_validation import TimestampCandidateValidator
+from .verification_control import stopped
 
 
 class TimestampCandidateService:
@@ -50,6 +51,9 @@ class TimestampCandidateService:
             verified_dolby_vision=verified_dolby_vision,
             source_reference=source_reference,
         )
+        if stopped(run, getattr(self._runtime, 'worker', None)):
+            validation.ok = False
+            validation.messages.append('Timestamp-Reparatur vor Commit abgebrochen.')
         if not validation.ok:
             return self._reject_invalid_candidate(
                 validation, run, out, tmp, base_dir, label, method, command, timing_summary
@@ -65,6 +69,13 @@ class TimestampCandidateService:
         )
 
     def _handle_tool_result(self, run, *, out, tmp, base_dir, label, method, command, timing_summary, candidate_exists):
+        if stopped(run, getattr(self._runtime, 'worker', None)):
+            if candidate_exists:
+                self._archive.archive(tmp, out=out, base_dir=base_dir, label=label,
+                    reason='Timestamp-Reparatur abgebrochen oder zeitüberschritten.')
+            result = self._failure_result('Timestamp-Reparatur abgebrochen oder zeitüberschritten.', run, method, command, timing_summary)
+            result.retry_recommended = False
+            return result
         if run.returncode == 0:
             return None
         detail_lines = (run.stderr or run.stdout or "").strip().splitlines()
@@ -75,7 +86,17 @@ class TimestampCandidateService:
         )
         if not candidate_exists or not tolerated:
             self._runtime.log(f"❌ {label} fehlgeschlagen: {detail}", "error")
-            self._archive.archive(tmp, out=out, base_dir=base_dir, label=label, reason=f"{label} fehlgeschlagen: {detail}")
+            archived = self._archive.archive(
+                tmp, out=out, base_dir=base_dir, label=label,
+                reason=f"{label} fehlgeschlagen: {detail}",
+            )
+            # Bei einem echten Toolfehler gab es noch keine erfolgreich
+            # verifizierte Diagnose-Datei. Kann sie nicht archiviert werden,
+            # bleibt das historische Cleanup-Verhalten bestehen. Anders bei
+            # *nach* Verifikation verworfenen Kandidaten: dort bewahrt der
+            # Archiv-Service das Artefakt fail-safe auf.
+            if archived is None and tmp.exists():
+                self._runtime.safe_unlink(tmp)
             return self._failure_result(f"{label} fehlgeschlagen: {detail}", run, method, command, timing_summary)
         self._runtime.log(
             f"⚠️ {label} endete mit Returncode {run.returncode}, hat aber eine Ausgabedatei erzeugt. "
@@ -117,7 +138,7 @@ class TimestampCandidateService:
             retry_recommended=True, tool_returncode=run.returncode, method=method,
         )
 
-    def _archive_rejected_candidate(self, tmp: Path, *, out: Path, base_dir: Path | None, label: str, reason: str) -> str | None:
+    def archive_rejected_candidate(self, tmp: Path, *, out: Path, base_dir: Path | None, label: str, reason: str) -> str | None:
         return self._archive.archive(tmp, out=out, base_dir=base_dir, label=label, reason=reason)
 
     @staticmethod

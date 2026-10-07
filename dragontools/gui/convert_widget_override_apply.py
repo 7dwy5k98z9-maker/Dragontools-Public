@@ -38,7 +38,7 @@ def merge_dialog_override(existing: dict | None, template: dict | None, *, prese
     Per-file state that is intentionally not edited by this dialog (for example
     an assigned encoder profile or future queue metadata) remains untouched.
     """
-    result = dict(existing or {})
+    result = deepcopy(existing or {})
     source = dict(template or {})
     for key in DIALOG_OVERRIDE_KEYS:
         if preserve_tracks and key in TRACK_OVERRIDE_KEYS:

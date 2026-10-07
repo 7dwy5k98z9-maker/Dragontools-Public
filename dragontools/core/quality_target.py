@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Callable
+import math
+from .type_utils import _safe_bool, _safe_float, _safe_int
 
 
 @dataclass(slots=True, frozen=True)
@@ -17,15 +19,15 @@ class QualityTargetConfig:
     @classmethod
     def from_encoder_options(cls, options: dict | None) -> "QualityTargetConfig":
         data = dict(options or {})
-        minimum = max(0, min(63, int(data.get("quality_target_min", 18))))
-        maximum = max(0, min(63, int(data.get("quality_target_max", 30))))
+        minimum = max(0, min(63, _safe_int(data.get("quality_target_min"), 18)))
+        maximum = max(0, min(63, _safe_int(data.get("quality_target_max"), 30)))
         if minimum > maximum:
             minimum, maximum = maximum, minimum
         return cls(
-            enabled=bool(data.get("quality_target_enabled", False)),
-            target_vmaf=max(1.0, min(100.0, float(data.get("quality_target_vmaf", 95.0)))),
-            sample_count=max(1, min(10, int(data.get("quality_target_samples", 3)))),
-            sample_duration_s=max(2.0, min(60.0, float(data.get("quality_target_sample_duration_s", 10.0)))),
+            enabled=_safe_bool(data.get("quality_target_enabled"), False),
+            target_vmaf=max(1.0, min(100.0, _finite_option(data.get("quality_target_vmaf"), 95.0))),
+            sample_count=max(1, min(10, _safe_int(data.get("quality_target_samples"), 3))),
+            sample_duration_s=max(2.0, min(60.0, _finite_option(data.get("quality_target_sample_duration_s"), 10.0))),
             min_quality=minimum,
             max_quality=maximum,
         )
@@ -36,6 +38,11 @@ class QualityTargetEvaluation:
     quality: int
     average_vmaf: float
     segment_scores: tuple[float, ...] = ()
+
+
+def _finite_option(value, default):
+    number = _safe_float(value, default)
+    return number if math.isfinite(number) else default
 
 
 @dataclass(slots=True)
@@ -73,7 +80,7 @@ def adaptive_quality_search(
         if value in measured:
             return measured[value].average_vmaf
         score = evaluate(value)
-        if score is None:
+        if score is None or not math.isfinite(float(score)) or not 0 <= float(score) <= 100:
             return None
         evaluation = QualityTargetEvaluation(value, float(score), ())
         measured[value] = evaluation

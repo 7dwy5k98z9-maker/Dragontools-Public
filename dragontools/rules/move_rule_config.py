@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+from copy import deepcopy
 from ..core.config_migration import SCHEMA_VERSION_KEY, finish_migration
 
 _DEFAULT_MOVE_RULES: dict[str, Any] = {
@@ -34,18 +35,18 @@ def migrate_move_rules(
     source_path: str | None = None,
     reporter: Any = None,
 ) -> dict[str, Any]:
-    raw = dict(rules or {})
-    migrated = dict(raw)
+    raw = deepcopy(rules or {})
+    migrated = deepcopy(raw)
     messages: list[str] = []
 
     for key, default_value in _DEFAULT_MOVE_RULES.items():
         if key == SCHEMA_VERSION_KEY:
             continue
         if key not in migrated:
-            migrated[key] = default_value
+            migrated[key] = deepcopy(default_value)
             messages.append(f"Move-Regel '{key}' ergänzt")
 
-    folder_structure = dict(_DEFAULT_MOVE_RULES["folder_structure"])
+    folder_structure = deepcopy(_DEFAULT_MOVE_RULES["folder_structure"])
     if isinstance(raw.get("folder_structure"), dict):
         folder_structure.update(raw["folder_structure"])
     else:

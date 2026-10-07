@@ -101,13 +101,16 @@ class ConversionStartCoordinator:
             self._log(traceback.format_exc(), "error")
         finally:
             if not launched:
+                # Any exception after worker assignment (for example a broken
+                # Qt signal wrapper) must not leave a stale unstarted worker.
+                self._state.thread = None
                 self._release_start_claim()
 
     def start_move_only(self) -> None:
+        if not self._claim_start():
+            return
+        launched = False
         try:
-            if bool(getattr(self._state, "start_reserved", False)) or self._lifecycle.active_worker():
-                self._log("Start während laufender Verarbeitung oder Verschieben gesperrt.", "warn")
-                return
             from PyQt6.QtWidgets import QDialog
             from .preflight_dialog import PreFlightDialog
 
@@ -170,6 +173,8 @@ class ConversionStartCoordinator:
                     )
 
             self._progress.reset(len(files))
+            # reset_for_run intentionally preserves start_reserved; restore the
+            # move-specific state gathered before the reset.
             self._state.planned_targets.update(preserved_planned_targets)
             self._state.sidecar_outputs_by_video.update(preserved_sidecars)
             self._state.restored_move_context.update(restore_context)
@@ -183,10 +188,24 @@ class ConversionStartCoordinator:
             self._ui.pause_btn.setEnabled(False)
             self._ui.pause_btn.setText("⏸ Pause")
             self._refresh_queue()
-            self._preflight.start_move(files, None)
+            launch_result = self._preflight.start_move(files, None)
+            launched = launch_result is not False
+            if not launched:
+                self._set_start_enabled(True)
+                self._set_queue_edit(True)
+                self._ui.abort_btn.setEnabled(False)
         except Exception:
             self._log("❌ Unbehandelte Ausnahme in start_move_only()", "error")
             self._log(traceback.format_exc(), "error")
+        finally:
+            if not launched:
+                self._set_start_enabled(True)
+                self._set_queue_edit(True)
+                self._ui.abort_btn.setEnabled(False)
+                self._ui.pause_btn.setEnabled(False)
+                self._ui.pause_btn.setText("⏸ Pause")
+                self._release_start_claim()
+                self._refresh_queue()
 
     def start_dv_remux(self) -> None:
         if not self._claim_start():
@@ -220,6 +239,7 @@ class ConversionStartCoordinator:
             self._log(traceback.format_exc(), "error")
         finally:
             if not launched:
+                self._state.thread = None
                 self._release_start_claim()
 
     def _claim_start(self) -> bool:
@@ -229,7 +249,7 @@ class ConversionStartCoordinator:
         Doppelstart-Schutz geeignet: zwischen beiden Zuständen kann ein zweites
         Click-/Auto-Start-Ereignis eintreffen.
         """
-        if bool(getattr(self._state, "start_reserved", False)):
+        if bool(getattr(self._state, "start_reserved", False)) or bool(getattr(self._state, "finalization_in_progress", False)):
             self._log("Start bereits vorgemerkt; doppelter Start wurde blockiert.", "warn")
             return False
         if self._lifecycle.active_worker():

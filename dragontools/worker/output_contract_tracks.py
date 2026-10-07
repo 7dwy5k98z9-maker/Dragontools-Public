@@ -7,6 +7,17 @@ from .media_contract import _audio_codec_family, _subtitle_codec_family
 from .media_contract_types import ExpectedMediaContract
 
 
+def _verified_track_title(stream, container):
+    tags = stream.get("tags") or {}
+    title = str(tags.get("title") or "").strip()
+    if title or str(container).lower() not in {"mp4", "mov"}:
+        return title
+    # FFmpeg stores MP4's track display label in the handler name. Generic
+    # muxer labels do not prove that a requested human title was retained.
+    handler = str(tags.get("handler_name") or "").strip()
+    return "" if handler in {"SoundHandler", "SubtitleHandler", "VideoHandler"} else handler
+
+
 def compare_audio_tracks(contract: ExpectedMediaContract, streams: list[dict]) -> list[str]:
     expected = contract.audio_tracks
     if len(streams) != len(expected):
@@ -33,6 +44,23 @@ def compare_audio_tracks(contract: ExpectedMediaContract, streams: list[dict]) -
                 messages.append(
                     f"Audio #{index}: Sprache abweichend: erwartet {expected_lang}, "
                     f"gefunden {actual_lang or '<nicht gesetzt>'}."
+                )
+        if planned.default is not None:
+            actual_default = bool((actual.get("disposition") or {}).get("default", 0))
+            if actual_default != bool(planned.default):
+                messages.append(
+                    f"Audio #{index}: Default-Flag abweichend: erwartet {bool(planned.default)}, "
+                    f"gefunden {actual_default}."
+                )
+        if planned.forced is not None:
+            actual_forced = bool((actual.get("disposition") or {}).get("forced", 0))
+            if actual_forced != planned.forced:
+                messages.append(f"Audio #{index}: Forced-Flag abweichend: erwartet {planned.forced}, gefunden {actual_forced}.")
+        if planned.title is not None:
+            actual_title = _verified_track_title(actual, contract.container)
+            if actual_title != str(planned.title).strip():
+                messages.append(
+                    f"Audio #{index}: Titel abweichend: erwartet {planned.title!r}, gefunden {actual_title!r}."
                 )
     return messages
 
@@ -62,6 +90,19 @@ def compare_subtitle_tracks(contract: ExpectedMediaContract, streams: list[dict]
                 f"Untertitel #{index}: Forced-Flag abweichend: erwartet {bool(planned.forced)}, "
                 f"gefunden {actual_forced}."
             )
+        if planned.default is not None:
+            actual_default = bool((actual.get("disposition") or {}).get("default", 0))
+            if actual_default != bool(planned.default):
+                messages.append(
+                    f"Untertitel #{index}: Default-Flag abweichend: erwartet {bool(planned.default)}, "
+                    f"gefunden {actual_default}."
+                )
+        if planned.title is not None:
+            actual_title = _verified_track_title(actual, contract.container)
+            if actual_title != str(planned.title).strip():
+                messages.append(
+                    f"Untertitel #{index}: Titel abweichend: erwartet {planned.title!r}, gefunden {actual_title!r}."
+                )
     return messages
 
 

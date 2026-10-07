@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from ..core.online_metadata import OnlineMetadataError, parse_movie_query, parse_series_query
+from ..core.online_metadata_parsing import compare_metadata_text
 
 
 @dataclass(frozen=True, slots=True)
@@ -189,9 +190,10 @@ def _text_score(left: str, right: str) -> float:
 
 
 def _norm(value: str) -> str:
-    text = str(value or "").casefold().replace("&", " und ")
-    text = text.replace("ä", "ae").replace("ö", "oe").replace("ü", "ue").replace("ß", "ss")
-    return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9]+", " ", text)).strip()
+    # Keep this confidence gate aligned with provider/renamer matching.
+    # ASCII-only normalization collapses CJK/Cyrillic titles to an empty
+    # string and makes an otherwise exact provider hit look ambiguous.
+    return compare_metadata_text(value)
 
 
 def _record_year(record: dict[str, Any]) -> int | None:

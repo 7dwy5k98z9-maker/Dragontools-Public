@@ -1,7 +1,7 @@
 # DragonTools Copilot Instructions
 
 ## Project context
-- This repository contains DragonTools V9.8.7, a Windows desktop application for media analysis, conversion, metadata handling, and renaming.
+- This repository contains DragonTools V9.9.0, a Windows desktop application for media analysis, conversion, metadata handling, and renaming.
 - Main entry point: `DragonToolsV9.py`
 - Source package root: `dragontools/`
 - External tools are expected under `third_party/` and are not checked into Git.

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -222,6 +223,10 @@ def _build_subtitle_row(track: dict[str, Any], fallback_index: int) -> dict[str,
 def _tracks(payload: dict[str, Any]) -> list[dict[str, Any]]:
     media = payload.get("media", {}) if isinstance(payload, dict) else {}
     tracks = media.get("track", []) if isinstance(media, dict) else []
+    if isinstance(tracks, dict):
+        tracks = [tracks]
+    if not isinstance(tracks, list):
+        return []
     return [track for track in tracks if isinstance(track, dict)]
 
 
@@ -240,7 +245,7 @@ def _first_number(track: dict[str, Any], *keys: str) -> int | None:
             continue
         try:
             return int(float(str(value).strip().replace(" ", "").replace(",", ".")))
-        except ValueError:
+        except (ValueError, OverflowError):
             continue
     return None
 
@@ -265,7 +270,7 @@ def _join_values(*values: Any, separator: str = " / ") -> str:
 def _format_int(value: Any) -> str:
     try:
         number = int(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return MISSING
     return f"{number:,}".replace(",", ".")
 
@@ -273,9 +278,9 @@ def _format_int(value: Any) -> str:
 def _format_size(bytes_value: Any) -> str:
     try:
         size = float(bytes_value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return MISSING
-    if size <= 0:
+    if not math.isfinite(size) or size <= 0:
         return MISSING
     units = ("Byte", "KB", "MB", "GB", "TB")
     unit_index = 0
@@ -290,9 +295,9 @@ def _format_size(bytes_value: Any) -> str:
 def _format_bitrate(value: Any, *, suffix: str = "") -> str:
     try:
         bitrate = float(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return MISSING
-    if bitrate <= 0:
+    if not math.isfinite(bitrate) or bitrate <= 0:
         return MISSING
     if bitrate >= 1_000_000:
         return f"{bitrate / 1_000_000:.2f} Mb/s{suffix}"
@@ -304,9 +309,9 @@ def _format_bitrate(value: Any, *, suffix: str = "") -> str:
 def _format_duration(seconds_value: Any) -> str:
     try:
         seconds = float(seconds_value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return MISSING
-    if seconds <= 0:
+    if not math.isfinite(seconds) or seconds <= 0:
         return MISSING
     hours = int(seconds // 3600)
     minutes = int((seconds % 3600) // 60)
@@ -323,7 +328,7 @@ def _fps_label(frame_rate: Any, numerator: Any = None, denominator: Any = None) 
             den = int(denominator)
             if den > 0:
                 return f"{num}/{den} ({num / den:.3f} fps)"
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
             pass
     text = _value(frame_rate)
     if text == MISSING:

@@ -29,6 +29,7 @@ class OnlineMetadataDialogStateMixin:
         combo.setCurrentIndex(0)
 
     def _apply_state(self, state: OnlineMetadataSettingsState) -> None:
+        self._loaded_bearer_token = state.loaded_bearer_token
         self._set_combo_data(self.movie_provider_combo, state.movie_provider)
         self._set_combo_data(self.series_provider_combo, state.series_provider)
         self._set_combo_data(self.movie_preferred_combo, state.movie_preferred_provider)
@@ -48,6 +49,7 @@ class OnlineMetadataDialogStateMixin:
 
     def _state_from_controls(self) -> OnlineMetadataSettingsState:
         return OnlineMetadataSettingsState(
+            loaded_bearer_token=getattr(self, '_loaded_bearer_token', None),
             movie_provider=self.movie_provider_combo.currentData() or DEFAULT_METADATA_MOVIE_PROVIDER,
             series_provider=self.series_provider_combo.currentData() or DEFAULT_METADATA_SERIES_PROVIDER,
             movie_preferred_provider=(

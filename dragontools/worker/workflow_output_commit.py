@@ -50,6 +50,12 @@ class WorkflowOutputCommitCoordinator:
             self._archive_geometry_candidate(ctx)
             return
 
+        # NFO metadata/track planning may have been prepared concurrently with
+        # the encode.  Wait only at the verified commit boundary and refresh
+        # technical streamdetails from the actual candidate; the final media
+        # contract remains the fallback if that late probe is unavailable.
+        self._postprocess.await_prepared_nfo(ctx)
+
         # Source-based trickplay must be rendered before destructive overwrite.
         # It targets the final video stem directly; because it is rendered from
         # the still-intact original it remains valid even if the video replace
@@ -82,6 +88,7 @@ class WorkflowOutputCommitCoordinator:
             if sidecar_tx is not None:
                 self._rollback_sidecars(sidecar_tx, ctx, staged_sidecars)
             self._postprocess.discard_prepared_source_trickplay(ctx, cleanup=False)
+            self._postprocess.discard_prepared_nfo(ctx)
             raise
 
         self._apply_replace_state(ctx)
@@ -89,6 +96,7 @@ class WorkflowOutputCommitCoordinator:
             if sidecar_tx is not None:
                 self._rollback_sidecars(sidecar_tx, ctx, staged_sidecars)
             self._postprocess.discard_prepared_source_trickplay(ctx, cleanup=False)
+            self._postprocess.discard_prepared_nfo(ctx)
             self.finalize_sidecars(ctx)
             return
 
@@ -97,6 +105,11 @@ class WorkflowOutputCommitCoordinator:
             self._finish_sidecar_journal(sidecar_tx)
         else:
             self.finalize_sidecars(ctx)
+
+        self._postprocess.commit_prepared_nfo(
+            ctx,
+            final_output=str(ctx.final_output_path or ctx.output_path),
+        )
         if getattr(ctx, "cleanup_pending", False):
             # No Future may announce success for a video with an open commit.
             # Optional companions still run, without owning the terminal result.
@@ -109,6 +122,8 @@ class WorkflowOutputCommitCoordinator:
         result = getattr(ctx, "verify_result", None)
         if result is None:
             raise RuntimeError("Geometrie-Archivierung ohne Verifikationsergebnis ist unzulaessig.")
+
+        self._postprocess.discard_prepared_nfo(ctx)
 
         archived = preserve_failed_verification_output(ctx, result, logger=self._logger)
         if archived:
@@ -214,3 +229,12 @@ class WorkflowOutputCommitCoordinator:
 
     def start_postprocess(self, ctx) -> bool:
         return self._postprocess.start(ctx)
+
+    def start_nfo_during_conversion(self, ctx) -> None:
+        self._postprocess.start_during_nfo(
+            ctx,
+            final_output=self._anticipated_final_output(ctx),
+        )
+
+    def discard_prepared_nfo(self, ctx) -> None:
+        self._postprocess.discard_prepared_nfo(ctx)

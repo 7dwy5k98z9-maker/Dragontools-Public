@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from ..rules.renamer_rules import sanitize_renamer_text
 from .settings_metadata import DEFAULT_METADATA_CACHE_DAYS, DEFAULT_METADATA_CACHE_ENABLED, DEFAULT_METADATA_FALLBACK_LANGUAGE, DEFAULT_METADATA_LANGUAGE, DEFAULT_METADATA_MOVIE_PROVIDER, DEFAULT_METADATA_SERIES_PROVIDER, DEFAULT_METADATA_MOVIE_PREFERRED_PROVIDER, DEFAULT_METADATA_SERIES_PREFERRED_PROVIDER
@@ -26,6 +26,14 @@ class OnlineMetadataAuthError(OnlineMetadataError):
     pass
 
 
+class OnlineMetadataNotFoundError(OnlineMetadataError):
+    """Provider returned a definite 404/not-found response."""
+
+
+class OnlineMetadataResponseError(OnlineMetadataError):
+    """Provider returned a syntactically/structurally invalid success payload."""
+
+
 @dataclass(frozen=True)
 class OnlineMetadataConfig:
     movie_provider: str = DEFAULT_METADATA_MOVIE_PROVIDER
@@ -39,6 +47,14 @@ class OnlineMetadataConfig:
     tvdb_api_key: str = ""
     tvdb_pin: str = ""
     tvdb_bearer_token: str = ""
+    # Optional runtime hooks for automatically managed TheTVDB bearer tokens.
+    # Excluded from repr/equality because they are plumbing, not provider config.
+    tvdb_bearer_token_load: Callable[[], str] | None = field(
+        default=None, repr=False, compare=False
+    )
+    tvdb_bearer_token_store: Callable[[str], None] | None = field(
+        default=None, repr=False, compare=False
+    )
     language: str = DEFAULT_METADATA_LANGUAGE
     fallback_language: str = DEFAULT_METADATA_FALLBACK_LANGUAGE
     cache_enabled: bool = DEFAULT_METADATA_CACHE_ENABLED

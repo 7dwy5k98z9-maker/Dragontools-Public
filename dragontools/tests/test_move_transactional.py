@@ -136,7 +136,7 @@ def test_directory_overwrite_copy_failure_keeps_old_destination(tmp_path, monkey
 
     def failing_copytree(_src, dst, *args, **kwargs):
         partial = Path(dst)
-        partial.mkdir(parents=True)
+        partial.mkdir(parents=True, exist_ok=True)
         (partial / "partial.txt").write_text("partial", encoding="utf-8")
         raise OSError("simulierter Copy-Fehler")
 
@@ -167,14 +167,14 @@ def test_directory_overwrite_commit_failure_restores_old_destination(tmp_path, m
 
     thread = _bare_move_thread()
     thread.conflict_mode = "overwrite"
-    real_replace = move_module.os.replace
+    real_replace = move_module.os.rename
 
     def failing_commit(src, dst):
         if ".__dragontools_partial__" in Path(src).name and Path(dst) == destination:
             raise OSError("simulierter Commit-Fehler")
         return real_replace(src, dst)
 
-    monkeypatch.setattr(move_module.os, "replace", failing_commit)
+    monkeypatch.setattr(move_module.os, "rename", failing_commit)
 
     ok = thread._move(str(source), str(target_parent))
 
@@ -228,14 +228,14 @@ def test_trickplay_overwrite_commit_failure_restores_old_target(tmp_path, monkey
 
     source, destination = _make_trickplay_pair(tmp_path)
     service = _trickplay_service("overwrite")
-    real_replace = move_module.os.replace
+    real_replace = move_module.os.rename
 
     def failing_commit(src, dst):
         if ".__dragontools_partial__" in Path(src).name and Path(dst) == destination:
             raise OSError("simulierter Trickplay-Commit-Fehler")
         return real_replace(src, dst)
 
-    monkeypatch.setattr(move_module.os, "replace", failing_commit)
+    monkeypatch.setattr(move_module.os, "rename", failing_commit)
 
     ok, _result = service.move_trickplay(source, destination)
 
@@ -253,14 +253,14 @@ def test_trickplay_backup_commit_failure_restores_original_name(tmp_path, monkey
 
     source, destination = _make_trickplay_pair(tmp_path)
     service = _trickplay_service("backup")
-    real_replace = move_module.os.replace
+    real_replace = move_module.os.rename
 
     def failing_commit(src, dst):
         if ".__dragontools_partial__" in Path(src).name and Path(dst) == destination:
             raise OSError("simulierter Trickplay-Commit-Fehler")
         return real_replace(src, dst)
 
-    monkeypatch.setattr(move_module.os, "replace", failing_commit)
+    monkeypatch.setattr(move_module.os, "rename", failing_commit)
 
     ok, _result = service.move_trickplay(source, destination)
 

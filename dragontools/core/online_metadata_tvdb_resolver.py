@@ -9,6 +9,7 @@ from .online_metadata_common import (
     EpisodeMetadataSuggestion,
     MovieMetadataSuggestion,
     OnlineMetadataError,
+    OnlineMetadataResponseError,
     SeriesMetadataSuggestion,
     _clear_cache_dir,
     _float_or_none,
@@ -38,17 +39,25 @@ class TvdbResolverMixin:
 
     def _search_records(self, kind: str, query: str, *, year: int | None, language: str | None) -> list[dict[str, Any]]:
         params: dict[str, Any] = {"query": query, "type": kind, "limit": 10}
-        if language:
-            params["language"] = _tvdb_language_code(language)
+        params["language"] = _tvdb_language_code(language or self.config.language)
         records = _records_from_data(self._request_json("/search", params))
+        valid: list[dict[str, Any]] = []
         for record in records:
-            record.setdefault("provider", "thetvdb")
-            record.setdefault("provider_id", _tvdb_record_id(record))
-        if year:
-            matching = [record for record in records if _year_from_tvdb_record(record) == year]
-            if matching:
-                return matching
-        return records
+            record_id = _tvdb_record_id(record)
+            if record_id is None:
+                continue
+            normalized = dict(record)
+            # Provider identity is transport-owned; payload fields must not spoof it.
+            normalized["provider"] = "thetvdb"
+            normalized["provider_id"] = record_id
+            valid.append(normalized)
+        if year is not None:
+            return [
+                record for record in valid
+                if (candidate_year := _year_from_tvdb_record(record)) is None
+                or candidate_year == int(year)
+            ]
+        return valid
 
     def movie_details(self, movie_id: int, *, include_translations: bool = False) -> dict[str, Any]:
         params = {"meta": "translations"} if include_translations else {}
@@ -97,7 +106,14 @@ class TvdbResolverMixin:
         selected = self.resolve_episode_record(series.tmdb_id, season, episode)
         if selected is None:
             return None
-        episode_id = _int_or_none(selected.get("id") or selected.get("tvdb_id") or selected.get("tvdbId") or selected.get("episode_id")) or 0
+        episode_id = _int_or_none(
+            selected.get("id") or selected.get("tvdb_id")
+            or selected.get("tvdbId") or selected.get("episode_id")
+        )
+        if episode_id is None:
+            raise OnlineMetadataResponseError(
+                "TheTVDB-Episodenantwort enthält keine gültige ID."
+            )
         title, title_is_fallback = normalize_episode_metadata_title(
             _tvdb_text(selected, "name_translated", "name", "title"),
             episode,
@@ -112,6 +128,7 @@ class TvdbResolverMixin:
             season_number=season,
             episode_number=episode,
             title=title,
+            first_air_year=series.first_air_year,
             overview=_tvdb_text(selected, "overview", "overview_translated"),
             air_date=str(selected.get("aired") or selected.get("firstAired") or selected.get("air_date") or "").strip(),
             runtime_min=_int_or_none(selected.get("runtime") or selected.get("runtime_min")),
@@ -145,4 +162,5 @@ class TvdbResolverMixin:
         return self.resolve_episode_candidates(path, limit=limit, force_refresh=True)
 
     def clear_cache(self) -> int:
+        self.enable_fresh_session()
         return _clear_cache_dir(self.cache_dir)

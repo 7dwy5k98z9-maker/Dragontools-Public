@@ -1,24 +1,31 @@
 # -*- coding: utf-8 -*-
 """Planning for lossless-video AudioMux jobs."""
 from __future__ import annotations
-import logging
 
-import subprocess
 from pathlib import Path
 from ..core.output_timestamps import build_output_timestamp_args
 
 from ..core.lang_codes import canonical_lang
 from ..core.media_metadata import normalize_video_codec
 from ..core.process_runner import subprocess_no_window_kwargs
-from ..rules.audio_plan import audio_filter_chain, audio_input_args_for_plan, compute_audio_track_plan
+from .tool_runner import run_tool
+from ..rules.audio_plan import (
+    audio_filter_chain,
+    audio_input_args_for_plan,
+    compute_audio_track_plan,
+    output_default_for_decision,
+)
 from .media_contract import _audio_codec_family, _subtitle_codec_family
 from .media_contract_types import ExpectedAudioTrack, ExpectedMediaContract, ExpectedSubtitleTrack
 from .output_probe import probe_output
+from .audio_metadata_args import audio_metadata_args, audio_output_title, audio_output_forced
 
 
 class AudioMuxPlanService:
-    def __init__(self, *, tools) -> None:
+    def __init__(self, *, tools, worker=None) -> None:
         self.tools = tools
+        self.worker = worker
+        self.expected_chapter_count = None
 
     def build_audio_plan(self, media_info):
         return compute_audio_track_plan(
@@ -57,12 +64,13 @@ class AudioMuxPlanService:
             cmd += ["-map", f"0:{chosen.index}"]
             if not decision.needs_transcode:
                 cmd += [f"-c:a:{out_idx}", "copy"]
-                continue
-            bitrate_k = max(32, int(decision.target_bitrate / 1000) if decision.target_bitrate else 256)
-            cmd += [f"-c:a:{out_idx}", decision.target_codec, f"-b:a:{out_idx}", f"{bitrate_k}k", f"-ac:a:{out_idx}", str(decision.target_channels)]
-            chain = audio_filter_chain(decision)
-            if chain:
-                cmd += [f"-filter:a:{out_idx}", chain]
+            else:
+                bitrate_k = max(32, int(decision.target_bitrate / 1000) if decision.target_bitrate else 256)
+                cmd += [f"-c:a:{out_idx}", decision.target_codec, f"-b:a:{out_idx}", f"{bitrate_k}k", f"-ac:a:{out_idx}", str(decision.target_channels)]
+                chain = audio_filter_chain(decision)
+                if chain:
+                    cmd += [f"-filter:a:{out_idx}", chain]
+            cmd += audio_metadata_args(decision)
         cmd += ["-map", "0:s?", "-c:s", "copy", "-map", "0:t?", "-c:t", "copy", "-map", "0:d?", "-c:d", "copy", *build_output_timestamp_args(out), out]
         return cmd
 
@@ -73,6 +81,9 @@ class AudioMuxPlanService:
                 codec=_audio_codec_family(decision.target_codec),
                 channels=max(0, int(decision.target_channels or 0)),
                 language=canonical_lang(getattr(decision.stream, "language", None)),
+                default=output_default_for_decision(decision),
+                title=audio_output_title(decision),
+                forced=audio_output_forced(decision),
             )
             for decision in plan
         )
@@ -81,21 +92,21 @@ class AudioMuxPlanService:
                 codec=_subtitle_codec_family(getattr(stream, "codec", "")),
                 language=canonical_lang(getattr(stream, "language", None)),
                 forced=bool(getattr(stream, "forced", False)),
+                default=bool(getattr(stream, "default", False)),
+                title=str(getattr(stream, "title", "") or ""),
             )
             for stream in (getattr(media_info, "subtitle_streams", None) or [])
         )
-        attachment_count = data_count = None
-        try:
-            probe = probe_output(
-                Path(source_path), ffprobe_path=str(self.tools.ffprobe),
-                run_process=subprocess.run, no_window_kwargs=subprocess_no_window_kwargs(),
-            )
-            attachment_count = sum(1 for s in probe.streams if s.get("codec_type") == "attachment")
-            data_count = sum(1 for s in probe.streams if s.get("codec_type") == "data")
-        except Exception:
-            # Video/audio/subtitle remain fail-closed; auxiliary stream counts
-            # are enforced whenever source ffprobe can establish them.
-            logging.getLogger(__name__).debug("Unterdrückte Best-Effort-Ausnahme in build_expected_contract.", exc_info=True)
+        probe = probe_output(
+            Path(source_path), ffprobe_path=str(self.tools.ffprobe),
+            run_process=self.run_source_probe, no_window_kwargs=subprocess_no_window_kwargs(),
+        )
+        if not any(stream.get("codec_type") == "video" for stream in probe.streams):
+            raise RuntimeError("AudioMux-Quellprobe enthält keinen Videostream.")
+        self.expected_chapter_count = len(getattr(probe, 'chapters', ()) or ())
+        attachment_count = sum(1 for stream in probe.streams if stream.get("codec_type") == "attachment"
+                               or bool((stream.get('disposition') or {}).get('attached_pic', 0)))
+        data_count = sum(1 for stream in probe.streams if stream.get("codec_type") == "data")
         return ExpectedMediaContract(
             container="mkv",
             video_codec=normalize_video_codec(getattr(primary, "codec", "")),
@@ -103,8 +114,20 @@ class AudioMuxPlanService:
             audio_tracks=audio,
             subtitle_tracks=subtitles,
             min_video_bit_depth=getattr(primary, "bit_depth", None),
+            require_hdr=bool(getattr(media_info, "is_hdr", False)),
+            require_dolby_vision=bool(getattr(media_info, "has_dv", False)),
+            expected_dolby_vision_profile=(int(getattr(media_info, "dv_profile_major", 0) or 0) or None),
+            require_hdr10plus=bool(getattr(media_info, "has_hdrplus", False)),
             expected_width=getattr(primary, "width", None),
             expected_height=getattr(primary, "height", None),
             attachment_stream_count=attachment_count,
             data_stream_count=data_count,
         )
+
+    def run_source_probe(self, command, **_kwargs):
+        result = run_tool(command, label="AudioMux Quellprobe", timeout_s=10,
+            worker=self.worker, abort_on_request=True,
+            log=getattr(self.worker, "log_line", None))
+        if result.aborted or result.timed_out:
+            raise RuntimeError("AudioMux-Quellprobe wurde abgebrochen oder hat das Zeitlimit überschritten.")
+        return result

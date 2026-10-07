@@ -5,6 +5,7 @@ from pathlib import Path
 from .media_analyzer_metadata import VideoAnalysisMetadata
 from .models import AudioStream, MediaInfo, SubtitleStream, VideoStream
 from .type_utils import _safe_int
+from .media_metadata import _parse_mediainfo_duration_s
 from .media_duration import source_duration
 
 
@@ -20,17 +21,26 @@ def build_media_info(
     analysis_source: str,
     analysis_warnings: list[str],
 ) -> MediaInfo:
-    format_data = ffprobe_json.get("format", {}) or {}
+    ffprobe_json = ffprobe_json if isinstance(ffprobe_json, dict) else {}
+    mi_general = mi_general if isinstance(mi_general, dict) else {}
+    format_raw = ffprobe_json.get("format", {}) or {}
+    format_data = format_raw if isinstance(format_raw, dict) else {}
     duration_s = source_duration(
         ffprobe_json, video_streams=video_streams, audio_streams=audio_streams,
-        container_duration=mi_general.get("Duration"),
+        container_duration=_parse_mediainfo_duration_s(mi_general.get("Duration")),
     ) or 0.0
-    size_bytes = _safe_int(
-        mi_general.get("FileSize")
-        or format_data.get("size")
-        or (Path(path).stat().st_size if Path(path).exists() else 0),
-        0,
-    )
+    size_bytes = 0
+    for candidate in (
+        mi_general.get("FileSize"),
+        format_data.get("size"),
+        (Path(path).stat().st_size if Path(path).exists() else 0),
+    ):
+        parsed = _safe_int(candidate, None)
+        if parsed is not None and parsed > 0:
+            size_bytes = int(parsed)
+            break
+    indices = [stream.index for stream in (*video_streams, *audio_streams, *subtitle_streams)]
+    ffmpeg_stream_indices_trusted = bool(indices) and all(index >= 0 for index in indices) and len(indices) == len(set(indices))
     dv_info = metadata.dv_info
     return MediaInfo(
         path=path,
@@ -54,4 +64,5 @@ def build_media_info(
         matrix_coefficients=metadata.matrix_coefficients,
         analysis_source=analysis_source,
         analysis_warnings=analysis_warnings,
+        ffmpeg_stream_indices_trusted=ffmpeg_stream_indices_trusted,
     )

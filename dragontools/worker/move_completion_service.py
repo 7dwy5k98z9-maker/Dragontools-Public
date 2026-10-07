@@ -6,6 +6,7 @@ from dataclasses import dataclass
 import inspect
 from pathlib import Path
 from typing import Callable
+from ..core.transaction_identity import renamed_receipt_matches
 
 
 @dataclass(frozen=True)
@@ -27,12 +28,14 @@ class MoveCompletionService:
         record_media_library_move: Callable[[str, dict | None], None],
         append_move_report: Callable[[dict | None], None],
         log: Callable[[str, str], None],
+        planned_target_for: Callable[[str], object] | None = None,
     ) -> None:
         self._journal = journal
         self._move_sidecars = move_sidecars
         self._record_media_library_move = record_media_library_move
         self._append_move_report = append_move_report
         self._log = log
+        self._planned_target_for = planned_target_for or (lambda _path: None)
 
     def companion_resume_result(
         self,
@@ -43,7 +46,9 @@ class MoveCompletionService:
     ) -> tuple[bool, dict]:
         """Erzeugt für Recovery ein Videoresultat ohne erneuten Video-Move."""
         dest_path = str(Path(video_path))
-        ok = Path(dest_path).exists()
+        planned = self._planned_target_for(video_path)
+        proof = planned.get('resume_video_receipt') if isinstance(planned, dict) else None
+        ok = renamed_receipt_matches(dest_path, proof)
         result = {
             "kind": "video",
             "name": Path(dest_path).name,
@@ -54,6 +59,7 @@ class MoveCompletionService:
             "recovered_companion_only": True,
         }
         if ok:
+            self._journal.set_commit_proof(video_path, None, proof)
             self._log(
                 "↻ Move-Recovery: Video bereits committed, Companion-Dateien werden "
                 f"fortgesetzt: {Path(dest_path).name}",

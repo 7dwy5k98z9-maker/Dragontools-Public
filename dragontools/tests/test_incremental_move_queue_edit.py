@@ -224,11 +224,11 @@ def test_incremental_move_finish_uses_finished_thread_reference(monkeypatch):
     controller.finish_incremental_move(finished_move_thread)
 
     assert state.move_thread is replacement_thread
-    assert state.incremental_move_active is False
+    assert state.incremental_move_active is True
     assert "finished-output.mkv" not in state.fertig
     assert finished_move_thread in state.retired_move_threads
-    assert queue_edit_calls == [True]
-    assert start_enabled_calls == [False]
+    assert queue_edit_calls == []
+    assert start_enabled_calls == []
 
 
 def test_incremental_move_does_not_start_without_running_conversion(monkeypatch):

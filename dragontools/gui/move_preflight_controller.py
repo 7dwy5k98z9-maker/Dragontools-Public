@@ -86,8 +86,8 @@ class MovePreflightController:
         return self._workflow.save_report(files, planned_targets, target_paths, title=title)
 
     # Move lifecycle
-    def start_move(self, files: list[str], finished_thread) -> None:
-        self._lifecycle.start_move(files, finished_thread)
+    def start_move(self, files: list[str], finished_thread) -> bool:
+        return self._lifecycle.start_move(files, finished_thread)
 
     def move_finished_now(self) -> None:
         self._lifecycle.move_finished_now()

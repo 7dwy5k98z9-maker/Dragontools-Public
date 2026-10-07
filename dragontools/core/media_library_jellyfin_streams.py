@@ -100,7 +100,7 @@ def _stream_from_jellyfin_row(row: sqlite3.Row, columns: dict[str, str]) -> dict
         "channel_layout": _row_value(row, columns, "ChannelLayout", default=None),
         "bitrate": _int_or_none(_row_value(row, columns, "BitRate", "Bitrate", default=None)),
         "width": width, "height": height, "hdr_format": video_range,
-        "dv_profile": _row_value(row, columns, "DvProfile", "DolbyVisionProfile", "Profile", default=None),
+        "dv_profile": _row_value(row, columns, "DvProfile", "DolbyVisionProfile", default=None),
         "pix_fmt": _row_value(row, columns, "PixelFormat", "PixFmt", default=None),
         "bit_depth": _int_or_none(_row_value(row, columns, "BitDepth", default=None)),
         "profile": _row_value(row, columns, "Profile", default=None),

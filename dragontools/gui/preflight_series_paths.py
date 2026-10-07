@@ -7,7 +7,7 @@ from .preflight_series_choices import (
     selected_series_folder_choice,
     validate_series_folder_choice,
 )
-from .preflight_widget_common import _base_path_key, _series_root_from_input, _series_season_target
+from .preflight_widget_common import _base_path_key, _series_root_from_input, _series_season_target, current_series_base
 
 
 class SeriesWidgetPathMixin:
@@ -29,12 +29,7 @@ class SeriesWidgetPathMixin:
         return _series_root_from_input(base, series_name)
 
     def _current_base_path(self) -> str | None:
-        if not self._options:
-            return None
-        index = self._type_combo.currentIndex()
-        if index < 0 or index >= len(self._options):
-            return None
-        return self._options[index][1]
+        return current_series_base(self)
 
     def _ordered_search_bases(self) -> list[dict[str, str]]:
         """Aktuell gewählten Serienbereich zuerst, danach die weiteren Bereiche."""

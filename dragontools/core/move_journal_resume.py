@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 from pathlib import Path
+from copy import deepcopy
+from .transaction_identity import renamed_receipt_matches
 from typing import Any
 from .move_journal_contracts import TERMINAL_OK, RETRYABLE
 from .move_journal_utils import _normalize_status, _dedupe
 
-def build_move_resume_plan(data: dict[str, Any]) -> dict[str, Any]:
-    files = data.get("files") if isinstance(data.get("files"), dict) else {}
+def _select_move_resume_files(files):
     resume_files: list[str] = []
     companion_resume_sources: dict[str, str] = {}
     counts = {"ok": 0, "skipped": 0, "retry": 0}
@@ -30,11 +31,39 @@ def build_move_resume_plan(data: dict[str, Any]) -> dict[str, Any]:
             if phase == "sidecars_pending" and dest_path:
                 source_exists = Path(str(path)).exists()
                 dest_exists = Path(dest_path).exists()
-                if not source_exists and dest_exists:
+                proof = item.get('commit_proof') if isinstance(item.get('commit_proof'), dict) else {}
+                if not source_exists and dest_exists and renamed_receipt_matches(dest_path, proof.get('destination')):
                     resume_path = dest_path
                     companion_resume_sources[resume_path] = str(path)
             resume_files.append(resume_path)
             counts["retry"] += 1
+
+    return resume_files, companion_resume_sources, counts
+
+def _companion_resume_context(files, companion_resume_sources, planned_targets, sidecars):
+    # Companion-only Recovery muss Kontext unter dem existierenden Zielvideo
+    # bereitstellen, weil die urspruengliche Videodatei bereits verschoben ist.
+    if companion_resume_sources:
+        planned_targets = dict(planned_targets)
+        sidecars = dict(sidecars)
+        for resume_path, original_source in companion_resume_sources.items():
+            row = files.get(original_source) if isinstance(files.get(original_source), dict) else {}
+            if original_source in planned_targets:
+                planned_targets[resume_path] = planned_targets[original_source]
+            elif row.get("target_dir"):
+                planned_targets[resume_path] = {"target": str(row.get("target_dir"))}
+            entry = planned_targets.get(resume_path)
+            entry = dict(entry) if isinstance(entry, dict) else {"target": str(entry or Path(resume_path).parent)}
+            entry['resume_video_receipt'] = deepcopy(row.get('commit_proof', {}).get('destination'))
+            entry['resume_companion_proofs'] = deepcopy(row.get('companion_proofs') or {})
+            planned_targets[resume_path] = entry
+            if original_source in sidecars:
+                sidecars[resume_path] = list(sidecars.get(original_source) or [])
+    return planned_targets, sidecars
+
+def build_move_resume_plan(data: dict[str, Any]) -> dict[str, Any]:
+    files = data.get("files") if isinstance(data.get("files"), dict) else {}
+    resume_files, companion_resume_sources, counts = _select_move_resume_files(files)
 
     planned_targets = data.get("planned_targets")
     if not isinstance(planned_targets, dict):
@@ -46,19 +75,8 @@ def build_move_resume_plan(data: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(target_paths, dict):
         target_paths = {}
 
-    # Companion-only Recovery muss Kontext unter dem existierenden Zielvideo
-    # bereitstellen, weil die urspruengliche Videodatei bereits verschoben ist.
-    if companion_resume_sources:
-        planned_targets = dict(planned_targets)
-        sidecars = dict(sidecars)
-        for resume_path, original_source in companion_resume_sources.items():
-            row = files.get(original_source) if isinstance(files.get(original_source), dict) else {}
-            if original_source in planned_targets:
-                planned_targets[resume_path] = planned_targets[original_source]
-            elif row.get("target_dir"):
-                planned_targets[resume_path] = {"target_dir": str(row.get("target_dir"))}
-            if original_source in sidecars:
-                sidecars[resume_path] = list(sidecars.get(original_source) or [])
+    planned_targets, sidecars = _companion_resume_context(
+        files, companion_resume_sources, planned_targets, sidecars)
 
     return {
         "run_id": str(data.get("run_id") or ""),
@@ -66,9 +84,9 @@ def build_move_resume_plan(data: dict[str, Any]) -> dict[str, Any]:
         "files": _dedupe(resume_files),
         "companion_resume_sources": companion_resume_sources,
         "counts": counts,
-        "planned_targets": planned_targets,
-        "sidecar_outputs_by_video": sidecars,
-        "target_paths": target_paths,
+        "planned_targets": deepcopy(planned_targets),
+        "sidecar_outputs_by_video": deepcopy(sidecars),
+        "target_paths": deepcopy(target_paths),
         "conflict_mode": str(data.get("conflict_mode") or "skip"),
         "episode_replacement_mode": str(data.get("episode_replacement_mode") or "auto"),
         "log_file": str(data.get("log_file") or ""),

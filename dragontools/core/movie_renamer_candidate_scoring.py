@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import re
+import unicodedata
+from .movie_identity import normalize_movie_title
 from difflib import SequenceMatcher
 from typing import Any
 
@@ -75,9 +77,14 @@ def _candidate_score(
 
 
 def _compare_text(value: str) -> str:
-    text = fold_german_umlauts(value)
+    # Provider titles are not limited to latin ASCII.  The previous
+    # ``[^a-z0-9]`` filter reduced Japanese/Chinese/Cyrillic titles to an
+    # empty key and therefore discarded correct provider hits with score 0.
+    # NFKC keeps the comparison deterministic while ``isalnum`` preserves
+    # letters/numbers from every Unicode script.
+    text = unicodedata.normalize("NFKC", fold_german_umlauts(normalize_movie_title(value)))
     text = text.replace("&", " und ")
-    text = re.sub(r"[^a-z0-9]+", " ", text)
+    text = "".join(ch if ch.isalnum() else " " for ch in text)
     return re.sub(r"\s+", " ", text).strip()
 
 

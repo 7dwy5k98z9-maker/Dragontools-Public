@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 
 from .process_runner import run_analysis_tool, tool_available
 from .lang_codes import mkv_language_tags
@@ -23,7 +24,8 @@ def apply_mkv_track_metadata(
         return False, "Direkte Track-Metadatenkorrektur ist in Patch I nur für MKV aktiviert."
     kind = str(stream_type or "").strip().casefold()
     selector_prefix = {"audio": "a", "subtitle": "s"}.get(kind)
-    if not selector_prefix or int(ordinal or 0) <= 0:
+    ordinal_text = str(ordinal).strip()
+    if not selector_prefix or not re.fullmatch(r"[0-9]+", ordinal_text) or int(ordinal_text) <= 0:
         return False, "Track konnte nicht eindeutig adressiert werden."
     if not tool_available(mkvpropedit_path):
         return False, "mkvpropedit wurde nicht gefunden."

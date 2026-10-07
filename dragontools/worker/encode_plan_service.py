@@ -1,30 +1,13 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-from .crop_geometry import normalize_crop_filter
+from copy import deepcopy
+
+from .encode_geometry_plan import detect_encode_imax, detect_encode_crop
 from .encode_plan import EncodePlan
 from .encoder_args import _scale
-from .hdr10_color import (
-    dv_p5_libplacebo_filter,
-    hdr10_setparams_filter,
-    should_apply_standard_hdr10_color,
-)
+from .encode_color_plan import build_encode_color_filters, _is_dv5_source
 from ..core.models import TargetCodec
-from ..core.sdr_hdr_enhancement import decide_sdr_hdr_enhancement
-from ..core.type_utils import _safe_bool, _safe_int
-
-
-def _is_dv5_source(media_info) -> bool:
-    """Gibt True zurück wenn die Quelle DV Profil 5 (ICtCp-Farbraum) ist.
-
-    dv_profile_major liegt auf MediaInfo (nicht VideoStream).
-    """
-    if media_info is None:
-        return False
-    return (
-        getattr(media_info, "dolby_vision", False) is True
-        and getattr(media_info, "dv_profile_major", None) == 5
-    )
 
 
 class EncodePlanService:
@@ -44,7 +27,7 @@ class EncodePlanService:
         logger,
     ) -> None:
         self._codec = codec
-        self._encoder_options = encoder_options
+        self._encoder_options = deepcopy(encoder_options)
         self._scale_mode = scale_mode
         self._detect_imax_auto = detect_imax_auto
         self._detect_crop = detect_crop
@@ -66,142 +49,24 @@ class EncodePlanService:
         scale_mode: str | None = None,
         codec: str | None = None,
     ) -> EncodePlan:
-        active_options = encoder_options or self._encoder_options
+        active_options = deepcopy(self._encoder_options if encoder_options is None else encoder_options)
         active_scale_mode = scale_mode or self._scale_mode
         active_codec = codec or self._codec
-        imax = _safe_bool(file_override.get("imax"), False)
-        video = media_info.primary_video
-        src_width = video.width if video else 0
-        src_height = video.height if video else 0
-        duration_s: float | None = None
-
-        if not imax and _safe_bool(active_options.get("imax_auto_detect"), False):
-            duration_s = (self._probe_duration_ms(input_path) or 0) / 1000
-            interval_s = _safe_int(active_options.get("imax_probe_interval_s"), 90) or 90
-            if self._detect_imax_auto(
-                input_path,
-                duration_s,
-                src_width,
-                src_height,
-                interval_s,
-                _safe_int(active_options.get("imax_probe_duration_s"), 3) or 3,
-                _safe_int(active_options.get("imax_min_variance_percent"), 15) or 15,
-                _safe_int(active_options.get("imax_min_hits"), 2) or 2,
-            ):
-                imax = True
-                self._log("🎬 IMAX-Auto aktiviert.", "info")
-
-        global_autocrop = _safe_bool(active_options.get("autocrop_enabled"), True)
-        crop = None
-        if imax:
-            self._logger.info("🎬 IMAX: Auto-Crop deaktiviert.")
-        elif not global_autocrop:
-            self._logger.info("Auto-Crop global deaktiviert.")
-        else:
-            autocrop_mode = active_options.get("autocrop_mode", "single")
-            if autocrop_mode == "multi" and duration_s is None:
-                duration_s = (self._probe_duration_ms(input_path) or 0) / 1000
-            crop = self._detect_crop(
-                input_path,
-                src_width,
-                src_height,
-                autocrop_mode,
-                _safe_int(active_options.get("autocrop_probe_start_s"), 30) or 30,
-                _safe_int(active_options.get("autocrop_probe_duration_s"), 45) or 45,
-                _safe_int(active_options.get("autocrop_probe_interval_s"), 600) or 600,
-                duration_s,
-            )
-            if crop and src_width > 0 and src_height > 0:
-                raw_crop = crop
-                try:
-                    crop = normalize_crop_filter(
-                        crop,
-                        source_width=src_width,
-                        source_height=src_height,
-                    )
-                except ValueError as exc:
-                    self._log(f"⚠️ Auto-Crop konnte nicht normalisiert werden: {exc}", "warn")
-                    crop = None
-                else:
-                    if crop != raw_crop:
-                        self._logger.info(
-                            f"Auto-Crop vor Encode normalisiert: {raw_crop} → {crop}."
-                        )
-            if not crop:
-                self._logger.info("Auto-Crop: Keine schwarzen Balken erkannt.")
-            elif pipeline == "dv" or str(pipeline).lower() == "pipeline.dv" or getattr(pipeline, "value", None) == "dv" or getattr(pipeline, "name", "").lower() == "dv":
-                self._logger.info(f"DV+Crop: {crop} → RPU wird nach physischem Crop auf L5=0/0/0/0 normalisiert.")
+        file_override = deepcopy(file_override)
+        imax, src_width, src_height, duration_s = detect_encode_imax(
+            input_path, media_info, file_override, active_options,
+            detect_imax_auto=self._detect_imax_auto,
+            probe_duration_ms=self._probe_duration_ms, log=self._log)
+        crop = detect_encode_crop(input_path, pipeline, active_options,
+            imax=imax, src_width=src_width, src_height=src_height,
+            detected_duration_s=duration_s, detect_crop=self._detect_crop,
+            probe_duration_ms=self._probe_duration_ms, log=self._log, logger=self._logger)
 
         burn_sub_or_vf, sn = self._stream_args.sub_args(input_path, media_info, file_override, container)
         scale_filter = _scale(active_scale_mode)
 
-        # DV Profil 5: Dolby-Vision-Reshaping → BT.2020nc/PQ auch in der Standard-Pipeline.
-        # Wenn DV-Erhalt deaktiviert ist und die Quelle DV5 ist, enthalten die Pixel
-        # trotzdem Dolby-Vision-P5-Werte. Reines Um-Taggen oder zscale/ictcp reicht
-        # in der Praxis nicht zuverlässig und kann Rot→Lila verschieben.
-        color_pre_filter = None
-        color_post_filters: list[str] = []
-        active_options["_sdr_hdr_applied"] = False
-        pipeline_value = str(getattr(pipeline, "value", pipeline) or "").strip().lower()
-        is_standard_pipeline = pipeline_value not in {"dv", "av1_dv", "pipeline.dv", "pipeline.av1_dv"}
-        if is_standard_pipeline and _is_dv5_source(media_info):
-            color_pre_filter = dv_p5_libplacebo_filter(active_options)
-            color_post_filters = [hdr10_setparams_filter(active_options)]
-            self._logger.info(
-                "⚠️ DV Profil 5 erkannt (ICtCp-Farbraum) – "
-                "Farbkorrektur libplacebo aktiv (Dolby Vision P5→BT.2020/PQ)."
-            )
-
-        elif is_standard_pipeline and should_apply_standard_hdr10_color(media_info, active_codec):
-            color_post_filters = [hdr10_setparams_filter(active_options)]
-            if getattr(media_info, "has_dv", False):
-                self._logger.info(
-                    "STANDARD-Modus: Dolby Vision wird entfernt; HDR10-Basis "
-                    "bleibt als BT.2020/PQ/10-bit getaggt."
-                )
-            else:
-                self._logger.info(
-                    "STANDARD-Modus: HDR10-Farbraum wird explizit als "
-                    "BT.2020/PQ/10-bit gesetzt."
-                )
-
-        if is_standard_pipeline and not color_pre_filter and not color_post_filters:
-            enhancement = decide_sdr_hdr_enhancement(
-                media_info,
-                target_codec=active_codec,
-                encoder_options=active_options,
-            )
-            if enhancement.applied:
-                color_post_filters = list(enhancement.filter_chain)
-                active_options["_sdr_hdr_applied"] = True
-                active_options["_force_10bit"] = True
-                backend = str(active_options.get("sdr_hdr_backend", "ffmpeg") or "ffmpeg").strip().lower()
-                if backend == "comfyui":
-                    self._log(
-                        "🧠 SDR→HDR Enhancement aktiv: BT.709 → BT.2020/PQ "
-                        "per ComfyUI/HDRTVDM.",
-                        "info",
-                    )
-                else:
-                    self._log(
-                        "🧪 SDR→HDR Enhancement aktiv: BT.709 → BT.2020/PQ per libplacebo "
-                        "Inverse Tone Mapping / Range Expansion.",
-                        "warn",
-                    )
-            elif enhancement.requested:
-                backend = str(active_options.get("sdr_hdr_backend", "ffmpeg") or "ffmpeg").strip().lower()
-                if backend == "comfyui":
-                    self._log(
-                        f"⚠️ SDR→HDR nicht angewendet: {enhancement.reason} "
-                        "Ausgabe bleibt SDR; normaler SDR-Encode wird fortgesetzt.",
-                        "warn",
-                    )
-                else:
-                    self._log(
-                        f"⚠️ SDR→HDR Enhancement übersprungen: {enhancement.reason} "
-                        "Normaler SDR-Encode bleibt aktiv.",
-                        "warn",
-                    )
+        color_pre_filter, color_post_filters = build_encode_color_filters(
+            media_info, pipeline, active_codec, active_options, logger=self._logger, log=self._log)
 
         pre_filters = [f for f in [color_pre_filter, crop, scale_filter] if f]
         vf_args = self._stream_args.build_vf_args(
@@ -211,6 +76,13 @@ class EncodePlanService:
         audio_args = self._stream_args.audio_args(media_info, file_override, container)
         audio_input_args = self._stream_args.audio_input_args(media_info, file_override, container)
 
+        # Preserve the explicit per-file compatibility handoff while keeping
+        # defaults untouched and the completed plan independent of its caller.
+        if encoder_options is not None:
+            encoder_options["_sdr_hdr_applied"] = active_options["_sdr_hdr_applied"]
+            if active_options.get("_sdr_hdr_applied"):
+                encoder_options["_force_10bit"] = True
+
         return EncodePlan(
             crop=crop,
             burn_sub_or_vf=burn_sub_or_vf,
@@ -218,4 +90,5 @@ class EncodePlanService:
             vf_args=vf_args,
             audio_args=audio_args,
             audio_input_args=audio_input_args,
+            encoder_options=deepcopy(active_options),
         )
