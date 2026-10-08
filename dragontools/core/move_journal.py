@@ -20,7 +20,9 @@ from .move_journal_utils import (_remove_path, _normalize_status, _has_retryable
 
 _LOG = logging.getLogger(__name__)
 
-def recover_active_move_backups(root: str | Path | None = None) -> dict[str, int]:
+def recover_active_move_backups(
+    root: str | Path | None = None, *, should_stop: Callable[[], bool] | None = None,
+) -> dict[str, int]:
     totals = {
         "restored": 0,
         "kept": 0,
@@ -30,6 +32,9 @@ def recover_active_move_backups(root: str | Path | None = None) -> dict[str, int
         "ambiguous": 0,
     }
     for data in read_active_move_journals(root):
+        # Finish each journal transaction before observing cancellation.
+        if should_stop is not None and should_stop():
+            break
         path_text = str(data.get("_journal_path") or "")
         if not path_text:
             continue

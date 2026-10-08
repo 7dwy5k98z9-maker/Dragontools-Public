@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import re
+from fractions import Fraction
 from pathlib import Path
 
 from ..core.process_runner import tool_available
@@ -10,6 +11,29 @@ from ..core.strict_numbers import nonnegative_integer
 from .verification_control import require_running
 from .duration_repair_models import MediaTimingInfo
 from .duration_repair_stream_guard import StreamInventory
+from .duration_repair_validation import source_video_reference_s
+
+
+def original_cfr_rate(
+    source_reference: MediaTimingInfo | None,
+    video_reference_s: float | None,
+) -> Fraction | None:
+    """Use the independently analysed original's CFR rate for a repair attempt.
+
+    The damaged output's FrameCount may be derived from its broken duration.
+    It must not veto creating a candidate when the original supplies the rate
+    and duration. Candidate timing and packet integrity remain commit guards.
+    """
+    if source_reference is None or source_reference.video_stream_count != 1:
+        return None
+    if (source_reference.frame_rate_mode or "").upper() != "CFR":
+        return None
+    if source_video_reference_s(source_reference) is None:
+        return None
+    rate = source_reference.frame_rate
+    if rate is None or rate <= 0 or video_reference_s is None or video_reference_s <= 0:
+        return None
+    return rate
 
 
 def allow_one_frame_wrap_cfr_repair(

@@ -74,8 +74,14 @@ class ConverterQueueState:
                         status = RemoveFileStatus.REMOVED
                         message, level = f"Queue: '{name}' entfernt.", "info"
                         break
-                if status == RemoveFileStatus.NOT_FOUND and any(normalize_worker_path(p) == path_n for p in self.done_files):
-                    return status
+                completed = {p for p in self.done_files if normalize_worker_path(p) == path_n}
+                if completed:
+                    self.done_files.difference_update(completed)
+                    self.skip_files.difference_update(
+                        p for p in list(self.skip_files) if normalize_worker_path(p) == path_n)
+                    self.pending_remove_files.difference_update(completed)
+                    status = RemoveFileStatus.REMOVED
+                    message, level = f"Queue: '{name}' entfernt; erneutes Hinzufügen möglich.", "info"
         dispatch_log(log, message, level)
         return status
 
@@ -123,7 +129,9 @@ class ConverterQueueState:
 
     def complete_current(self, path: str) -> None:
         with self.lock:
-            self.done_files.add(path)
+            if path not in self.pending_remove_files:
+                self.done_files.add(path)
+            self.skip_files.discard(path)
             self.pending_remove_files.discard(path)
             self.current_file = None
             self._file_keys.discard(normalize_worker_path(path))

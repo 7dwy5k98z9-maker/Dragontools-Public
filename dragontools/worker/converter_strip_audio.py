@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from ..core.lang_codes import mkv_language_tags
+from .audio_metadata_args import audio_metadata_args
 from ..rules.audio_plan import (
     audio_filter_chain,
     audio_input_args_for_plan,
     compute_audio_track_plan,
-    output_default_for_decision,
 )
 
 
@@ -20,15 +19,7 @@ def build_strip_audio_args(mi, ov, container: str) -> tuple[list[str], list[str]
         args += ["-map", f"0:{decision.stream.index}"]
         if not decision.needs_transcode:
             args += [f"-c:a:{decision.out_idx}", "copy"]
-            args += [
-                f"-disposition:a:{decision.out_idx}",
-                "default" if output_default_for_decision(decision) else "0",
-            ]
-            if getattr(decision.stream, "language", None):
-                args += [
-                    f"-metadata:s:a:{decision.out_idx}",
-                    f"language={mkv_language_tags(decision.stream.language)[0]}",
-                ]
+            args += audio_metadata_args(decision)
             continue
         bitrate_k = max(1, int(decision.target_bitrate / 1000) if decision.target_bitrate else 256)
         args += [
@@ -39,13 +30,5 @@ def build_strip_audio_args(mi, ov, container: str) -> tuple[list[str], list[str]
         filters = audio_filter_chain(decision)
         if filters:
             args += [f"-filter:a:{decision.out_idx}", filters]
-        args += [
-            f"-disposition:a:{decision.out_idx}",
-            "default" if output_default_for_decision(decision) else "0",
-        ]
-        if getattr(decision.stream, "language", None):
-            args += [
-                f"-metadata:s:a:{decision.out_idx}",
-                f"language={mkv_language_tags(decision.stream.language)[0]}",
-            ]
+        args += audio_metadata_args(decision)
     return input_args, args

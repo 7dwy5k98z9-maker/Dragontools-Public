@@ -1,30 +1,30 @@
-# Dragon Tools V9.9.0
+# DragonTools 9.9.0 – aktualisierter Stand
 
-Stand: 08.10.2026. Diese Ausgabe enthält die aktuellen Korrekturen aller 29 Patch-/Review-Schritte und die anschließend behobenen Laufzeitfehler.
+Stand: 08.10.2026. Diese Aktualisierung ergänzt die 29 Review-Schritte und die bisherigen Laufzeitkorrekturen.
 
-- Einzelne aktive Worker lassen sich bei paralleler Konvertierung über Rechtsklick auf die Videodatei pausieren und fortsetzen.
-- Der Abschluss eines Verschiebevorgangs räumt die Warteschlange nach der Bestätigung wieder korrekt auf. Bereits verschobene Dateien bleiben nicht als vermeintlich vorhandene Aufträge zurück.
-- Die Quell-RPU wird vor dem HEVC-Dolby-Vision-Encode schnell anhand vorhandener Metadaten oder Laufzeit × Bildrate auf plausible Länge geprüft. Eine vollständige Framezählung vor dem Encode entfällt. Offensichtlich zu kurze RPUs werden erkannt; der exakte Abgleich nach dem Encode bleibt bestehen.
-- Patch 29 stärkt zusätzlich die ausgewählte Audio-/Untertitelspurübernahme, finale Medienverträge und sichere Filmersetzung.
-- Die Review-Korrekturen betreffen unter anderem Prozesssteuerung, Watchfolder, Zielwahl, HDR, Audio, Untertitel, Metadaten, Mediathek, Recovery und sichere Dateitransaktionen.
-- Der öffentliche Builder übernimmt die aktuelle Build- und Qt-/ICU-Prüfung. Seine PDF-Datenschutzprüfung ist standardmäßig aktiv; ein fehlendes oder ungeeignetes pypdf wird automatisch installiert/repariert.
-- Hilfe, Änderungshistorie, Über-Ansicht, Word-Dokumentation und PDF-Handbuch wurden aus dem aktuellen Projektstand übernommen. Die Übersichten nennen auch die Testanzahl.
+## Korrekturen vom 08.10.2026
 
-## Download
+- Timestamp-Reparatur berücksichtigt die verlässliche Bildrate und Laufzeit des Originals. Ein erfolgloser Remux verhindert diese Prüfung nicht; unsichere Reparaturen bleiben gesperrt.
+- Entfernte, abgeschlossene oder abgebrochene Dateien lassen sich erneut hinzufügen, sobald kein aktiver Auftrag mehr dieselbe Datei verarbeitet.
+- Journal-Wiederherstellung läuft beim Start im Hintergrund. Abgeschlossene Verschiebevorgänge ohne ausstehendes Cleanup lösen keine erneute vollständige Dateiprüfung aus.
+- Beim Einfügen von Untertiteln werden gültige Schriftanhänge auch dann akzeptiert und erhalten, wenn ffprobe keinen Codec-Namen für sie meldet.
+- WebVTT wird zwischen MediaInfo und ffprobe korrekt zugeordnet. Die globale Spurposition bleibt unabhängig von der Untertitelanzahl.
+- Strip-only schreibt die erwarteten Audiotitel, Sprachangaben sowie Default-/Forced-Kennzeichnungen und besteht dadurch die finale Ausgabeprüfung.
 
-`DragonToolsV9.9.0-win64.zip` enthält die EXE und sämtliche für den Start benötigten Python-/Qt-Laufzeitdateien. Den gesamten ZIP-Inhalt entpacken und `DragonToolsV9.9.0.exe` starten.
+Die gezielte Abnahme der WebVTT-/Strip-only-Korrektur umfasst 95 bestandene Tests. Zusätzlich bestand eine echte betroffene Episode die Strip-only-Ausgabeprüfung; ihr Original blieb unverändert. Die Prüfung früherer Korrekturen wurde jeweils mit den betroffenen Regressionstests durchgeführt.
 
-Externe Medienwerkzeuge wie FFmpeg, MKVToolNix, dovi_tool oder MediaInfo sind nicht enthalten. `TOOLS_INSTALLIEREN.txt` beschreibt deren Einrichtung. Die benötigten Python-/Qt-Laufzeitbibliotheken sind enthalten.
+## Installation und Versionshinweis
 
-Die SHA-256-Prüfsumme steht in `DragonToolsV9.9.0-win64.zip.sha256`.
+Das Windows-Paket enthält die EXE und den erforderlichen Datenordner. Externe Medienwerkzeuge werden separat gemäß `TOOLS_INSTALLIEREN.txt` eingerichtet. Das vollständige ZIP entpacken und die EXE gemeinsam mit `Daten` belassen.
 
-## Prüfung
+Die Anwendungsversion bleibt 9.9.0. Bereits installierte 9.9.0-Builds erhalten deshalb keinen automatischen Versionshinweis auf diesen aktualisierten Build.
 
-- 5.160 Standardtests bestanden, 27 übersprungen; 24 DV/HDR-Integrationstests abgewählt.
-- Syntax-/Namensprüfung und öffentliche Datenschutzprüfung bestanden, einschließlich DOCX und PDF.
-- Vier gezielte Fälle prüfen die zusätzliche öffentliche Datenschutzprüfung; echte eingebettete Zugangsdaten werden auch in Hilfsskripten erkannt und ihre Werte maskiert.
-- Finale App-Bundle-Prüfung: 0 Fehler, 0 Warnungen.
-- Starttest der tatsächlich gebauten EXE erfolgreich; Qt-Widgets, JPEG und OpenCV werden dabei praktisch geprüft.
-- ZIP-CRC, Dateiinhalte, Ausschluss externer Medienwerkzeuge und SHA-256-Prüfsumme geprüft.
+## Abnahme des veröffentlichten Quellstands
 
-Der öffentliche Quellstand enthält 1.298 Python-Dateien, 208.363 Gesamtzeilen und 176.045 Codezeilen. Die Testpakete umfassen 376 Python-Dateien, davon 370 Testdateien mit 3.293 statisch erkannten Testfunktionen. Parametrisierte Tests erzeugen mehr ausgeführte Testfälle als statische Testfunktionen.
+- Vollständige Standardtestsuite: 5.234 bestanden, 18 übersprungen, 24 DV/HDR-Integrationstests abgewählt.
+- Öffentliche Datenschutzprüfung einschließlich Dokumenten und Syntax-/Namensprüfung bestanden.
+- Die zusätzliche Architektur-/Journal-/Statistik-Prüfung umfasst 940 bestandene Tests. Die Architekturgrenzen wurden eingehalten; der bestehende Schuldenkatalog blieb unverändert.
+- Der frisch gebaute Windows-Build besteht alle 18 App-Bundle-Prüfungen und den Starttest der tatsächlichen EXE.
+- Paketinhalt, kompilierte Anwendungsmodule, Ausschluss externer Medienwerkzeuge und ZIP-CRC wurden geprüft.
+
+Der aktuelle Quellstand umfasst 1.304 Python-Dateien, 209.366 Gesamtzeilen, 176.898 Codezeilen und 375 Testdateien mit 3.326 statisch erkannten Testfunktionen. Die gezielten Testläufe werden nicht zusätzlich zur Gesamtsuite addiert.

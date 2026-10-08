@@ -17,6 +17,7 @@ def application_worker_sources(window):
         sources.append(SimpleNamespace(iter_shutdown_workers=provider))
     sources.append(SimpleNamespace(iter_shutdown_workers=lambda: (
         getattr(window, "_metadata_action_thread", None),
+        getattr(window, "_move_journal_recovery_thread", None),
     )))
     controller = getattr(window, "_watch_folder_controller", None)
     if controller is not None:

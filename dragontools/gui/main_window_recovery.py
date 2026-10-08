@@ -32,14 +32,28 @@ class MainWindowRecoveryMixin:
         quiet_errors: bool,
     ) -> None:
         try:
-            from ..core.move_journal import (
-                archive_active_move_journal,
-                read_active_move_journal,
-                recover_active_move_backups,
+            from .move_journal_recovery_thread import start_move_journal_recovery
+
+            start_move_journal_recovery(
+                self, on_ready=self._present_move_journal,
+                show_empty_message=show_empty_message, quiet_errors=quiet_errors,
             )
+        except Exception as exc:
+            _LOG.warning("Move-Wiederaufnahme konnte nicht gestartet werden: %s", exc, exc_info=True)
+            if not quiet_errors:
+                QMessageBox.warning(self, "Move-Wiederaufnahme", str(exc))
+
+    def _present_move_journal(
+        self, payload: dict, *, show_empty_message: bool, quiet_errors: bool,
+    ) -> None:
+        try:
+            from ..core.move_journal import archive_active_move_journal
             from .move_resume_dialog import MoveResumeDialog
 
-            recovery = recover_active_move_backups()
+            self.statusBar().clearMessage()
+            if payload.get("error"):
+                raise RuntimeError(payload["error"])
+            recovery = payload["recovery"]
             restored = int(recovery.get("restored", 0) or 0)
             completed = int(recovery.get("completed", 0) or 0)
             cleaned = int(recovery.get("cleaned", 0) or 0)
@@ -56,7 +70,7 @@ class MainWindowRecoveryMixin:
                     9000,
                 )
 
-            data = read_active_move_journal()
+            data = payload["data"]
             if not data:
                 if show_empty_message:
                     QMessageBox.information(
@@ -66,7 +80,7 @@ class MainWindowRecoveryMixin:
                     )
                 return
 
-            dlg = MoveResumeDialog(data, self)
+            dlg = MoveResumeDialog(data, self, prepared_plan=payload["plan"])
             exec_owned_dialog(dlg)
             action = dlg.action()
             if action == MoveResumeDialog.ACTION_LOAD:

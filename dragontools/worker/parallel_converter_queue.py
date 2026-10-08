@@ -5,6 +5,7 @@ from .worker_contracts import RemoveFileStatus
 from .log_dispatch import dispatch_log
 from .live_queue_overrides import override_key, set_file_override
 from .parallel_queue_coordination import coordinated_change
+from .parallel_launch_ownership import child_may_be_running
 
 
 class ParallelConverterQueueMixin:
@@ -30,6 +31,12 @@ class ParallelConverterQueueMixin:
     @coordinated_change
     def accepts_live_file(self, path: str) -> bool:
         key = path_compare_key(path)
+        # An explicitly removed row may still belong to a child doing final
+        # cleanup. Release its old ownership only after the native thread stops.
+        owner = self._assigned.get(key)
+        if (key not in self._queue_state.file_keys and owner is not None
+                and not child_may_be_running(owner)):
+            self._assigned.pop(key, None)
         return bool(self._running and not self.abort_requested
                     and key not in self._assigned and key not in self._queue_state.file_keys)
 
@@ -69,14 +76,17 @@ class ParallelConverterQueueMixin:
         for index, pending_path in enumerate(list(self._pending_files)):
             if path_compare_key(pending_path) == key:
                 del self._pending_files[index]
-                self.files = [p for p in self.files if path_compare_key(p) != key]
-                self._file_progress_pct.pop(path, None)
-                self._rebuild_display_positions()
+                self._forget_removed_file(path)
                 dispatch_log(self._logger, f"Queue: '{display_name(path)}' entfernt.")
                 self._emit_aggregate_progress()
                 return RemoveFileStatus.REMOVED
 
         worker = self._assigned.get(key)
+        terminal = any(path_compare_key(p) == key for p in self._terminal_inputs)
+        if terminal or (worker is not None and not child_may_be_running(worker)):
+            self._forget_removed_file(path, release_owner=worker is None or not child_may_be_running(worker))
+            self._emit_aggregate_progress()
+            return RemoveFileStatus.REMOVED
         candidates = [worker] if worker is not None else list(self._workers)
         for candidate in candidates:
             if candidate is None:
@@ -84,14 +94,31 @@ class ParallelConverterQueueMixin:
             state = candidate.remove_file(path)
             if state != RemoveFileStatus.NOT_FOUND:
                 if state == RemoveFileStatus.REMOVED:
-                    self._assigned.pop(key, None)
-                    self._queue_state.individually_paused.discard(key)
-                    self.files = [p for p in self.files if path_compare_key(p) != key]
-                    self._file_progress_pct.pop(path, None)
-                    self._rebuild_display_positions()
+                    self._forget_removed_file(path)
                 self._emit_aggregate_progress()
                 return state
         return RemoveFileStatus.NOT_FOUND
+
+    def _forget_removed_file(self, path: str, *, release_owner: bool = True) -> None:
+        """Forget one removed row without allowing old children to own a retry."""
+        key = path_compare_key(path)
+        if release_owner:
+            self._assigned.pop(key, None)
+        self.files = [p for p in self.files if path_compare_key(p) != key]
+        self._queue_state.individually_paused.discard(key)
+        for values in (self._terminal_inputs, self._postprocessing_inputs,
+                       self._queue_state.dv_postprocessing_inputs):
+            values.difference_update(p for p in list(values) if path_compare_key(p) == key)
+        for p in list(self._file_progress_pct):
+            if path_compare_key(p) == key:
+                self._file_progress_pct.pop(p, None)
+        results = getattr(self, '_result_state', None)
+        if results is not None:
+            for mapping in (results.sidecar_outputs, results.postprocess_outputs, results.failure_details):
+                for p in list(mapping):
+                    if path_compare_key(p) == key:
+                        mapping.pop(p, None)
+        self._rebuild_display_positions()
 
     @coordinated_change
     def reorder_waiting_files(self, new_order: list[str]) -> None:

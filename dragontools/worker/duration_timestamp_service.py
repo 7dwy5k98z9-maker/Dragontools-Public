@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+from dataclasses import replace
 from fractions import Fraction
 from pathlib import Path
 from uuid import uuid4
@@ -22,6 +23,7 @@ from .duration_timestamp_helpers import (
     allow_one_frame_wrap_cfr_repair,
     log_reference_inventories,
     mkv_video_track_id,
+    original_cfr_rate,
     timestamp_tool_availability_error,
 )
 from .workflow_engine import WorkflowVerifyResult
@@ -74,14 +76,38 @@ class TimestampRepairService:
         )
 
         before = self.get_media_timing_info(str(out), expected_duration_s=video_reference_s)
+        # An independently measured VFR original must retain its timeline,
+        # even if damaged output metadata claims CFR.
+        if source_reference is not None and (source_reference.frame_rate_mode or "").upper() == "VFR":
+            before = replace(before, frame_rate_mode="VFR", frame_rate_derived_from_source=False)
         summary = self.timing_summary(before)
         for line in summary:
             self._runtime.log(f"   {line}", "info")
 
         problem = detect_timestamp_problem(before, expected_duration_s=video_reference_s)
+        source_rate = original_cfr_rate(source_reference, video_reference_s)
+        use_original_cfr = (
+            source_rate is not None
+            and not reference_result.duration_ok
+            and Path(source_reference.path).resolve() != out.resolve()
+        )
+        if use_original_cfr:
+            before = replace(before, frame_rate=source_rate, frame_rate_mode="CFR")
+            reference_line = (
+                f"Timestamp-Rekonstruktion aus Original: {_fps_label(source_rate)} fps | "
+                f"Videodauer={_fmt_duration(video_reference_s)}"
+            )
+            summary.append(reference_line)
+            self._runtime.log(f"   {reference_line}", "info")
+            self._runtime.log(
+                "ℹ️ Framerate und Laufzeit der Originaldatei bestimmen den Reparaturversuch; "
+                "die Framezahl der defekten Ausgabe ist kein Freigabekriterium. "
+                "Der Kandidat wird danach auf Laufzeit und unveränderte Paketnutzdaten geprüft.",
+                "info",
+            )
         original_fallback = None
         vfr_fallback_reason = ""
-        if not problem.should_repair:
+        if not problem.should_repair and not use_original_cfr:
             original_fallback = _try_original_timeline_fallback(
                 service=self._original_timeline_service, problem_reason=problem.reason, before=before,
                 source_path=source_path, out=out, base_dir=base_dir, container=container,
@@ -111,7 +137,7 @@ class TimestampRepairService:
                 "warn",
             )
 
-        self._runtime.log("⚠️ Extreme Abweichung im Videostream erkannt.", "warn")
+        self._runtime.log("⚠️ Laufzeitabweichung im Videostream erkannt.", "warn")
         self._runtime.log("ℹ️ Starte verlustfreie Timestamp-Reparatur.", "info")
         if before.frame_rate is not None:
             self._runtime.log(f"   Rekonstruktionsrate: {_fps_label(before.frame_rate)} fps", "info")

@@ -44,10 +44,20 @@ def probe_streams(path, *, ffprobe, worker=None, logger=None, count_packets=Fals
     payload = json.loads(result.stdout)
     rows = payload.get("streams")
     valid_stream_indices(rows)
-    if not rows or any(
-        not row.get("codec_type") or not row.get("codec_name") for row in rows
-    ):
-        raise ValueError("Medienprüfung enthält keine vollständigen Spuren.")
+    # Font/binary attachments and data streams need not have an FFmpeg codec.
+    # They remain in the inventory and must survive the mux; only playable
+    # streams require codec information for the media contract.
+    incomplete = [row for row in rows if not row.get("codec_type") or (
+        row["codec_type"] not in {"attachment", "data"} and not row.get("codec_name")
+    )]
+    if not rows or incomplete:
+        details = ", ".join(
+            f"Spur {row['index']} ({row.get('codec_type') or 'unbekannt'})"
+            for row in incomplete
+        ) or "keine Spuren"
+        raise ValueError(
+            f"Medienprüfung enthält keine vollständigen Spuren: {Path(path).name}; {details}."
+        )
     for row in rows:
         tags = dict(row.get("tags") or {})
         tags["title"] = tags.get("title") or tags.get("handler_name") or ""

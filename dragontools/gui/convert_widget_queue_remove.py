@@ -4,6 +4,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QMessageBox
 from ..core.path_syntax import display_name, strip_long_path_prefix
 from ..worker.worker_contracts import RemoveFileStatus
+from .conversion_queue_admission import worker_queue_is_running
 
 class ConvertWidgetQueueRemoveMixin:
     def _remove_rejected_from_gui(self, rejected: list[str]) -> None:
@@ -44,7 +45,7 @@ class ConvertWidgetQueueRemoveMixin:
         if not self.guard_queue_edit_allowed("Reihenfolge aendern"):
             return
         thread = self.state.thread
-        if not thread:
+        if not worker_queue_is_running(thread):
             return
         if not hasattr(thread, "reorder_waiting_files"):
             return
@@ -75,12 +76,15 @@ class ConvertWidgetQueueRemoveMixin:
         state.planned_targets.pop(path, None)
         getattr(state, "preflight_rows_by_path", {}).pop(path, None)
         state.pending_remove_paths.discard(path)
+        reset = getattr(state, "reset_file_for_requeue", None)
+        if callable(reset):
+            reset(path)
 
     def remove_paths(self, paths: list[str]) -> None:
         if paths and not self.guard_queue_edit_allowed("Dateien entfernen"):
             return
         state_obj = self.state
-        thread = state_obj.thread
+        thread = state_obj.thread if worker_queue_is_running(state_obj.thread) else None
         for path in paths:
             remove_state = RemoveFileStatus.REMOVED
             worker_error = False
@@ -138,7 +142,7 @@ class ConvertWidgetQueueRemoveMixin:
         if not self.guard_queue_edit_allowed("Warteschlange leeren"):
             return
         state = self.state
-        thread = state.thread
+        thread = state.thread if worker_queue_is_running(state.thread) else None
         current_paths: set[str] = set()
 
         if thread and hasattr(thread, "remove_file"):

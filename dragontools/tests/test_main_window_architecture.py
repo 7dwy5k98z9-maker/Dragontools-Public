@@ -69,7 +69,7 @@ def test_main_window_legacy_method_surface_is_preserved_across_owners():
         "_close_current_tab", "_reopen_last_tab", "_reopen_all_tabs", "_reopen_tab",
         "_set_tab_visible_setting", "set_tab_visible_setting", "_toggle_tab", "_open_tab_manager", "_apply_tab_visibility",
         "_maybe_show_recovery_journals", "_maybe_show_unfinished_job_journal",
-        "_show_unfinished_move_journal", "_maybe_show_replacement_reminders",
+        "_show_unfinished_move_journal", "_present_move_journal", "_maybe_show_replacement_reminders",
         "_open_unfinished_job_journal", "_open_unfinished_move_journal",
         "_show_unfinished_job_journal", "_restore_move_resume_plan", "_restore_job_resume_plan",
         "_ensure_converter_widget", "_handoff_iso_to_converter", "_open_movie_renamer_tab",

@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+from copy import deepcopy
+
 from PyQt6.QtWidgets import (
     QLabel,
     QTextEdit,
@@ -15,15 +17,18 @@ from .journal_resume_base import JournalResumeDialogBase
 class MoveResumeDialog(JournalResumeDialogBase):
     """Dialog für eine nicht vollständig abgeschlossene Verschiebequeue."""
 
-    def __init__(self, data: dict, parent=None) -> None:
+    def __init__(self, data: dict, parent=None, *, prepared_plan: dict | None = None) -> None:
         super().__init__(parent)
         self._data = data
+        self._prepared_plan = deepcopy(prepared_plan)
         self.setWindowTitle("Unvollständiges Verschieben gefunden")
         self.setMinimumWidth(620)
         self._init_ui()
         install_persistent_window_geometry(self, "move_resume_dialog")
 
     def resume_plan(self) -> dict:
+        if self._prepared_plan is not None:
+            return deepcopy(self._prepared_plan)
         return build_move_resume_plan(self._data)
 
     def _init_ui(self) -> None:
@@ -41,7 +46,7 @@ class MoveResumeDialog(JournalResumeDialogBase):
         summary = QTextEdit()
         summary.setReadOnly(True)
         summary.setMinimumHeight(130)
-        summary.setPlainText(format_unfinished_move_summary(self._data))
+        summary.setPlainText(format_unfinished_move_summary(self._data, plan=self.resume_plan()))
         root.addWidget(summary)
 
         plan = self.resume_plan()

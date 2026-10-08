@@ -75,6 +75,15 @@ class ConversionResultFileEventsMixin:
 
         if input_path in state.pending_remove_paths:
             state.pending_remove_paths.discard(input_path)
+            # The terminal event makes deferred removal actionable in the
+            # parallel coordinator too; deleting only the GUI row left its
+            # finished worker ownership blocking an explicit later retry.
+            remove = getattr(thread, "remove_file", None)
+            if callable(remove):
+                try:
+                    remove(input_path)
+                except Exception as exc:
+                    self._log(f"Queue-Freigabe nach Abschluss fehlgeschlagen: {exc}", "warn")
             self._ui.file_list.remove_path(input_path)
             state.file_overrides.pop(input_path, None)
             state.planned_targets.pop(input_path, None)

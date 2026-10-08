@@ -16,7 +16,8 @@ def _codec(track, *, probe=False):
     aliases = {'h265':'hevc', 'avc':'h264', 'e-ac-3':'eac3', 'ac-3':'ac3',
                'utf-8':'subrip', 'srt':'subrip', 'pgs':'hdmv_pgs_subtitle',
                'vobsub':'dvd_subtitle', 'advanced substation alpha':'ass',
-               'substation alpha':'ssa', 'mpeg audio':'mp3'}
+               'substation alpha':'ssa', 'mpeg audio':'mp3',
+               'd_webvtt/subtitles':'webvtt'}
     return aliases.get(value, value)
 
 

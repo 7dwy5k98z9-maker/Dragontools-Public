@@ -93,8 +93,9 @@ def build_move_resume_plan(data: dict[str, Any]) -> dict[str, Any]:
         "started_at": str(data.get("started_at") or ""),
     }
 
-def format_unfinished_move_summary(data: dict[str, Any]) -> str:
-    plan = build_move_resume_plan(data)
+def format_unfinished_move_summary(data: dict[str, Any], *, plan: dict | None = None) -> str:
+    if plan is None:
+        plan = build_move_resume_plan(data)
     files = data.get("files") if isinstance(data.get("files"), dict) else {}
     lines = [
         f"Run-ID: {data.get('run_id', '-')}",

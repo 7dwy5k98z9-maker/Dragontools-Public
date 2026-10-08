@@ -1,11 +1,26 @@
 # DragonTools V9.9.0
 
-> Stand 07.10.2026: Dragon Tools V9.9.0 übernimmt die Korrekturen der 29 Patch-/Review-Schritte, die automatische TheTVDB-Token-Erneuerung und den gezielten Fallback bei beschädigter Dolby-Vision-RPU. Die Fachkapitel erläutern die wirksamen Datei-Profile, sichere Ausgabeinstallation, abbrechbare Quellbildprüfung und konsistente Pipeline-Verträge. Einzelne Worker: Rechtsklick → pausieren/fortsetzen. Die technische Historie steht in `PATCH.md`.
+> Stand 08.10.2026: Dragon Tools V9.9.0 übernimmt die Korrekturen der 29 Patch-/Review-Schritte, die automatische TheTVDB-Token-Erneuerung und den gezielten Fallback bei beschädigter Dolby-Vision-RPU. Die Fachkapitel erläutern die wirksamen Datei-Profile, sichere Ausgabeinstallation, abbrechbare Quellbildprüfung und konsistente Pipeline-Verträge. Einzelne Worker: Rechtsklick → pausieren/fortsetzen. Die technische Historie steht in `PATCH.md`.
 
 DragonTools ist eine Windows-Anwendung zur Analyse, Konvertierung und Verwaltung von Video-, Audio- und Untertiteldateien. Das Projekt bündelt die benötigten Drittanbieterprogramme nicht im Git-Repository. Sie müssen separat von den jeweiligen Projektseiten heruntergeladen werden.
 
 
-## Stand 9.9.0 – 07.10.2026
+## Korrekturen vom 08.10.2026
+
+- Timestamp-Reparatur berücksichtigt die verlässliche Bildrate und Laufzeit des Originals. Ein erfolgloser Remux verhindert diese Prüfung nicht; unsichere Reparaturen bleiben gesperrt.
+- Entfernte, abgeschlossene oder abgebrochene Dateien lassen sich erneut hinzufügen, sobald kein aktiver Auftrag mehr dieselbe Datei verarbeitet.
+- Journal-Wiederherstellung läuft beim Start im Hintergrund. Abgeschlossene Verschiebevorgänge ohne ausstehendes Cleanup lösen keine erneute vollständige Dateiprüfung aus.
+- Beim Einfügen von Untertiteln werden gültige Schriftanhänge auch dann akzeptiert und erhalten, wenn ffprobe keinen Codec-Namen für sie meldet.
+- WebVTT wird zwischen MediaInfo und ffprobe korrekt zugeordnet. Die globale Spurposition bleibt unabhängig von der Untertitelanzahl.
+- Strip-only schreibt die erwarteten Audiotitel, Sprachangaben sowie Default-/Forced-Kennzeichnungen und besteht dadurch die finale Ausgabeprüfung.
+
+Die gezielte Abnahme der WebVTT-/Strip-only-Korrektur umfasst 95 bestandene Tests. Zusätzlich bestand eine echte betroffene Episode die Strip-only-Ausgabeprüfung; ihr Original blieb unverändert. Die Prüfung früherer Korrekturen wurde jeweils mit den betroffenen Regressionstests durchgeführt.
+
+### Veröffentlichungsprüfung vom 08.10.2026
+
+Die aktuelle Standardtestsuite besteht mit **5.234 bestandenen Tests**, 18 übersprungenen Fällen und 24 abgewählten DV/HDR-Integrationstests. Datenschutz-, Syntax-, Architektur-, Paket- und EXE-Startprüfung bestanden. Der neue Quellstand umfasst 1.304 Python-Dateien und 375 Testdateien mit 3.326 statisch erkannten Testfunktionen. Die folgenden Inventar- und Abnahmeangaben vom 07.10.2026 beschreiben den ursprünglichen 9.9.0-Stand; aktuelle Release-Hinweise stehen in `RELEASE_NOTES_v9.9.0.md`.
+
+## Stand 9.9.0 – 08.10.2026
 
 **Release-Schwerpunkte V9.9.0:** 29 abgeschlossene Review-Schritte, einzeln steuerbare Worker, aufgenommene Dateioptionen, verlässliche Zielwahl, geprüfte Spurmetadaten und wiederholbare Recovery bei späten Fehlern. TheTVDB-Token-Erneuerung, Quell-RPU-Fallback und asynchrone Quellbildprüfung bleiben enthalten.
 

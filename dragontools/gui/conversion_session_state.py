@@ -9,6 +9,7 @@ sind hier gebündelt. Keine PyQt6-Abhängigkeiten.
 from __future__ import annotations
 
 from ..core.conversion_artifacts import ConversionArtifactBundle
+from ..core.path_syntax import path_compare_key
 
 
 class ConversionSessionState:
@@ -167,6 +168,29 @@ class ConversionSessionState:
         return result
 
     # ── Lifecycle ───────────────────────────────────────────────────
+
+    def reset_file_for_requeue(self, path: str) -> None:
+        """Clear the previous attempt while preserving newly prepared options."""
+        key = path_compare_key(path)
+        outputs = {path}
+        for input_path, bundle in list(self.artifacts_by_input.items()):
+            if path_compare_key(input_path) == key:
+                if bundle.output_path:
+                    outputs.add(bundle.output_path)
+                self.artifacts_by_input.pop(input_path, None)
+        for values in (self.completed_inputs, self.pending_remove_paths, self.pending_postprocess_inputs):
+            values.difference_update(p for p in list(values) if path_compare_key(p) == key)
+        for mapping in (self.run_results, self.active_file_progress, self.active_file_eta):
+            for p in list(mapping):
+                if path_compare_key(p) == key:
+                    mapping.pop(p, None)
+        output_keys = {path_compare_key(p) for p in outputs}
+        self.fertig.difference_update(p for p in list(self.fertig) if path_compare_key(p) in output_keys)
+        for p in list(self.sidecar_outputs_by_video):
+            if path_compare_key(p) in output_keys:
+                self.sidecar_outputs_by_video.pop(p, None)
+        if self.progress_focus_path and path_compare_key(self.progress_focus_path) == key:
+            self.progress_focus_path = None
 
     def release_file_analysis(self, path: str) -> None:
         """Drop transient lists as soon as a file reaches a terminal result."""

@@ -202,6 +202,12 @@ def _recover_backup_pairs(
     row["backup_pairs"] = remaining
 
 
+def _completed_without_pending_work(row: dict[str, Any], status: str, phase: str) -> bool:
+    """Durable completed rows need no media proofs unless cleanup remains."""
+    return (status == "ok" and phase != "sidecars_pending"
+            and not row.get("cleanup_pending") and not row.get("backup_pairs"))
+
+
 def recover_interrupted_backups(data: dict[str, Any]) -> dict[str, int]:
     """Stellt sichere Backups wieder her und erkennt Crash-Erfolge.
 
@@ -219,12 +225,17 @@ def recover_interrupted_backups(data: dict[str, Any]) -> dict[str, int]:
     for source_text, row in files.items():
         if not isinstance(row, dict):
             continue
+        status = _normalize_status(row.get("status"))
+        phase = str(row.get("phase") or "")
+        # A durable completed entry needs no recovery. Re-reading its full
+        # video digest on every startup can scan hours of media over SMB.
+        # Outstanding cleanup/backups and companion commits still need proof.
+        if _completed_without_pending_work(row, status, phase):
+            continue
         dest = Path(str(row.get("dest_path") or "")) if row.get("dest_path") else None
         source = Path(str(source_text)) if source_text else None
         source_exists = bool(source and source.exists())
         dest_exists = bool(dest and dest.exists())
-        status = _normalize_status(row.get("status"))
-        phase = str(row.get("phase") or "")
 
         source_exists = _collapse_same_inode_alias(
             row,

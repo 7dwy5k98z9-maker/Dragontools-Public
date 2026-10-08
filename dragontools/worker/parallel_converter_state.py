@@ -200,7 +200,7 @@ class ParallelWorkerRegistry:
         seen: set[str] = set()
         for path in candidates:
             key = path_compare_key(path)
-            if (not key or key in seen or key in terminal_keys
+            if (not key or key not in self.queue_state.file_keys or key in seen or key in terminal_keys
                     or self.queue_state.assigned.get(key) is not child):
                 continue
             seen.add(key)

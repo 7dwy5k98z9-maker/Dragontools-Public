@@ -17,7 +17,7 @@ def log_tool_error(
     if not logger:
         return
     if exc is not None:
-        dispatch_log(logger, f"❌ {tool} konnte nicht gestartet werden: {exc}")
+        dispatch_log(logger, f"❌ Fehler bei {tool}: {exc}")
         return
     dispatch_log(logger, f"❌ {tool} fehlgeschlagen (rc={rc})")
     lines = [

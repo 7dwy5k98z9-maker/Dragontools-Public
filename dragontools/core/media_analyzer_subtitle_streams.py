@@ -30,6 +30,7 @@ def _normalize_subtitle_codec(value: str | None) -> str:
         "tx3g": "mov_text",
         "webvtt": "webvtt",
         "vtt": "webvtt",
+        "d_webvtt/subtitles": "webvtt",
         "hdmv_pgs_subtitle": "hdmv_pgs_subtitle",
         "dvd_subtitle": "dvd_subtitle",
         "vobsub": "dvd_subtitle",
