@@ -100,20 +100,26 @@ class MovieRenamerView(MovieRenamerViewStateMixin):
         root.setContentsMargins(8, 8, 8, 8)
         root.setSpacing(8)
 
-        title_row = QHBoxLayout()
+        title_row = QGridLayout()
         title = QLabel(f"🎞 Renamer – Dragon Tools V{APP_VERSION}")
         title.setStyleSheet("font-weight:bold;font-size:15px;")
-        title_row.addWidget(title, 1)
+        title_row.addWidget(title, 0, 0, 1, 4)
 
         self.metadata_browser_btn = QPushButton("🌐 Metadaten-Browser")
         self.metadata_browser_btn.setToolTip(
             "TMDB/TheTVDB ohne vorher importierte Datei durchsuchen und Dateien explizit Filmen/Episoden zuordnen"
         )
-        title_row.addWidget(self.metadata_browser_btn)
+        title_row.addWidget(self.metadata_browser_btn, 1, 0)
+        self.check_season_btn = QPushButton("Staffel prüfen")
+        self.check_series_btn = QPushButton("Serie prüfen")
+        self.check_season_btn.setToolTip("Erkannte Staffeln mit ihrer Metadatenquelle auf fehlende Folgen prüfen")
+        self.check_series_btn.setToolTip("Erkannte Serien einschließlich fehlender Staffeln und Specials prüfen")
+        title_row.addWidget(self.check_season_btn, 1, 1)
+        title_row.addWidget(self.check_series_btn, 1, 2)
 
         self.columns_btn = QPushButton("⚙ Spalten")
         self.columns_btn.setToolTip("Spalten ein-/ausblenden und Standardansicht wiederherstellen")
-        title_row.addWidget(self.columns_btn)
+        title_row.addWidget(self.columns_btn, 1, 3)
         root.addLayout(title_row)
 
         hint = QLabel(

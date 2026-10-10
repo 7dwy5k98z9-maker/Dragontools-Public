@@ -162,6 +162,7 @@ def test_rename_dialog_enter_confirms_escape_cancels(qtbot, monkeypatch, table_c
     action = actions_module.MovieRenamerActionController(None, SimpleNamespace(table=c.table, status_lbl=QLabel()), c, None)
     try:
         action.execute_rename()
+        qtbot.waitUntil(lambda: not action.commit.busy)
     finally:
         timer.stop()
     assert seen_defaults == [QMessageBox.StandardButton.Yes]

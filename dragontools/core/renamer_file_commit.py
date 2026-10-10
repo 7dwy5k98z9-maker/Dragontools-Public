@@ -1,18 +1,14 @@
-"""Receipt-bound video rename with rollback of its stem-bound companions."""
+"""Filename-only video rename with rollback of its stem-bound companions."""
 import os
 from pathlib import Path
 from .path_syntax import path_compare_key
-from .transaction_identity import path_receipt, receipt_matches
 
 
 def rename_prepared_file(source, target, *, discover_companions, publish, transaction_cls, journal_cls):
     source = Path(source)
-    receipt = path_receipt(source)
     companions = [Path(path) for path in discover_companions(source)]
-    _require_source(source, receipt)
     transaction, journal = _commit_companions(source, target, companions, transaction_cls, journal_cls)
     try:
-        _require_source(source, receipt)
         if os.name == 'nt' and path_compare_key(source) == path_compare_key(target):
             # Windows permits spelling-only renames of the same path. os.rename
             # still refuses to replace a different destination object.
@@ -33,11 +29,6 @@ def rename_prepared_file(source, target, *, discover_companions, publish, transa
     return target
 
 
-def _require_source(source, receipt):
-    if not receipt_matches(source, receipt):
-        raise OSError('Quelldatei wurde während der Umbenennung verändert; Quelle bleibt erhalten.')
-
-
 def _commit_companions(source, target, companions, transaction_cls, journal_cls):
     if not companions:
         return None, None
@@ -47,7 +38,8 @@ def _commit_companions(source, target, companions, transaction_cls, journal_cls)
     occupied = [row['destination'] for row in records if str(row.get('backup') or '')]
     if occupied:
         raise FileExistsError('Begleitdatei-Ziel existiert bereits: ' + ', '.join(Path(path).name for path in occupied))
-    journal = journal_cls.start(video_staging=source, video_destination=target, records=records)
+    journal = journal_cls.start(video_staging=source, video_destination=target, records=records,
+                                rename_only=True)
     try:
         transaction.commit()
         journal.set_status('sidecars_committed', fatal=False)

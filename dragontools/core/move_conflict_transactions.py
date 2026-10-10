@@ -34,10 +34,30 @@ class MoveConflictTransactions:
         try:
             for conflict in conflicts:
                 backup = self.unique_backup_path(conflict)
-                pair = {"original": str(conflict), "backup": str(backup), 'receipt': path_receipt(conflict)}
+                try:
+                    receipt = path_receipt(conflict)
+                except FileNotFoundError:
+                    if not self._skip_missing_trickplay(conflict):
+                        raise
+                    continue
+                pair = {"original": str(conflict), "backup": str(backup), 'receipt': receipt}
                 pairs.append(pair)
                 self._journal.set_backups(source_path, pairs)
-                publish_staged_no_replace(conflict, backup)
+                try:
+                    publish_staged_no_replace(conflict, backup)
+                except FileNotFoundError as publish_error:
+                    # Only skip an absent original when no backup was created.
+                    # A lost child/backup or an unavailable share remains fatal.
+                    try:
+                        backup.lstat()
+                    except FileNotFoundError:
+                        if not self._skip_missing_trickplay(conflict):
+                            raise publish_error
+                    else:
+                        raise publish_error
+                    pairs.pop()
+                    self._journal.set_backups(source_path, pairs)
+                    continue
                 self._owned_backups[str(backup)] = path_receipt(backup)
                 self._log(f"🛡️ Vorhandene Datei temporär gesichert: {conflict.name}", "info")
             result["backup_pairs"] = list(pairs)
@@ -50,6 +70,21 @@ class MoveConflictTransactions:
             self._log(f"❌ Konfliktdatei konnte nicht sicher gesichert werden: {exc}", "error")
             self.rollback(source_path, pairs, result)
             return None
+
+    def _skip_missing_trickplay(self, conflict: Path) -> bool:
+        if conflict.suffix.casefold() != ".trickplay":
+            return False
+        try:
+            conflict.lstat()
+        except FileNotFoundError:
+            # Do not confuse an offline/missing destination with an absent cache.
+            conflict.parent.stat()
+            self._log(
+                f"ℹ️ Trickplay im Ziel nicht mehr vorhanden, Sicherung übersprungen: {conflict.name}",
+                "info",
+            )
+            return True
+        return False
 
     def rollback(self, source_path: str | Path, pairs: list[dict[str, str]], result: dict) -> None:
         failures: list[str] = []

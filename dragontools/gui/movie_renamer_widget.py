@@ -18,6 +18,7 @@ from .movie_renamer_table_controller import (
     RenamerColumns,
 )
 from .movie_renamer_view import MovieRenamerView
+from .movie_renamer_completeness_runtime import MovieRenamerCompletenessController
 
 
 class MovieRenamerWidget(QWidget):
@@ -56,6 +57,7 @@ class MovieRenamerWidget(QWidget):
             self._table_controller,
             self._resolver,
         )
+        self._completeness = MovieRenamerCompletenessController(self, self._table_controller)
         self._connect_actions()
 
     def _bind_view_attributes(self) -> None:
@@ -64,6 +66,8 @@ class MovieRenamerWidget(QWidget):
             "add_files_btn",
             "add_folder_btn",
             "metadata_browser_btn",
+            "check_season_btn",
+            "check_series_btn",
             "resolve_btn",
             "manual_series_search_btn",
             "manual_movie_search_btn",
@@ -88,6 +92,8 @@ class MovieRenamerWidget(QWidget):
         self.add_files_btn.clicked.connect(self._actions.choose_files)
         self.add_folder_btn.clicked.connect(self._actions.choose_folder)
         self.metadata_browser_btn.clicked.connect(self._actions.open_metadata_browser)
+        self.check_season_btn.clicked.connect(self.check_season_completeness)
+        self.check_series_btn.clicked.connect(self.check_series_completeness)
         self.resolve_btn.clicked.connect(self.resolve_proposals)
         self.manual_series_search_btn.clicked.connect(self._actions.manual_series_search)
         self.manual_movie_search_btn.clicked.connect(self._actions.manual_movie_search)
@@ -112,7 +118,17 @@ class MovieRenamerWidget(QWidget):
     def add_paths(self, paths: list[str]) -> None:
         self._actions.add_paths(paths)
 
+    def check_season_completeness(self):
+        if not self._actions.commit.busy:
+            return self._completeness.open()
+
+    def check_series_completeness(self):
+        if not self._actions.commit.busy:
+            return self._completeness.open(whole_series=True)
+
     def resolve_proposals(self) -> None:
+        if self._actions.commit.busy:
+            return
         self._actions.prompt_missing_seasons()
         self._resolver.resolve_all()
 
@@ -136,8 +152,15 @@ class MovieRenamerWidget(QWidget):
 
     # ---- lifecycle -----------------------------------------------------------
     def iter_shutdown_workers(self) -> tuple:
-        return self._resolver.iter_shutdown_workers()
+        return (self._resolver.iter_shutdown_workers() + self._actions.commit.iter_shutdown_workers()
+                + self._completeness.iter_shutdown_workers())
 
     def closeEvent(self, event) -> None:
+        if not self._completeness.shutdown():
+            event.ignore()
+            return
+        if not self._actions.commit.shutdown():
+            event.ignore()
+            return
         self._resolver.shutdown()
         super().closeEvent(event)

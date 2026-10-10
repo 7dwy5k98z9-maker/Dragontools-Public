@@ -86,7 +86,7 @@ def test_double_episode_review_cannot_become_auto_accept_on_candidate_reapply():
 
 
 @pytest.mark.parametrize('phase', ['discovery', 'sidecar_commit'])
-def test_rename_source_replaced_during_sidecar_work_remains_untouched(tmp_path, monkeypatch, phase):
+def test_rename_does_not_inspect_content_changed_during_sidecar_work(tmp_path, monkeypatch, phase):
     from dragontools.core import movie_renamer_parsing as module
     source = tmp_path / 'Alt.mkv'
     source.write_bytes(b'ORIGINAL')
@@ -107,12 +107,20 @@ def test_rename_source_replaced_during_sidecar_work_remains_untouched(tmp_path, 
             source.write_bytes(b'FOREIGN')
             return result
         monkeypatch.setattr(module.SidecarCommitTransaction, 'commit', changed)
-    with pytest.raises(OSError, match='Quelle|Quelldatei'):
-        rename_movie_file(source, 'Neu.mkv')
-    assert source.read_bytes() == b'FOREIGN'
-    assert sidecar.read_bytes() == b'SUBTITLE'
-    assert not (tmp_path / 'Neu.mkv').exists()
-    assert not (tmp_path / 'Neu.de.srt').exists()
+    # A name change must not inspect video contents, including when another
+    # process writes to the same file during companion discovery or commit.
+    original_open = Path.open
+    def guarded_open(path, mode='r', *args, **kwargs):
+        if path.suffix.lower() == '.mkv' and ('r' in mode or '+' in mode):
+            raise AssertionError('Renamer must not read video contents')
+        return original_open(path, mode, *args, **kwargs)
+    with monkeypatch.context() as reads:
+        reads.setattr(Path, 'open', guarded_open)
+        target = rename_movie_file(source, 'Neu.mkv')
+    assert target.read_bytes() == b'FOREIGN'
+    assert (tmp_path / 'Neu.de.srt').read_bytes() == b'SUBTITLE'
+    assert not source.exists()
+    assert not sidecar.exists()
 
 
 def test_case_only_rename_works_on_native_windows(tmp_path):

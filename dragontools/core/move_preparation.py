@@ -159,7 +159,10 @@ class MovePreparationService:
         replacement_mode = prepared.get("replacement_mode")
         transaction_conflicts = list(conflicts)
         try:
-            transaction_conflicts.extend(movie_commit_artifacts(prepared,src_p,dst_p,protected_paths))
+            # Secure movie companions before unpublishing their video: media
+            # servers can remove derived trickplay as soon as the video vanishes.
+            movie_artifacts = movie_commit_artifacts(prepared,src_p,dst_p,protected_paths)
+            transaction_conflicts = list(movie_artifacts) + transaction_conflicts
         except ValueError as exc:
             self._invalidate(prepared,[str(p) for p in conflicts],str(exc))
             return {'ok':False,'transaction_conflicts':[],'replacement_mode':None}

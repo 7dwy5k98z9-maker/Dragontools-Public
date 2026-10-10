@@ -82,6 +82,8 @@ class MovieRenamerViewStateMixin:
             self.add_files_btn,
             self.add_folder_btn,
             self.metadata_browser_btn,
+            self.check_season_btn,
+            self.check_series_btn,
             self.resolve_btn,
             self.manual_series_search_btn,
             self.manual_movie_search_btn,
@@ -101,6 +103,8 @@ class MovieRenamerViewStateMixin:
     @property
     def blocked_during_search(self) -> tuple:
         return (
+            self.check_season_btn,
+            self.check_series_btn,
             self.resolve_btn,
             self.accept_selected_btn,
             self.accept_safe_btn,
@@ -126,7 +130,18 @@ class MovieRenamerViewStateMixin:
         )
 
     def set_busy(self, busy: bool) -> None:
+        self._search_busy = busy
+        self._apply_busy_state()
+
+    def set_rename_busy(self, busy: bool) -> None:
+        self._rename_busy = busy
+        self._apply_busy_state()
+
+    def _apply_busy_state(self) -> None:
+        rename_busy = getattr(self, "_rename_busy", False)
+        search_busy = getattr(self, "_search_busy", False)
+        self.table.setEnabled(not rename_busy)
         for button in self.available_during_search:
-            button.setEnabled(True)
+            button.setEnabled(not rename_busy)
         for button in self.blocked_during_search:
-            button.setEnabled(not busy)
+            button.setEnabled(not (search_busy or rename_busy))

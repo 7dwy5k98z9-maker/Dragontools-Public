@@ -20,7 +20,7 @@ from typing import Any, Iterable
 
 from .json_io import atomic_write_json
 from .path_defaults import app_documents_dir
-from .transaction_identity import path_receipt, renamed_receipt_matches
+from .transaction_identity import path_receipt, renamed_receipt_matches, object_identity, same_object
 from .journal_runtime import register_journal, recovery_may_run
 from .sidecar_recovery import (validate_records, rollback_records as _rollback_records,
     complete_records as _complete_records)
@@ -64,6 +64,7 @@ class SidecarJournal:
         records: Iterable[dict[str, str]],
         root: str | Path | None = None,
         video_committed: bool = False,
+        rename_only: bool = False,
     ) -> "SidecarJournal":
         folder = sidecar_journal_dir(root)
         stamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
@@ -76,7 +77,7 @@ class SidecarJournal:
             row.setdefault('old_receipt', path_receipt(row['destination']) if row.get('backup') and Path(row['destination']).exists() else None)
         candidate = Path(video_destination) if video_committed else Path(video_staging)
         data = {
-            'video_receipt': path_receipt(candidate) if candidate.exists() else None,
+            'video_receipt': path_receipt(candidate) if not rename_only and candidate.exists() else None,
             "format": "DragonToolsSidecarJournal",
             "format_version": FORMAT_VERSION,
             "active": True,
@@ -90,6 +91,9 @@ class SidecarJournal:
             "updated_at": now,
             "message": "",
         }
+        if rename_only:
+            # Rename recovery needs the filesystem object, not its video contents.
+            data['video_rename_identity'] = object_identity(candidate) if candidate.exists() else None
         journal = cls(path, data)
         journal.write(fatal=True)
         register_journal(path)
@@ -160,7 +164,7 @@ def recover_active_sidecar_journals(root: str | Path | None = None) -> dict[str,
             destination = Path(destination_text) if destination_text else None
 
             if (bool(data.get("video_committed", False)) and destination is not None
-                    and renamed_receipt_matches(destination, data.get('video_receipt'))):
+                    and _video_matches(destination, data)):
                 _complete_records(rows)
                 totals["completed"] += 1
                 path.unlink(missing_ok=True)
@@ -172,7 +176,7 @@ def recover_active_sidecar_journals(root: str | Path | None = None) -> dict[str,
                 path.unlink(missing_ok=True)
                 continue
 
-            if destination is not None and renamed_receipt_matches(destination, data.get('video_receipt')):
+            if destination is not None and _video_matches(destination, data):
                 _complete_records(rows)
                 totals["completed"] += 1
                 path.unlink(missing_ok=True)
@@ -187,6 +191,15 @@ def recover_active_sidecar_journals(root: str | Path | None = None) -> dict[str,
             _LOG.warning("Sidecar-Recovery fehlgeschlagen fuer %s: %s", path, exc)
             totals["failed"] += 1
     return totals
+
+
+def _video_matches(path: Path, data: dict) -> bool:
+    if 'video_rename_identity' in data:
+        identity = data['video_rename_identity']
+        return (isinstance(identity, list) and len(identity) == 2
+                and all(isinstance(value, int) for value in identity)
+                and same_object(path, identity))
+    return renamed_receipt_matches(path, data.get('video_receipt'))
 
 
 def _path_exists(path: Path) -> bool:

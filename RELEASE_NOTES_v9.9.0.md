@@ -1,30 +1,45 @@
-# DragonTools 9.9.0 – aktualisierter Stand
+# DragonTools 9.9.0 – 10.10.2026
 
-Stand: 08.10.2026. Diese Aktualisierung ergänzt die 29 Review-Schritte und die bisherigen Laufzeitkorrekturen.
+DragonTools verbindet Medienverarbeitung, Untertitelverwaltung und Benennung anhand von Metadaten. Das Windows-Paket enthält die Anwendung und die benötigten Laufzeitdateien. Externe Medienwerkzeuge werden separat installiert.
 
-## Korrekturen vom 08.10.2026
+## Renamer und Serienbestand
 
-- Timestamp-Reparatur berücksichtigt die verlässliche Bildrate und Laufzeit des Originals. Ein erfolgloser Remux verhindert diese Prüfung nicht; unsichere Reparaturen bleiben gesperrt.
-- Entfernte, abgeschlossene oder abgebrochene Dateien lassen sich erneut hinzufügen, sobald kein aktiver Auftrag mehr dieselbe Datei verarbeitet.
-- Journal-Wiederherstellung läuft beim Start im Hintergrund. Abgeschlossene Verschiebevorgänge ohne ausstehendes Cleanup lösen keine erneute vollständige Dateiprüfung aus.
-- Beim Einfügen von Untertiteln werden gültige Schriftanhänge auch dann akzeptiert und erhalten, wenn ffprobe keinen Codec-Namen für sie meldet.
-- WebVTT wird zwischen MediaInfo und ffprobe korrekt zugeordnet. Die globale Spurposition bleibt unabhängig von der Untertitelanzahl.
-- Strip-only schreibt die erwarteten Audiotitel, Sprachangaben sowie Default-/Forced-Kennzeichnungen und besteht dadurch die finale Ausgabeprüfung.
+### Umbenennen
 
-Die gezielte Abnahme der WebVTT-/Strip-only-Korrektur umfasst 95 bestandene Tests. Zusätzlich bestand eine echte betroffene Episode die Strip-only-Ausgabeprüfung; ihr Original blieb unverändert. Die Prüfung früherer Korrekturen wurde jeweils mit den betroffenen Regressionstests durchgeführt.
+Film- und Seriennamen werden im Hintergrund geändert. Die Dateiendung bleibt erhalten, vorhandene Zieldateien werden nicht überschrieben. Für eine reine Umbenennung wird der Videoinhalt nicht vollständig gelesen.
 
-## Installation und Versionshinweis
+### Staffel und Serie prüfen
 
-Das Windows-Paket enthält die EXE und den erforderlichen Datenordner. Externe Medienwerkzeuge werden separat gemäß `TOOLS_INSTALLIEREN.txt` eingerichtet. Das vollständige ZIP entpacken und die EXE gemeinsam mit `Daten` belassen.
+Die beiden Schaltflächen neben dem Metadaten-Browser vergleichen erkannte Renamer-Einträge mit ihrer gewählten Quelle TMDB oder TheTVDB. Die Auswahl fasst Serien und Staffeln zusammen. Das Ergebnis zeigt vollständige oder fehlende Staffeln, Specials und einzelne fehlende Folgen. Eine CSV-Datei ermöglicht die weitere Verwendung der Tabelle.
 
-Die Anwendungsversion bleibt 9.9.0. Bereits installierte 9.9.0-Builds erhalten deshalb keinen automatischen Versionshinweis auf diesen aktualisierten Build.
+## Medienverarbeitung
 
-## Abnahme des veröffentlichten Quellstands
+### Laufzeit und Spurmetadaten
 
-- Vollständige Standardtestsuite: 5.234 bestanden, 18 übersprungen, 24 DV/HDR-Integrationstests abgewählt.
-- Öffentliche Datenschutzprüfung einschließlich Dokumenten und Syntax-/Namensprüfung bestanden.
-- Die zusätzliche Architektur-/Journal-/Statistik-Prüfung umfasst 940 bestandene Tests. Die Architekturgrenzen wurden eingehalten; der bestehende Schuldenkatalog blieb unverändert.
-- Der frisch gebaute Windows-Build besteht alle 18 App-Bundle-Prüfungen und den Starttest der tatsächlichen EXE.
-- Paketinhalt, kompilierte Anwendungsmodule, Ausschluss externer Medienwerkzeuge und ZIP-CRC wurden geprüft.
+Bei einer unplausiblen MKV-Laufzeit wird zuerst ein normaler Remux versucht. Anschließend wird eine Timestamp-Reparatur anhand der verlässlichen Bildrate und Dauer des Originals geprüft. Audio- und Untertitelspuren behalten die geplanten Titel, Sprachangaben und Kennzeichnungen. WebVTT-Zuordnung und Schriftanhänge werden bei der Verarbeitung berücksichtigt.
 
-Der aktuelle Quellstand umfasst 1.304 Python-Dateien, 209.366 Gesamtzeilen, 176.898 Codezeilen und 375 Testdateien mit 3.326 statisch erkannten Testfunktionen. Die gezielten Testläufe werden nicht zusätzlich zur Gesamtsuite addiert.
+### Warteschlange und Wiederherstellung
+
+Dateien lassen sich erneut hinzufügen, sobald sie aus der Liste entfernt wurden und kein aktiver Auftrag sie mehr verarbeitet. Die Journal-Wiederherstellung läuft beim Start im Hintergrund. Beim Ersetzen eines Films werden vorhandene Trickplay-Daten vor dem Video gesichert; fehlende optionale Trickplay-Daten blockieren das Verschieben nicht.
+
+## Dokumentation und Installation
+
+### Hilfe und Changelog
+
+Die Hilfe erläutert die Bedienung. Das V9-Changelog fasst die technische Entwicklung nach Fachbereichen und Unterpunkten zusammen. JSON- und Textfassung enthalten dieselben Informationen.
+
+### Windows-Paket
+
+Das vollständige ZIP entpacken und die EXE zusammen mit dem Ordner `Daten` belassen. `TOOLS_INSTALLIEREN.txt` beschreibt die getrennte Einrichtung der Medienwerkzeuge. Die SHA-256-Datei gehört zur gleichnamigen ZIP-Datei; für die lokale EXE liegt ebenfalls eine eigene Prüfsumme bei.
+
+Die Anwendungsversion bleibt 9.9.0. Das vorhandene GitHub-Release wird mit dem aktuellen Paket aktualisiert.
+
+## Prüfung der Veröffentlichung
+
+### Quellstand
+
+Die vollständige Standardtestsuite bestand mit 5286 erfolgreichen Fällen. 18 Fälle wurden übersprungen; 24 DV/HDR-Integrationstests waren in diesem Lauf nicht ausgewählt. Die Datenschutzprüfung einschließlich der öffentlichen Dokumente und die Release-Validierung des Quellstands bestanden.
+
+### Windows-Anwendung
+
+Die neue EXE bestand den Starttest. Alle 18 App-Bundle-Prüfungen waren erfolgreich. Die aktualisierte Hilfe und beide V9-Changelog-Fassungen sind im Paket enthalten. Kompilierte Anwendungsmodule, Ausschluss externer Medienwerkzeuge, ZIP-Inhalt und Prüfsummen wurden kontrolliert.
