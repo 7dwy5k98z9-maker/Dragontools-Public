@@ -81,6 +81,7 @@ def select_sidecar_streams(
     pgs_to_srt_enabled: Callable[[dict], bool] | None = None,
     pgs_original_storage: Callable[[dict], str] | None = None,
     container: str = "mp4",
+    apply_audio_language_rules: bool = True,
 ) -> SidecarSelection:
     """Resolve the rule plan and the streams that must become sidecars."""
     plan = compute_plan(
@@ -90,6 +91,7 @@ def select_sidecar_streams(
         subtitle_rules=subtitle_rules,
         container_copy_supported=True,
         media_duration_s=media_duration_s,
+        **({"apply_audio_language_rules": False} if not apply_audio_language_rules else {}),
     )
     storage = build_storage_plan(
         plan,

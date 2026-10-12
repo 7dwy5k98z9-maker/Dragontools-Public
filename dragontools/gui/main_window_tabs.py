@@ -46,9 +46,16 @@ class _TabBar(QTabBar):
 
     def mouseReleaseEvent(self, e):
         if e.button() == Qt.MouseButton.MiddleButton:
-            idx = self.tabAt(e.pos())
+            # A middle-click close mutates the tab bar synchronously through
+            # tabCloseRequested.  Do not pass the same release event to
+            # QTabBar afterwards: after removal another tab may already occupy
+            # the same geometry and Qt can process the release against that
+            # new tab as well.  One physical click must produce one close only.
+            idx = self.tabAt(e.position().toPoint())
             if idx >= 0:
+                e.accept()
                 self.tabCloseRequested.emit(idx)
+                return
         super().mouseReleaseEvent(e)
 
 

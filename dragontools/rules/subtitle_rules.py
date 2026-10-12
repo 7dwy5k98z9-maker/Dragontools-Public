@@ -39,6 +39,8 @@ def compute_subtitle_plan(
     subtitle_rules: dict | None = None,
     container_copy_supported: bool = True,
     media_duration_s: float | None = None,
+    audio_rules: dict | None = None,
+    apply_audio_language_rules: bool = True,
 ) -> SubtitlePlan:
     return compute_subtitle_plan_service(
         subtitle_streams,
@@ -47,6 +49,8 @@ def compute_subtitle_plan(
         subtitle_rules=subtitle_rules,
         container_copy_supported=container_copy_supported,
         media_duration_s=media_duration_s,
+        audio_rules=audio_rules,
+        apply_audio_language_rules=apply_audio_language_rules,
     )
 
 def choose_burn_subtitle(

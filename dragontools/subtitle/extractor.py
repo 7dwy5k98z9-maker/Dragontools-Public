@@ -81,3 +81,98 @@ def extract_with_ffmpeg(input_path: str, stream_index: int, output_path: str,
             stage.unlink(missing_ok=True)
         _log_tool_error(logger, Path(ffmpeg).name, None, exc=exc)
         return False
+
+
+def extract_to_mks_with_mkvmerge(
+    input_path: str,
+    stream_index: int,
+    output_path: str,
+    *,
+    mkvmerge: str = "mkvmerge",
+    ffprobe: str = "ffprobe",
+    logger: Callable[[str], None] | None = None,
+    worker=None,
+    overwrite: bool = False,
+) -> bool:
+    """Losslessly export one subtitle stream as a subtitle-only Matroska file.
+
+    This is the generic fallback for codecs for which FFmpeg has no convenient
+    standalone muxer.  FFprobe global stream indices are deliberately resolved
+    to MKVToolNix track IDs by subtitle ordinal; the two ID spaces are never
+    mixed.
+    """
+    from .matroska_tracks import resolve_subtitle_track_id
+
+    output = Path(output_path)
+    if type(stream_index) is not int or stream_index < 0 or reject_source_output(output, input_path):
+        return False
+    if output.exists() and not overwrite:
+        if logger:
+            dispatch_log(logger, f"❌ Zieldatei existiert bereits und wird nicht überschrieben: {output_path}")
+        return False
+    stage = _staging_output(output)
+    verified = False
+    try:
+        probe = run_tool(
+            [
+                ffprobe, "-v", "error", "-select_streams", "s",
+                "-show_entries", "stream=index", "-of", "json", input_path,
+            ],
+            label="Subtitle-MKV-Fallback ffprobe",
+            timeout_s=30,
+            worker=worker,
+        )
+        identify = run_tool(
+            [mkvmerge, "-J", input_path],
+            label="Subtitle-MKV-Fallback Inventar",
+            timeout_s=60,
+            worker=worker,
+        )
+        if (
+            probe.returncode != 0
+            or identify.returncode not in {0, 1}
+            or stopped(probe, worker)
+            or stopped(identify, worker)
+        ):
+            raise ValueError("FFprobe/MKVToolNix-Inventar für Untertitel-Fallback fehlgeschlagen.")
+        track_id = resolve_subtitle_track_id(probe.stdout, identify.stdout, stream_index)
+        cmd = [
+            mkvmerge,
+            "-o", str(stage),
+            "--no-video", "--no-audio", "--no-buttons", "--no-attachments",
+            "--no-chapters", "--no-global-tags", "--no-track-tags",
+            "--subtitle-tracks", str(track_id),
+            input_path,
+        ]
+        result = run_tool(
+            cmd,
+            label="Subtitle-MKV-Fallback",
+            timeout_s=get_timeout("subtitle_extract"),
+            worker=worker,
+            log=(lambda msg, level="info": dispatch_log(logger, msg)) if logger else None,
+        )
+        if result.returncode not in {0, 1} or stopped(result, worker):
+            raise ValueError("MKVToolNix-Subtitle-Fallback fehlgeschlagen oder abgebrochen.")
+        if not stage.exists() or stage.stat().st_size <= 0:
+            raise ValueError("MKVToolNix-Subtitle-Fallback erzeugte keine Ausgabedatei.")
+        verify_extraction(
+            stage,
+            input_path=input_path,
+            stream_index=stream_index,
+            codec_args=["-c:s", "copy"],
+            ffprobe=ffprobe,
+            worker=worker,
+            logger=logger,
+        )
+        if stopped(result, worker):
+            raise ValueError("Untertitel-Fallback vor dem Speichern abgebrochen.")
+        verified = True
+        publish_subtitle_stage(stage, output, overwrite=overwrite)
+        if result.returncode == 1 and logger:
+            dispatch_log(logger, "⚠️ MKVToolNix meldete Warnungen; der Subtitle-Fallback wurde geprüft.")
+        return True
+    except Exception as exc:
+        if not verified:
+            stage.unlink(missing_ok=True)
+        _log_tool_error(logger, Path(mkvmerge).name, None, exc=exc)
+        return False

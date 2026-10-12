@@ -62,17 +62,21 @@ class ConvertWidgetQueueBadgesMixin:
         return badges
 
     def _encode_badge_label(self, preview: dict) -> str:
+        if not preview or preview.get("pending"):
+            return "Analyse läuft"
+        if preview.get("error"):
+            return "Analyse fehlgeschlagen"
         pipeline = str(getattr(preview.get("pipeline"), "value", preview.get("pipeline") or "")).lower()
         video = dict(preview.get("video") or {})
         preserves_dv = (
             pipeline in {"dv", "av1_dv"}
             or bool(preview.get("dv_preserved"))
-            or bool(video.get("has_dv") and preview.get("effective_preserve_dv"))
+            or bool("dv_preserved" not in preview and video.get("has_dv") and preview.get("effective_preserve_dv"))
         )
         preserves_hdr10plus = (
             pipeline in {"hdrplus", "av1_hdrplus"}
-            or bool(preview.get("hdr10plus_preserved"))
-            or bool(video.get("has_hdr10plus") and preview.get("effective_preserve_hdrplus"))
+            or bool(preview.get("hdr10plus_preserved") or preview.get("generate_hdr10plus"))
+            or bool("hdr10plus_preserved" not in preview and video.get("has_hdr10plus") and preview.get("effective_preserve_hdrplus"))
         )
         if preserves_dv and preserves_hdr10plus:
             return "DV + HDR10+"
@@ -80,9 +84,14 @@ class ConvertWidgetQueueBadgesMixin:
             return "DV"
         if preserves_hdr10plus:
             return "HDR10+"
+        if video.get("is_hdr") or preview.get("sdr_hdr_applied"):
+            return "HDR"
         return "Standard"
 
     def _cached_preflight_preview(self, path: str) -> dict:
+        controller = getattr(self, "_pipeline_preview", None)
+        if controller is not None:
+            return controller.preview(path)
         rows = getattr(self._state, "preflight_rows_by_path", {}) or {}
         row = rows.get(path) or rows.get(str(path)) or {}
         preview = row.get("preview") if isinstance(row, dict) else {}

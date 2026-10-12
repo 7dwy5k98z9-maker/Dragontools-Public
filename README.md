@@ -1,4 +1,4 @@
-# DragonTools V9.9.0
+# DragonTools V9.9.1
 
 DragonTools ist eine Windows-Anwendung zur Analyse, Konvertierung und Verwaltung von Video-, Audio- und Untertiteldateien. Profile und Regeln helfen bei wiederkehrenden Aufgaben. Die Vorschau zeigt die geplanten Änderungen vor der Verarbeitung.
 
@@ -29,8 +29,6 @@ Neben den Pfeilen der Warteschlange stehen die Schnellschalter **HDR+ Generator*
 Die Hilfe beschreibt die Bedienung des aktuellen Programms. Das V9-Changelog ist nach technischen Fachbereichen und Unterpunkten gegliedert. Die Historien älterer Hauptversionen bleiben separat verfügbar.
 
 Externe Medienwerkzeuge sind nicht im Git-Repository oder im öffentlichen Windows-Paket enthalten. Sie werden anhand von `TOOLS_INSTALLIEREN.txt` separat eingerichtet. Die Anwendung besteht aus der EXE und dem zugehörigen Ordner `Daten`; beide bleiben beim Entpacken zusammen.
-
-Das öffentliche Paket und seine SHA-256-Prüfsumme stehen im [Release v9.9.0](https://github.com/7dwy5k98z9-maker/Dragontools-Releases/releases/tag/v9.9.0). Persönliche Einstellungen und externe Medienwerkzeuge gehören nicht zur öffentlichen Ausgabe.
 
 ## Voraussetzungen
 
@@ -125,7 +123,7 @@ Beim Start aus dem Quellcode sucht DragonTools Werkzeuge in dieser Reihenfolge:
 2. im Windows-`PATH`,
 3. in den bekannten Unterordnern von `third_party`.
 
-Die Pfade können in DragonTools unter den Einstellungen für externe Werkzeuge ausgewählt werden. Das ist praktisch, wenn die Programme bereits an anderer Stelle installiert sind. Der öffentliche `build_v9.bat` erstellt das Paket ohne diese Medienwerkzeuge. Für den Build müssen sie daher nicht in `third_party` liegen; ihre Pfade werden für die spätere Medienverarbeitung eingerichtet.
+Die Pfade können in DragonTools unter den Einstellungen für externe Werkzeuge ausgewählt werden. Das ist praktisch, wenn die Programme bereits an anderer Stelle installiert sind. Für `build_v9.bat` müssen sie trotzdem in der oben beschriebenen `third_party`-Struktur vorhanden sein.
 
 ## Empfohlene Ordnerstruktur
 
@@ -209,7 +207,6 @@ Die Tabelle zeigt vollständige Staffeln, vollständig fehlende Staffeln und ein
 
 **CSV exportieren** speichert die Tabelle mit UTF-8-BOM und Semikolon-Trennzeichen für Tabellenprogramme. Die Funktion vergleicht die Renamer-Liste, keine vorhandene Mediathek außerhalb dieser Liste, und benennt keine Dateien um.
 
-
 ## Renamer: mehrstufige Suche und manuelle Korrektur
 
 Der Film-/Serien-Renamer bewertet Metadatenkandidaten in konfigurierbaren Stufen. Standardmäßig wird zuerst die normale Mindestübereinstimmung von **60 %** verwendet. Gibt es dort keinen Kandidaten, folgen automatisch die Fallback-Stufen **45 %** und **30 %**. Alle drei Grenzwerte sind unter **Regeln → Renamer-Regeln** separat einstellbar. Treffer aus reduzierten Stufen werden sichtbar als Fallback markiert und bleiben prüfbedürftig; die letzte Stufe behandelt mehrere ähnlich schwache Kandidaten bewusst als mehrdeutig statt blind zu raten.
@@ -240,11 +237,11 @@ Kontrolliere anschließend, dass alle externen Werkzeuge unter `third_party` vor
 build_v9.bat
 ```
 
-Im privaten Entwicklungsrepository erstellt der Builder ohne Argumente (auch beim Doppelklick) einen privaten Build: Die PDF-Datenschutzprüfung wird ausgelassen, sodass ein fehlendes `pypdf` den Build nicht blockiert. `build_v9.bat --private` wählt denselben Modus ausdrücklich. Alle übrigen Release-, Konfigurations- und EXE-Smoke-Prüfungen bleiben aktiv.
+Ohne Argumente (auch beim Doppelklick) erstellt der Builder einen privaten Build: Die PDF-Datenschutzprüfung wird ausgelassen, sodass ein fehlendes `pypdf` den Build nicht blockiert. `build_v9.bat --private` wählt denselben Modus ausdrücklich. Alle übrigen Release-, Konfigurations- und EXE-Smoke-Prüfungen bleiben aktiv.
 
-In dieser öffentlichen Arbeitskopie erstellt `build_v9.bat` auch ohne Argumente einen öffentlichen Build mit PDF-Datenschutzprüfung. `build_v9.bat --public` wählt den Modus ausdrücklich. Fehlt `pypdf` oder ist seine Version ungeeignet, installiert/repariert der Builder `pypdf>=5,<7` und prüft danach erneut. Externe Medienwerkzeuge werden weder benötigt noch mitgeliefert. Der private Entwicklungsbuilder verwendet ohne Argumente weiterhin den privaten Modus; seine übrigen Release- und EXE-Prüfungen bleiben aktiv.
+Für einen öffentlichen Build verwende `build_v9.bat --public`. Dann prüft der Builder PDF-Inhalte und installiert oder repariert bei Bedarf `pypdf>=5,<7` automatisch in der verwendeten Python-Umgebung. Danach prüft er Import und Version erneut; Installations- oder PDF-Prüffehler brechen den öffentlichen Build ab. Öffentliche Quellarchive behalten ihre verpflichtende PDF-Prüfung unabhängig vom privaten Builder-Modus. `build_v9_angepasst.bat` reicht die Argumente ebenfalls weiter.
 
-Der fertige Build wird unter `dist/DragonToolsV9.9.0/` abgelegt. `build/` und `dist/` sind lokale Ausgaben und werden nicht in Git gespeichert.
+Der fertige Build wird unter `dist/DragonToolsV9.9.1/` abgelegt. `build/` und `dist/` sind lokale Ausgaben und werden nicht in Git gespeichert.
 
 ## Programm-Updates über GitHub
 

@@ -295,6 +295,11 @@ def _extra_stereo_decisions(
     return decisions
 
 
+def load_audio_rules() -> dict[str, Any]:
+    """Return the shared cached audio configuration used by track planning."""
+    return _load_audio_rules()
+
+
 def compute_audio_track_plan(
     audio_streams: list[AudioStream],
     file_override: dict[str, Any] | None,

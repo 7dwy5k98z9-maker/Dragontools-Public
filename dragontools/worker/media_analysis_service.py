@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Callable
 
 from ..core.media_analyzer import analyze_media
+from ..core.media_duration import positive_seconds
 
 
 class MediaAnalysisService:
@@ -32,7 +33,12 @@ class MediaAnalysisService:
             )
         if getattr(media_info, "primary_video", None) is None:
             raise RuntimeError("Die Medienanalyse lieferte keine verarbeitbare Videospur.")
-        duration_ms = self._probe_duration_ms(input_path)
+        duration_s = positive_seconds(getattr(media_info, "duration_s", None))
+        duration_ms = (
+            int(duration_s * 1000)
+            if duration_s is not None and duration_s < 1_000_000
+            else self._probe_duration_ms(input_path)
+        )
         src = Path(input_path)
         size_before = src.stat().st_size if src.exists() else 0
         return media_info, duration_ms, size_before

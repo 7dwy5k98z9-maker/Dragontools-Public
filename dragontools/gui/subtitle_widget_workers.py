@@ -8,11 +8,13 @@ from pathlib import Path
 
 from PyQt6.QtCore import QThread, pyqtSignal
 
-from ..core.lang_codes import lang_iso_tag, sub_codec_to_ext_and_args
+from ..core.lang_codes import lang_iso_tag
 from ..core.tool_paths import ToolPaths
 from ..worker.process_control import terminate_process_tree
 from ..worker.tool_runner import run_tool
-from ..subtitle.extractor import extract_with_ffmpeg
+from ..subtitle.extractor import extract_with_ffmpeg, extract_to_mks_with_mkvmerge
+from ..subtitle.formats import subtitle_extraction_targets, subtitle_codec_is_text, normalize_subtitle_codec
+from ..subtitle.media_verification import probe_streams
 from ..subtitle.sidecar_matcher import find_injection_subtitle
 from ..subtitle.injector import inject_with_mkvmerge, inject_with_ffmpeg
 from ..subtitle.converter import build_ass_style, srt_to_ass, subtitle_to_txt, txt_to_ass, txt_to_srt
@@ -106,22 +108,57 @@ class _ExtractWorker(_SubWorker):
     
                 Path(self.out_dir).mkdir(parents=True, exist_ok=True)
                 for s in streams:
-                    codec = (s.get("codec_name") or "subrip").lower()
-                    result = sub_codec_to_ext_and_args(codec)
-                    if result is None:
-                        self.log.emit(f"  ⚠️ Stream {s.get('index', '?')} übersprungen: Codec {codec} nicht unterstützt")
+                    stream_index = s.get("index")
+                    if type(stream_index) is not int or stream_index < 0:
+                        self.log.emit("  ❌ Untertitelspur ohne gültigen FFprobe-Index übersprungen")
                         continue
-                    ext, codec_args = result
-                    lang  = lang_iso_tag((s.get("tags") or {}).get("language", "und"))
-                    out = _unique_output_path(Path(self.out_dir) / f"{Path(path).stem}.{lang}.{s['index']}{ext}")
-                    ok = extract_with_ffmpeg(
-                        path, s["index"], str(out), self.tools.ffmpeg,
-                        logger=self.log.emit, codec_args=codec_args, worker=self,
-                    )
-                    if ok:
-                        self.log.emit(f"  ✅ → {Path(out).name}")
+                    codec = normalize_subtitle_codec(s.get("codec_name"), s.get("codec_tag_string"))
+                    lang = lang_iso_tag((s.get("tags") or {}).get("language", "und"))
+                    attempts = subtitle_extraction_targets(codec, s.get("codec_tag_string"))
+                    ok = False
+                    used_out: Path | None = None
+                    for attempt_no, target in enumerate(attempts, start=1):
+                        out = _unique_output_path(
+                            Path(self.out_dir)
+                            / f"{Path(path).stem}.{lang}.{stream_index}{target.suffix}"
+                        )
+                        if attempt_no > 1:
+                            self.log.emit(
+                                f"  ↪️ Stream {stream_index} ({codec}): versuche {target.description}"
+                            )
+                        ok = extract_with_ffmpeg(
+                            path, stream_index, str(out), self.tools.ffmpeg,
+                            logger=self.log.emit, codec_args=list(target.codec_args), worker=self,
+                        )
+                        if ok:
+                            used_out = out
+                            break
+                    if not ok:
+                        # Final generic fallback: let MKVToolNix map the FFprobe
+                        # stream ordinal to its own track ID and keep the subtitle
+                        # losslessly in an .mks container.  This also covers codecs
+                        # unknown to DragonTools' format table.
+                        out = _unique_output_path(
+                            Path(self.out_dir) / f"{Path(path).stem}.{lang}.{stream_index}.mks"
+                        )
+                        self.log.emit(
+                            f"  ↪️ Stream {stream_index} ({codec}): versuche MKVToolNix-Verlustfrei-Fallback"
+                        )
+                        ok = extract_to_mks_with_mkvmerge(
+                            path, stream_index, str(out),
+                            mkvmerge=self.tools.mkvmerge,
+                            ffprobe=self.tools.ffprobe,
+                            logger=self.log.emit,
+                            worker=self,
+                        )
+                        if ok:
+                            used_out = out
+                    if ok and used_out is not None:
+                        self.log.emit(f"  ✅ Stream {stream_index} ({codec}) → {used_out.name}")
                     else:
-                        self.log.emit(f"  ❌ Stream {s['index']} fehlgeschlagen")
+                        self.log.emit(
+                            f"  ❌ Stream {stream_index} ({codec}) konnte mit keinem verfügbaren Backend extrahiert werden"
+                        )
                 self.progress.emit(idx + 1, total)
             self.done.emit()
         except Exception:
@@ -145,13 +182,26 @@ class _InjectWorker(_SubWorker):
         self.forced      = forced
         self.tools       = tools
 
-    def _output_path(self, video_path: str) -> str:
+    def _output_path(self, video_path: str, *, force_mkv: bool = False) -> str:
         p = Path(video_path)
-        if p.suffix.lower() in {".mkv", ".mp4", ".m4v", ".mov"}:
+        if force_mkv:
+            candidate = p.with_name(p.stem + "_sub.mkv")
+        elif p.suffix.lower() in {".mkv", ".mp4", ".m4v", ".mov"}:
             candidate = p.with_stem(p.stem + "_sub")
         else:
             candidate = p.with_name(p.stem + "_sub.mkv")
         return str(_unique_output_path(candidate))
+
+    def _probe_subtitle_codec(self, sub_file: str) -> str:
+        rows = probe_streams(
+            sub_file, ffprobe=self.tools.ffprobe, worker=self, logger=self.log.emit
+        )
+        subtitles = [row for row in rows if row.get("codec_type") == "subtitle"]
+        forbidden = [row for row in rows if row.get("codec_type") in {"video", "audio"}]
+        if len(subtitles) != 1 or forbidden:
+            raise ValueError("Die Zusatzdatei muss genau eine Untertitelspur und keine Audio-/Videospur enthalten.")
+        row = subtitles[0]
+        return normalize_subtitle_codec(row.get("codec_name"), row.get("codec_tag_string"))
 
     def run(self) -> None:
         try:
@@ -167,27 +217,53 @@ class _InjectWorker(_SubWorker):
                     self.progress.emit(idx + 1, total)
                     continue
                 self.log.emit(f"  Untertitel: {Path(sub_file).name} | {self.language} | {self.title}")
-                out = self._output_path(path)
+                try:
+                    subtitle_codec = self._probe_subtitle_codec(sub_file)
+                except Exception as exc:
+                    self.log.emit(f"  ❌ Untertitel-Datei nicht eindeutig erkannt: {exc}")
+                    self.progress.emit(idx + 1, total)
+                    continue
+
                 video_suffix = Path(path).suffix.lower()
-                sub_suffix = Path(sub_file).suffix.lower()
                 ok = False
 
-                if video_suffix in {".mp4", ".m4v", ".mov"}:
-                    if sub_suffix not in {".srt", ".ass", ".ssa"}:
-                        self.log.emit("  ⚠️ MP4/MOV unterstützt hier nur Text-Untertitel (.srt/.ass).")
-                    else:
-                        ok = inject_with_ffmpeg(
+                # MP4/MOV können nicht alle Untertitelcodecs darstellen. Text wird
+                # wie bisher als mov_text eingefügt; Bitmap/binäre/ unbekannte Subs
+                # wechseln automatisch auf MKV statt die Spur zu verwerfen.
+                if video_suffix in {".mp4", ".m4v", ".mov"} and subtitle_codec_is_text(subtitle_codec):
+                    out = self._output_path(path)
+                    ok = inject_with_ffmpeg(
+                        path, sub_file, out,
+                        self.language, self.tools.ffmpeg,
+                        logger=self.log.emit,
+                        subtitle_codec="mov_text",
+                        map_existing_subtitles=True,
+                        worker=self,
+                        forced=self.forced,
+                        ffprobe=self.tools.ffprobe,
+                        title=self.title,
+                    )
+                    if not ok:
+                        self.log.emit(
+                            "  ↪️ MP4/MOV-Mux nicht möglich; versuche verlustfrei als MKV."
+                        )
+                        out = self._output_path(path, force_mkv=True)
+                        ok = inject_with_mkvmerge(
                             path, sub_file, out,
-                            self.language, self.tools.ffmpeg,
+                            self.language, self.forced,
                             logger=self.log.emit,
-                            subtitle_codec="mov_text",
-                            map_existing_subtitles=True,
-                            worker=self,
-                            forced=self.forced,
+                            mkvmerge=self.tools.mkvmerge,
                             ffprobe=self.tools.ffprobe,
                             title=self.title,
+                            worker=self,
                         )
                 else:
+                    force_mkv = video_suffix not in {".mkv"} or not subtitle_codec_is_text(subtitle_codec)
+                    out = self._output_path(path, force_mkv=force_mkv)
+                    if force_mkv and video_suffix in {".mp4", ".m4v", ".mov"}:
+                        self.log.emit(
+                            f"  ℹ️ Codec {subtitle_codec} ist für MP4/MOV nicht verlustfrei geeignet; Ausgabe wird MKV."
+                        )
                     ok = inject_with_mkvmerge(
                         path, sub_file, out,
                         self.language, self.forced,

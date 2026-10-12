@@ -6,7 +6,7 @@
       "title": "Überblick",
       "icon": "📋",
       "blocks": [
-        "DragonTools V9.9.0 · Stand 10.10.2026\n- Mit DragonTools lassen sich Videodateien analysieren, konvertieren, umbenennen und für eine Mediathek aufbereiten. Diese Übersicht beschreibt die Entwicklung der Funktionen nach Fachbereichen.",
+        "DragonTools V9.9.1 · Stand 12.10.2026\n- Mit DragonTools lassen sich Videodateien analysieren, konvertieren, umbenennen und für eine Mediathek aufbereiten. Diese Übersicht beschreibt die Entwicklung der Funktionen nach Fachbereichen.",
         "Ältere Versionen\n- Die getrennten Historien für V8 und V1–V7 bleiben über Hilfe → Änderungshistorie erreichbar."
       ]
     },
@@ -66,8 +66,9 @@
       "title": "07 Untertitel und Schriftanhänge",
       "icon": "💬",
       "blocks": [
+        "Standardspur und Sprachpriorität\n- Bei gleicher erster Audio- und Untertitelsprache wird ein passender Untertitel als Standard hinterlegt, wenn die ausgewählte Hauptaudiospur eine andere bekannte Sprache verwendet. Vollständige Untertitel werden vor Forced-Spuren bevorzugt.\n- Konvertierung, Strip-Only und Remux verwenden dieselbe Entscheidung. Sidecars erhalten die Kennung .default; Datei-Overrides und Forced-Flags bleiben erhalten.",
         "Interne Spuren und Sidecars\n- Untertitel können intern übernommen oder als separate Dateien ausgegeben werden. Die Containerwahl berücksichtigt kompatible Textformate und externe Bilduntertitel. Schriftanhänge bleiben beim Einfügen von Untertiteln erhalten, auch wenn ffprobe dafür keinen Codec-Namen meldet.",
-        "OCR und Burn-In\n- Bilduntertitel können über die eingerichteten OCR-Werkzeuge verarbeitet oder gezielt ins Bild eingebrannt werden. Fehlgeschlagene OCR ersetzt keine vorhandene Originalspur; eine nicht mehr verfügbare Auswahl führt nicht zum Einbrennen einer anderen Spur.",
+        "OCR und Burn-In\n- Bilduntertitel können über die eingerichteten OCR-Werkzeuge verarbeitet oder gezielt ins Bild eingebrannt werden. Fehlgeschlagene OCR ersetzt keine vorhandene Originalspur; eine nicht mehr verfügbare Auswahl führt nicht zum Einbrennen einer anderen Spur.\n- Beim Ende einer Bitmap-Untertitelspur läuft das Hauptvideo mit seiner ursprünglichen Zeitachse weiter. Der Overlay-Filter verlängert die Untertitelspur nicht und erzeugt dadurch keine zusätzlichen Bilder mit extremen Zeitstempeln. Crop und Skalierung folgen weiterhin dem Einbrennen im Quellbild.",
         "Track-Zuordnung\n- MediaInfo und ffprobe werden anhand passender Spureigenschaften zusammengeführt. WebVTT-Bezeichnungen werden dabei normalisiert. Die Anzahl der Untertitel und ihr globaler Streamindex sind getrennte Angaben."
       ]
     },

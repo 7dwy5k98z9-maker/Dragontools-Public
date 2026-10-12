@@ -62,6 +62,10 @@ Thumbs.db
 /DragonTools_Source_*.zip
 
 
-# Generated specifications and local release assets
+# Local generated builds, review archives and media samples
 /*.spec
+/DragonTools*.zip
+/PATCH_*.zip
+/film.mp4
 /artifacts/
+/SNAPSHOT_CONTENTS.json

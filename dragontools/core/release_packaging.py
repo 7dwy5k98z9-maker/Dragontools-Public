@@ -51,7 +51,7 @@ _PRIVATE_SERVER_BACKSLASH_PATTERN = r"\\\\medien" + "speicher"
 _PRIVATE_SERVER_FORWARD_PATTERN = r"//medien" + "speicher"
 _PRIVATE_WORKDIR_PATTERN = "Arbeitsordner " + "codex"
 _PRIVATE_ORG_PATTERN = "Mark" + "usTools"
-_PRIVATE_AUTHOR_PATTERN = "Mark" + "us Developer"
+_PRIVATE_AUTHOR_PATTERN = "Mark" + "us Tsch" + "erner"
 _PRIVATE_FIRST_NAME_PATTERN = r"\bMark" + r"us\b|\bMark" + r"u\b"
 
 _PUBLIC_SANITIZERS: tuple[tuple[re.Pattern[str], str], ...] = (

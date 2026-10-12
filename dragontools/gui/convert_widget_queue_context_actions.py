@@ -114,7 +114,11 @@ class ConvertWidgetQueueContextActionsMixin:
         )
         dlg.exec()
 
-    def _rule_test_preview_options(self) -> dict:
+    def rule_test_preview_options(self, *, probe_generator: bool = True) -> dict:
+        """Provide the preview configuration through the widget's public API."""
+        return self._rule_test_preview_options(probe_generator=probe_generator)
+
+    def _rule_test_preview_options(self, *, probe_generator: bool = True) -> dict:
         from ..core.encoder_profile_override import SCALE_LABELS_TO_MODE
         from ..core.settings_access import settings_text
         from ..core.settings_conversion import (
@@ -135,13 +139,13 @@ class ConvertWidgetQueueContextActionsMixin:
         # der Worker. Ein per-Datei-Override darf den global ausgeschalteten
         # Generator aktivieren; deshalb wird bei irgendeinem aktiven Request der
         # gleiche --version-Vertrag wie beim Worker geprüft.
-        generator_requested = bool(encoder_options.get("hdr10plus_generator_enabled", False)) or any(
+        generator_requested = probe_generator and (bool(encoder_options.get("hdr10plus_generator_enabled", False)) or any(
             normalize_override_dict(raw).get("generate_hdr10plus") is True
             or file_override_may_enable_encoder_option(raw, "hdr10plus_generator_enabled")
             for raw in dict(getattr(self._state, "file_overrides", {}) or {}).values()
-        )
+        ))
         generator_available = False
-        if generator_requested:
+        if generator_requested and probe_generator:
             try:
                 from ..worker.hdr10plus_generator_client import (
                     HDR10PlusGeneratorClient,

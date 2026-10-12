@@ -14,7 +14,7 @@ def test_release_manifest_matches_985() -> None:
     from dragontools.core.version import APP_VERSION
 
     manifest = json.loads((ROOT / "release_manifest.json").read_text(encoding="utf-8"))
-    assert APP_VERSION == "9.9.0"
+    assert re.fullmatch(r"9\.\d+\.\d+", APP_VERSION)
     assert manifest["app_version"] == APP_VERSION
     assert APP_VERSION in manifest["help_policy"]
 

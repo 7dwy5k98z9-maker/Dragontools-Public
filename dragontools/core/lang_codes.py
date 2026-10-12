@@ -300,9 +300,16 @@ _SUB_CODEC_TABLE: dict[str, tuple[str, list[str]]] = {
     "tx3g":              (".srt",  ["-c:s", "srt"]),
     "text":              (".srt",  ["-c:s", "srt"]),
     "webvtt":            (".vtt",  ["-c:s", "webvtt"]),
+    "wvtt":              (".vtt",  ["-c:s", "webvtt"]),   # MP4 codec-tag alias
+    "ttml":              (".ttml", ["-c:s", "ttml"]),
+    "dfxp":              (".ttml", ["-c:s", "ttml"]),
     "hdmv_pgs_subtitle": (".sup",  ["-c:s", "copy"]),
     "dvd_subtitle":      (".mks",  ["-c:s", "copy", "-f", "matroska"]),
     "vobsub":            (".mks",  ["-c:s", "copy", "-f", "matroska"]),
+    "dvb_subtitle":      (".mks",  ["-c:s", "copy", "-f", "matroska"]),
+    "xsub":              (".mks",  ["-c:s", "copy", "-f", "matroska"]),
+    "dvb_teletext":      (".mks",  ["-c:s", "copy", "-f", "matroska"]),
+    "arib_caption":      (".mks",  ["-c:s", "copy", "-f", "matroska"]),
 }
 
 

@@ -80,7 +80,8 @@ def test_worker_automatic_lookup_skips_missing_episode(tmp_path):
     logs, progress = [], []
     worker.log.connect(logs.append)
     worker.progress.connect(lambda done, total: progress.append((done, total)))
-    with patch.object(workers, "inject_with_mkvmerge", return_value=True) as mux:
+    with patch.object(workers, "probe_streams", return_value=[{"codec_type": "subtitle", "codec_name": "subrip"}]), \
+         patch.object(workers, "inject_with_mkvmerge", return_value=True) as mux:
         worker.run()
     assert mux.call_count == 1
     assert Path(mux.call_args.args[1]).name == "Serie.S01E02.de.srt"

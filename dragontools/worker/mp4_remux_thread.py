@@ -10,7 +10,7 @@ from .base_worker import BaseWorker
 from ..core.logger import create_worker_logger
 from ..core.media_analyzer import analyze_media
 from .utility_media_analysis import analyze_owned_media
-from ..core.transaction_identity import path_receipt
+from ..core.transaction_identity import stat_identity
 from ..core.tool_paths import get_tool_paths
 from ..core.sidecar_transaction import SidecarCommitTransaction
 from ..core.timeout_settings import get_timeout
@@ -189,7 +189,7 @@ class MP4RemuxThread(BaseWorker):
         return result.returncode
 
     def _remux_file(self, input_path: str, output_path: str) -> bool:
-        source_receipt = path_receipt(input_path)
+        source_identity = stat_identity(input_path)
         media_info = analyze_owned_media(input_path, self.tools, worker=self, analyzer=analyze_media)
         service = MP4RemuxFileService(
             planner=self._planner(),
@@ -213,5 +213,5 @@ class MP4RemuxThread(BaseWorker):
             current_index=self._current_idx,
             total_files=len(self.files),
             user_abort_error=_UserAbortError,
-            expected_source_receipt=source_receipt,
+            expected_source_identity=source_identity,
         )

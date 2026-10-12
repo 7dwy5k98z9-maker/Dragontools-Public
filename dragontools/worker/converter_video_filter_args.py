@@ -20,9 +20,13 @@ def image_burn_vf_args(mi, burn_sub, pre_filters: list[str], post_filters: list[
     # bitmap in the old coordinate system and can shift or clip it. Overlay in
     # source coordinates first, then apply all video transforms to the combined
     # image so subtitle placement remains geometrically stable.
+    # sub2video may expose a PGS EOF frame with a UINT32_MAX-ms duration.
+    # Repeating that secondary frame can add a wrapped, far-future video PTS.
+    # Continue the main video after subtitle EOF without extending the overlay.
+    overlay = "overlay=eof_action=pass:repeatlast=0"
     filters = list(pre_filters) + list(post_filters or [])
     if filters:
-        graph = f"[0:v:0][0:s:{ordinal}]overlay[vburn];[vburn]{','.join(filters)}[vout]"
+        graph = f"[0:v:0][0:s:{ordinal}]{overlay}[vburn];[vburn]{','.join(filters)}[vout]"
     else:
-        graph = f"[0:v:0][0:s:{ordinal}]overlay[vout]"
+        graph = f"[0:v:0][0:s:{ordinal}]{overlay}[vout]"
     return ["-filter_complex", graph, "-map", "[vout]"]

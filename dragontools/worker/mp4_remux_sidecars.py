@@ -47,6 +47,7 @@ class MP4RemuxSidecarService:
             abort_check=self._abort_check,
             preserve_burn_candidate=True,
             container="mp4",
+            apply_audio_language_rules=bool(getattr(self._worker, 'apply_audio_rules', True)),
         )
 
     def cleanup_generated(self, paths: list[str] | tuple[str, ...]) -> None:

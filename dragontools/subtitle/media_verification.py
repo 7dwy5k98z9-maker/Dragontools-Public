@@ -115,10 +115,14 @@ def build_injection_plan(
     logger=None,
 ):
     source = probe_streams(video_path, ffprobe=ffprobe, worker=worker, logger=logger)
-    subtitles = probe_streams(sub_path, ffprobe=ffprobe, worker=worker, logger=logger)
-    if len(subtitles) != 1 or subtitles[0]["codec_type"] != "subtitle":
+    sidecar_rows = probe_streams(sub_path, ffprobe=ffprobe, worker=worker, logger=logger)
+    subtitles = _of_type(sidecar_rows, "subtitle")
+    forbidden_sidecar_streams = [
+        row for row in sidecar_rows if row["codec_type"] in {"video", "audio"}
+    ]
+    if len(subtitles) != 1 or forbidden_sidecar_streams:
         raise ValueError(
-            "Die zusätzliche Datei muss genau eine Untertitelspur enthalten."
+            "Die zusätzliche Datei muss genau eine Untertitelspur und keine Audio-/Videospur enthalten."
         )
     videos = _of_type(source, "video")
     if not videos:

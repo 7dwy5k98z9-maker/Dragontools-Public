@@ -19,6 +19,7 @@ from PyQt6.QtGui import QFont, QPainter, QPixmap, QLinearGradient, QColor, QPen
 from ..core.tool_paths import get_tool_paths
 from .subtitle_widget_workers import _SubWorker, _ExtractWorker, _InjectWorker, _ConvertWorker
 from .subtitle_widget_files import _FileDropList, _parse_exts
+from ..subtitle.formats import SUBTITLE_FILE_DIALOG_FILTER
 
 class SubtitleWidget(QWidget):
     def __init__(self, parent=None):
@@ -113,7 +114,7 @@ class SubtitleWidget(QWidget):
         self.inj_sub  = QLineEdit()
         self.inj_sub.setPlaceholderText("Leer lassen: passende Untertitel neben den Videos suchen")
         sub_btn       = QPushButton("…"); sub_btn.setFixedWidth(30)
-        sub_btn.clicked.connect(lambda: self._browse_file(self.inj_sub, "Untertitel (*.srt *.ass *.sup)"))
+        sub_btn.clicked.connect(lambda: self._browse_file(self.inj_sub, SUBTITLE_FILE_DIALOG_FILTER))
         sub_row.addWidget(self.inj_sub); sub_row.addWidget(sub_btn)
         v.addLayout(sub_row)
 

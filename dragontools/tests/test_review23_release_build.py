@@ -140,7 +140,7 @@ def test_docx_privacy_scan_detects_private_content(tmp_path):
     from dragontools.core.release_validation_privacy import _scan_private_markers
 
     docx = tmp_path / "manual.docx"
-    private_name = "Mark" + "us Developer"
+    private_name = "Mark" + "us Tsch" + "erner"
     with zipfile.ZipFile(docx, "w") as archive:
         archive.writestr(
             "word/document.xml",
@@ -160,7 +160,7 @@ def test_pdf_privacy_scan_detects_private_metadata(tmp_path):
     pdf = tmp_path / "manual.pdf"
     writer = PdfWriter()
     writer.add_blank_page(width=72, height=72)
-    writer.add_metadata({"/Author": "Mark" + "us Developer"})
+    writer.add_metadata({"/Author": "Mark" + "us Tsch" + "erner"})
     with pdf.open("wb") as handle:
         writer.write(handle)
 

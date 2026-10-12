@@ -87,6 +87,7 @@ class SubtitleSidecarService:
         abort_check: "Callable[[], bool] | None" = None,
         preserve_burn_candidate: bool = False,
         container: str = "mp4",
+        apply_audio_language_rules: bool = True,
     ) -> SubtitleExportResult:
         """Export all subtitle streams that the MP4 policy requires externally."""
         subtitle_streams = getattr(media_info, "subtitle_streams", None) or []
@@ -110,6 +111,7 @@ class SubtitleSidecarService:
             pgs_to_srt_enabled=pgs_to_srt_enabled,
             pgs_original_storage=pgs_original_storage,
             container=container,
+            apply_audio_language_rules=apply_audio_language_rules,
         )
         for warning in getattr(selection.plan, "burn_warnings", ()) or ():
             self._log(f"  ⚠️ {warning}", "warn")

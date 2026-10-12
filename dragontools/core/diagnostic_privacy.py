@@ -31,9 +31,10 @@ class DiagnosticSanitizer:
         self.roots = sorted(variants, key=len, reverse=True)
 
     def __call__(self, text):
-        result = redact_sensitive_text(text, secret_values=self.secret_values)
+        result = str(text or '')
         for root in self.roots:
             result = re.sub(re.escape(root), lambda _match: "[PRIVATE_PATH]", result, flags=re.IGNORECASE)
+        result = redact_sensitive_text(result, secret_values=self.secret_values)
         # Foreign user profiles in historical logs must also remain anonymous.
         result = re.sub(r"(?i)[A-Z]:[\\/]+Users[\\/]+[^\\/\r\n\"']+", "[USER_PROFILE]", result)
         result = re.sub(r'''/(?:home|Users)/[^/\s"']+''', "[USER_PROFILE]", result)

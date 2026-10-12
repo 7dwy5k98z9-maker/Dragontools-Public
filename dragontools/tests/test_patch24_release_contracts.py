@@ -56,7 +56,7 @@ def test_docx_private_link_target_is_checked(tmp_path):
 def test_docx_split_runs_do_not_hide_private_names(tmp_path):
     from dragontools.core.release_validation_privacy import _scan_private_markers
     with zipfile.ZipFile(tmp_path/'manual.docx','w') as z:
-        z.writestr('word/document.xml','<document><t>Mar</t><t>kus Developer</t></document>')
+        z.writestr('word/document.xml','<document><t>Mar</t><t>kus Tsch' + 'erner</t></document>')
     assert any(c.status=='error' and 'DOCX' in c.title for c in _scan_private_markers(tmp_path))
 
 

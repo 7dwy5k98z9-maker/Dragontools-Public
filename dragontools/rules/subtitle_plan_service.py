@@ -10,6 +10,7 @@ from .subtitle_rule_config import COMPATIBLE_SUBTITLE_CODECS, migrate_subtitle_r
 from .subtitle_selection import _build_custom_track_map, _dedupe_streams, _limit_external_sidecar_streams, _preferred_formats
 from .subtitle_keep_policy import _build_auto_keep_streams, _sort_keep_candidates
 from .subtitle_burn_policy import _evaluate_forced_burn_plausibility, _resolve_auto_burn
+from .subtitle_default_policy import apply_subtitle_default_policy
 
 
 def compute_subtitle_plan_service(
@@ -20,6 +21,8 @@ def compute_subtitle_plan_service(
     subtitle_rules: dict | None = None,
     container_copy_supported: bool = True,
     media_duration_s: float | None = None,
+    audio_rules: dict | None = None,
+    apply_audio_language_rules: bool = True,
 ) -> SubtitlePlan:
     ov = normalize_override_dict(file_override)
     subtitle_mode = ov.get("subtitle_mode", "auto")
@@ -55,7 +58,7 @@ def compute_subtitle_plan_service(
         subtitle_rules=subtitle_rules,
         container_copy_supported=container_copy_supported,
     )
-    return SubtitlePlan(
+    plan = SubtitlePlan(
         override_mode=subtitle_mode,
         burn_sub=state["burn_sub"],
         keep_streams=tuple(keep_streams),
@@ -64,6 +67,11 @@ def compute_subtitle_plan_service(
         burn_blocked_reason=state["burn_blocked_reason"],
         burn_warnings=tuple(state["burn_warnings"]),
         burn_event_rate=state["burn_event_rate"],
+    )
+    return apply_subtitle_default_policy(
+        plan, audio_streams=audio_streams, file_override=ov,
+        subtitle_rules=subtitle_rules, audio_rules=audio_rules,
+        apply_audio_language_rules=apply_audio_language_rules,
     )
 
 

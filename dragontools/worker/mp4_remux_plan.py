@@ -169,6 +169,7 @@ class MP4RemuxPlanner:
             subtitle_rules=self.subtitle_rules,
             container_copy_supported=True,
             media_duration_s=getattr(media_info, "duration_s", None),
+            apply_audio_language_rules=self.apply_audio_rules,
         )
         storage = build_mp4_subtitle_storage_plan(
             subtitle_plan,

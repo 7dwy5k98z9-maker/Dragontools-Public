@@ -413,7 +413,7 @@ def test_bitmap_burn_overlays_before_crop_and_scale():
     )
     graph = args[args.index("-filter_complex") + 1]
 
-    assert graph.startswith("[0:v:0][0:s:0]overlay[vburn];")
+    assert graph.startswith("[0:v:0][0:s:0]overlay=eof_action=pass:repeatlast=0[vburn];")
     assert graph.index("overlay") < graph.index("crop=") < graph.index("scale=")
     assert args.count("-map") == 1
     assert args[-1] == "[vout]"

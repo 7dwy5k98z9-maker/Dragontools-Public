@@ -9,7 +9,7 @@ from typing import Callable
 from ..core.output_replace import commit_staged_output
 from ..core.move_transaction import publish_staged_no_replace
 from ..core.sidecar_transaction import SidecarCommitError, SidecarCommitTransaction
-from ..core.transaction_identity import path_receipt, receipt_matches
+from ..core.transaction_identity import path_receipt, receipt_matches, stat_identity
 from ..core.callback_dispatch import best_effort_callback
 from .mp4_remux_plan import MP4RemuxPlanner
 from .subtitle_sidecar_service import SubtitleExportResult
@@ -60,13 +60,16 @@ class MP4RemuxFileService:
         total_files: int,
         user_abort_error: type[RuntimeError],
         expected_source_receipt=None,
+        expected_source_identity=None,
     ) -> bool:
         if self._output_verifier is None:
             return self._fail(input_path, "MP4-Ausgabeprüfung fehlt; Veröffentlichung ist gesperrt.")
-        prepared = self._prepare_plan(input_path, output_path, media_info, expected_source_receipt)
+        if expected_source_identity is None and expected_source_receipt is not None:
+            expected_source_identity = expected_source_receipt.get("identity", [])
+        prepared = self._prepare_plan(input_path, output_path, media_info, expected_source_identity)
         if prepared is None:
             return False
-        plan, source_receipt, reason = prepared
+        plan, source_identity, reason = prepared
         best_effort_callback(self._logger.file_start,
             current_index,
             total_files,
@@ -100,7 +103,10 @@ class MP4RemuxFileService:
             preserve_for_recovery = True
             if plan.workspace is not None:
                 plan.workspace.mark_verified(plan.staging)
-            if not receipt_matches(plan.source, source_receipt):
+            # Content receipts are needed for publication and recovery, after
+            # FFmpeg has finished; startup only needs the filesystem identity.
+            source_receipt = self._confirmed_source_receipt(plan.source, source_identity, expected_source_receipt)
+            if source_receipt is None:
                 return self._fail(input_path, "Originalquelle wurde während der Verarbeitung verändert; bleibt erhalten.")
 
             if self._should_export_sidecars():
@@ -156,18 +162,32 @@ class MP4RemuxFileService:
             self._emit_file_result(input_path, True, str(plan.destination))
             return True
         finally:
-            if plan.workspace is not None:
-                plan.workspace.__exit__()
-            if not remux_complete and preserve_for_recovery:
-                best_effort_callback(self._log, f"Geprüftes MP4-Zwischenergebnis bleibt erhalten: {plan.staging}", "warn")
-            if not remux_complete and not preserve_for_recovery:
-                if plan.workspace is None:
-                    self._cleanup_partial(plan.staging)
-                    self._cleanup_sidecars(exported_sidecars)
+            self._finish_workspace(plan, remux_complete, preserve_for_recovery, exported_sidecars)
 
-    def _prepare_plan(self, input_path, output_path, media_info, expected_source_receipt):
-        source_receipt = expected_source_receipt if expected_source_receipt is not None else path_receipt(input_path)
-        if not receipt_matches(input_path, source_receipt):
+    def _finish_workspace(self, plan, complete, preserve_for_recovery, sidecars):
+        """Close staging ownership while retaining verified results for recovery."""
+        if plan.workspace is not None:
+            plan.workspace.__exit__()
+        if not complete and preserve_for_recovery:
+            best_effort_callback(self._log, f"Geprüftes MP4-Zwischenergebnis bleibt erhalten: {plan.staging}", "warn")
+        if not complete and not preserve_for_recovery and plan.workspace is None:
+            self._cleanup_partial(plan.staging)
+            self._cleanup_sidecars(sidecars)
+
+    def _confirmed_source_receipt(self, source, expected_identity, expected_receipt):
+        """Confirm source identity and content independently from publication."""
+        if stat_identity(source) != expected_identity:
+            return None
+        receipt = path_receipt(source)
+        if receipt['identity'] != expected_identity:
+            return None
+        if expected_receipt is not None and receipt != expected_receipt:
+            return None
+        return receipt
+
+    def _prepare_plan(self, input_path, output_path, media_info, expected_source_identity):
+        source_identity = stat_identity(input_path)
+        if expected_source_identity is not None and source_identity != expected_source_identity:
             self._fail(input_path, "Originalquelle wurde seit der Analyse verändert; bleibt erhalten.")
             return None
         compatible, reason = self._planner.video_compatibility(media_info)
@@ -175,7 +195,7 @@ class MP4RemuxFileService:
             self._fail(input_path, reason)
             return None
         plan = self._planner.build(input_path, output_path, media_info)
-        return plan, source_receipt, reason
+        return plan, source_identity, reason
 
     def _publish_output(self, plan, source_receipt, staging_receipt):
         if not receipt_matches(plan.source, source_receipt) or not receipt_matches(plan.staging, staging_receipt):

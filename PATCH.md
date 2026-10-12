@@ -1,8 +1,8 @@
-# Dragon Tools – Patchprotokoll bis Version 9.9.0
+# Dragon Tools – Patchprotokoll bis Version 9.9.1
 
 **Ausgangsbasis:** Dragon Tools 9.8.5  
 **Zwischenrelease:** Dragon Tools 9.8.6  
-**Zielversion / aktueller Stand:** Dragon Tools 9.9.0  
+**Zielversion / aktueller Stand:** Dragon Tools 9.9.1
 **Status:** laufende Entwicklung  
 **Letzte Aktualisierung:** 27.09.2026
 

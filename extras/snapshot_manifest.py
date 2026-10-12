@@ -29,7 +29,7 @@ EXCLUDED_DIR_NAMES = frozenset(
         "git release",
     }
 )
-EXCLUDED_SUFFIXES = frozenset({".pyc", ".pyo", ".spec", ".zip", ".sha256"})
+EXCLUDED_SUFFIXES = frozenset({".pyc", ".pyo", ".spec", ".zip", ".sha256", ".mp4", ".mkv"})
 
 
 def _excluded(relative: Path) -> bool:

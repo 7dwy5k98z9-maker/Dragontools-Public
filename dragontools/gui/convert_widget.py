@@ -30,6 +30,7 @@ from .convert_widget_host_actions import ConvertWidgetHostActions
 from .convert_widget_paths import ConvertWidgetTargetPathService
 from .convert_widget_queue_actions import ConvertWidgetQueueActionsMixin
 from .convert_widget_watch_intake import ConvertWidgetWatchMixin
+from .convert_widget_pipeline_preview import ConvertWidgetPipelinePreview
 
 
 class ConvertWidget(ConvertWidgetWatchMixin, ConvertWidgetQueueActionsMixin, QWidget):
@@ -52,6 +53,7 @@ class ConvertWidget(ConvertWidgetWatchMixin, ConvertWidgetQueueActionsMixin, QWi
         )
         self._composition = ConvertWidgetComposition(self)
         self._composition.initialize()
+        self._pipeline_preview = ConvertWidgetPipelinePreview(self)
         self._refresh_dv_remux_target_ui()
 
     @property
@@ -103,6 +105,8 @@ class ConvertWidget(ConvertWidgetWatchMixin, ConvertWidgetQueueActionsMixin, QWi
     def reload_paths(self) -> None:
         self.tools = self._path_service.reload_tools()
         self._refresh_dv_remux_target_ui()
+        if getattr(self, "_pipeline_preview", None) is not None:
+            self._pipeline_preview.refresh()
 
     def _dv_remux_target_container(self) -> str:
         return settings_text(
@@ -185,23 +189,31 @@ class ConvertWidget(ConvertWidgetWatchMixin, ConvertWidgetQueueActionsMixin, QWi
     def load_encoder_settings(self) -> None:
         self._enc_settings.load_encoder_settings()
         self.update_hdr_metadata_option_visibility()
+        if getattr(self, "_pipeline_preview", None) is not None:
+            self._pipeline_preview.refresh()
 
     def _save_profile(self):
         self._enc_settings.save_profile()
 
     def _profile_assistant(self):
         self._enc_settings.apply_assistant_profile()
+        self._pipeline_preview.refresh()
 
     def apply_profile(self, profile: dict) -> None:
         self._enc_settings.apply_profile_to_ui(profile)
         self.update_hdr_metadata_option_visibility()
+        if getattr(self, "_pipeline_preview", None) is not None:
+            self._pipeline_preview.refresh()
 
     def reset_encoder_defaults(self) -> None:
         self._enc_settings.reset_to_defaults()
         self.update_hdr_metadata_option_visibility()
+        if getattr(self, "_pipeline_preview", None) is not None:
+            self._pipeline_preview.refresh()
 
     def _load_profile(self):
         self._enc_settings.load_profile()
+        self._pipeline_preview.refresh()
 
     def update_hdr_metadata_option_visibility(self) -> None:
         show = self.default_codec in {"h265", "av1"}
@@ -245,13 +257,29 @@ class ConvertWidget(ConvertWidgetWatchMixin, ConvertWidgetQueueActionsMixin, QWi
     def iter_shutdown_workers(self) -> tuple:
         """Öffentliche Lifecycle-Schnittstelle für den MainWindow-Shutdown."""
         workers = list(self._controller.workers_for_shutdown())
+        preview = getattr(self, "_pipeline_preview", None)
+        if preview is not None:
+            workers.extend(preview.workers_for_shutdown())
         source_visual = getattr(self, "_source_visual_check_thread", None)
         if source_visual is not None and source_visual not in workers:
             workers.append(source_visual)
         return tuple(workers)
 
+    def closeEvent(self, event) -> None:
+        preview = getattr(self, "_pipeline_preview", None)
+        if preview is not None:
+            preview.shutdown()
+            if any(worker.isRunning() for worker in preview.workers_for_shutdown()):
+                event.ignore()
+                return
+        super().closeEvent(event)
+
     def running_job_diagnostics(self) -> str:
         return self._controller.running_job_diagnostics()
+
+    def get_subtitle_rules(self) -> dict:
+        """Current subtitle rules for preview services."""
+        return self._get_subtitle_rules()
 
     def _get_subtitle_rules(self) -> dict:
         return self._controller.get_subtitle_rules()

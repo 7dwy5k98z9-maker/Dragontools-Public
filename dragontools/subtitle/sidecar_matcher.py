@@ -4,8 +4,9 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from .formats import SUBTITLE_SIDECAR_EXTENSIONS
+
 _EPISODE = re.compile(r"(?i)(?<![a-z0-9])(?:s(\d{1,3})[ ._-]*e(\d{1,3})|(\d{1,3})x(\d{1,3}))(?!\d)")
-_EXTENSIONS = {".srt", ".ass", ".ssa", ".sup"}
 
 
 def _normalize(name: str) -> str:
@@ -21,11 +22,18 @@ def _episode(name: str):
     return int(season), int(episode), _normalize(name[:match.start()])
 
 
+def _is_vobsub_data_file_with_index(path: Path) -> bool:
+    """Do not select the .sub half of an .idx/.sub VobSub pair separately."""
+    return path.suffix.casefold() == ".sub" and path.with_suffix(".idx").is_file()
+
+
 def find_injection_subtitle(video_path: str | Path, language: str = "deu") -> Path:
     """Prefer a matching basename; otherwise require matching series and episode.
 
     Never choose arbitrarily between multiple candidates. Search only the
-    video's own directory, using a dot-delimited language token.
+    video's own directory, using a dot-delimited language token.  All supported
+    subtitle sidecar families are considered; a VobSub ``.idx/.sub`` pair is
+    represented by its ``.idx`` control file so it is not reported twice.
     """
     video = Path(video_path)
     codes = "de|deu|ger" if language in {"de", "deu", "ger"} else "en|eng"
@@ -33,7 +41,11 @@ def find_injection_subtitle(video_path: str | Path, language: str = "deu") -> Pa
     exact, episodes = [], []
     video_episode = _episode(video.stem)
     for candidate in sorted(video.parent.iterdir(), key=lambda p: p.name.casefold()):
-        if not candidate.is_file() or candidate.suffix.lower() not in _EXTENSIONS:
+        if (
+            not candidate.is_file()
+            or candidate.suffix.casefold() not in SUBTITLE_SIDECAR_EXTENSIONS
+            or _is_vobsub_data_file_with_index(candidate)
+        ):
             continue
         token = language_token.search(candidate.stem)
         if token is None:
