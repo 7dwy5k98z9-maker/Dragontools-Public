@@ -5,6 +5,7 @@ DragonTools ist eine Windows-Anwendung zur Analyse, Konvertierung und Verwaltung
 ## Verarbeitung und Medienprüfung
 
 - Video, Audio und Untertitel werden anhand der gewählten Profile verarbeitet. Dolby Vision, HDR10+ und SDR→HDR besitzen eigene Einstellungen und Ausgabeprüfungen.
+- Video und ausgewählte Audiospuren werden mit ihren jeweiligen Quelldauern geprüft. Ein passender Audio-Nachlauf gilt auch bei Strip-Only als gültig.
 - Bei einer unplausiblen MKV-Laufzeit folgt auf den normalen Remux die Prüfung einer Timestamp-Reparatur anhand der verlässlichen Bildrate und Dauer des Originals.
 - Untertitel lassen sich als interne Spuren oder Begleitdateien verwalten. Sprache, Titel und Default-/Forced-Kennzeichnungen werden bei der Ausgabe berücksichtigt.
 
@@ -22,6 +23,9 @@ Neben den Pfeilen der Warteschlange stehen die Schnellschalter **HDR+ Generator*
 
 - Entfernte, abgeschlossene oder abgebrochene Dateien lassen sich wieder hinzufügen, sobald kein aktiver Auftrag dieselbe Datei verarbeitet.
 - Wiederherstellung, Verschieben und Nachbearbeitung berücksichtigen Video und Begleitdateien gemeinsam. Die Journal-Wiederherstellung läuft beim Programmstart im Hintergrund.
+- Erfolgreiche Serienumbenennungen geben ihre bestätigte Metadatenzuordnung innerhalb derselben Sitzung an die Zielordner-Vorabprüfung weiter.
+- Nach erfolgreicher Ausgabeübernahme werden die unveränderten, verworfenen Timestamp-Reparaturkopien desselben Auftrags bereinigt.
+- Der vollständige Kopiervergleich liefert die Prüfnachweise für das Verschiebejournal und vermeidet zusätzliche Dateizugriffe. Die abschließende Integritätsprüfung bleibt erhalten.
 - Beim Ersetzen eines Films werden vorhandene Trickplay-Daten vor dem Video gesichert. Fehlende optionale Trickplay-Daten verhindern das Verschieben nicht.
 
 ## Dokumentation und Windows-Paket

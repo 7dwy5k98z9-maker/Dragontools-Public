@@ -13,9 +13,9 @@ from .move_transaction import (
     PathSwapTransaction, PathTransactionRollbackError, publish_staged_no_replace,
     remove_path, unique_staging_path,
 )
-from .move_copy_verification import verify_staged_file_copy
+from .move_copy_verification import VerifiedFileCopy, verify_staged_file_copy
 from .move_conflicts import same_path
-from .transaction_identity import path_receipt, receipt_matches, renamed_receipt_matches, object_identity, same_object
+from .transaction_identity import path_receipt, receipt_matches, renamed_receipt_matches, object_identity, same_object, stat_identity
 
 
 class MoveTransferExecutor:
@@ -56,12 +56,13 @@ class MoveTransferExecutor:
         *,
         replacement_mode: str | None,
         hook=None,
+        source_receipt=None,
     ) -> bool:
         destination_installed = False
         tmp_p = unique_staging_path(dst_p)
         stage_identity = None
         installed_receipt = None
-        source_receipt = path_receipt(src_p)
+        source_receipt = source_receipt if source_receipt is not None else path_receipt(src_p)
         try:
             self.check_abort()
             # Persist the expected shared inode before the hardlink crash window.
@@ -94,17 +95,26 @@ class MoveTransferExecutor:
                             progress_hook = None
                     fdst.flush()
                     os.fsync(fdst.fileno())
-                verify_staged_file_copy(src_p, tmp_p)
+                verified = verify_staged_file_copy(src_p, tmp_p)
                 self.check_abort()
-                if not receipt_matches(src_p, source_receipt):
+                if isinstance(verified, VerifiedFileCopy):
+                    source_matches = (verified.source_receipt == source_receipt
+                        and stat_identity(src_p) == source_receipt['identity'])
+                else:
+                    # Compatibility for callers that supply a verification hook
+                    # without a receipt: retain the original full-content check.
+                    source_matches = receipt_matches(src_p, source_receipt)
+                if not source_matches:
                     raise OSError('Quelle wurde nach der Kopierprüfung verändert.')
                 shutil.copystat(src_p, tmp_p)
+                stage_before_publish = stat_identity(tmp_p)
                 publish_staged_no_replace(tmp_p, dst_p)
                 destination_installed = True
-                installed_receipt = path_receipt(dst_p)
+                installed_receipt = self._copied_destination_receipt(
+                    dst_p, verified, stage_before_publish)
             self.check_abort()
-            if not receipt_matches(src_p, source_receipt):
-                raise OSError('Quelle wurde vor dem Cleanup verändert.')
+            # finish_installed_file performs fresh full-content checks of source
+            # and destination after the journal write and before any deletion.
             self.journal.set_commit_proof(src_p, source_receipt, installed_receipt)
             return self.finish_installed_file(src_p, dst_p, result, backup_pairs,
                 replacement_mode=replacement_mode, source_receipt=source_receipt,
@@ -124,6 +134,18 @@ class MoveTransferExecutor:
                 remove_path(tmp_p)
             if backup_pairs and not destination_installed:
                 self.conflicts.rollback(src_p, backup_pairs, result)
+
+    @staticmethod
+    def _copied_destination_receipt(destination, verified, stage_before_publish):
+        if not isinstance(verified, VerifiedFileCopy):
+            return path_receipt(destination)
+        installed_identity = stat_identity(destination)
+        # Our rename may change ctime. Metadata changes are deliberate; object,
+        # size and mtime must survive publication. A final full read follows.
+        if installed_identity[:4] != stage_before_publish[:4]:
+            raise OSError('Kopie wurde während der Ziel-Übergabe verändert.')
+        return {'identity': installed_identity,
+            'content': verified.staged_receipt['content']}
 
     def check_abort(self):
         self.wait()

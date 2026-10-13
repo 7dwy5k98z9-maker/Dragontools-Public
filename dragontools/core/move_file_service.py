@@ -154,6 +154,7 @@ class MoveFileService:
             backup_pairs,
             replacement_mode=commit.get("replacement_mode"),
             hook=hook,
+            source_receipt=prepared.get('source_receipt'),
         )
         return ok, result
 

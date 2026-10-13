@@ -22,6 +22,7 @@ def try_duration_repair(ctx, result, source_has_audio: bool, repair_service):
         source_path=getattr(ctx, "input_path", None),
     )
     ctx.duration_repair_attempted = bool(getattr(outcome, "attempted", False))
+    ctx.duration_repair_rejected_candidates = tuple(getattr(outcome, "rejected_candidates", ()))
     ctx.duration_after_ffmpeg_s = getattr(result, "duration_s", None)
     ctx.duration_after_remux_s = getattr(outcome, "remux_duration_s", None)
     ctx.duration_after_timestamp_fix_s = getattr(outcome, "timestamp_duration_s", None)

@@ -3,10 +3,18 @@
 from __future__ import annotations
 
 from pathlib import Path
+from dataclasses import dataclass
+import hashlib
 import os
 from .transaction_identity import stat_identity
 
 _SAMPLE_BYTES = 1024 * 1024
+
+
+@dataclass(frozen=True)
+class VerifiedFileCopy:
+    source_receipt: dict
+    staged_receipt: dict
 
 
 def verify_staged_path_copy(source: Path, staged: Path) -> None:
@@ -29,7 +37,7 @@ def verify_staged_path_copy(source: Path, staged: Path) -> None:
         verify_staged_file_copy(source, staged)
 
 
-def verify_staged_file_copy(source: str | Path, staged: str | Path) -> None:
+def verify_staged_file_copy(source: str | Path, staged: str | Path) -> VerifiedFileCopy | None:
     """Compare every byte before source deletion, with bounded memory."""
     src = Path(source)
     dst = Path(staged)
@@ -42,6 +50,7 @@ def verify_staged_file_copy(source: str | Path, staged: str | Path) -> None:
             f"Größenprüfung fehlgeschlagen: Quelle={source_size} Byte, Kopie={staged_size} Byte"
         )
     offset = 0
+    digest = hashlib.sha256(b'file\0')
     with src.open('rb') as left, dst.open('rb') as right:
         while True:
             chunk = left.read(_SAMPLE_BYTES)
@@ -49,7 +58,15 @@ def verify_staged_file_copy(source: str | Path, staged: str | Path) -> None:
                 raise OSError(f"Integritätsprüfung der Kopie fehlgeschlagen (Byte-Offset {offset}).")
             if not chunk:
                 break
+            digest.update(chunk)
             offset += len(chunk)
     if (offset != source_size or stat_identity(src) != source_before
             or stat_identity(dst) != staged_before):
         raise OSError("Quelle wurde während der Integritätsprüfung verändert.")
+    if src.is_symlink() or dst.is_symlink():
+        return None
+    content = digest.hexdigest()
+    return VerifiedFileCopy(
+        {'identity': source_before, 'content': content},
+        {'identity': staged_before, 'content': content},
+    )

@@ -35,6 +35,7 @@ class DurationRepairRuntime:
     worker: object | None
     run_tool_fn: RunToolFn
     replace_fn: ReplaceFn = os.replace
+    on_rejected_candidate: Callable[[Path], None] | None = None
 
     def __post_init__(self):
         callback = self.log

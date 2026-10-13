@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+from ..core.renamer_metadata_handoff import known_series_for_entries
 
 from .preflight_series_choices import hide_series_folder_choices, show_series_folder_choices
 from .preflight_widget_common import _fmt_path
@@ -19,20 +20,25 @@ class SeriesWidgetMetadataMixin:
         series_name = self._series_edit.text().strip()
         if not base or not series_name:
             return None
-        key = f"{id(self)}:{base}:{series_name}"
-        return (
-            "series",
-            key,
-            {
-                "base": base,
-                "series_name": series_name,
-                "search_bases": self._ordered_search_bases(),
-                "year": self._single_entry_year(),
-            },
+        year = self._single_entry_year()
+        self._renamer_suggestion = known_series_for_entries(
+            self.__dict__.get("entries", []), series_name, year
         )
+        key = f"{id(self)}:{base}:{series_name}"
+        payload = {
+            "base": base,
+            "series_name": series_name,
+            "search_bases": self._ordered_search_bases(),
+            "year": year,
+        }
+        if self._renamer_suggestion is not None:
+            payload["known_series"] = self._renamer_suggestion
+        return ("series", key, payload)
 
     def mark_metadata_lookup_started(self, online_lookup: bool = True) -> None:
-        if online_lookup:
+        if self.__dict__.get("_renamer_suggestion") is not None:
+            text = "  ℹ️ Renamer-Metadaten vorhanden – bestehende Zielordner werden gesucht …"
+        elif online_lookup:
             text = "  🌐 Suche: bestehende Serienordner und Online-Serienjahr werden geladen …"
         else:
             text = "  ℹ️ Bestehende Serienordner werden im Hintergrund gesucht …"
@@ -171,8 +177,13 @@ class SeriesWidgetMetadataMixin:
             if str(getattr(suggestion, "provider", "") or "").casefold() == "thetvdb"
             else "TMDB"
         )
+        source = (
+            f"ℹ️ Zielquelle: Renamer ({provider})"
+            if suggestion == self.__dict__.get("_renamer_suggestion")
+            else f"🌐 Zielquelle: {provider}"
+        )
         self._metadata_hint.setText(
-            f"  🌐 Zielquelle: {provider} – Serienjahr vorgeschlagen: "
+            f"  {source} – Serienjahr vorgeschlagen: "
             f"{suggestion.folder_name}{suffix}"
         )
         self._metadata_hint.setVisible(True)

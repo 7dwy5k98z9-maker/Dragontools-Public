@@ -129,7 +129,11 @@ def test_diagnostics_run_before_any_repair_mutation(monkeypatch, tmp_path):
     monkeypatch.setattr(service, "can_repair", lambda **kw: True)
     monkeypatch.setattr("dragontools.worker.duration_repair_service.log_timestamp_diagnostics",
                         lambda **kw: events.append("diagnostic"))
-    monkeypatch.setattr(service._orchestrator, "repair", lambda **kw: events.append("repair"))
+    from dragontools.worker.duration_repair_models import DurationRepairOutcome
+    def repair(**kw):
+        events.append("repair")
+        return DurationRepairOutcome()
+    monkeypatch.setattr(service._orchestrator, "repair", repair)
     service.repair(output_path=str(tmp_path / "out.mkv"), source_path="source.mkv", base_dir=tmp_path,
         container="mkv", expected_duration_ms=2539000, source_has_audio=True,
         initial_result=WorkflowVerifyResult(duration_s=4297505.5))

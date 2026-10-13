@@ -88,6 +88,7 @@ class DurationRepairOutcome:
     timing_summary: list[str] | None = None
     keep_failed_output: bool = False
     message: str = ""
+    rejected_candidates: tuple = ()
 
 
 def calculate_expected_duration(info: MediaTimingInfo) -> float | None:

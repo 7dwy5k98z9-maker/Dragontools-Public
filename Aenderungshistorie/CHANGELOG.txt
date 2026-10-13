@@ -1,4 +1,4 @@
-DragonTools V9.9.1 · Stand 12.10.2026
+DragonTools V9.9.1 · Stand 13.10.2026
 - Mit DragonTools lassen sich Videodateien analysieren, konvertieren, umbenennen und für eine Mediathek aufbereiten. Diese Übersicht beschreibt die Entwicklung der Funktionen nach Fachbereichen.
 
 Ältere Versionen
@@ -109,10 +109,17 @@ Ausgabeprüfung
 
 Laufzeit und Timestamps
 - Bei unplausibler Laufzeit versucht DragonTools zuerst einen Remux. Bleibt die Dauer falsch, kann eine Timestamp-Reparatur die verlässliche Bildrate und Laufzeit des Originals als Referenz verwenden. Nicht eindeutig passende Zeitbasen werden nicht automatisch erzwungen.
+- Video und ausgewählte Audiospuren werden mit ihren eigenen Quelldauern verglichen. Ein nachvollziehbarer Audio-Nachlauf wird auch bei Strip-Only akzeptiert. Die tatsächliche Matroska-Schreibanwendung bestimmt, wie Laufzeit-Tags und Startversätze ausgewertet werden; kopierte Encoder-Tags reichen dafür nicht aus.
 
 Dateikonflikte und Installation
 - Vorhandene Ziele werden entsprechend der gewählten Konfliktregel behandelt. Video, NFO, Untertitel und Trickplay werden gemeinsam vorbereitet; fehlgeschlagene Installationen behalten die nötigen Daten für eine Rückabwicklung.
 - Beim Ersetzen eines Films wird vorhandenes Trickplay vor der Videodatei gesichert. Bereits verschwundene, optionale Cache-Dateien verhindern den Austausch nicht; fehlende Pflichtdateien werden weiterhin als Fehler gemeldet.
+
+Reparaturarchiv
+- Nach erfolgreicher Verifikation und Übernahme der fertigen Ausgabe werden unveränderte, verworfene Timestamp-Reparaturkopien desselben Auftrags entfernt. Fehlgeschlagene Aufträge, ältere Archivdateien und zwischenzeitlich geänderte Dateien bleiben erhalten.
+
+Kopieren und Prüfnachweise
+- Der vollständige Kopiervergleich erzeugt zugleich die Inhaltsnachweise für das Verschiebejournal. Dadurch entfallen zusätzliche Lesevorgänge der Quelle und der Kopie. Vor dem Löschen der Quelle werden beide Dateien weiterhin frisch geprüft; Abbruch, Dateikonflikte und Wiederherstellung bleiben abgesichert.
 
 === 11 Online-Metadaten und Renamer ===
 
@@ -130,6 +137,10 @@ Staffel prüfen und Serie prüfen
 
 Zugang und Cache
 - Zugangsdaten werden über die Einstellungen verwaltet. TheTVDB kann sein Bearer-Token automatisch erneuern. Frische Abfragen für einen Verarbeitungslauf werden innerhalb desselben Laufs wiederverwendet; ein unbrauchbarer Episodentitel kann einen gezielten Refresh auslösen.
+
+Renamer-Zuordnung und Zielordner
+- Eine erfolgreich umbenannte Serie gibt ihre bestätigte Metadatenquelle, Serien-ID und ihr Jahr innerhalb derselben Programmsitzung an die Zielordner-Vorabprüfung weiter. Eindeutig passende Zuordnungen ersparen eine erneute Online-Suche. Vorhandene Serienordner behalten Vorrang; fehlende oder widersprüchliche Zuordnungen verwenden die normale Suche.
+- Die lokale Ordnersuche prüft bei Netzwerkpfaden nur passende Namen auf ihren Ordnertyp und vermeidet Dateizugriffe für unpassende Serienordner.
 
 === 12 NFO, Trickplay und Jellyfin ===
 

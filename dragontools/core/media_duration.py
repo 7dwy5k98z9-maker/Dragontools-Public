@@ -40,7 +40,7 @@ def _plausible(value) -> float | None:
     return number if number is not None and number < 1_000_000 else None
 
 
-def stream_duration(stream: dict) -> float | None:
+def stream_duration(stream: dict, *, writing_application: str = "") -> float | None:
     if not isinstance(stream, dict):
         return None
     duration = positive_seconds(stream.get("duration"))
@@ -53,7 +53,8 @@ def stream_duration(stream: dict) -> float | None:
             return positive_seconds(ticks * time_base)
     except (ValueError, ZeroDivisionError, OverflowError):
         pass
-    # Matroska DURATION is an endpoint, not a length when start_time != 0.
+    # FFmpeg writes DURATION as an endpoint. MKVToolNix statistics instead
+    # contain the track's length, which must retain an independent start delay.
     tags_raw = stream.get("tags") or {}
     tags = tags_raw if isinstance(tags_raw, dict) else {}
     tag = tags.get("DURATION")
@@ -61,7 +62,13 @@ def stream_duration(stream: dict) -> float | None:
         try:
             hours, minutes, seconds = str(tag).split(":")
             end = int(hours) * 3600 + int(minutes) * 60 + float(seconds)
-            start = float(stream.get("start_time") or 0)
+            statistics_app = str(tags.get("_STATISTICS_WRITING_APP") or "").casefold()
+            statistics_fields = str(tags.get("_STATISTICS_TAGS") or "").split()
+            # FFmpeg can copy stale MKVToolNix statistics tags while replacing
+            # DURATION. The current container writer has precedence.
+            ffmpeg_writer = str(writing_application or "").casefold().startswith("lavf")
+            is_track_length = not ffmpeg_writer and "mkvmerge" in statistics_app and "DURATION" in statistics_fields
+            start = 0.0 if is_track_length else float(stream.get("start_time") or 0)
             return positive_seconds(end - start)
         except (ValueError, TypeError, OverflowError):
             pass
@@ -79,9 +86,9 @@ def _is_real_video(stream):
     return stream.get("codec_type") == "video" and not _safe_bool(flags.get("attached_pic"))
 
 
-def _video_duration_reference(streams, video_streams):
+def _video_duration_reference(streams, video_streams, writing_application=""):
     primary = next((s for s in streams if _is_real_video(s)), None)
-    measured = _plausible(stream_duration(primary)) if primary else None
+    measured = _plausible(stream_duration(primary, writing_application=writing_application)) if primary else None
     if measured is not None:
         return measured
     models = {getattr(s, "index", None): s for s in video_streams}
@@ -89,9 +96,9 @@ def _video_duration_reference(streams, video_streams):
     return _plausible(getattr(model, "duration_s", None))
 
 
-def _audio_duration_reference(streams, audio_streams, container):
+def _audio_duration_reference(streams, audio_streams, container, writing_application=""):
     raw = [d for s in streams if s.get("codec_type") == "audio"
-           if (d := _plausible(stream_duration(s))) is not None]
+           if (d := _plausible(stream_duration(s, writing_application=writing_application))) is not None]
     models = [d for s in audio_streams if (d := _plausible(getattr(s, "duration_s", None))) is not None]
     candidates = raw or models
     if container is not None and candidates:
@@ -99,7 +106,7 @@ def _audio_duration_reference(streams, audio_streams, container):
     return max(candidates, default=None)
 
 
-def source_duration(payload: dict, *, video_streams=(), audio_streams=(), container_duration=None) -> float | None:
+def source_duration(payload: dict, *, video_streams=(), audio_streams=(), container_duration=None, writing_application="") -> float | None:
     """Choose the primary real video duration, using independent fallback evidence.
 
     No FPS multiplication; only agreeing container/audio evidence can reject a
@@ -111,8 +118,8 @@ def source_duration(payload: dict, *, video_streams=(), audio_streams=(), contai
     raw_format = payload.get("format")
     fmt = raw_format if isinstance(raw_format, dict) else {}
     container = _plausible(fmt.get("duration")) or _plausible(container_duration)
-    video = _video_duration_reference(streams, video_streams)
-    audio = _audio_duration_reference(streams, audio_streams, container)
+    video = _video_duration_reference(streams, video_streams, writing_application)
+    audio = _audio_duration_reference(streams, audio_streams, container, writing_application)
     if video and container and audio:
         extreme = max(video, container) >= 2 * min(video, container) and abs(video - container) >= 120
         if extreme and abs(audio - container) <= max(3, container * .02):

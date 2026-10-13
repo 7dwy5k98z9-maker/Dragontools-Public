@@ -20,6 +20,7 @@ from .duration_repair_models import (
 from .duration_repair_orchestrator import DurationRepairOrchestrator
 from .duration_repair_policy import can_repair_duration, mark_duration_repair_failed
 from .duration_repair_runtime import DurationRepairRuntime
+from .duration_repair_diagnostics import RejectedRepairCandidates
 from .duration_repair_validation import validate_timestamp_repair as _validate_timestamp_repair
 from .duration_timing_analyzer import MediaTimingAnalyzer
 from .duration_timestamp_service import TimestampRepairService
@@ -50,6 +51,7 @@ class DurationRepairService:
         resolved_ffprobe = str(ffprobe_path or getattr(output_verifier, "_ffprobe_path", "") or "")
         self._normal_remux_enabled = bool(normal_remux_enabled)
         self._timestamp_repair_enabled = bool(timestamp_repair_enabled)
+        self._rejected_candidates = RejectedRepairCandidates()
         self._runtime = DurationRepairRuntime(
             mkvmerge_path=str(mkvmerge_path or ""),
             mp4box_path=str(mp4box_path or ""),
@@ -60,6 +62,7 @@ class DurationRepairService:
             log=log,
             worker=worker,
             run_tool_fn=run_tool_fn or run_tool,
+            on_rejected_candidate=self._rejected_candidates.record,
         )
         self._timing_analyzer = MediaTimingAnalyzer(
             ffprobe_path=self._runtime.ffprobe_path,
@@ -118,7 +121,8 @@ class DurationRepairService:
             actual_s=initial_result.duration_s, container=container,
             ffprobe_path=self._runtime.ffprobe_path, log=self._runtime.log, worker=self._runtime.worker,
         )
-        return self._orchestrator.repair(
+        self._rejected_candidates.clear()
+        outcome = self._orchestrator.repair(
             output_path=str(output_path),
             base_dir=base_dir,
             container=container,
@@ -132,6 +136,8 @@ class DurationRepairService:
             timestamp_repair_enabled=self._timestamp_repair_enabled,
             source_path=source_path,
         )
+        outcome.rejected_candidates = self._rejected_candidates.receipts
+        return outcome
 
     @staticmethod
     def _mark_failed_result(final_result, messages: list[str]) -> None:

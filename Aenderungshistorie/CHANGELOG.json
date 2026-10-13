@@ -6,7 +6,7 @@
       "title": "Überblick",
       "icon": "📋",
       "blocks": [
-        "DragonTools V9.9.1 · Stand 12.10.2026\n- Mit DragonTools lassen sich Videodateien analysieren, konvertieren, umbenennen und für eine Mediathek aufbereiten. Diese Übersicht beschreibt die Entwicklung der Funktionen nach Fachbereichen.",
+        "DragonTools V9.9.1 · Stand 13.10.2026\n- Mit DragonTools lassen sich Videodateien analysieren, konvertieren, umbenennen und für eine Mediathek aufbereiten. Diese Übersicht beschreibt die Entwicklung der Funktionen nach Fachbereichen.",
         "Ältere Versionen\n- Die getrennten Historien für V8 und V1–V7 bleiben über Hilfe → Änderungshistorie erreichbar."
       ]
     },
@@ -94,8 +94,10 @@
       "icon": "✅",
       "blocks": [
         "Ausgabeprüfung\n- Die fertige Datei wird auf die geplanten Spuren, Metadaten und eine plausible Laufzeit geprüft. Eine ungültige Ausgabe wird nicht als fertige Datei übernommen und löst keine erfolgreiche Nachbearbeitung aus.",
-        "Laufzeit und Timestamps\n- Bei unplausibler Laufzeit versucht DragonTools zuerst einen Remux. Bleibt die Dauer falsch, kann eine Timestamp-Reparatur die verlässliche Bildrate und Laufzeit des Originals als Referenz verwenden. Nicht eindeutig passende Zeitbasen werden nicht automatisch erzwungen.",
-        "Dateikonflikte und Installation\n- Vorhandene Ziele werden entsprechend der gewählten Konfliktregel behandelt. Video, NFO, Untertitel und Trickplay werden gemeinsam vorbereitet; fehlgeschlagene Installationen behalten die nötigen Daten für eine Rückabwicklung.\n- Beim Ersetzen eines Films wird vorhandenes Trickplay vor der Videodatei gesichert. Bereits verschwundene, optionale Cache-Dateien verhindern den Austausch nicht; fehlende Pflichtdateien werden weiterhin als Fehler gemeldet."
+        "Laufzeit und Timestamps\n- Bei unplausibler Laufzeit versucht DragonTools zuerst einen Remux. Bleibt die Dauer falsch, kann eine Timestamp-Reparatur die verlässliche Bildrate und Laufzeit des Originals als Referenz verwenden. Nicht eindeutig passende Zeitbasen werden nicht automatisch erzwungen.\n- Video und ausgewählte Audiospuren werden mit ihren eigenen Quelldauern verglichen. Ein nachvollziehbarer Audio-Nachlauf wird auch bei Strip-Only akzeptiert. Die tatsächliche Matroska-Schreibanwendung bestimmt, wie Laufzeit-Tags und Startversätze ausgewertet werden; kopierte Encoder-Tags reichen dafür nicht aus.",
+        "Dateikonflikte und Installation\n- Vorhandene Ziele werden entsprechend der gewählten Konfliktregel behandelt. Video, NFO, Untertitel und Trickplay werden gemeinsam vorbereitet; fehlgeschlagene Installationen behalten die nötigen Daten für eine Rückabwicklung.\n- Beim Ersetzen eines Films wird vorhandenes Trickplay vor der Videodatei gesichert. Bereits verschwundene, optionale Cache-Dateien verhindern den Austausch nicht; fehlende Pflichtdateien werden weiterhin als Fehler gemeldet.",
+        "Reparaturarchiv\n- Nach erfolgreicher Verifikation und Übernahme der fertigen Ausgabe werden unveränderte, verworfene Timestamp-Reparaturkopien desselben Auftrags entfernt. Fehlgeschlagene Aufträge, ältere Archivdateien und zwischenzeitlich geänderte Dateien bleiben erhalten.",
+        "Kopieren und Prüfnachweise\n- Der vollständige Kopiervergleich erzeugt zugleich die Inhaltsnachweise für das Verschiebejournal. Dadurch entfallen zusätzliche Lesevorgänge der Quelle und der Kopie. Vor dem Löschen der Quelle werden beide Dateien weiterhin frisch geprüft; Abbruch, Dateikonflikte und Wiederherstellung bleiben abgesichert."
       ]
     },
     {
@@ -105,7 +107,8 @@
         "Titelsuche und Auswahl\n- TMDB und TheTVDB liefern Film- und Serienzuordnungen. Mehrstufige Suchgrenzen, Umlautvarianten, Aliasregeln und manuelle Staffel-, Episoden- und Jahreskorrekturen helfen bei uneindeutigen Dateinamen.\n- Der Metadaten-Browser ermöglicht eine gezielte Titelwahl mit anschließender Dateizuordnung. Eine Datei kann bis zu vier aufeinanderfolgende Folgen enthalten. Der ausgewählte Provider und seine Serien-ID bleiben Teil der Zuordnung.",
         "Dateinamen ändern\n- Der Renamer prüft die Container-Endung und freie Zielnamen. Er liest den Videoinhalt für die Umbenennung nicht ein. Begleitdateien werden mit umbenannt, vorhandene Zieldateien werden nicht überschrieben. Die Arbeit läuft im Hintergrund mit einer sichtbaren Statusanzeige.",
         "Staffel prüfen und Serie prüfen\n- Die neuen Schaltflächen stehen neben Metadaten-Browser. Zur Auswahl erscheinen ausschließlich erkannte Serien und Staffeln mit einer konkreten Provider-Zuordnung. Die gewählte Quelle wird aktuell abgefragt.\n- Der Vergleich verwendet die konkreten Folgennummern der Renamer-Liste. Doppelte Dateien zählen nicht mehrfach; Mehrfachfolgen zählen einzeln. Die Tabelle unterscheidet vollständige Staffeln, fehlende Staffeln und fehlende einzelne Folgen. Specials erscheinen als Staffel 0.\n- Alle vom Provider gelisteten Folgen werden berücksichtigt, auch angekündigte Folgen. Unterschiedliche Quellen bleiben getrennt. Fehlende Zugangsdaten, Abfragefehler und widersprüchliche Daten erscheinen als Nicht prüfbar. Die Tabelle lässt sich als CSV exportieren.",
-        "Zugang und Cache\n- Zugangsdaten werden über die Einstellungen verwaltet. TheTVDB kann sein Bearer-Token automatisch erneuern. Frische Abfragen für einen Verarbeitungslauf werden innerhalb desselben Laufs wiederverwendet; ein unbrauchbarer Episodentitel kann einen gezielten Refresh auslösen."
+        "Zugang und Cache\n- Zugangsdaten werden über die Einstellungen verwaltet. TheTVDB kann sein Bearer-Token automatisch erneuern. Frische Abfragen für einen Verarbeitungslauf werden innerhalb desselben Laufs wiederverwendet; ein unbrauchbarer Episodentitel kann einen gezielten Refresh auslösen.",
+        "Renamer-Zuordnung und Zielordner\n- Eine erfolgreich umbenannte Serie gibt ihre bestätigte Metadatenquelle, Serien-ID und ihr Jahr innerhalb derselben Programmsitzung an die Zielordner-Vorabprüfung weiter. Eindeutig passende Zuordnungen ersparen eine erneute Online-Suche. Vorhandene Serienordner behalten Vorrang; fehlende oder widersprüchliche Zuordnungen verwenden die normale Suche.\n- Die lokale Ordnersuche prüft bei Netzwerkpfaden nur passende Namen auf ihren Ordnertyp und vermeidet Dateizugriffe für unpassende Serienordner."
       ]
     },
     {

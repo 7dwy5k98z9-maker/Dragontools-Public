@@ -17,6 +17,7 @@ from .output_contract_verifier import (
     video_bit_depth,
 )
 from .output_probe import probe_output
+from .output_duration_policy import output_duration_plausible
 from .workflow_engine import WorkflowVerifyResult
 from .timestamp_diagnostics import wrap_message
 from .owned_probe import owned_probe_runner
@@ -156,7 +157,10 @@ class OutputVerifier:
         result.probe_ok = probe.usable
         result.video_ok = bool(videos)
         result.audio_ok = True if expected_contract is not None else ((not source_has_audio) or bool(audios))
-        result.duration_ok = self._duration_plausible(probe.duration_s, expected_duration_ms=expected_duration_ms)
+        result.duration_ok = output_duration_plausible(
+            probe, expected_duration_ms=expected_duration_ms,
+            expected_contract=expected_contract, plausible=self._duration_plausible,
+        )
 
         if videos:
             video = videos[0]

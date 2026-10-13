@@ -7,6 +7,7 @@ from PyQt6.QtCore import QObject, QThread, QTimer, pyqtSignal, pyqtSlot
 from PyQt6.QtWidgets import QApplication, QMessageBox
 
 from .qt_receiver_state import receiver_is_alive
+from ..core.renamer_metadata_handoff import remember_renamed_series
 from .utility_worker_start import owned_utility_start, start_utility_worker, utility_workers
 
 
@@ -130,6 +131,7 @@ class MovieRenamerCommitCoordinator(QObject):
             else:
                 renamed_paths.append((str(source), target))
                 if row is not None:
+                    remember_renamed_series(target, self.table_controller.row_proposal(row))
                     self.view.table.removeRow(row)
         message = f"{len(renamed_paths)} Datei(en) umbenannt und aus der Liste entfernt."
         if len(results) < total:

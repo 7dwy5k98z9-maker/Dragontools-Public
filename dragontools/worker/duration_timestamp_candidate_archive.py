@@ -22,6 +22,9 @@ class RejectedTimestampArchive:
             archive_dir.mkdir(parents=True, exist_ok=True)
             target = unique_archive_path(archive_dir, f"{out.stem}.{self.safe_label(label)}{out.suffix}")
             preserve_recovery_file(tmp, target)
+            callback = getattr(self._runtime, "on_rejected_candidate", None)
+            if callback is not None:
+                callback(target)
             dispatch_log(self._runtime.log,
                 "📦 Verworfener Timestamp-Reparaturkandidat wurde zur Prüfung archiviert: "
                 f"{target} ({reason})",

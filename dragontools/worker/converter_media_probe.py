@@ -9,6 +9,7 @@ from pathlib import Path
 
 from ..core.process_runner import subprocess_no_window_kwargs as _no_window_kwargs
 from ..core.media_duration import source_duration
+from ..core.matroska_writer import matroska_writing_application
 
 
 def _tools(worker):
@@ -26,7 +27,8 @@ def probe_ms(worker, path) -> int | None:
         )
         if result.returncode != 0:
             raise RuntimeError(result.stderr or "ffprobe fehlgeschlagen")
-        duration = source_duration(json.loads(result.stdout or "{}"))
+        duration = source_duration(json.loads(result.stdout or "{}"),
+                                   writing_application=matroska_writing_application(path))
         return int(duration * 1000) if duration is not None else None
     except Exception as exc:
         worker.log(f"⚠️ ffprobe-Daueranalyse fehlgeschlagen bei {Path(path).name}: {exc}", "warn")

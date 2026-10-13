@@ -7,6 +7,7 @@ from .models import AudioStream, MediaInfo, SubtitleStream, VideoStream
 from .type_utils import _safe_int
 from .media_metadata import _parse_mediainfo_duration_s
 from .media_duration import source_duration
+from .matroska_writer import matroska_writing_application
 
 
 def build_media_info(
@@ -28,6 +29,8 @@ def build_media_info(
     duration_s = source_duration(
         ffprobe_json, video_streams=video_streams, audio_streams=audio_streams,
         container_duration=_parse_mediainfo_duration_s(mi_general.get("Duration")),
+        writing_application=(matroska_writing_application(path)
+            if "matroska" in str(format_data.get("format_name") or "") else ""),
     ) or 0.0
     size_bytes = 0
     for candidate in (

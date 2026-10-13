@@ -11,6 +11,7 @@ class ExpectedAudioTrack:
     default: bool | None = None
     title: str | None = None
     forced: bool | None = None
+    duration_s: float | None = None
 
 
 @dataclass(frozen=True, slots=True)

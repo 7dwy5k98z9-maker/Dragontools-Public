@@ -35,8 +35,16 @@ class SeriesOnlineLookup:
     series_name: str
     cache: MetadataLookupCache
     suggest_series_metadata_for_name: object
+    known_series: object = None
+    online_enabled: bool = True
 
     def lookup(self, year: int | None):
+        if self.known_series is not None and (
+            year is None or safe_year(self.known_series.first_air_year) == year
+        ):
+            return self.known_series
+        if not self.online_enabled:
+            return None
         key = (self.series_name.casefold(), year)
         if key not in self.cache.online_series:
             value = _call_series_lookup(self.suggest_series_metadata_for_name,

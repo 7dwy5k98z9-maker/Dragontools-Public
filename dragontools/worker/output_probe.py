@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 from .verification_control import stopped
+from ..core.matroska_writer import matroska_writing_application
 
 
 @dataclass(frozen=True, slots=True)
@@ -14,6 +15,7 @@ class OutputProbeData:
     duration_s: float | None
     streams: tuple[dict, ...]
     chapters: tuple[dict, ...] = ()
+    writing_application: str = ""
 
     @property
     def video_streams(self) -> list[dict]:
@@ -65,7 +67,8 @@ def probe_output(
                 "format=format_name,duration:"
                 "stream=index,codec_type,codec_name,codec_tag_string,profile,width,height,"
                 "pix_fmt,bits_per_raw_sample,color_space,color_transfer,color_primaries,"
-                "channels,channel_layout:stream_tags=language,title,handler_name:"
+                "channels,channel_layout,duration,duration_ts,time_base,start_time:"
+                "stream_tags=language,title,handler_name,DURATION,_STATISTICS_WRITING_APP,_STATISTICS_TAGS:"
                 "stream_disposition=default,forced,attached_pic:stream_side_data:"
                 "chapter=id,start_time,end_time"
             ),
@@ -92,4 +95,6 @@ def probe_output(
         duration_s=duration,
         streams=tuple(payload.get("streams") or ()),
         chapters=tuple(payload.get("chapters") or ()),
+        writing_application=(matroska_writing_application(path)
+            if "matroska" in str(fmt.get("format_name") or "") else ""),
     )

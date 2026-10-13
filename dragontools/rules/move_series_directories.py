@@ -35,13 +35,13 @@ def find_series_dir_candidates(base: str | None, series_name: str, year: int | N
     candidates: list[Path] = []
 
     for d in bp.iterdir():
-        if not d.is_dir():
-            continue
         # Jahres-Suffix entfernen, dann normalisieren
         dir_name_without_year = _strip_dir_year_suffix(d.name)
         dn = _normalize_for_dir_match(dir_name_without_year)
         # Exakter Vergleich – kein Substring-Match
-        if dn == needle:
+        # Erst den Namen vergleichen: is_dir() kann auf Netzlaufwerken einen
+        # eigenen Zugriff auslösen und ist für fremde Serien unnötig.
+        if dn == needle and d.is_dir():
             candidates.append(d)
 
     candidates.sort(key=lambda p: p.name.lower())

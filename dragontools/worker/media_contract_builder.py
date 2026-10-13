@@ -29,6 +29,7 @@ def _build_audio_tracks(media_info, file_override, container, *, audio_planner, 
             # Matroska represents forced audio; MP4's forced timed-text flag
             # does not establish an equivalent audio disposition.
             forced=(audio_output_forced(decision) if str(container).lower() == "mkv" else None),
+            duration_s=getattr(decision.stream, "duration_s", None),
         )
         for decision in plan
     )

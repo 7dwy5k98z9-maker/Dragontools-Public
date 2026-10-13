@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
+from .duration_repair_diagnostics import cleanup_successful_repair_diagnostics
 
 from typing import TYPE_CHECKING
 
@@ -294,6 +295,9 @@ class WorkflowServices:
             keep_output=ctx.success or bool(getattr(ctx, "keep_failed_output", False)),
         )
         self._temp_state.burn_sub_tmp = None
+        cleanup_successful_repair_diagnostics(
+            ctx, lambda message, _level="info": self._logger.info(message)
+        )
 
 
 __all__ = ["WorkflowConfig", "WorkflowServices"]

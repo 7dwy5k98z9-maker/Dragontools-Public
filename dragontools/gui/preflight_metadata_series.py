@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from .preflight_metadata_common import MetadataLookupCache, safe_year
+from ..core.online_metadata_types import SeriesMetadataSuggestion
 from .preflight_metadata_series_resolver import SeriesMetadataResolver, database_payload
 from .preflight_metadata_series_sources import (
     SeriesDatabaseLookup,
@@ -33,6 +34,9 @@ def resolve_series_metadata(
     if not isinstance(search_bases, list) or not search_bases:
         search_bases = [{"type": "", "base": str(info.get("base") or "")}]
     desired_year = safe_year(info.get("year")) or safe_year(series_name)
+    known_series = info.get("known_series")
+    if not isinstance(known_series, SeriesMetadataSuggestion):
+        known_series = None
     db_bases = [
         (str(base.get("base") or ""), str(base.get("type") or ""))
         for base in search_bases
@@ -42,13 +46,14 @@ def resolve_series_metadata(
     resolver = SeriesMetadataResolver(
         series_name=series_name,
         desired_year=desired_year,
-        online_enabled=online_enabled,
+        online_enabled=online_enabled or known_series is not None,
         database=SeriesDatabaseLookup(
             settings, series_name, db_bases, cache, find_series_dir_from_settings
         ),
         folders=SeriesFolderLookup(search_bases, cache, find_series_dir_candidates),
         online=SeriesOnlineLookup(
-            settings, series_name, cache, suggest_series_metadata_for_name
+            settings, series_name, cache, suggest_series_metadata_for_name,
+            known_series=known_series, online_enabled=online_enabled,
         ),
     )
     return resolver.resolve()

@@ -112,6 +112,32 @@ def test_failed_file_remains_and_next_file_is_renamed(renamer, qtbot, monkeypatc
     assert refreshed == [(str(good), str(good_target))]
 
 
+def test_successful_series_rename_passes_identity_to_destination_selection(renamer, qtbot, tmp_path):
+    from dragontools.core.renamer_metadata_handoff import known_series_for_entries
+    from dragontools.tests.test_renamer_preflight_handoff import proposal, resolve
+    from dragontools.gui.preflight_series_widget import SeriesGroupWidget
+
+    widget, _refreshed, _gates = renamer
+    source, target = add_file(widget, tmp_path, "Superman & Lois - S01E01.mkv")
+    controller = widget._table_controller
+    controller.set_row_proposal(0, proposal(source))
+    target = source.with_name("Superman & Lois - S01E01 - Pilot.mkv")
+    controller.set_item(0, controller.columns.TARGET, target.name, editable=True)
+    widget.execute_rename()
+    qtbot.waitUntil(lambda: not widget._actions.commit.busy)
+    assert target.is_file() and widget.table.rowCount() == 0
+    entries = [dict(path=str(target), year=None, season=1, episode=1)]
+    known = known_series_for_entries(entries, "Superman & Lois")
+    assert known.first_air_year == 2021 and known.provider == "thetvdb"
+    group = SeriesGroupWidget("Superman & Lois", entries, str(tmp_path / "TV"), None)
+    qtbot.addWidget(group)
+    _kind, _key, payload = group.metadata_lookup_job()
+    assert payload["known_series"] == known
+    group.mark_metadata_lookup_started()
+    assert "Renamer" in group._metadata_hint.text()
+    assert resolve(payload) == known
+
+
 def test_shutdown_finishes_current_file_and_skips_next(renamer, qtbot, monkeypatch, tmp_path):
     widget, refreshed, gates = renamer
     first, first_target = add_file(widget, tmp_path, "First.mkv")
