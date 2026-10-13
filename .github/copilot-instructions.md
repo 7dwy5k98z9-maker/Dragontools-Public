@@ -35,3 +35,8 @@
 - This project is Windows-focused and may rely on external executables like FFmpeg, mkvmerge, MediaInfo, MP4Box, and similar tools.
 - When a change touches metadata, conversion workflows, or file-system operations, consider error handling, rollback safety, and idempotence.
 - If a change is uncertain, inspect the nearest existing implementation before introducing a new pattern.
+
+## Handbook documentation
+- The independent technical handbook is maintained in `DragonToolsV9_Dokumentation.docx`. Preserve its chapter structure, tables, reference sections and developer material when updating it.
+- Export the handbook from its Word source; do not replace it with a PDF printout of `help.html`.
+- Keep the local root `Handbuch.pdf` and the packaged source `Handbuch/Handbuch.pdf` identical. Verify contents references and rendered pages before publishing.

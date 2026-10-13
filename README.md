@@ -30,7 +30,7 @@ Neben den Pfeilen der Warteschlange stehen die Schnellschalter **HDR+ Generator*
 
 ## Dokumentation und Windows-Paket
 
-Die Hilfe beschreibt die Bedienung des aktuellen Programms. Das V9-Changelog ist nach technischen Fachbereichen und Unterpunkten gegliedert. Die Historien älterer Hauptversionen bleiben separat verfügbar.
+Die HTML-Hilfe beschreibt die Bedienung des aktuellen Programms. Das eigenständig aufgebaute Anwender-, Referenz- und Entwicklerhandbuch wird aus seiner Word-Quelle gepflegt; Kapitel, Tabellen und technische Referenzen bleiben erhalten. Das V9-Changelog ist nach technischen Fachbereichen und Unterpunkten gegliedert. Die Historien älterer Hauptversionen bleiben separat verfügbar.
 
 Externe Medienwerkzeuge sind nicht im Git-Repository oder im öffentlichen Windows-Paket enthalten. Sie werden anhand von `TOOLS_INSTALLIEREN.txt` separat eingerichtet. Die Anwendung besteht aus der EXE und dem zugehörigen Ordner `Daten`; beide bleiben beim Entpacken zusammen.
 
