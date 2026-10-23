@@ -6,6 +6,7 @@ from typing import Any
 from ..core.config_migration import SCHEMA_VERSION_KEY, finish_migration
 from ..core.lang_codes import canonical_lang, language_aliases, normalize_language_priority
 from ..core.type_utils import _safe_bool
+from .subtitle_default_config import normalize_default_subtitle
 
 
 TEXT_SUBTITLE_CODECS = {"subrip", "ass", "ssa", "subt", "mov_text", "tx3g", "webvtt", "srt", "text"}
@@ -22,7 +23,7 @@ DEFAULT_PREFERRED_SUBTITLE_FORMATS = [
 
 
 DEFAULT_SUBTITLE_RULES: dict[str, Any] = {
-    SCHEMA_VERSION_KEY: 7,
+    SCHEMA_VERSION_KEY: 8,
     "language_priority": ["de", "en"],
     "max_languages": 1,
     "tracks_per_language": 1,
@@ -31,6 +32,11 @@ DEFAULT_SUBTITLE_RULES: dict[str, Any] = {
     "fallback_languages": ["en", "eng"],
     "force_priority": True,
     "preferred_formats": list(DEFAULT_PREFERRED_SUBTITLE_FORMATS),
+    "default_subtitle": {
+        "mode": "audio_differs",
+        "audio_language": "de",
+        "language_priority": ["de", "en"],
+    },
     "burn_in_rules": {
         "auto_burn_forced": True,
         "burn_language": "de",
@@ -128,6 +134,9 @@ def migrate_subtitle_rules(
     _migrate_subtitle_exports(raw, migrated, migration_messages, priority)
     migrated["burn_in_rules"] = _migrate_subtitle_burn_rules(raw, priority, migration_messages)
     migrated["keep_rules"] = _migrate_subtitle_keep_rules(raw, legacy_language_rules, migration_messages)
+    migrated["default_subtitle"] = normalize_default_subtitle(
+        raw.get("default_subtitle"), language_priority=priority,
+    )
     migrated["_legacy_language_rules"] = legacy_language_rules
     return finish_migration(
         "subtitle_rules",

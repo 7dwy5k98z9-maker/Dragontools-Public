@@ -21,10 +21,14 @@ class _LanguagePriorityEditor(QWidget):
         fallback_options: list[tuple[str, str]],
         max_label: str,
         tracks_label: str,
+        priority_only: bool = False,
+        show_ranks: bool = False,
         parent=None,
     ):
         super().__init__(parent)
         self._fallback_options = list(fallback_options)
+        self._show_ranks = show_ranks
+        self._priority_only = priority_only
         self._init_ui(
             priority=priority,
             max_languages=max_languages,
@@ -32,6 +36,7 @@ class _LanguagePriorityEditor(QWidget):
             fallback_policy=fallback_policy,
             max_label=max_label,
             tracks_label=tracks_label,
+            priority_only=priority_only,
         )
 
     def _init_ui(
@@ -43,6 +48,7 @@ class _LanguagePriorityEditor(QWidget):
         fallback_policy: str,
         max_label: str,
         tracks_label: str,
+        priority_only: bool,
     ):
         v = QVBoxLayout(self)
 
@@ -80,6 +86,15 @@ class _LanguagePriorityEditor(QWidget):
         btn_row.addStretch()
         v.addLayout(btn_row)
 
+        if self._show_ranks:
+            model = self.list.model()
+            model.rowsInserted.connect(self._refresh_ranks)
+            model.rowsRemoved.connect(self._refresh_ranks)
+            model.rowsMoved.connect(self._refresh_ranks)
+            self._refresh_ranks()
+        if priority_only:
+            return
+
         grid = QGridLayout()
         grid.addWidget(QLabel(max_label), 0, 0)
         self.max_languages = QSpinBox()
@@ -106,6 +121,12 @@ class _LanguagePriorityEditor(QWidget):
 
     def _item_text(self, code: str) -> str:
         return f"{lang_display(code)} ({code})"
+
+    def _refresh_ranks(self, *_args) -> None:
+        for i in range(self.list.count()):
+            item = self.list.item(i)
+            code = str(item.data(Qt.ItemDataRole.UserRole))
+            item.setText(f"Rang {i + 1}: {self._item_text(code)}")
 
     def _add_language(self, raw_code) -> None:
         code = canonical_lang(str(raw_code))
@@ -148,6 +169,8 @@ class _LanguagePriorityEditor(QWidget):
         return normalize_language_priority(values)
 
     def data(self) -> dict:
+        if self._priority_only:
+            return {"language_priority": self.priority()}
         return {
             "language_priority": self.priority(),
             "max_languages": self.max_languages.value(),

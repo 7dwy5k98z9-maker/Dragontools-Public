@@ -6,6 +6,8 @@ import re
 from pathlib import Path
 from typing import Callable
 
+from ..rules.move_path_helpers import _strip_dir_year_suffix
+
 from ..rules.move_rules import (
     find_series_dir_candidates,
     is_planned_move_target_valid,
@@ -105,9 +107,11 @@ class MoveRouter:
             if resp.get("abort"):
                 return ""
             base = resp.get("base_path", bases[0]["path"])
-        return self.find_series_dir(base, series_name, season)
+        return self.find_series_dir(base, series_name, season, year=parsed.get("year"))
 
-    def find_series_dir(self, base: str, series_name: str, season: int) -> str:
+    def find_series_dir(self, base: str, series_name: str, season: int, year: int | None = None) -> str:
+        if year:
+            series_name = f"{_strip_dir_year_suffix(series_name)} ({int(year)})"
         candidates = [Path(p) for p in find_series_dir_candidates(base, series_name)]
         if len(candidates) == 1:
             series_dir = str(candidates[0])

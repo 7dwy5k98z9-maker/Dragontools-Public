@@ -204,6 +204,7 @@ _SMOKE_MODULES = (
     Path("gui") / "media_library_dialog_service.py",
     Path("gui") / "media_library_dialog_presenter.py",
     Path("gui") / "media_library_maintenance_controller.py",
+    Path("gui") / "media_library_import_worker.py",
     Path("gui") / "media_library_mapping_controller.py",
     Path("gui") / "media_library_search_controller.py",
     Path("gui") / "media_library_scan_controller.py", Path("gui") / "media_library_fix_tab.py", Path("gui") / "media_library_fix_actions.py", Path("gui") / "media_library_fix_controller.py", Path("gui") / "media_library_fix_worker.py",

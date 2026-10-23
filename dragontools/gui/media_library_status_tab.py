@@ -47,6 +47,10 @@ def _build_database_group(owner, actions, layout: QVBoxLayout) -> None:
     db_browse = QPushButton("...")
     db_browse.setFixedWidth(36)
     db_browse.clicked.connect(actions.browse_db_path)
+    owner.import_sensitive_widgets = [
+        owner.enabled_cb, owner.preflight_cb, owner.analyze_import_cb,
+        owner.db_path_edit, db_browse,
+    ]
     grid.addWidget(QLabel("DragonTools-DB:"), 3, 0)
     grid.addWidget(owner.db_path_edit, 3, 1)
     grid.addWidget(db_browse, 3, 2)
@@ -60,6 +64,7 @@ def _build_import_group(owner, actions, layout: QVBoxLayout) -> None:
     jf_browse = QPushButton("...")
     jf_browse.setFixedWidth(36)
     jf_browse.clicked.connect(actions.browse_jellyfin_db)
+    owner.import_sensitive_widgets.extend([owner.jellyfin_path_edit, jf_browse])
     grid.addWidget(QLabel("Jellyfin-DB:"), 0, 0)
     grid.addWidget(owner.jellyfin_path_edit, 0, 1)
     grid.addWidget(jf_browse, 0, 2)
@@ -78,6 +83,16 @@ def _build_import_group(owner, actions, layout: QVBoxLayout) -> None:
     grid.addWidget(buttons["cleanup"], 6, 0, 1, 3)
     grid.addWidget(buttons["save"], 7, 0, 1, 3)
 
+    owner.import_progress = QProgressBar()
+    owner.import_progress.setRange(0, 100)
+    owner.import_progress.setValue(0)
+    owner.import_progress.setVisible(False)
+    owner.import_status_label = QLabel("")
+    owner.import_status_label.setWordWrap(True)
+    owner.import_status_label.setVisible(False)
+    grid.addWidget(owner.import_progress, 8, 0, 1, 3)
+    grid.addWidget(owner.import_status_label, 9, 0, 1, 3)
+
     owner.scan_progress = QProgressBar()
     owner.scan_progress.setRange(0, 100)
     owner.scan_progress.setValue(0)
@@ -86,8 +101,8 @@ def _build_import_group(owner, actions, layout: QVBoxLayout) -> None:
         "MediaInfo ist die primäre Analysequelle; ffprobe ergänzt fehlende Werte."
     )
     owner.scan_status_label.setWordWrap(True)
-    grid.addWidget(owner.scan_progress, 8, 0, 1, 3)
-    grid.addWidget(owner.scan_status_label, 9, 0, 1, 3)
+    grid.addWidget(owner.scan_progress, 10, 0, 1, 3)
+    grid.addWidget(owner.scan_status_label, 11, 0, 1, 3)
 
     owner.nfo_progress = QProgressBar()
     owner.nfo_progress.setRange(0, 100)
@@ -96,8 +111,8 @@ def _build_import_group(owner, actions, layout: QVBoxLayout) -> None:
         "NFO-Lightscan arbeitet nur auf den bereits bekannten DB-Pfaden und startet keine Videoanalyse."
     )
     owner.nfo_status_label.setWordWrap(True)
-    grid.addWidget(owner.nfo_progress, 10, 0, 1, 3)
-    grid.addWidget(owner.nfo_status_label, 11, 0, 1, 3)
+    grid.addWidget(owner.nfo_progress, 12, 0, 1, 3)
+    grid.addWidget(owner.nfo_status_label, 13, 0, 1, 3)
     layout.addWidget(group)
 
 

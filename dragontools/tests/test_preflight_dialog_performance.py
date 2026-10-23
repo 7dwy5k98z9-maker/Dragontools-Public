@@ -424,7 +424,7 @@ def test_background_library_mapping_notice_is_forwarded_verbatim(monkeypatch):
     assert result["__existing_series_dir__"] == r"D:\TV\American Dad! (2005)"
 
 
-def test_background_lookup_uses_online_year_to_pick_existing_series_folder(monkeypatch):
+def test_background_lookup_keeps_edition_choices_despite_online_year_suggestion(monkeypatch):
     from dragontools.tests.test_incremental_move_queue_edit import _install_pyqt_stubs
 
     _install_pyqt_stubs(monkeypatch)
@@ -457,10 +457,12 @@ def test_background_lookup_uses_online_year_to_pick_existing_series_folder(monke
 
     kind, key, result = result_queue.get_nowait()
     assert (kind, key) == ("series", "job-ranma")
-    assert result["__existing_series_dir__"] == r"D:\Anime\Ranma ½ (2024)"
+    assert [choice["path"] for choice in result["__series_dir_choices__"]] == [
+        r"D:\Anime\Ranma ½ (1989)", r"D:\Anime\Ranma ½ (2024)",
+    ]
 
 
-def test_background_lookup_passes_online_year_to_library_search(monkeypatch):
+def test_background_lookup_keeps_edition_choices_before_database_or_online_guess(monkeypatch):
     from dragontools.tests.test_incremental_move_queue_edit import _install_pyqt_stubs
 
     _install_pyqt_stubs(monkeypatch)
@@ -509,9 +511,10 @@ def test_background_lookup_passes_online_year_to_library_search(monkeypatch):
     )
 
     _kind, _key, result = result_queue.get_nowait()
-    assert years == [None, 2024]
-    assert result["source"] == "database"
-    assert result["__existing_series_dir__"] == r"D:\Anime\Ranma ½ (2024)"
+    assert years == []
+    assert [choice["path"] for choice in result["__series_dir_choices__"]] == [
+        r"D:\Anime\Ranma ½ (1989)", r"D:\Anime\Ranma ½ (2024)",
+    ]
 
 
 def test_background_lookup_returns_folder_choices_when_year_is_unknown(monkeypatch):

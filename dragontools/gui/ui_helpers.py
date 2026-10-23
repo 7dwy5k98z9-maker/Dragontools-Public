@@ -11,6 +11,7 @@ from PyQt6.QtCore import QSettings, Qt
 from PyQt6.QtWidgets import QListWidget, QWidget
 
 from ..core.settings_app import APP_NAME, APP_ORG
+from ..core.path_syntax import display_name
 
 
 
@@ -33,14 +34,39 @@ def set_file_list_item_text(file_list: QListWidget, path: str, text: str) -> Non
     if hasattr(file_list, "item_for_path"):
         item = file_list.item_for_path(path)
         if item is not None:
+            _remember_file_list_runtime_text(item, text)
             item.setText(text)
             return
 
     for i in range(file_list.count()):
         item = file_list.item(i)
         if item and item.data(Qt.ItemDataRole.UserRole) == path:
+            _remember_file_list_runtime_text(item, text)
             item.setText(text)
             return
+
+
+def _remember_file_list_runtime_text(item, text: str) -> None:
+    # UserRole remains the path; the next role belongs to runtime presentation.
+    # Lightweight legacy list adapters may only implement setText.
+    if callable(getattr(item, "setData", None)):
+        item.setData(Qt.ItemDataRole.UserRole + 1, text)
+
+
+def file_list_runtime_text(item) -> str | None:
+    """Return the worker caption independently of the queue option badges."""
+    return item.data(Qt.ItemDataRole.UserRole + 1)
+
+
+def clear_file_list_runtime_texts(file_list) -> None:
+    """A new run owns fresh captions; removed/readded rows are fresh already."""
+    if not callable(getattr(file_list, "item", None)):
+        return
+    for index in range(file_list.count()):
+        item = file_list.item(index)
+        if file_list_runtime_text(item) is not None:
+            item.setData(Qt.ItemDataRole.UserRole + 1, None)
+            item.setText(display_name(item.data(Qt.ItemDataRole.UserRole)))
 
 
 def window_geometry_key(window_id: str) -> str:

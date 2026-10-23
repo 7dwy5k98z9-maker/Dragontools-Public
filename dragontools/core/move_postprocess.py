@@ -67,6 +67,6 @@ def record_media_library_move(
             replaced_paths=replaced_paths,
         )
         if changed:
-            log(f"🗄️ Mediathek-DB aktualisiert: {Path(dest_path).name}", "info")
+            log(f"🗄️ Mediathek-DB aktualisiert: {Path(dest_path).name}", "success")
     except (OSError, sqlite3.Error, ValueError, TypeError, RuntimeError) as exc:
         log(f"⚠️ Mediathek-DB konnte nicht aktualisiert werden: {exc}", "warn")

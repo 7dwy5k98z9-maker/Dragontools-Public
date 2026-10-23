@@ -28,7 +28,8 @@ def test_close_rechecks_workers_registered_during_wait(qtbot, monkeypatch):
     for name in ("stop_watch_folder_controller", "stop_metadata_action_thread", "stop_jellyfin_workers"):
         monkeypatch.setattr(module, name, lambda *args, **kwargs: True)
     warning = Mock()
-    monkeypatch.setattr(module.QMessageBox, "warning", warning)
+    monkeypatch.setattr(module, "_confirm_force_quit", warning)
+    warning.return_value = False
     assert not module.prepare_main_window_close(window, timeout_ms=0)
     late.requestInterruption.assert_called_once()
     assert "late-worker" in warning.call_args.args[2]
@@ -242,7 +243,7 @@ def test_watch_cannot_take_source_queued_in_other_codec_tab(monkeypatch):
 
 def test_close_discovery_exception_refuses_close_without_escape(monkeypatch):
     from dragontools.gui import main_window_shutdown as module
-    monkeypatch.setattr(module.QMessageBox, "warning", lambda *a: None)
+    monkeypatch.setattr(module, "_confirm_force_quit", lambda *a: False)
     def broken(*args, **kwargs):
         raise RuntimeError("watch stop status unknown")
     monkeypatch.setattr(module, "stop_watch_folder_controller", broken)

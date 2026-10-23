@@ -124,7 +124,7 @@ def test_main_window_shutdown_includes_cancelled_dialog_analysis(monkeypatch):
         release.wait(3)
         return SimpleNamespace()
     monkeypatch.setattr(loader_module, 'analyze_media', analyze)
-    monkeypatch.setattr(subject.QMessageBox, 'warning', Mock())
+    monkeypatch.setattr(subject, '_confirm_force_quit', Mock(return_value=False))
     for name in ('stop_metadata_action_thread', 'stop_watch_folder_controller', 'stop_jellyfin_workers'):
         monkeypatch.setattr(subject, name, lambda *a, **kw: True)
     worker = loader_module._OverrideAnalyzeThread('file', None)

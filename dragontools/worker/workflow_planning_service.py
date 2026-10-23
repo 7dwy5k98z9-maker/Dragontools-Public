@@ -24,6 +24,7 @@ class WorkflowPlanningService:
         standard_pipeline,
         output_paths,
         quality_target=None,
+        audio_language_recovery=None,
     ) -> None:
         self._config = config
         self._runtime_state = runtime_state
@@ -33,6 +34,7 @@ class WorkflowPlanningService:
         self._standard_pipeline = standard_pipeline
         self._output_paths = output_paths
         self._quality_target = quality_target
+        self._audio_language_recovery = audio_language_recovery
 
     def effective_strip_only(self, override: dict) -> bool:
         return bool(
@@ -44,6 +46,8 @@ class WorkflowPlanningService:
         if ctx.analysis is None:
             raise RuntimeError("Analyse fehlt fuer Workflow-Plan.")
         ctx.strip_only = self.effective_strip_only(override)
+        if self._audio_language_recovery is not None:
+            ctx.analysis = self._audio_language_recovery.prepare(ctx.analysis, override)
 
         enc_settings = effective_encoder_settings(
             default_codec=self._config.codec,

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from .exception_diagnostics import report_worker_exception
+
 from ..core.crash_guard import mark_activity, write_manual_crash_note
 from ..core.logger import discard_verbose_after_clean_run
 from .worker_contracts import normalize_worker_path
@@ -108,9 +110,9 @@ class ConverterLifecycleService:
         try:
             coordinator.wait_for_all()
         except Exception as exc:
-            worker.log(
-                f"✳️ Post-Processing konnte nicht vollständig abgewartet werden: {exc}",
-                "warn",
+            worker._session_state.keep_verbose_log = True
+            report_worker_exception(
+                worker.log, "Post-Processing konnte nicht vollständig abgewartet werden.", exc
             )
 
     def _cleanup_empty_temp_overwrite_dirs_after_run(self) -> None:

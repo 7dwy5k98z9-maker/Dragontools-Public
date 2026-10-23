@@ -1,5 +1,5 @@
 {
-  "_schema_version": 7,
+  "_schema_version": 8,
   "language_priority": [
     "de",
     "en"
@@ -55,5 +55,13 @@
   },
   "mp4_sidecars_enabled": true,
   "additional_sidecars_enabled": false,
-  "text_to_srt_sidecar_enabled": false
+  "text_to_srt_sidecar_enabled": false,
+  "default_subtitle": {
+    "mode": "audio_differs",
+    "audio_language": "de",
+    "language_priority": [
+      "de",
+      "en"
+    ]
+  }
 }

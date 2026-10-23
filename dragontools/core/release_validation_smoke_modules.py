@@ -16,7 +16,7 @@ REFACTOR_SMOKE_MODULES = (
         "move_file_service move_preparation move_conflict_transactions move_journal_adapter move_transfer_executor "
         "media_library_path_mappings media_library_series_paths online_metadata_tmdb_resolver "
         "online_metadata_tmdb_suggestions online_metadata_tmdb_transport online_metadata_tvdb_candidates "
-        "release_validation_smoke_modules update_check windows_restart_policy "
+        "release_validation_smoke_modules update_check windows_restart_policy windows_restart_api restart_guard_diagnostics "
         "settings_backup_common settings_backup_limits settings_backup_crypto settings_backup_export settings_backup_restore "
         "settings_watch watch_folder quality_target sdr_hdr_enhancement renamer_metadata_browser "
         "job_journal_storage job_journal_resume rules_preview_common rules_preview_audio "
@@ -33,8 +33,9 @@ REFACTOR_SMOKE_MODULES = (
     ),
     *_module_paths(
         "gui",
-        "update_checker windows_restart_guard media_library_dialog_contracts media_library_dialog_options "
-        "media_library_status_tab media_library_mapping_tab media_library_search_tab media_library_sql_tab "
+        "update_checker windows_restart_guard windows_restart_native rules_subtitle_default_editor "
+        "media_library_dialog_contracts media_library_dialog_options "
+        "media_library_status_tab media_library_mapping_tab media_library_search_tab media_library_sql_tab media_library_import_worker "
         "drop_path_files drop_path_decode drop_path_windows "
         "preflight_series_view preflight_series_paths preflight_series_metadata "
         "media_library_search_worker preflight_metadata_common preflight_metadata_movie "
@@ -49,7 +50,8 @@ REFACTOR_SMOKE_MODULES = (
     ),
     *_module_paths(
         "rules",
-        "pipeline_selector pipeline_capabilities pipeline_policy audio_plan audio_plan_policy",
+        "pipeline_selector pipeline_capabilities pipeline_policy audio_plan audio_plan_policy "
+        "subtitle_default_config subtitle_default_policy",
     ),
     *_module_paths(
         "worker",

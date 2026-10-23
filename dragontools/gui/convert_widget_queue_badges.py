@@ -3,6 +3,9 @@ from __future__ import annotations
 
 from PyQt6.QtCore import Qt
 
+from .file_worker_pause import file_pause_caption
+from .ui_helpers import file_list_runtime_text
+
 from ..core.models import normalize_override_dict
 from ..core.encoder_profile_override import MODE_TO_SCALE_LABEL, normalize_encoder_override
 from ..core.path_syntax import display_name
@@ -15,7 +18,13 @@ class ConvertWidgetQueueBadgesMixin:
         for i in range(self._ui.file_list.count()):
             item = self._ui.file_list.item(i)
             if item.data(Qt.ItemDataRole.UserRole) == path:
-                item.setText(self._override_label_text(path))
+                runtime_text = file_list_runtime_text(item)
+                if runtime_text is not None:
+                    item.setText(file_pause_caption(
+                        runtime_text, worker=getattr(self._state, "thread", None), path=path,
+                    ))
+                else:
+                    item.setText(self._override_label_text(path))
                 break
         self._refresh_queue_window()
 

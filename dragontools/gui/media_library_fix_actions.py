@@ -14,7 +14,7 @@ class MediaLibraryFixActionsMixin:
             settings=self.settings,
             get_db_path=self._db_path,
             refresh_stats=self._refresh_stats,
-            other_task_running=lambda: self._scan.is_running or self._nfo.is_running,
+            other_task_running=lambda: self._scan.is_running or self._nfo.is_running or self._maintenance.is_running,
         )
 
     def scan_fix_issues(self) -> None:

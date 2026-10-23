@@ -54,6 +54,6 @@ def test_close_stops_intake_before_attempting_worker_shutdown(monkeypatch):
     monkeypatch.setattr(module, 'stop_watch_folder_controller', stop_watch)
     monkeypatch.setattr(module, 'shutdown_loaded_widgets',
                         lambda *_args, **_kwargs: calls.append('workers') or SimpleNamespace(ok=False, still_running=['encoder']))
-    monkeypatch.setattr(module.QMessageBox, 'warning', lambda *_: None)
+    monkeypatch.setattr(module, '_confirm_force_quit', lambda *_: False)
     assert not module.prepare_main_window_close(SimpleNamespace(_tab_widgets={}))
     assert calls == ['watch', 'workers']

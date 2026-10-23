@@ -12,6 +12,34 @@ from .media_library_utils import _int_or_none
 from .media_library_episode_identity import episode_series_identity, same_series_for_episode_replacement
 from .path_syntax import path_compare_key
 from .move_conflicts import episode_identity_for_path
+from .media_library_analysis_merge import preserve_catalog_identity
+
+
+def _transfer_catalog_links(conn: sqlite3.Connection, source_id: int, dest_id: int) -> None:
+    """Uebernimmt bekannte Metadaten zum aktiven Ziel eines unveraenderten Moves."""
+    if source_id == dest_id:
+        return
+    for table, columns in (
+        ("media_provider_ids", "provider, provider_id, source"),
+        ("media_item_values", "value_id, sort_order"),
+        ("media_people", "person_id, role_type, character_name, sort_order"),
+    ):
+        conn.execute(f"DELETE FROM {table} WHERE media_id=?", (dest_id,))
+        conn.execute(
+            f"INSERT INTO {table}(media_id, {columns}) "
+            f"SELECT ?, {columns} FROM {table} WHERE media_id=?",
+            (dest_id, source_id),
+        )
+    conn.execute("DELETE FROM collection_members WHERE media_id=?", (dest_id,))
+    conn.execute(
+        "INSERT INTO collection_members(collection_id, media_id, sort_order) "
+        "SELECT collection_id, ?, sort_order FROM collection_members WHERE media_id=?",
+        (dest_id, source_id),
+    )
+    # Der NFO-Cache gehoert zum alten Pfad. Am neuen Ziel wird er beim naechsten
+    # Lightscan frisch gelesen; falsche alte Ziel-Caches duerfen nicht bleiben.
+    for table in ("nfo_metadata", "nfo_provider_ids", "nfo_issues"):
+        conn.execute(f"DELETE FROM {table} WHERE media_id=?", (dest_id,))
 
 
 def _deactivate_paths(conn: sqlite3.Connection, paths: Iterable[str | Path]) -> int:
@@ -124,9 +152,26 @@ def record_moved_file(
     streams = _streams_from_media_info_with_sidecars(dest, info)
     with closing(_connect(db)) as conn:
         with conn:
+            known_source = conn.execute(
+                "SELECT * FROM media_items WHERE path_key=? AND active=1 AND exists_flag=1 "
+                "ORDER BY id DESC LIMIT 1",
+                (path_compare_key(str(source_path)),),
+            ).fetchone()
+            if known_source is None:
+                # Ein wiederholter Companion-/Journalabschluss kann ein bereits
+                # erfasstes Ziel treffen. Dessen bestaetigte Identitaet erhalten.
+                known_source = conn.execute(
+                    "SELECT * FROM media_items WHERE path_key=? AND active=1 AND exists_flag=1 "
+                    "ORDER BY id DESC LIMIT 1",
+                    (path_compare_key(str(dest)),),
+                ).fetchone()
+            if known_source is not None:
+                preserve_catalog_identity(item, known_source)
             _deactivate_paths(conn, [source_path, *list(replaced_paths or [])])
             _deactivate_existing_episode_identity(conn, item)
-            _insert_item(conn, item, streams)
+            dest_id = _insert_item(conn, item, streams)
+            if known_source is not None:
+                _transfer_catalog_links(conn, int(known_source["id"]), dest_id)
             conn.execute("INSERT OR REPLACE INTO meta(key, value) VALUES('updated_at', ?)", (_now(),))
 
 

@@ -1,5 +1,6 @@
 """Keep utility worker ownership across reentrant and failed starts."""
 from functools import wraps
+from inspect import signature
 from .qt_receiver_state import receiver_is_alive
 
 from ..core.callback_dispatch import best_effort_callback
@@ -81,6 +82,14 @@ def owned_utility_start(*attributes):
             finally:
                 owner._utility_start_claimed = False
                 owner._utility_start_owner = None
+        if len(signature(method).parameters) == 1:
+            # PyQt inspects the callable's actual argument count, not the
+            # functools metadata. Keep zero-argument slots zero-argument so
+            # clicked(bool) can discard its checked value as usual.
+            @wraps(method)
+            def start_without_arguments(owner):
+                return start(owner)
+            return start_without_arguments
         return start
     return decorate
 

@@ -3,13 +3,18 @@
 from __future__ import annotations
 import logging
 
-import ctypes
 import os
 import time
 from typing import Any
 
 from PyQt6.QtCore import QObject, QTimer
-from PyQt6.QtWidgets import QApplication, QMessageBox
+from PyQt6.QtWidgets import QApplication, QLabel, QMessageBox
+
+from ..core.windows_restart_api import WindowsRestartAPI
+from ..core.restart_guard_diagnostics import RestartGuardDiagnostics
+from .windows_restart_native import (
+    WindowsRestartEventFilter, WM_QUERYENDSESSION, WM_ENDSESSION, ENDSESSION_CRITICAL,
+)
 
 from ..core.windows_restart_policy import (
     ACTION_ALLOW,
@@ -28,10 +33,27 @@ from .shutdown_worker_state import worker_is_running
 class WindowsRestartGuard(QObject):
     """Blockiert Windows-Neustarts, solange DragonTools kritische Jobs ausfuehrt."""
 
-    def __init__(self, window: Any, *, poll_ms: int = 5000) -> None:
+    def __init__(self, window: Any, *, poll_ms: int = 1000, api=None, diagnostics=None) -> None:
         super().__init__(window)
         self._window = window
         self._block_reason = ""
+        self._blocked_hwnd = 0
+        self._disposed = False
+        self._last_error = ""
+        self._last_status = None
+        self._api = api
+        self._diagnostics = diagnostics if diagnostics is not None else RestartGuardDiagnostics()
+        self._native_filter = None
+        self._status_label = None
+        if os.name == "nt" and self._api is None:
+            try:
+                self._api = WindowsRestartAPI()
+            except Exception as exc:
+                self._last_error = str(exc)
+        status_bar = getattr(window, "statusBar", None)
+        if os.name == "nt" and callable(status_bar):
+            self._status_label = QLabel("Neustartschutz: bereit", window)
+            status_bar().addPermanentWidget(self._status_label)
         self._last_notice_at = 0.0
         self._snoozed_until = 0.0
         self._notice_generation = 0
@@ -41,19 +63,29 @@ class WindowsRestartGuard(QObject):
 
         app = QApplication.instance()
         if app is not None:
+            if os.name == "nt":
+                try:
+                    native_filter = WindowsRestartEventFilter(self)
+                    app.installNativeEventFilter(native_filter)
+                    self._native_filter = native_filter
+                except Exception as exc:
+                    self._last_error = f"Direkter Neustartschutz nicht verfügbar: {exc}"
             commit_signal = getattr(app, "commitDataRequest", None)
             if commit_signal is not None:
                 commit_signal.connect(self.handle_commit_data_request)
             app.aboutToQuit.connect(self.release)
+        window.destroyed.connect(self.dispose)
 
         self._timer.start()
         QTimer.singleShot(0, self.refresh)
 
     def refresh(self) -> None:
+        if self._disposed:
+            return
         if user_initiated_shutdown_allowed():
             self.release()
             return
-        active = self._active_worker_names()
+        active = self._safe_active_worker_names()
         shutdown_after = self._shutdown_after_enabled()
         snoozed = self._is_snoozed()
         if not active and not snoozed:
@@ -69,20 +101,27 @@ class WindowsRestartGuard(QObject):
 
     def release(self) -> None:
         self._notice_generation += 1
-        if os.name != "nt" or not self._block_reason:
-            self._block_reason = ""
-            return
-        hwnd = self._hwnd()
-        if hwnd:
+        if self._api is not None:
+            if self._blocked_hwnd:
+                try:
+                    self._api.destroy(self._blocked_hwnd)
+                    self._write_event("registration_released", hwnd=self._blocked_hwnd)
+                except Exception as exc:
+                    self._write_event("release_failed", error=str(exc))
             try:
-                ctypes.windll.user32.ShutdownBlockReasonDestroy(hwnd)
-            except Exception:
-                logging.getLogger(__name__).debug("Unterdrückte Best-Effort-Ausnahme in release.", exc_info=True)
+                self._api.restore_priority()
+            except Exception as exc:
+                self._write_event("priority_restore_failed", error=str(exc))
+        self._blocked_hwnd = 0
         self._block_reason = ""
+        if os.name == "nt" and (self._api is None or self._native_filter is None) and not self._disposed:
+            self._set_status("eingeschränkt", self._last_error or "Windows-Neustartschutz konnte nicht vollständig eingerichtet werden.")
+        else:
+            self._set_status("bereit", "Aktiviert sich bei laufenden DragonTools-Aufträgen.")
 
     def handle_commit_data_request(self, manager: Any) -> None:
         decision = decide_windows_restart_request(
-            self._active_worker_names(),
+            self._safe_active_worker_names(),
             shutdown_after_enabled=self._shutdown_after_enabled(),
             interaction_allowed=self._manager_allows_interaction(manager),
             snoozed=self._is_snoozed(),
@@ -94,7 +133,7 @@ class WindowsRestartGuard(QObject):
             return
         if decision.action == ACTION_ASK:
             answer = self._ask_user(decision)
-            if answer == ACTION_ALLOW and not self._active_worker_names():
+            if answer == ACTION_ALLOW and not self._safe_active_worker_names():
                 self._snoozed_until = 0.0
                 self.release()
                 return
@@ -114,17 +153,38 @@ class WindowsRestartGuard(QObject):
                     "DragonTools blockiert den Windows-Neustart nach Benutzerentscheidung.",
                 )
 
-        self._cancel_manager(manager)
+        cancelled = self._cancel_manager(manager)
+        self._write_event("qt_session_query", action=decision.action, cancel_called=cancelled,
+                          workers=list(decision.active_workers))
         if decision.action == ACTION_BLOCK:
             self._set_block_reason(decision.block_reason)
-            self._show_block_notice(decision)
+            if cancelled:
+                self._show_block_notice(decision)
+            else:
+                self._set_status("eingeschränkt", "Windows-Neustart konnte über Qt nicht abgelehnt werden; siehe Protokoll.")
 
     def _active_worker_names(self) -> tuple[str, ...]:
-        return tuple(
+        names = list(
             _worker_display_name(worker)
             for worker in collect_shutdown_workers(application_worker_sources(self._window))
             if worker_is_running(worker)
         )
+        # The synchronous reservation also covers preflight and the brief
+        # conversion-to-move handoff before QThread.isRunning() becomes true.
+        widgets = getattr(self._window, "_tab_widgets", {}) or {}
+        for widget in (widgets.values() if hasattr(widgets, "values") else widgets):
+            state = getattr(widget, "_state", None)
+            if state is not None and (getattr(state, "start_reserved", False)
+                                      or getattr(state, "finalization_in_progress", False)):
+                names.append("DragonTools-Auftrag wird gestartet/abgeschlossen")
+        return tuple(dict.fromkeys(names))
+
+    def _safe_active_worker_names(self) -> tuple[str, ...]:
+        try:
+            return self._active_worker_names()
+        except Exception as exc:
+            self._write_event("worker_discovery_failed", error=str(exc))
+            return ("Auftragsstatus nicht sicher ermittelbar",)
 
     def _shutdown_after_enabled(self) -> bool:
         widgets = getattr(self._window, "_tab_widgets", {}) or {}
@@ -176,13 +236,17 @@ class WindowsRestartGuard(QObject):
             return "snooze"
         return ACTION_BLOCK
 
-    def _cancel_manager(self, manager: Any) -> None:
+    def _cancel_manager(self, manager: Any) -> bool:
         cancel = getattr(manager, "cancel", None)
         if callable(cancel):
             try:
                 cancel()
-            except Exception:
-                logging.getLogger(__name__).debug("Unterdrückte Best-Effort-Ausnahme in _cancel_manager.", exc_info=True)
+                return True
+            except Exception as exc:
+                self._write_event("qt_cancel_failed", error=str(exc))
+        else:
+            self._write_event("qt_cancel_failed", error="Qt bietet keine Abbruchfunktion")
+        return False
 
     def _show_block_notice(self, decision: RestartGuardDecision) -> None:
         now = time.monotonic()
@@ -195,7 +259,9 @@ class WindowsRestartGuard(QObject):
         def _show() -> None:
             if generation != self._notice_generation:
                 return
-            QMessageBox.information(self._window, decision.title, decision.message)
+            status_bar = getattr(self._window, "statusBar", None)
+            if callable(status_bar):
+                status_bar().showMessage("Windows-Neustartanforderung abgelehnt: DragonTools arbeitet noch.", 15000)
 
         QTimer.singleShot(0, _show)
 
@@ -204,18 +270,111 @@ class WindowsRestartGuard(QObject):
         if os.name != "nt" or not reason:
             self.release()
             return
-        if self._block_reason == reason:
-            return
         hwnd = self._hwnd()
         if not hwnd:
+            self._registration_failed("Kein gültiges DragonTools-Fenster verfügbar")
             return
-        self.release()
+        if self._api is None:
+            self._registration_failed(self._last_error or "Windows-Neustartschutz nicht verfügbar")
+            return
         try:
-            ok = bool(ctypes.windll.user32.ShutdownBlockReasonCreate(hwnd, reason))
+            changed = self._blocked_hwnd != hwnd or self._block_reason != reason
+            if not changed:
+                try:
+                    changed = self._api.query(hwnd) != reason
+                except OSError:
+                    changed = True
+            if changed:
+                if self._blocked_hwnd and self._blocked_hwnd != hwnd:
+                    try:
+                        self._api.destroy(self._blocked_hwnd)
+                    except Exception as exc:
+                        # Qt may already have destroyed the old HWND. That
+                        # must not prevent protection of its replacement.
+                        self._write_event("old_window_release_failed", hwnd=self._blocked_hwnd, error=str(exc))
+                    self._blocked_hwnd = 0
+                self._api.prioritize()
+                # Retain the HWND even if the verification query fails after
+                # Create succeeded, so idle/exit still cleans up the registration.
+                self._blocked_hwnd = hwnd
+                self._block_reason = self._api.create(hwnd, reason)
+                self._write_event("registration_verified", hwnd=hwnd, reason=reason,
+                                  native_filter=self._native_filter is not None)
+            if self._native_filter is None:
+                self._registration_failed("Direkter Neustartschutz nicht verfügbar; nur Qt-Rückfallebene aktiv",
+                                          preserve_registration=True)
+                return
+            self._last_error = ""
+            self._set_status("aktiv", "Windows-Registrierung geprüft; Neustartanforderungen werden direkt abgewiesen.\n"
+                             "Erzwungenes Ausschalten kann Windows trotzdem durchsetzen.")
+        except Exception as exc:
+            self._registration_failed(str(exc))
+
+    def _registration_failed(self, detail: str, *, preserve_registration: bool = False) -> None:
+        if detail != self._last_error or self._last_status is None:
+            self._write_event("registration_failed", error=detail, hwnd=self._hwnd())
+        self._last_error = detail
+        if not preserve_registration:
+            self._block_reason = ""
+        self._set_status("eingeschränkt", "Neustartschutz konnte nicht vollständig bestätigt werden.\n" + detail)
+
+    def _write_event(self, event: str, **details) -> None:
+        try:
+            self._diagnostics.record(event, **details)
         except Exception:
-            ok = False
-        if ok:
-            self._block_reason = reason
+            logging.getLogger(__name__).exception("Neustartschutz-Diagnose fehlgeschlagen")
+
+    def _set_status(self, state: str, detail: str) -> None:
+        if self._disposed:
+            return
+        log_error = getattr(self._diagnostics, "error", "")
+        if log_error:
+            state += " (Protokollfehler)"
+            detail += "\nProtokoll nicht verfügbar: " + str(log_error)
+        self._last_status = state, detail
+        if self._status_label is not None:
+            self._status_label.setText("Neustartschutz: " + state)
+            self._status_label.setToolTip(detail + "\nProtokoll: " + str(getattr(self._diagnostics, "path", "")))
+            color = "#26703b" if state == "aktiv" else ("#a65a00" if "eingeschränkt" in state or log_error else "")
+            self._status_label.setStyleSheet(f"color: {color};" if color else "")
+
+    def handle_native_message(self, message: int, wparam: int, flags: int) -> tuple[bool, int]:
+        if self._disposed or message not in {WM_QUERYENDSESSION, WM_ENDSESSION}:
+            return False, 0
+        active = self._safe_active_worker_names()
+        if message == WM_ENDSESSION:
+            self._write_event("native_session_end", ending=bool(wparam), flags=int(flags),
+                              critical=bool(flags & ENDSESSION_CRITICAL), workers=list(active))
+            return False, 0
+        if user_initiated_shutdown_allowed() or (not active and not self._is_snoozed()):
+            self._write_event("native_query_deferred", flags=int(flags), workers=list(active))
+            if user_initiated_shutdown_allowed():
+                self.release()
+            return False, 0
+        decision = decide_windows_restart_request(active, shutdown_after_enabled=self._shutdown_after_enabled(),
+                                                  interaction_allowed=False, snoozed=self._is_snoozed())
+        self._set_block_reason(decision.block_reason)
+        self._write_event("native_query_rejected", flags=int(flags), critical=bool(flags & ENDSESSION_CRITICAL),
+                          workers=list(active), registration_verified=bool(self._block_reason))
+        self._show_block_notice(decision)
+        # FALSE is the Win32 veto. Returning True here tells Qt that the native
+        # message is handled; it must not start closing/aborting worker windows.
+        return True, 0
+
+    def native_filter_error(self, exc) -> None:
+        self._write_event("native_filter_failed", error=str(exc))
+        self._set_status("eingeschränkt", "Direkte Windows-Neustartprüfung fehlgeschlagen: " + str(exc))
+
+    def dispose(self, *_args) -> None:
+        if self._disposed:
+            return
+        self._disposed = True
+        self._timer.stop()
+        app = QApplication.instance()
+        if app is not None and self._native_filter is not None:
+            app.removeNativeEventFilter(self._native_filter)
+            self._native_filter = None
+        self.release()
 
     def _hwnd(self) -> int:
         try:

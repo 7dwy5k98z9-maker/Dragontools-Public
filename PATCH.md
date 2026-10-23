@@ -1,8 +1,8 @@
-# Dragon Tools – Patchprotokoll bis Version 9.9.1
+# Dragon Tools – Patchprotokoll bis Version 9.9.2
 
 **Ausgangsbasis:** Dragon Tools 9.8.5  
 **Zwischenrelease:** Dragon Tools 9.8.6  
-**Zielversion / aktueller Stand:** Dragon Tools 9.9.1
+**Zielversion / aktueller Stand:** Dragon Tools 9.9.2
 **Status:** laufende Entwicklung  
 **Letzte Aktualisierung:** 27.09.2026
 
@@ -5535,3 +5535,18 @@ Bei der dokumentierten Abnahme nach Patch 28 wurden alle damaligen Patch-/Review
 ### Patch 29 – Frühe DV Prüfung und sichere Filmersetzung
 
 Vor einem Dolby-Vision-Encode wird die vollständig gelesene Quell-RPU gegen die exakt gezählten Frames der gewählten Videospur geprüft; der AV1-DV-Pfad prüft die tatsächlich vorhandenen und gelesenen RPU-Daten. Offensichtlich unbrauchbare RPUs können ausschließlich für diese Datei einen erneuten Plan ohne Dolby Vision auslösen. Die Option steht unter Einstellungen → Quellbildprüfung → Dolby Vision – Quell-RPU und ist standardmäßig eingeschaltet. HDR10+, Audio-, Untertitel-, Qualitäts- und Dateioptionen bleiben erhalten. Bei ausgeschalteter Option, kleinen unklaren Frameabweichungen, Spurfehlern oder Abbruch wird kein DV-Encode freigegeben. Vor und nach dem Encode werden getrennte Prüfergebnisse protokolliert. MKV-Muxer übernehmen aus jeder Audio-/Untertitelquelle nur ausdrücklich ausgewählte Spuren; nicht ausgewählte gleiche Untertitel blockieren eine eindeutig ausgewählte PGS-Spur nicht. Der fertige Medienvertrag wird vor dem Ersetzen geprüft. Filmersetzung und Matching verwenden dieselbe Normalisierung für Unicode, Bindestriche, Apostrophe und Dateinamen. Jahr, Edition, vorhandene Metadata-IDs und Mehrdeutigkeit schützen verschiedene Filme. Vorbereitete Identität und Ziel bleiben verbindlich; gescheiterte Dateitausche bewahren den guten Altbestand und Recovery-Dateien. PATCH_29_REPORT.md erläutert Prüfungen und Grenzen.
+
+
+# DragonTools 9.9.2 – 23.10.2026
+
+Die Version übernimmt den aktuellen Entwicklungsstand mit folgenden Verbesserungen:
+
+- Konfigurierbare Standarduntertitel und verbesserte Erkennung der Audiosprache; Whisper-Aufträge werden bei paralleler Verarbeitung abgestimmt.
+- Stabilere Serienzuordnung und TVDB-Suche, einschließlich ähnlicher Seriennamen und Jahresangaben.
+- Verbesserte Verschiebeabläufe für lange Dateinamen und Aktualisierung der Mediathek nach reinen Verschiebeaufträgen.
+- Fortschrittsanzeige beim Mediathekimport und dauerhafte Statusanzeige in der Warteschlange.
+- Verbesserte Bestätigung von Laufzeiten und Auswertung von MakeMKV-Titeln.
+- Korrigierte Werkzeugpfade, Start von Hilfsaktionen sowie Ausnahmebehandlung einzelner Aufträge.
+- Verbesserte Pausen-, Beendigungs- und Windows-Neustartsteuerung.
+
+Das öffentliche Windows-Paket enthält keine externen Medienwerkzeuge. Diese werden anhand von TOOLS_INSTALLIEREN.txt separat installiert. Python- und Qt-Laufzeitdateien bleiben Bestandteil des Pakets.

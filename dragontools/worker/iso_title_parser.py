@@ -17,12 +17,15 @@ def parse_makemkv_titles(lines):
             raw = json.loads(fields[3])
         except (TypeError, ValueError):
             continue
-        if title_id < 0 or code not in {2, 8, 11} or not isinstance(raw, str):
+        # MakeMKV attribute 8 is the chapter count; attribute 9 is duration.
+        # A chapter count can look like a valid number of seconds, so using
+        # attribute 8 silently rejects complete films during verification.
+        if title_id < 0 or code not in {2, 9, 11} or not isinstance(raw, str):
             continue
         entry = titles.setdefault(title_id, dict(id=title_id, duration=0, size=0, name=f'Title {title_id}'))
         if code == 2 and raw:
             entry['name'] = raw
-        elif code == 8:
+        elif code == 9:
             entry['duration'] = parse_duration_to_seconds(raw)
         elif code == 11:
             entry['size'] = parse_size_to_bytes(raw)

@@ -33,6 +33,7 @@ from .source_visual_check import SourceVisualCheckService
 from .standard_pipeline_runner import StandardPipelineRunner
 from .workflow_engine import ConversionWorkflowRunner
 from .workflow_factory import build_workflow_services
+from .conversion_audio_language import ConversionAudioLanguageRecovery
 
 
 class ConverterRuntimeBuilder:
@@ -149,6 +150,7 @@ class ConverterRuntimeBuilder:
         )
         services.duration_repair = DurationRepairService(
             mkvmerge_path=tools.mkvmerge,
+            mkvextract_path=getattr(tools, "mkvextract", ""),
             mp4box_path=tools.mp4box,
             ffmpeg_path=tools.ffmpeg,
             ffprobe_path=tools.ffprobe,
@@ -267,6 +269,10 @@ class ConverterRuntimeBuilder:
             corrupt_source_rpu_fallback=settings_bool(worker.settings,SET_KEY_CORRUPT_SOURCE_RPU_FALLBACK,
                 DEFAULT_CORRUPT_SOURCE_RPU_FALLBACK),
             abort_check=lambda: bool(worker.abort_requested),
+            audio_language_recovery=ConversionAudioLanguageRecovery(
+                settings=worker.settings, tools=services.tools, log=worker.log,
+                worker=worker, abort_check=lambda: bool(worker.abort_requested),
+            ),
         )
         services.workflow_runner = ConversionWorkflowRunner(
             services.workflow_services,

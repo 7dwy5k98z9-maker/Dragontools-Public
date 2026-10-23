@@ -30,6 +30,7 @@ IGNORED_RELEASE_DIRS = frozenset({
     ".git",
     ".venv",
     "venv",
+    "archiv",
     "build",
     "dist",
     "git release",

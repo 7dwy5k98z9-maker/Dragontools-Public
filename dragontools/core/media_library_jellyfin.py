@@ -36,32 +36,43 @@ from .media_library_jellyfin_streams import (
 )
 from .media_library_paths import save_path_mappings
 from .media_library_repository import _insert_item
-from .media_library_types import DEFAULT_DB_FILENAME, LibraryImportResult, LogFn, PathMapping, _now
+from .media_library_types import DEFAULT_DB_FILENAME, LibraryImportResult, LogFn, PathMapping, ProgressFn, _now
 
 
 def _load_source_snapshot(
     source_copy: Path,
     warnings: list[str],
+    progress: ProgressFn = None,
 ):
     source_conn = sqlite3.connect(str(source_copy))
     source_conn.row_factory = sqlite3.Row
     try:
+        if progress:
+            progress(0, 0, "Jellyfin-Datenbank wird geprüft …")
         _validate_jellyfin_snapshot(source_conn)
         item_table = _pick_jellyfin_item_table(source_conn)
         if not item_table:
             raise RuntimeError("Keine passende Jellyfin-Medientabelle gefunden.")
 
+        if progress:
+            progress(0, 0, "Video-, Audio- und Untertiteldaten werden gelesen …")
         stream_table = _pick_jellyfin_stream_table(source_conn)
         streams_by_item = _group_streams_by_item(source_conn, stream_table) if stream_table else {}
         if not stream_table:
             warnings.append("Keine MediaStreams-Tabelle gefunden. Streamdetails werden nur bei Analyse ergänzt.")
 
+        if progress:
+            progress(0, 0, "Vorschaubild-Daten werden gelesen …")
         trickplay_table = _pick_jellyfin_trickplay_table(source_conn)
         trickplay_by_item = _trickplay_status_by_item(source_conn, trickplay_table) if trickplay_table else {}
 
+        if progress:
+            progress(0, 0, "Filme, Serien und Folgen werden gelesen …")
         item_cur = source_conn.execute(f"SELECT * FROM {item_table}")
         item_columns = _column_map(item_cur)
         rows = item_cur.fetchall()
+        if progress:
+            progress(0, 0, "Titel, Mitwirkende und Sammlungen werden gelesen …")
         auxiliary_metadata = load_jellyfin_auxiliary_metadata(source_conn, item_table, rows, item_columns)
         item_names_by_id = {
             _jellyfin_item_id(row, item_columns): str(
@@ -97,6 +108,7 @@ def _import_rows(
     analyze_existing_files: bool,
     tools: Any,
     warnings: list[str],
+    progress: ProgressFn = None,
 ) -> tuple[int, int, int]:
     imported_items = 0
     imported_streams = 0
@@ -104,7 +116,12 @@ def _import_rows(
     with closing(_connect(target_db)) as target_conn, target_conn:
         seen_paths: set[str] = set()
         source_to_media_id: dict[str, int] = {}
-        for row in rows:
+        total = len(rows)
+        for index, row in enumerate(rows, start=1):
+            # Begrenzte Signalrate auch bei grossen Bibliotheken. Die Zaehler
+            # umfassen gepruefte Quelldatensaetze, inklusive uebersprungener.
+            if progress and (index == 1 or index % 100 == 0):
+                progress(index - 1, total, f"Einträge prüfen: {index - 1}/{total} · {imported_items} übernommen")
             built = build_jellyfin_item(
                 row,
                 item_columns,
@@ -128,6 +145,9 @@ def _import_rows(
                 source_to_media_id[source_id] = media_id
                 apply_auxiliary_metadata(target_conn, media_id, source_id, auxiliary_metadata)
             imported_items += 1
+        if progress:
+            progress(total, total, f"Einträge geprüft: {total}/{total} · {imported_items} übernommen")
+            progress(0, 0, "Sammlungen werden zugeordnet …")
         apply_collection_metadata(target_conn, source_to_media_id, auxiliary_metadata)
         target_conn.execute("INSERT OR REPLACE INTO meta(key, value) VALUES('updated_at', ?)", (_now(),))
     return imported_items, imported_streams, skipped_items
@@ -141,6 +161,7 @@ def import_jellyfin_database(
     analyze_existing_files: bool = False,
     tools: Any = None,
     logger: LogFn = None,
+    progress: ProgressFn = None,
 ) -> LibraryImportResult:
     source = Path(jellyfin_db_path)
     if not source.exists():
@@ -153,6 +174,8 @@ def import_jellyfin_database(
     warnings: list[str] = []
 
     if target.exists():
+        if progress:
+            progress(0, 0, "Vorhandene DragonTools-Mediathek wird gesichert …")
         backup_database(target, "pre_import")
 
     with tempfile.TemporaryDirectory(prefix="dragontools_jellyfin_import_", dir=str(target.parent)) as tmp:
@@ -160,13 +183,15 @@ def import_jellyfin_database(
         source_dir = tmp_dir / "source"
         source_dir.mkdir()
         source_copy = source_dir / source.name
+        if progress:
+            progress(0, 0, "Jellyfin-Datenbank wird kopiert …")
         _snapshot_database(source, source_copy, source_read_only=True)
         tmp_db = tmp_dir / DEFAULT_DB_FILENAME
         initialize_database(tmp_db)
         if mappings_list:
             save_path_mappings(tmp_db, mappings_list)
 
-        source_data = _load_source_snapshot(source_copy, warnings)
+        source_data = _load_source_snapshot(source_copy, warnings, progress=progress)
         imported_items, imported_streams, skipped_items = _import_rows(
             tmp_db,
             source_data[0],
@@ -180,10 +205,15 @@ def import_jellyfin_database(
             analyze_existing_files=analyze_existing_files,
             tools=tools,
             warnings=warnings,
+            progress=progress,
         )
 
         replacement_db = tmp_dir / f".{DEFAULT_DB_FILENAME}.ready"
+        if progress:
+            progress(0, 0, "Neue Mediathek wird fertiggestellt …")
         _snapshot_database(tmp_db, replacement_db)
+        if progress:
+            progress(0, 0, "Neue Mediathek wird übernommen …")
         publish_library(replacement_db, target, replace_file=os.replace)
 
     if logger:

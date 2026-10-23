@@ -184,6 +184,8 @@ class MediaStreamLanguageService:
                 model_name=self.model_name,
                 model_path=self.model_path,
                 use_local_model=self.use_local_model,
+                abort_check=self._abort_requested,
+                log=self._log,
             )
         return self._whisper
 

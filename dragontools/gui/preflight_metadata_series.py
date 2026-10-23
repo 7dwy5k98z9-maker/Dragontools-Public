@@ -37,6 +37,8 @@ def resolve_series_metadata(
     known_series = info.get("known_series")
     if not isinstance(known_series, SeriesMetadataSuggestion):
         known_series = None
+    if known_series is not None and desired_year is None:
+        desired_year = safe_year(known_series.first_air_year)
     db_bases = [
         (str(base.get("base") or ""), str(base.get("type") or ""))
         for base in search_bases

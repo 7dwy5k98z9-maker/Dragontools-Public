@@ -106,7 +106,11 @@ class ConvertWidgetQueueRemoveMixin:
                 for i in range(self.file_list.count()):
                     item = self.file_list.item(i)
                     if item and item.data(Qt.ItemDataRole.UserRole) == path:
-                        item.setText(f"(läuft - wird nach Abschluss aus der Liste entfernt)  {display_name(path)}")
+                        from .ui_helpers import set_file_list_item_text
+                        set_file_list_item_text(
+                            self.file_list, path,
+                            f"(läuft - wird nach Abschluss aus der Liste entfernt)  {display_name(path)}",
+                        )
                         break
                 continue
 

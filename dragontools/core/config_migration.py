@@ -32,7 +32,7 @@ class UnsupportedConfigSchemaError(ValueError):
 
 CURRENT_SCHEMA_VERSIONS: dict[str, int] = {
     "audio_rules": 4,
-    "subtitle_rules": 7,
+    "subtitle_rules": 8,
     "move_rules": 1,
     "renamer_rules": 3,
     "profiles": 3,

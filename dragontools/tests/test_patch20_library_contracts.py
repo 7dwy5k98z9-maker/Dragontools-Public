@@ -322,6 +322,7 @@ def test_dialog_reject_cannot_bypass_active_task_close_guard(monkeypatch):
     dialog._scan = SimpleNamespace(is_running=True)
     dialog._nfo = SimpleNamespace(is_running=False)
     dialog._fix = SimpleNamespace(is_running=False)
+    dialog._maintenance = SimpleNamespace(is_running=False)
     monkeypatch.setattr(QMessageBox, 'information', lambda *a: None)
     dialog.show()
     dialog.reject()
@@ -393,6 +394,7 @@ def test_native_dialog_all_completion_paths_save_once(monkeypatch, action):
     dialog = module.MediaLibraryDialog.__new__(module.MediaLibraryDialog)
     QDialog.__init__(dialog)
     dialog._scan = dialog._nfo = dialog._fix = SimpleNamespace(is_running=False)
+    dialog._maintenance = SimpleNamespace(is_running=False)
     dialog._search = SimpleNamespace(shutdown=lambda: True)
     dialog.settings = None
     saves = []
@@ -414,6 +416,7 @@ def test_native_dialog_accept_cannot_bypass_running_task(monkeypatch):
     QDialog.__init__(dialog)
     dialog._scan = SimpleNamespace(is_running=True)
     dialog._nfo = dialog._fix = SimpleNamespace(is_running=False)
+    dialog._maintenance = SimpleNamespace(is_running=False)
     monkeypatch.setattr(QMessageBox, 'information', lambda *a: None)
     dialog.show()
     dialog.accept()

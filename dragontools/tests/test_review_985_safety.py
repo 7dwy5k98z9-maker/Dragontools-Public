@@ -184,7 +184,7 @@ def test_shutdown_refuses_live_jellyfin_thread(monkeypatch):
     monkeypatch.setattr(dispatch, "_SHUTTING_DOWN", False)
     monkeypatch.setattr(shutdown, "stop_metadata_action_thread", lambda *a, **kw: True)
     monkeypatch.setattr(shutdown, "stop_watch_folder_controller", lambda *a, **kw: True)
-    monkeypatch.setattr(shutdown.QMessageBox, "warning", lambda *a: None)
+    monkeypatch.setattr(shutdown, "_confirm_force_quit", lambda *a: False)
     assert not shutdown.prepare_main_window_close(SimpleNamespace(_tab_widgets={}), timeout_ms=0)
 
 

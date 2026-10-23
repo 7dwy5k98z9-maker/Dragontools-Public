@@ -109,6 +109,7 @@ class MediaLibraryDialogService:
         *,
         analyze_existing_files: bool,
         tools: Any,
+        progress=None,
     ):
         return import_jellyfin_database(
             jellyfin_db,
@@ -116,6 +117,7 @@ class MediaLibraryDialogService:
             mappings,
             analyze_existing_files=analyze_existing_files,
             tools=tools,
+            progress=progress,
         )
 
     def export_database(self, db_path: str, folder: str):
@@ -215,7 +217,9 @@ class MediaLibraryDialogService:
 
     @staticmethod
     def tool_paths(settings: Any):
-        return get_tool_paths(settings)
+        # Der App-Start registriert den ToolPathSettingsProvider. QSettings ist
+        # dessen Datenquelle und darf den zentralen Provider nicht ersetzen.
+        return get_tool_paths()
 
     def storage_scan_roots(self, settings: Any) -> list[PathMapping]:
         entries = (

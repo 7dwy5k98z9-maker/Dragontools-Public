@@ -45,11 +45,17 @@ def remove_path(path: str | Path) -> None:
 
 
 def unique_staging_path(destination: str | Path, *, attempts: int = 1000) -> Path:
-    """Erzeugt einen freien Staging-Pfad als Geschwister des Zielpfads."""
+    """Erzeugt einen kurzen, freien Staging-Pfad im selben Zielordner.
+
+    Der temporaere Name darf den eigentlichen Zielnamen nicht verlaengern:
+    Bereits gueltige lange Episodennamen koennen sonst das Komponentenlimit
+    des Dateisystems/NAS ueberschreiten. Der Marker bleibt fuer Diagnose und
+    Cleanup erhalten, der zufaellige Token verhindert Namenskollisionen.
+    """
     dst = Path(destination)
     for _ in range(max(1, int(attempts))):
         token = uuid.uuid4().hex[:10]
-        candidate = dst.with_name(f"{dst.name}.__dragontools_partial__{token}")
+        candidate = dst.with_name(f".__dragontools_partial__{token}")
         if not candidate.exists() and not candidate.is_symlink():
             return candidate
     raise RuntimeError(f"Kein freier Transaktionspfad gefunden fuer {dst.name}")

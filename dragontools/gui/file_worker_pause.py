@@ -15,7 +15,10 @@ def update_file_pause_row(file_list, *, worker, path):
         return
     item = file_list.item_for_path(path)
     if item is not None:
-        item.setText(file_pause_caption(item.text(), worker=worker, path=path))
+        from .ui_helpers import set_file_list_item_text
+        set_file_list_item_text(
+            file_list, path, file_pause_caption(item.text(), worker=worker, path=path),
+        )
 
 
 def file_worker_is_paused(worker, path):

@@ -4,6 +4,7 @@ from __future__ import annotations
 from .output_verification_archive import preserve_failed_verification_output
 from .workflow_duration_repair import try_duration_repair
 from .workflow_geometry_validation import apply_geometry_policy
+from .duration_confirmation import confirm_disputed_duration
 
 
 class WorkflowVerificationService:
@@ -34,6 +35,11 @@ class WorkflowVerificationService:
             return
 
         if not result.ok:
+            if confirm_disputed_duration(ctx, result, self._duration_repair_service):
+                ctx.keep_failed_output = True
+                self._log_warnings(result)
+                self._log_success(result)
+                return
             result = try_duration_repair(ctx, result, required_audio, self._duration_repair_service)
             ctx.verify_result = result
             if result.ok:

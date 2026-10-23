@@ -96,6 +96,26 @@ class MediaLibraryDialogView:
             widget.setEnabled(not running)
         self.scan_abort_btn.setEnabled(running)
 
+    def set_import_running(self, running: bool) -> None:
+        if running:
+            widgets = [*self.scan_sensitive_widgets, *self.fix_sensitive_widgets, *self.import_sensitive_widgets]
+            # Den vorherigen Zustand erhalten, etwa bei deaktiviertem Preflight.
+            self._import_widget_states = [(widget, widget.isEnabled()) for widget in widgets]
+            self._import_tab_states = [self.tabs.isTabEnabled(i) for i in range(1, self.tabs.count())]
+            for widget, _enabled in self._import_widget_states:
+                widget.setEnabled(False)
+            for index in range(1, self.tabs.count()):
+                self.tabs.setTabEnabled(index, False)
+            self.import_progress.setVisible(True)
+            self.import_status_label.setVisible(True)
+        else:
+            for widget, enabled in getattr(self, "_import_widget_states", []):
+                widget.setEnabled(enabled)
+            for index, enabled in enumerate(getattr(self, "_import_tab_states", []), start=1):
+                self.tabs.setTabEnabled(index, enabled)
+            self._import_widget_states = []
+            self._import_tab_states = []
+
     def set_nfo_scan_running(self, running: bool) -> None:
         for widget in [*self.nfo_scan_sensitive_widgets, *self.fix_sensitive_widgets]:
             widget.setEnabled(not running)

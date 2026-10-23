@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from .exception_diagnostics import report_worker_exception
 from ..core.path_syntax import display_name, path_compare_key
 from .worker_contracts import RemoveFileStatus
 from .log_dispatch import dispatch_log
@@ -53,6 +54,9 @@ class ParallelConverterQueueMixin:
             try:
                 self._start_child_worker([path])
             except Exception as exc:
+                report_worker_exception(
+                    self._logger, f"Parallel-Worker konnte nicht gestartet werden: {path}", exc
+                )
                 # Live-add is all-or-nothing.  A failed child start must not
                 # leave a phantom queue row or ownership marker behind.
                 self.files = [p for p in self.files if path_compare_key(p) != key]
@@ -187,10 +191,13 @@ class ParallelConverterQueueMixin:
             try:
                 self._start_child_worker([path])
             except Exception as exc:
+                report = report_worker_exception(
+                    self._logger, f"Parallel-Worker konnte nicht gestartet werden: {path}", exc
+                )
                 self._terminal_inputs.add(path)
                 self._result_state.failure_details[path] = {
                     "message": f"Parallel-Worker konnte nicht gestartet werden: {exc}",
-                    "error_report": "", "pipeline": "", "container": "",
+                    "error_report": report, "pipeline": "", "container": "",
                     "strategy": "parallel_worker_start",
                 }
                 self._synthetic_failures += 1

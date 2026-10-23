@@ -18,7 +18,7 @@ from ..core.journal_runtime import journal_activity
 import os  # Legacy test/diagnostic hook: move_thread.os.replace
 from copy import deepcopy
 import threading
-import traceback
+from .exception_diagnostics import report_worker_exception
 from pathlib import Path
 
 from PyQt6.QtCore import QThread, pyqtSignal
@@ -146,13 +146,12 @@ class MoveThread(
 
                 if not self.abort_requested and moved_any:
                     did_shut = self._handle_optional_shutdown()
-        except Exception:
+        except Exception as exc:
             moved_any = moved_any or bool(self._moved_log)
             # Bewusste QThread-Grenze: unerwartete Fehler duerfen nicht still
             # aus dem Worker verschwinden; der Traceback landet im Log.
             self.error_count += 1
-            self._log("Unbehandelte Ausnahme im Worker:", "error")
-            self._log(traceback.format_exc(), "error")
+            report_worker_exception(self._log, "Unbehandelte Ausnahme im Move-Worker.", exc)
         finally:
             self._finalize_journal()
             self.batch_finished.emit(moved_any, did_shut)

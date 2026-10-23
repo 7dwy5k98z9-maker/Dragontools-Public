@@ -47,7 +47,6 @@ def collect_candidate_records(client, request: dict[str, Any]) -> list[dict[str,
 
     def collect(term: str, year: int | None) -> None:
         nonlocal successful_calls
-        found: list[dict[str, Any]] = []
         for language in _search_languages(client):
             try:
                 current = client.search_series(term, year=year, language=language)
@@ -55,15 +54,15 @@ def collect_candidate_records(client, request: dict[str, Any]) -> list[dict[str,
                 errors.append(exc)
                 continue
             successful_calls += 1
-            found = current
-            if found:
-                break
-        for record in found or []:
-            record_id = _tvdb_record_id(record)
-            if record_id is None or record_id in seen_ids:
-                continue
-            seen_ids.add(record_id)
-            records.append(record)
+            # A nonempty list can contain only unrelated titles or an older
+            # adaptation. Merge both languages before ranking and validating
+            # episodes; otherwise those false positives suppress discovery.
+            for record in current or []:
+                record_id = _tvdb_record_id(record)
+                if record_id is None or record_id in seen_ids:
+                    continue
+                seen_ids.add(record_id)
+                records.append(record)
 
     search_terms = list(request["search_terms"])
     for term in search_terms[:2]:

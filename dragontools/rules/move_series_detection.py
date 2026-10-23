@@ -96,9 +96,19 @@ def parse_series_match_details(filename: str) -> dict[str, Any] | None:
         if ep_i not in episodes:
             episodes.append(ep_i)
 
-    series = _clean_series_name(_decide_series_block(stem, m)) or None
+    series_block = _decide_series_block(stem, m)
+    # Das Jahr vor der Titelbereinigung sichern, damit Runtime-Move dieselbe
+    # Edition verwendet wie der Preflight. Release-Dots und Endtrenner zulassen.
+    year_match = re.search(
+        r"(?:\((19\d{2}|20\d{2})\)|[\s._-](19\d{2}|20\d{2}))"
+        r"[\s._/\\\-\u2010\u2011\u2012\u2013\u2014\u207b\u2212]*$",
+        series_block,
+    )
+    year = int(year_match.group(1) or year_match.group(2)) if year_match else None
+    series = _clean_series_name(series_block) or None
     return {
         "series":     series,
+        "year":       year,
         "season":     season,
         "episode":    first_ep,
         "episodes":   episodes,

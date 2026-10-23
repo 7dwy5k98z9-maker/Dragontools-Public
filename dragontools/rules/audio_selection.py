@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..core.lang_codes import language_matches, normalize_language_priority
+from ..core.lang_codes import canonical_lang, language_matches, normalize_language_priority
 from ..core.models import AudioStream
 from .audio_rule_basics import _DEFAULT_RULES, normalize_audio_codec, safe_int
 from .audio_rule_migration import migrate_audio_rules
@@ -162,3 +162,22 @@ def choose_audio_streams(
         return _dedupe_audio_streams(_fallback_audio_streams(streams, eligible_streams, rules))
 
     return _dedupe_audio_streams(selected)
+
+
+def unknown_audio_streams_without_priority_match(
+    streams: list[AudioStream], rules: dict | None = None,
+) -> list[AudioStream]:
+    """Return eligible unknown tracks only when rule selection needs recovery.
+
+    Disable the fallback for this check: keep_all/keep_first can return tracks
+    without having found any of the requested languages.
+    """
+    resolved = _load_rules() if rules is None else migrate_audio_rules(rules)
+    strict = {**resolved, "fallback_if_no_priority_match": "keep_none"}
+    if choose_audio_streams(streams, strict):
+        return []
+    return [
+        stream for stream in streams
+        if canonical_lang(getattr(stream, "language", None)) in {"", "und", "unk", "unknown", "undefined"}
+        and not _should_skip_for_language_rules(stream, resolved)
+    ]

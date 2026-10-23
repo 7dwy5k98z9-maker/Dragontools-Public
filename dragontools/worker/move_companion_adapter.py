@@ -6,7 +6,7 @@ video transfer out of the bounded result-commit mixin.
 """
 from __future__ import annotations
 
-import traceback
+from .exception_diagnostics import report_worker_exception
 from pathlib import Path
 
 from ..core.move_file_service import MoveFileService
@@ -82,11 +82,12 @@ class MoveCompanionAdapterMixin:
             if service.last_result is not None:
                 self._last_move_result = service.last_result
             raise
-        except Exception:
+        except Exception as exc:
             if service.last_result is not None:
                 self._last_move_result = service.last_result
-            self._log(f"❌ Unbehandelte Ausnahme beim Move von {Path(src).name}", "error")
-            self._log(traceback.format_exc(), "error")
+            report_worker_exception(
+                self._log, f"❌ Unbehandelte Ausnahme beim Move von {src}", exc
+            )
             return False
 
     def _stage_sidecars_before_video(

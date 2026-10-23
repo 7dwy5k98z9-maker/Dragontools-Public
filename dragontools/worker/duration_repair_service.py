@@ -28,6 +28,7 @@ from .tool_runner import ToolRunResult, run_tool
 from .workflow_engine import WorkflowVerifyResult
 from .timestamp_diagnostics import log_timestamp_diagnostics
 from .owned_probe import owned_probe_runner
+from .duration_confirmation import DurationConfirmationService
 
 
 class DurationRepairService:
@@ -43,6 +44,7 @@ class DurationRepairService:
         ffmpeg_path: str = "",
         ffprobe_path: str = "",
         mediainfo_path: str = "",
+        mkvextract_path: str = "",
         normal_remux_enabled: bool = True,
         timestamp_repair_enabled: bool = True,
         worker=None,
@@ -68,6 +70,9 @@ class DurationRepairService:
             ffprobe_path=self._runtime.ffprobe_path,
             mediainfo_path=self._runtime.mediainfo_path,
             run_command=subprocess.run if worker is None else owned_probe_runner(worker, label='Timinganalyse'),
+        )
+        self._duration_confirmation = DurationConfirmationService(
+            self._runtime, mkvextract_path=mkvextract_path,
         )
         self._remux_service = DurationRemuxService(self._runtime)
         self._timestamp_service = TimestampRepairService(self._runtime, self._timing_analyzer)
@@ -98,6 +103,17 @@ class DurationRepairService:
             normal_remux_enabled=self._normal_remux_enabled,
             timestamp_repair_enabled=self._timestamp_repair_enabled,
         )
+
+    def confirm_duration(self, *, source_path, output_path, expected_contract=None):
+        votes = self._duration_confirmation.confirm(
+            source_path=source_path, output_path=output_path, expected_contract=expected_contract,
+        )
+        for vote in votes:
+            self._runtime.log(
+                f"Laufzeit-Gegenprüfung {vote.tool}: {vote.detail}",
+                "success" if vote.accepted else "warn",
+            )
+        return votes
 
     def repair(
         self,

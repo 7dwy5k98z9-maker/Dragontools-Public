@@ -14,39 +14,43 @@ def apply_subtitle_default_policy(
     plan, *, audio_streams, file_override, subtitle_rules,
     audio_rules=None, apply_audio_language_rules=True,
 ):
-    """Adjust output copies only; source flags and forced flags stay intact.
-
-    If both language priorities agree and playback audio uses another known
-    language, prefer a complete subtitle in that preferred language. One
-    selected subtitle becomes default, including its sidecar representation.
-    """
+    """Set one selected output default without changing source/forced flags."""
     selected = list(plan.keep_streams) + list(plan.external_streams)
     if plan.burn_sub is not None:
         selected.append(plan.burn_sub)
-    if not selected or not audio_streams:
+    if not selected:
         return plan
-    sub_priority = normalize_language_priority(migrate_subtitle_rules(subtitle_rules).get('language_priority'))
-    rules = migrate_audio_rules(audio_rules if audio_rules is not None else audio_plan.load_audio_rules())
-    audio_priority = normalize_language_priority(rules.get('language_priority'))
-    if not sub_priority or not audio_priority or sub_priority[0] != audio_priority[0]:
+    subtitle_settings = migrate_subtitle_rules(subtitle_rules)
+    default = subtitle_settings['default_subtitle']
+    mode = default['mode']
+    if mode == 'preserve':
         return plan
-    preferred = sub_priority[0]
-    candidates = [s for s in selected if canonical_lang(s.language) == preferred]
+    priority = default['language_priority']
+    if mode != 'always':
+        if not audio_streams:
+            return plan
+        rules = migrate_audio_rules(audio_rules if audio_rules is not None else audio_plan.load_audio_rules())
+        audio_priority = normalize_language_priority(rules.get('language_priority'))
+        reference = default['audio_language']
+        if reference == 'audio_priority':
+            reference = audio_priority[0] if audio_priority else ''
+        if mode == 'legacy':
+            priority = subtitle_settings['language_priority'][:1]
+            if not priority or not audio_priority or priority[0] != audio_priority[0]:
+                return plan
+            reference = priority[0]
+        language = _playback_language(audio_streams, file_override, rules, apply_audio_language_rules)
+        if language is None or not reference or language == reference:
+            return plan
+        if mode == 'legacy' and language in {'', 'und', 'mul', 'zxx'}:
+            return plan
+        # An unknown tag cannot confirm matching audio. In the explicit
+        # conditional mode it therefore receives subtitles as well.
+    candidates = [s for s in selected if canonical_lang(s.language) in priority]
     if not candidates:
         return plan
-    decisions = audio_plan.compute_audio_track_plan(
-        list(audio_streams), file_override, 'mkv', rules=rules,
-        apply_language_rules=apply_audio_language_rules,
-    )
-    playback = [d for d in decisions if not d.is_extra_stereo]
-    if not playback:
-        return plan
-    primary = next((d for d in playback if audio_plan.output_default_for_decision(d)), playback[0])
-    language = canonical_lang(primary.stream.language)
-    if language in {'', 'und', 'mul', 'zxx', preferred}:
-        return plan
-    # Preserve the planned language/format order within full and forced tracks.
-    target = min(candidates, key=lambda s: bool(s.forced))
+    # Language rank precedes full/forced preference; format order is stable.
+    target = min(candidates, key=lambda s: (priority.index(canonical_lang(s.language)), bool(s.forced)))
     target_index = int(target.index)
 
     def output_stream(stream):
@@ -62,3 +66,15 @@ def apply_subtitle_default_policy(
         keep_streams=tuple(output_stream(s) for s in plan.keep_streams),
         external_streams=tuple(output_stream(s) for s in plan.external_streams),
     )
+
+
+def _playback_language(audio_streams, file_override, rules, apply_language_rules):
+    decisions = audio_plan.compute_audio_track_plan(
+        list(audio_streams), file_override, 'mkv', rules=rules,
+        apply_language_rules=apply_language_rules,
+    )
+    playback = [d for d in decisions if not d.is_extra_stereo]
+    if not playback:
+        return None
+    primary = next((d for d in playback if audio_plan.output_default_for_decision(d)), playback[0])
+    return canonical_lang(primary.stream.language)

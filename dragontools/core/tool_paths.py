@@ -113,10 +113,22 @@ def find_tool(
     return name
 
 
+def _validate_tool_path_provider(provider: ToolPathSettingsProvider | None) -> None:
+    if provider is not None and not all(
+        callable(getattr(provider, method, None))
+        for method in ("get_custom_dirs", "find_in_settings")
+    ):
+        raise TypeError(
+            "ToolPaths benötigt einen ToolPathSettingsProvider. "
+            "Einstellungsobjekte können nicht direkt als Provider übergeben werden."
+        )
+
+
 class ToolPaths:
     """Cached access to all external executables used by DragonTools."""
 
     def __init__(self, provider: ToolPathSettingsProvider | None = None) -> None:
+        _validate_tool_path_provider(provider)
         self._provider = provider
         # Resolution is instance-local. Unsaved previews and provider changes
         # must not install their directories into the process-wide PATH.
@@ -287,6 +299,9 @@ _tool_paths_lock = threading.Lock()
 def get_tool_paths(provider: ToolPathSettingsProvider | None = None) -> ToolPaths:
     """Return the process-wide, thread-safe ToolPaths instance."""
     global _tool_paths_instance, _tool_paths_provider
+    # Vor jeder Registrierung pruefen: Ein ungueltiger Aufrufer darf weder
+    # den funktionierenden Singleton noch dessen Provider ueberschreiben.
+    _validate_tool_path_provider(provider)
     # Ordinary readers may use the fast path.  Supplying a provider is a
     # registration operation and must always pass through the lock: otherwise
     # an earlier provider-less access permanently wins and GUI-configured tool

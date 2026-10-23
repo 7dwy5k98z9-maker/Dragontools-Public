@@ -1,4 +1,4 @@
-# DragonTools V9.9.1
+# DragonTools V9.9.2
 
 DragonTools ist eine Windows-Anwendung zur Analyse, Konvertierung und Verwaltung von Video-, Audio- und Untertiteldateien. Profile und Regeln helfen bei wiederkehrenden Aufgaben. Die Vorschau zeigt die geplanten Änderungen vor der Verarbeitung.
 
@@ -245,7 +245,7 @@ Ohne Argumente (auch beim Doppelklick) erstellt der Builder einen privaten Build
 
 Für einen öffentlichen Build verwende `build_v9.bat --public`. Dann prüft der Builder PDF-Inhalte und installiert oder repariert bei Bedarf `pypdf>=5,<7` automatisch in der verwendeten Python-Umgebung. Danach prüft er Import und Version erneut; Installations- oder PDF-Prüffehler brechen den öffentlichen Build ab. Öffentliche Quellarchive behalten ihre verpflichtende PDF-Prüfung unabhängig vom privaten Builder-Modus. `build_v9_angepasst.bat` reicht die Argumente ebenfalls weiter.
 
-Der fertige Build wird unter `dist/DragonToolsV9.9.1/` abgelegt. `build/` und `dist/` sind lokale Ausgaben und werden nicht in Git gespeichert.
+Der fertige Build wird unter `dist/DragonToolsV9.9.2/` abgelegt. `build/` und `dist/` sind lokale Ausgaben und werden nicht in Git gespeichert.
 
 ## Programm-Updates über GitHub
 

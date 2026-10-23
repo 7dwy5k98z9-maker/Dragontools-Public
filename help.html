@@ -4,7 +4,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1" name="viewport"/>
-<title>Dragon Tools V9.9.1 – Hilfe</title>
+<title>Dragon Tools V9.9.2 – Hilfe</title>
 <style>
 body {
   font-family: "Segoe UI", Arial, sans-serif;
@@ -105,8 +105,9 @@ summary { font-weight: 600; padding: 7px 10px; background: #f0f4f8; }
 </head>
 <body>
 <div class="container">
-<h1>🐉 Dragon Tools V9.9.1</h1>
-<p>DragonTools V9.9.1 unterstützt die Verarbeitung von Videodateien, die Verwaltung von Untertiteln und die Benennung anhand von Metadaten. Diese Hilfe erklärt die Einstellungen, den Ablauf der Verarbeitung und die Prüfung von Serienbeständen.</p>
+<h1>🐉 Dragon Tools V9.9.2</h1>
+<p>Stand 23.10.2026: konfigurierbare Standarduntertitel, verbesserte Sprach- und Serienerkennung, Mediathekimport mit Fortschritt sowie Korrekturen bei Verschieben, Laufzeitprüfung und Programmende.</p>
+<p>DragonTools V9.9.2 unterstützt die Verarbeitung von Videodateien, die Verwaltung von Untertiteln und die Benennung anhand von Metadaten. Diese Hilfe erklärt die Einstellungen, den Ablauf der Verarbeitung und die Prüfung von Serienbeständen.</p>
 <p style="text-align:center;color:#64748b;">
   Multifunktionales Video-Konvertierungstool · H.264 · H.265 · AV1 · DV · HDR10+ · Remux · ISO-Remux · Videomerge  
 
@@ -492,7 +493,7 @@ Dolby Vision und HDR10+ können trotz Erkennung bewusst nicht erhalten werden. D
 AV1 Dolby Vision wird derzeit nativ über FFmpeg/libsvtav1 als Profile 10 geschrieben. Profil 7 sowie Crop/Skalierung und Untertitel-Burn-In im AV1-DV-Pfad werden fail-closed abgelehnt. AV1 HDR10+ nutzt FFmpeg/libaom-av1 für die T.35/OBU-Metadaten; dieser Pfad ist deutlich langsamer als der normale SVT-AV1-Pfad und wird deshalb als Spezialoption behandelt. Für beide Metadatenpfade ist die Erhaltung derzeit nur mit CPU freigegeben; NVENC/QSV/AMF brechen ab, statt Metadaten still zu verlieren. Enthält eine AV1-Quelle gleichzeitig Dolby Vision und HDR10+ und sind beide Erhaltungsoptionen aktiv, hat Dolby Vision Priorität: Dragon Tools nutzt AV1-DV10/SVT-AV1, übernimmt HDR10+ bewusst nicht und zeigt dazu eine INFO im Kurzlog. Ein expliziter per-Datei-Override auf AV1-HDR10+ bleibt möglich.
 </div>
 <div class="callout ok">
-<strong>DV-Ablauf in V9.9.1 – Direct-MKV:</strong><br/>
+<strong>DV-Ablauf in V9.9.2 – Direct-MKV:</strong><br/>
 Bei Matroska liest Dragon Tools die Dolby-Vision-RPU für Profil 5/7/8 direkt aus dem Originalcontainer und normalisiert sie auf den vorgesehenen P8.1-Metadatenpfad. Der Bild-Encode liest ebenfalls direkt die Original-MKV; <code>source.hevc</code> und <code>p8.hevc</code> sind keine regulären Bildquellen mehr. Ein roher <code>encoded.hevc</code>-Stream entsteht erst dort, wo <code>dovi_tool inject-rpu</code> ihn benötigt. Nur Container-/Metadaten-Fallbacks dürfen weiterhin einen temporären HEVC-Hilfsstream erzeugen.
 <br/><br/>
 Bei DV Profil 5 wird der Base Layer beim Encode weiterhin mit <code>libplacebo</code> von ICtCp nach BT.2020/PQ gewandelt. <strong>Der FFmpeg-AutoCrop ist die alleinige Quelle für den physischen Bild-Crop.</strong> RPU-Level-5 wird diagnostisch abgeglichen und danach an die tatsächlich gecroppte Zielgeometrie angepasst.
@@ -1526,7 +1527,7 @@ Sobald DRC oder Lautheitsnormalisierung aktiv eingreift, ist Stream-Copy für di
 <div class="callout">Die detaillierten Regeln, Alias-/Fuzzy-Logik und Providerbewertung stehen in den folgenden Kapiteln. Genau diese Trennung macht die Prozentwerte nachvollziehbar.</div>
 </div>
 <a name="renamerrules"></a><h2 id="renamerrules"><span style="color:#64748b;font-size:.85em;margin-right:6px;">42.</span>🧩 Renamer-Regeln &amp; Release-Normalisierung</h2><div class="panel">
-<p>Unter <strong>Regeln → Renamer-Regeln</strong> sowie im globalen Regelfenster befindet sich der aktuelle V9.9.1-Regelbereich für Dateinamen und Match-Logik.</p>
+<p>Unter <strong>Regeln → Renamer-Regeln</strong> sowie im globalen Regelfenster befindet sich der aktuelle V9.9.2-Regelbereich für Dateinamen und Match-Logik.</p>
 <h3>Dateizeichen</h3>
 <table class="table"><tr><th>Standard</th><th>Ersetzung</th><th>Grund</th></tr>
 <tr><td><code>*</code></td><td><code>X</code></td><td>Windows-ungültiges Zeichen</td></tr>
@@ -1680,7 +1681,7 @@ WHERE upper(ni.severity) = 'ERROR';</code></pre>
 <div class="panel">
 <p>TMDB und TheTVDB können getrennt oder gemeinsam verwendet werden. Bei <strong>Beide</strong> ist die Provider-Präferenz nur ein Tie-Breaker bei gleicher Match-Qualität; sie blendet den zweiten Provider nicht aus.</p>
 <table class="table" style="border-collapse:collapse;">
-<tr><th>Bereich</th><th>Verhalten in V9.9.1</th></tr>
+<tr><th>Bereich</th><th>Verhalten in V9.9.2</th></tr>
 <tr><td>Nur ein Provider</td><td>Bis zu 6 gültige Kandidaten.</td></tr>
 <tr><td>TMDB + TheTVDB</td><td>Bis zu 6 Kandidaten je Provider, also maximal 12.</td></tr>
 <tr><td>Serienkandidaten</td><td>Mehrere echte Serienresultate werden geprüft. Existiert SxxExx beim Provider, wird der Episodentreffer verwendet. Ist die Episode noch nicht angelegt, kann ein eindeutiger Serientreffer mit <code>Folge XX</code> als abgesenktem Fallback weiterverwendet werden.</td></tr>
@@ -1724,7 +1725,7 @@ Zusatzmaterial nur vor dem ersten gemeinsamen Bildbereich oder nach dem letzten 
 <table class="table shortcut-table" style="border-collapse:collapse;">
 <tr><th>Taste</th><th>Funktion</th></tr>
 <tr><td><kbd>F1</kbd></td><td>Diese Hilfe öffnen</td></tr>
-<tr><td><kbd>F2</kbd></td><td>DragonToolsV9.9.1-PDF-Handbuch öffnen</td></tr>
+<tr><td><kbd>F2</kbd></td><td>DragonToolsV9.9.2-PDF-Handbuch öffnen</td></tr>
 <tr><td><kbd>F9</kbd></td><td>System prüfen / Werkzeuge testen (ffmpeg, mkvmerge usw.)</td></tr>
 <tr><td><kbd>F11</kbd></td><td>Änderungshistorie Legacy V8 öffnen</td></tr>
 <tr><td><kbd>F12</kbd></td><td>Änderungshistorie V9 öffnen</td></tr>
@@ -1945,7 +1946,7 @@ in das Testfeld ein. Klicke "🔍 Testen".</p>
 <div class="panel"><h3>Automatisierung und Wiederherstellung</h3><p>Warteschlange, Watchfolder, Nachbearbeitung und Jellyfin-Aktualisierung teilen sich die Steuerung der Aufträge. Journale halten den Fortschritt von Dateioperationen fest, damit eine unterbrochene Verarbeitung kontrolliert wieder aufgenommen werden kann.</p></div>
 <a name="changelog"></a><h2 id="changelog"><span style="color:#64748b;font-size:.85em;margin-right:6px;">59.</span>🕘 Änderungshistorie &amp; Versionen</h2>
 <div class="panel">
-<p>Hier findest du die aktuelle V9.9.1-Historie und getrennt davon die Legacy-Historien der älteren Entwicklungsstände. Der V9-Dialog verwendet jetzt eine <strong>seitenbasierte Darstellung</strong> statt eines langen Scrolltextes.</p>
+<p>Hier findest du die aktuelle V9.9.2-Historie und getrennt davon die Legacy-Historien der älteren Entwicklungsstände. Der V9-Dialog verwendet jetzt eine <strong>seitenbasierte Darstellung</strong> statt eines langen Scrolltextes.</p>
 <ul>
 <li><strong>Aktuelle Änderungshistorie:</strong> V9-Log öffnen mit <kbd>F12</kbd> oder über das Hilfe-Menü.</li>
 <li><strong>Bereichsauswahl:</strong> die vollständigen Abschnittsnamen stehen in einer breiten Auswahlliste; die alte Button-Matrix mit abgeschnittenen Überschriften entfällt.</li>
@@ -2134,7 +2135,7 @@ und der gesamten Open-Source-Community im Video-Encoding-Bereich.</p>
 <div class="panel"><h3>DragonTools</h3><p>Mit DragonTools lassen sich Videodateien analysieren, konvertieren, umbenennen und für eine Mediathek aufbereiten. Profile und Regeln unterstützen wiederkehrende Aufgaben; die Tabellen und Dialoge zeigen die Entscheidungen vor der Verarbeitung.</p></div>
 <div class="panel"><h3>Aufbau des Programms</h3><p>Benutzeroberfläche, Medienanalyse, Verarbeitung, Regeln, Untertitel und Diagnose sind in eigene Bereiche aufgeteilt. Lange Arbeiten laufen im Hintergrund. Der Dragon HDR10+ Generator ist ein separates Werkzeug, das sich in den Verarbeitungsablauf einbinden lässt.</p></div>
 <div class="panel"><h3>Hilfe und Historie</h3><p>Diese Hilfe beschreibt die Bedienung des aktuellen Programms. Die Änderungshistorie unter Hilfe fasst die technische Entwicklung nach Fachbereichen zusammen. Ältere Versionen besitzen eigene Historien.</p></div>
-<div class="panel" style="text-align:center;margin-top:32px;"><span class="muted">© 2026 – DragonTools V9.9.1</span></div>
+<div class="panel" style="text-align:center;margin-top:32px;"><span class="muted">© 2026 – DragonTools V9.9.2</span></div>
 </div>
 </body>
 </html>

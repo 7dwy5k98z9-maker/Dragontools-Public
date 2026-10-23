@@ -80,6 +80,7 @@ class MediaLibraryDialog(MediaLibraryFixActionsMixin, QDialog):
             get_db_path=self._db_path,
             get_mappings=self._mappings_from_table,
             save_state=self._save_without_popup,
+            other_task_running=lambda: self._scan.is_running or self._nfo.is_running or self._fix.is_running or self._search.is_running,
         )
         self._search = MediaLibrarySearchController(
             parent=self,
@@ -104,7 +105,7 @@ class MediaLibraryDialog(MediaLibraryFixActionsMixin, QDialog):
             get_db_path=self._db_path,
             save_state=self._save_without_popup,
             refresh_stats=self._refresh_stats,
-            is_storage_scan_running=lambda: self._scan.is_running or self._fix.is_running,
+            is_storage_scan_running=lambda: self._scan.is_running or self._fix.is_running or self._maintenance.is_running,
         )
         self._init_fix_controller()
 
@@ -151,8 +152,8 @@ class MediaLibraryDialog(MediaLibraryFixActionsMixin, QDialog):
             super().done(result)
 
     def _can_close(self) -> bool:
-        if self._scan.is_running or self._nfo.is_running or self._fix.is_running:
-            QMessageBox.information(self, "Mediathek-Aufgabe läuft", "Eine Mediathek-Aufgabe läuft noch. Bitte zuerst abbrechen oder vollständig abschließen.")
+        if self._scan.is_running or self._nfo.is_running or self._fix.is_running or self._maintenance.is_running:
+            QMessageBox.information(self, "Mediathek-Aufgabe läuft", "Eine Mediathek-Aufgabe läuft noch. Bitte diese zuerst vollständig abschließen.")
             return False
         if not self._search.shutdown():
             QMessageBox.information(self, "Mediathek-Suche läuft", "Die laufende Mediathek-Suche wird noch beendet. Bitte das Fenster gleich erneut schließen.")
@@ -239,7 +240,7 @@ class MediaLibraryDialog(MediaLibraryFixActionsMixin, QDialog):
     # ── Speicherpfad-Scan ───────────────────────────────────────────
 
     def scan_storage_paths(self) -> None:
-        if self._scan.is_running or self._nfo.is_running or self._fix.is_running:
+        if self._scan.is_running or self._nfo.is_running or self._fix.is_running or self._maintenance.is_running:
             return
         scan_roots = self._storage_scan_roots()
         if not scan_roots:

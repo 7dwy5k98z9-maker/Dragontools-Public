@@ -4,21 +4,25 @@ from __future__ import annotations
 
 from pathlib import Path
 from ..core.path_syntax import join_user_path
-from .move_path_helpers import sanitize_win_segment, _dir_year_suffix, _normalize_for_dir_match, _strip_dir_year_suffix
+from .move_path_helpers import (
+    sanitize_win_segment, _dir_year_suffix, _normalize_for_dir_match,
+    _series_dir_fuzzy_match, _strip_dir_year_suffix,
+)
 
 def find_series_dir_candidates(base: str | None, series_name: str, year: int | None = None) -> list[str]:
     """Liefert bestehende Serienordner-Kandidaten unterhalb des Basisordners.
 
-    Matching-Logik (strikt):
-      Der Ordnername ohne Jahres-Suffix und ohne bedeutungslose Sonderzeichen
-      muss exakt dem Seriennamen entsprechen (nach gleicher Normalisierung).
+    Matching-Logik:
+      Exakte normalisierte Treffer zuerst, danach kontrollierte Schreibvarianten
+      (Project/Projekt, ein fehlendes fuehrendes Wort bei langen Titeln).
       Ein Substring-Match ("mao" in "xxxxxxxdungen mao") wird NICHT akzeptiert.
 
     Tolerierte Unterschiede:
       - Verschiedene Apostrophe (MAO's vs MAO´s)
       - Bindestrich optional bzw. typografisch verschieden (Special Ops Lioness vs Special Ops - Lioness)
       - Leerzeichen zwischen Wörtern (werden zum Vergleich entfernt)
-      - Jahres-Suffix im Ordnernamen (MAO (2026) → MAO)
+      - Das Jahr bleibt Editionsmerkmal: Ein bekanntes Jahr filtert auf diese
+        Edition. Ohne Jahr bleiben alle passenden Ordner fuer die Auswahl.
     """
     if not base:
         return []
@@ -32,26 +36,34 @@ def find_series_dir_candidates(base: str | None, series_name: str, year: int | N
     wanted_year = (int(year) if year else None) or _dir_year_suffix(str(series_name or ""))
     needle = _normalize_for_dir_match(_strip_dir_year_suffix(str(series_name or "")))
     exact_dir = bp / safe_series
-    candidates: list[Path] = []
+    exact_candidates: list[Path] = []
+    fuzzy_candidates: list[Path] = []
 
     for d in bp.iterdir():
+        # Bekannte Editionen vor jedem Dateisystemzugriff filtern.
+        if wanted_year and _dir_year_suffix(d.name) != wanted_year:
+            continue
         # Jahres-Suffix entfernen, dann normalisieren
         dir_name_without_year = _strip_dir_year_suffix(d.name)
         dn = _normalize_for_dir_match(dir_name_without_year)
-        # Exakter Vergleich – kein Substring-Match
         # Erst den Namen vergleichen: is_dir() kann auf Netzlaufwerken einen
         # eigenen Zugriff auslösen und ist für fremde Serien unnötig.
-        if dn == needle and d.is_dir():
-            candidates.append(d)
+        if dn == needle:
+            if d.is_dir():
+                exact_candidates.append(d)
+        elif _series_dir_fuzzy_match(dir_name_without_year, series_name) and d.is_dir():
+            fuzzy_candidates.append(d)
 
-    candidates.sort(key=lambda p: p.name.lower())
-    if wanted_year:
-        candidates = [p for p in candidates if _dir_year_suffix(p.name) == wanted_year]
-    if exact_dir.exists() and exact_dir.is_dir() and (
-        not wanted_year or _dir_year_suffix(exact_dir.name) == wanted_year
-    ):
-        candidates = [p for p in candidates if p.resolve() != exact_dir.resolve()]
-        candidates.insert(0, exact_dir)
+    exact_candidates.sort(key=lambda p: p.name.lower())
+    fuzzy_candidates.sort(key=lambda p: p.name.lower())
+    # Ein exakter Schreibtreffer darf alternative passende Ordner nicht
+    # verstecken. Mehrere Kandidaten werden durch das bestehende UI aufgeloest.
+    candidates = exact_candidates + fuzzy_candidates
+    if exact_dir in candidates:
+        # Unter Windows ist Path-Gleichheit unabhaengig von der Schreibweise.
+        # Trotzdem den tatsaechlich gelesenen Ordnernamen zurueckgeben.
+        exact_candidate = candidates.pop(candidates.index(exact_dir))
+        candidates.insert(0, exact_candidate)
 
     return [str(p) for p in candidates]
 

@@ -20,6 +20,7 @@ def build_workflow_services(
     logger,
     corrupt_source_rpu_fallback=True,
     abort_check=None,
+    audio_language_recovery=None,
 ) -> WorkflowServices:
     """Verdrahtet Workflow-Komponenten ohne Zugriff auf private Worker-Felder."""
     config = WorkflowConfig(
@@ -41,6 +42,7 @@ def build_workflow_services(
         standard_pipeline=services.standard_pipeline,
         output_paths=services.output_paths,
         quality_target=services.quality_target,
+        audio_language_recovery=audio_language_recovery,
     )
     pipeline_executor = WorkflowPipelineExecutor(
         standard_pipeline=services.standard_pipeline,

@@ -14,6 +14,7 @@ from dataclasses import dataclass
 import re
 from typing import Iterable
 
+from .whisper_execution import whisper_execution_slot, cached_model, remember_model
 from .lang_codes import canonical_lang, lang_display
 from .whisper_runtime import resolve_whisper_model_reference, whisper_runtime_available
 
@@ -90,12 +91,18 @@ class FasterWhisperLanguageDetector:
         model_name: str = "small",
         model_path: str = "",
         use_local_model: bool | None = None,
+        abort_check=None,
+        log=None,
+        wait_timeout_s: float = 180.0,
     ) -> None:
         self.model_name = str(model_name or "small").strip() or "small"
         self.model_path = str(model_path or "").strip()
         self.use_local_model = bool(self.model_path) if use_local_model is None else bool(use_local_model)
         self._model = None
         self._backend = ""
+        self._abort_check = abort_check or (lambda: False)
+        self._log = log or (lambda *args: None)
+        self._wait_timeout_s = wait_timeout_s
 
     @staticmethod
     def available() -> bool:
@@ -106,7 +113,42 @@ class FasterWhisperLanguageDetector:
         return self._backend
 
     def detect_file(self, audio_path: str) -> LanguageEvidence:
-        model = self._ensure_model()
+        # Serialize both initialization and lazy generator execution. Separate
+        # ConverterThreads must not concurrently initialize CUDA/native models.
+        key = (self.model_name, self.model_path, self.use_local_model)
+        with whisper_execution_slot(abort_check=self._abort_check, log=self._log,
+                                    timeout_s=self._wait_timeout_s):
+            shared = cached_model(key)
+            if shared is not None:
+                self._model, self._backend = shared
+            model = self._ensure_model()
+            remember_model(key, model, self._backend)
+            self._log(f"Whisper analysiert Audiosample ({self._backend}).", "info")
+            try:
+                return self._detect_with_model(model, audio_path)
+            except Exception:
+                if not self._backend.startswith("cuda/") or self._abort_check():
+                    raise
+                # CUDA libraries can fail only at transcribe()/iteration time,
+                # long after the constructor has apparently succeeded.
+                self._log("Whisper-GPU-Analyse fehlgeschlagen; erneuter Versuch auf CPU.", "warn")
+                model = self._load_cpu_model()
+                remember_model(key, model, self._backend)
+                return self._detect_with_model(model, audio_path)
+
+    def _load_cpu_model(self):
+        from faster_whisper import WhisperModel
+        reference = resolve_whisper_model_reference(
+            model_name=self.model_name, model_dir=self.model_path,
+            use_local_model=self.use_local_model,
+        )
+        self._model = WhisperModel(reference, device="cpu", compute_type="int8")
+        self._backend = "cpu/int8"
+        return self._model
+
+    def _detect_with_model(self, model, audio_path: str) -> LanguageEvidence:
+        if self._abort_check():
+            raise InterruptedError("Whisper-Spracherkennung abgebrochen.")
         segments, info = model.transcribe(
             str(audio_path),
             beam_size=1,
@@ -115,7 +157,11 @@ class FasterWhisperLanguageDetector:
         )
         # faster-whisper executes lazily; consume the generator so decoding and
         # VAD errors surface inside this call rather than later in a worker.
-        list(segments)
+        for _segment in segments:
+            if self._abort_check():
+                raise InterruptedError("Whisper-Spracherkennung abgebrochen.")
+        if self._abort_check():
+            raise InterruptedError("Whisper-Spracherkennung abgebrochen.")
         return LanguageEvidence(
             canonical_lang(getattr(info, "language", "")),
             float(getattr(info, "language_probability", 0.0) or 0.0),

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import traceback
+
+from .exception_diagnostics import report_worker_exception
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -34,14 +36,25 @@ class ConverterFileExecutor:
             if not self._check_source_visual_quality(input_path, override):
                 return False
             return worker._services.workflow_runner.run(input_path, override)
-        except Exception:
-            traceback_text = traceback.format_exc()
+        except Exception as exc:
+            report_worker_exception(
+                worker.log, f"Unbehandelte Ausnahme in convert_file(): {input_path}", exc
+            )
+            try:
+                traceback_text = traceback.format_exc()
+            except Exception:
+                traceback_text = type(exc).__name__
             worker._session_state.keep_verbose_log = True
             worker.log(
                 f"❌ Unbehandelte Ausnahme in convert_file() bei {Path(input_path).name}",
                 "error",
             )
-            worker._verbose_logger.write(traceback_text)
+            try:
+                worker._verbose_logger.write(traceback_text)
+            except Exception as log_exc:
+                report_worker_exception(
+                    worker.log, "Verbose-Fehlerlog konnte nicht geschrieben werden.", log_exc
+                )
             try:
                 report_path = write_conversion_error_report(
                     ctx=SimpleNamespace(

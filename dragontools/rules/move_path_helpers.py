@@ -138,6 +138,61 @@ def _normalize_for_dir_match(text: str) -> str:
     text = re.sub(r"\s", "", text)
     return text.lower()
 
+def _canonical_series_match_tokens(text: str) -> tuple[str, ...]:
+    """Tokenisiert einen Seriennamen fuer einen vorsichtigen Fuzzy-Vergleich.
+
+    Der normale Ordnervergleich bleibt absichtlich streng. Diese Token
+    ergaenzen exakte Treffer um weitere plausible Ordnerkandidaten. Dadurch
+    koennen kleine, bekannte Schreibvarianten abgefangen werden,
+    ohne beliebiges Substring-Matching einzufuehren.
+    """
+    import unicodedata
+
+    value = _strip_dir_year_suffix(str(text or ""))
+    value = value.replace("½", " 1 2 ")
+    value = unicodedata.normalize("NFKD", value)
+    value = "".join(ch for ch in value if not unicodedata.combining(ch))
+    value = value.casefold().replace("_", " ")
+    tokens = re.findall(r"[\w]+", value, flags=re.UNICODE)
+
+    # Sehr kleine, gezielte Aequivalenzliste. Keine allgemeine Uebersetzung:
+    # nur Schreibweisen, die denselben Titelbestandteil darstellen.
+    aliases = {
+        "projekt": "project",
+    }
+    return tuple(aliases.get(token, token) for token in tokens if token)
+
+
+def _series_dir_fuzzy_match(left: str, right: str) -> bool:
+    """Kontrollierter Vergleich fuer weitere bestehende Serienordner.
+
+    Erlaubt nur:
+      * identische Token nach kleinen Schreibvarianten (z. B. Projekt/Project)
+      * genau ein fehlendes *fuehrendes* Wort bei mindestens vier verbleibenden
+        Tokens (z. B. "Magical Girl Raising Project Restart" gegen
+        "Girl Raising Projekt Restart").
+
+    Ein fehlendes Wort am Ende oder in der Mitte wird absichtlich nicht
+    akzeptiert, weil gerade Fortsetzungs-/Editionstitel dort oft unterschieden
+    werden (z. B. "Restart", "Reboot", "Season 2").
+    """
+    a = _canonical_series_match_tokens(left)
+    b = _canonical_series_match_tokens(right)
+    if not a or not b:
+        return False
+    if a == b:
+        return True
+
+    # Kontrollierter Prefix-Drop: nur ein einziges fuehrendes Token darf fehlen.
+    # Mindestens vier Tokens muessen uebrig bleiben, damit kurze/generische
+    # Serientitel nicht versehentlich zusammenfallen.
+    if len(a) == len(b) + 1 and len(b) >= 4 and a[1:] == b:
+        return True
+    if len(b) == len(a) + 1 and len(a) >= 4 and b[1:] == a:
+        return True
+    return False
+
+
 def _strip_dir_year_suffix(name: str) -> str:
     """Entfernt das Jahres-Suffix '(YYYY)' am Ende eines Ordnernamens.
 

@@ -127,7 +127,7 @@ def test_makemkv_scan_preserves_robot_escaped_title_names(tmp_path):
     service = ISOMakeMKVService(tools=object(), inspector=SimpleNamespace(makemkv_source=lambda _: 'iso:source'),
         worker=SimpleNamespace(), log=lambda *a: None, progress=lambda *a: None)
     result = service.scan_titles(str(tmp_path / 'disc.iso'), run_makemkv=lambda *a, **kw: (0, [
-        r'TINFO:0,2,0,"Titel, \"Deutsch\""', 'TINFO:0,8,0,"00:01:10.500"']))
+        r'TINFO:0,2,0,"Titel, \"Deutsch\""', 'TINFO:0,9,0,"00:01:10.500"']))
     assert result.titles[0]['name'] == 'Titel, "Deutsch"'
     assert result.titles[0]['duration'] == 70
 
@@ -137,7 +137,7 @@ def test_makemkv_verification_uses_the_duration_of_each_exact_selected_title(tmp
     service, worker, run = _makemkv_service(tmp_path, monkeypatch)
     source = str(tmp_path / 'disc.iso')
     scan = service.scan_titles(source, run_makemkv=lambda *a, **kw: (0, [
-        'TINFO:1,8,0,"00:01:00"', 'TINFO:4,8,0,"00:04:00"']))
+        'TINFO:1,9,0,"00:01:00"', 'TINFO:4,9,0,"00:04:00"']))
     assert len(scan.titles) == 2
     seen = []
     from dragontools.worker import iso_makemkv_service as module

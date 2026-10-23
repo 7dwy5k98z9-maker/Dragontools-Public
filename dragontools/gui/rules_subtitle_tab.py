@@ -9,6 +9,7 @@ from PyQt6.QtWidgets import (
 from .info_button import InfoButton
 from .rules_dialog_storage import _load
 from .rules_language_editor import _LanguagePriorityEditor
+from .rules_subtitle_default_editor import _SubtitleDefaultEditor
 from ..core.lang_codes import LANGUAGE_CHOICES, canonical_lang
 from ..rules.subtitle_rules import DEFAULT_PREFERRED_SUBTITLE_FORMATS
 
@@ -42,6 +43,11 @@ class _SubtitleTab(QWidget):
         )
         ll.addWidget(self.language_editor)
         v.addWidget(lg)
+
+        self.default_subtitle = _SubtitleDefaultEditor(
+            self._data.get("default_subtitle"), language_priority=self.language_editor.priority(),
+        )
+        v.addWidget(self.default_subtitle)
 
         bg = QGroupBox("Burn-In Regeln"); bl = QVBoxLayout(bg)
         burn = self._data.get("burn_in_rules", {})
@@ -244,6 +250,7 @@ class _SubtitleTab(QWidget):
         has_english_fallback = "en" in language_priority[1:]
         return {
             **language_data,
+            "default_subtitle": self.default_subtitle.data(),
             "preferred_languages": language_priority[:1] or ["de"],
             "fallback_languages":  language_priority[1:] or ["en"],
             "force_priority":      self.fp.isChecked(),

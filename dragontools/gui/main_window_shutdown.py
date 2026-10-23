@@ -5,6 +5,7 @@ from __future__ import annotations
 from PyQt6.QtWidgets import QMessageBox
 
 from .application_shutdown import shutdown_loaded_widgets
+from .force_application_exit import force_application_exit
 from .application_worker_sources import application_worker_sources
 from .jellyfin_refresh_dispatch import (
     stop_jellyfin_workers, begin_jellyfin_shutdown, finish_jellyfin_shutdown,
@@ -29,9 +30,8 @@ def prepare_main_window_close(window, *, timeout_ms: int = 8000) -> bool:
         ok = _close_with_budget(window, remaining)
     except Exception as exc:
         finish_jellyfin_shutdown(False)
-        QMessageBox.warning(window, "DragonTools wird noch beendet",
-            f"Worker-Zustand konnte nicht sicher ermittelt werden. Das Fenster bleibt geöffnet.\n\n{exc}")
-        return False
+        return _shutdown_blocked(window, "DragonTools kann nicht regulär beendet werden",
+            f"Worker-Zustand konnte nicht sicher ermittelt werden.\n\n{type(exc).__name__}: {exc}")
     finish_jellyfin_shutdown(ok)
     return ok
 
@@ -40,48 +40,68 @@ def _close_with_budget(window, remaining):
     stop_watch_folder_controller(window, timeout_ms=0)
     result = shutdown_loaded_widgets(application_worker_sources(window), timeout_ms=remaining())
     if not result.ok:
-        QMessageBox.warning(
+        return _shutdown_blocked(
             window,
             "DragonTools wird noch beendet",
             "Mindestens ein Worker läuft noch und konnte innerhalb des "
-            "Shutdown-Zeitfensters nicht sauber beendet werden.\n\n"
-            "Das Fenster bleibt aus Sicherheitsgründen geöffnet. Bitte kurz warten "
-            "und erneut schließen.\n\nNoch aktiv: " + ", ".join(result.still_running),
+            "Shutdown-Zeitfensters nicht sauber beendet werden."
+            "\n\nNoch aktiv: " + ", ".join(result.still_running),
         )
-        return False
 
     if not stop_metadata_action_thread(window, timeout_ms=remaining()):
-        QMessageBox.warning(
+        return _shutdown_blocked(
             window,
             "Online-Abfrage wird noch beendet",
             "Eine Online-Metadatenabfrage ist noch in einem Netzwerkaufruf. "
-            "Das Fenster bleibt geöffnet, bis der Aufruf sauber beendet ist.",
+            "Der Aufruf wurde noch nicht abgeschlossen.",
         )
-        return False
 
     if not stop_watch_folder_controller(window, timeout_ms=remaining()):
-        QMessageBox.warning(
+        return _shutdown_blocked(
             window,
             "Watch-Folder wird noch beendet",
             "Der Watch-Folder-Scan reagiert noch auf einen Dateisystemzugriff. "
-            "Das Fenster bleibt geöffnet, bis der Scan sauber beendet ist.",
+            "Der Scan wurde noch nicht abgeschlossen.",
         )
-        return False
     if not stop_jellyfin_workers(timeout_ms=remaining()):
-        QMessageBox.warning(
+        return _shutdown_blocked(
             window, "Jellyfin wird noch beendet",
-            "Eine Jellyfin-Abfrage ist noch aktiv. Das Fenster bleibt bis zum Ende des Netzwerkaufrufs geöffnet.",
+            "Eine Jellyfin-Abfrage ist noch aktiv und reagiert noch nicht auf den Abbruch.",
         )
-        return False
     # Qt event delivery while waiting may register another worker. Re-read
     # the public ownership sources before allowing their QObject parents to die.
     final = shutdown_loaded_widgets(application_worker_sources(window), timeout_ms=remaining())
     if not final.ok:
-        QMessageBox.warning(window, "DragonTools wird noch beendet",
+        return _shutdown_blocked(window, "DragonTools wird noch beendet",
             "Während des Beendens wurde weitere Hintergrundarbeit registriert. "
-            "Das Fenster bleibt geöffnet.\n\nNoch aktiv: " + ", ".join(final.still_running))
-        return False
+            "\n\nNoch aktiv: " + ", ".join(final.still_running))
     return True
+
+
+def _confirm_force_quit(window, title: str, message: str) -> bool:
+    dialog = QMessageBox(window)
+    dialog.setIcon(QMessageBox.Icon.Warning)
+    dialog.setWindowTitle(title)
+    dialog.setText(message)
+    dialog.setInformativeText(
+        "Mit 'Trotzdem beenden' werden DragonTools und seine Hilfsprozesse "
+        "zwangsweise beendet. Laufende Konvertierungen und Schreibvorgänge "
+        "werden unterbrochen; unvollständige Dateien können zurückbleiben."
+    )
+    force = dialog.addButton("Trotzdem beenden", QMessageBox.ButtonRole.DestructiveRole)
+    cancel = dialog.addButton("Abbrechen", QMessageBox.ButtonRole.RejectRole)
+    dialog.setDefaultButton(cancel)
+    dialog.setEscapeButton(cancel)
+    dialog.exec()
+    return dialog.clickedButton() is force
+
+
+def _shutdown_blocked(window, title: str, message: str) -> bool:
+    if _confirm_force_quit(window, title, message):
+        force_application_exit()
+    # Emergency exit never returns in production. In tests, keep the ordinary
+    # close path blocked so it cannot clear journals or destroy live QThreads.
+    return False
 
 
 __all__ = ["prepare_main_window_close"]

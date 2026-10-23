@@ -337,7 +337,7 @@ def test_release_validation_checks_required_files_and_schema(tmp_path):
     _write_package_smoke_files(root)
     config = root / "dragontools" / "config"
     _write_json(config / "default_audio_rules.json", {"_schema_version": 4})
-    _write_json(config / "default_subtitle_rules.json", {"_schema_version": 7})
+    _write_json(config / "default_subtitle_rules.json", {"_schema_version": 8})
     _write_json(config / "default_move_rules.json", {"_schema_version": 1})
     _write_json(config / "default_renamer_rules.json", {"_schema_version": 3})
     _write_json(config / "default_profiles.json", {"_schema_version": 3})
@@ -362,7 +362,7 @@ def test_release_validation_treats_schema_mismatch_as_error(tmp_path):
     by_title = {check.title: check for check in checks}
 
     assert by_title["Schema: Untertitel-Regeln"].status == "error"
-    assert "erwartet 7" in by_title["Schema: Untertitel-Regeln"].detail
+    assert "erwartet 8" in by_title["Schema: Untertitel-Regeln"].detail
 
 
 def test_release_validation_warns_about_private_paths(tmp_path):
@@ -392,7 +392,7 @@ def test_app_bundle_validation_checks_exe_not_source_files(tmp_path):
     (data_dir / "Aenderungshistorie" / "CHANGELOG.json").write_text('{"format_version": 1, "sections": [{"title": "Überblick", "blocks": ["V9"]}]}', encoding="utf-8")
     config = data_dir / "dragontools" / "config"
     _write_json(config / "default_audio_rules.json", {"_schema_version": 4})
-    _write_json(config / "default_subtitle_rules.json", {"_schema_version": 7})
+    _write_json(config / "default_subtitle_rules.json", {"_schema_version": 8})
     _write_json(config / "default_move_rules.json", {"_schema_version": 1})
     _write_json(config / "default_renamer_rules.json", {"_schema_version": 3})
     _write_json(config / "default_profiles.json", {"_schema_version": 3})
@@ -446,7 +446,7 @@ def test_source_only_manifest_makes_source_archive_self_consistent(tmp_path):
     _write_package_smoke_files(root)
     config = root / "dragontools" / "config"
     _write_json(config / "default_audio_rules.json", {"_schema_version": 4})
-    _write_json(config / "default_subtitle_rules.json", {"_schema_version": 7})
+    _write_json(config / "default_subtitle_rules.json", {"_schema_version": 8})
     _write_json(config / "default_move_rules.json", {"_schema_version": 1})
     _write_json(config / "default_renamer_rules.json", {"_schema_version": 3})
     _write_json(config / "default_profiles.json", {"_schema_version": 3})
@@ -521,7 +521,7 @@ def test_package_only_manifest_validates_code_only_release(tmp_path):
     _write_package_smoke_files(root)
     config = root / "dragontools" / "config"
     _write_json(config / "default_audio_rules.json", {"_schema_version": 4})
-    _write_json(config / "default_subtitle_rules.json", {"_schema_version": 7})
+    _write_json(config / "default_subtitle_rules.json", {"_schema_version": 8})
     _write_json(config / "default_move_rules.json", {"_schema_version": 1})
     _write_json(config / "default_renamer_rules.json", {"_schema_version": 3})
     _write_json(config / "default_profiles.json", {"_schema_version": 3})
@@ -590,7 +590,7 @@ def test_release_validation_detects_stale_built_documentation(tmp_path):
     _write_package_smoke_files(root)
     config = root / "dragontools" / "config"
     _write_json(config / "default_audio_rules.json", {"_schema_version": 4})
-    _write_json(config / "default_subtitle_rules.json", {"_schema_version": 7})
+    _write_json(config / "default_subtitle_rules.json", {"_schema_version": 8})
     _write_json(config / "default_move_rules.json", {"_schema_version": 1})
     _write_json(config / "default_renamer_rules.json", {"_schema_version": 3})
     _write_json(config / "default_profiles.json", {"_schema_version": 3})

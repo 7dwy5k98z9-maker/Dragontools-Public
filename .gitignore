@@ -69,3 +69,6 @@ Thumbs.db
 /film.mp4
 /artifacts/
 /SNAPSHOT_CONTENTS.json
+
+# Local archive kept for manual review; never publish historical test data.
+/Archiv/

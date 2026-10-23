@@ -38,8 +38,12 @@ class TvdbResolverMixin:
         return self._search_records("series", query, year=year, language=language)
 
     def _search_records(self, kind: str, query: str, *, year: int | None, language: str | None) -> list[dict[str, Any]]:
-        params: dict[str, Any] = {"query": query, "type": kind, "limit": 10}
+        # Let TVDB narrow by year before its result limit is applied. Filtering
+        # only the first ten broad hits locally can lose a matching remake.
+        params: dict[str, Any] = {"query": query, "type": kind, "limit": 50}
         params["language"] = _tvdb_language_code(language or self.config.language)
+        if year is not None:
+            params["year"] = int(year)
         records = _records_from_data(self._request_json("/search", params))
         valid: list[dict[str, Any]] = []
         for record in records:

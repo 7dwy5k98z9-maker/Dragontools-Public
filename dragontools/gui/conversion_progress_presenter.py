@@ -10,6 +10,7 @@ from ..core.result_status import POSTPROCESS_PENDING_ICON
 from .conversion_progress_display import ConversionProgressDisplay, eta_text as _eta
 from .conversion_progress_focus import ConversionProgressFocusController, PROGRESS_FOCUS_ACTIVE_TOTAL
 from .file_worker_pause import file_pause_caption
+from .ui_helpers import clear_file_list_runtime_texts
 
 
 class ConversionProgressPresenter:
@@ -34,6 +35,7 @@ class ConversionProgressPresenter:
 
     def reset(self, file_count: int) -> None:
         self._state.reset_for_run(file_count)
+        clear_file_list_runtime_texts(self._ui.file_list)
         self._state.current_log_path = None
         self._ui.curlog_btn.setEnabled(False)
         self._last_queue_refresh_at = 0.0

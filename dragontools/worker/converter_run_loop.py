@@ -7,6 +7,7 @@ import subprocess
 import time
 from pathlib import Path
 
+from .exception_diagnostics import report_worker_exception
 from ..core.crash_guard import mark_activity
 from ..core.path_syntax import path_compare_key
 from ..core.process_runner import subprocess_no_window_kwargs as _no_window_kwargs
@@ -153,7 +154,20 @@ class ConverterRunLoop:
             },
         )
         worker.progress.emit(int(done_count / max(total_now, 1) * 100))
-        worker.convert_file(path)
+        try:
+            worker.convert_file(path)
+        except Exception as exc:
+            # The file owns this failure; preserve the rest of the live queue.
+            worker._session_state.keep_verbose_log = True
+            report = report_worker_exception(
+                worker.log, f"Konvertierung fehlgeschlagen: {path}", exc
+            )
+            worker._session_state.failure_details.setdefault(path, {
+                "message": "Unbehandelte Ausnahme bei der Dateiverarbeitung.",
+                "error_report": report,
+                "pipeline": "", "container": "", "strategy": "file_run",
+            })
+            worker._services.result.fail_unhandled(path)
         worker._queue.complete_current(path)
         worker.files = worker._queue.files
 

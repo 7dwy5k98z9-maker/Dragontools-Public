@@ -51,6 +51,15 @@ def test_private_methods_are_not_called_across_object_boundaries():
             if not method.startswith("_") or method.startswith("__"):
                 continue
             owner = node.func.value
+            # os._exit is a documented standard-library API used only by the
+            # explicit emergency shutdown, rather than a private project method.
+            if (
+                path.relative_to(PACKAGE).as_posix() == "gui/force_application_exit.py"
+                and isinstance(owner, ast.Name)
+                and owner.id == "os"
+                and method == "_exit"
+            ):
+                continue
             if isinstance(owner, ast.Name) and owner.id in {"self", "cls"}:
                 continue
             if isinstance(owner, ast.Call) and isinstance(owner.func, ast.Name) and owner.func.id == "super":
