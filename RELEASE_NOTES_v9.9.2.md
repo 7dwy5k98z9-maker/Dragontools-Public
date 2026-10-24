@@ -11,3 +11,7 @@ Die Version übernimmt den aktuellen Entwicklungsstand mit folgenden Verbesserun
 - Verbesserte Pausen-, Beendigungs- und Windows-Neustartsteuerung.
 
 Das öffentliche Windows-Paket enthält keine externen Medienwerkzeuge. Diese werden anhand von TOOLS_INSTALLIEREN.txt separat installiert. Python- und Qt-Laufzeitdateien bleiben Bestandteil des Pakets.
+
+## Nachbesserung vom 24.10.2026
+
+TVDB-Titelprüfung berücksichtigt hinterlegte Titel-Aliasse auch bei der Validierung der Detaildaten. Die Prüfung des Serienjahrs bleibt erhalten; alternative Staffelzählungen werden nicht zusätzlich ausgewertet.

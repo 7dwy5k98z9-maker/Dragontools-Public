@@ -6,7 +6,8 @@
       "title": "Überblick",
       "icon": "📋",
       "blocks": [
-        "DragonTools V9.9.2 · Stand 23.10.2026\n- Mit DragonTools lassen sich Videodateien analysieren, konvertieren, umbenennen und für eine Mediathek aufbereiten. Diese Übersicht beschreibt die Entwicklung der Funktionen nach Fachbereichen.",
+        "DragonTools V9.9.2 · Stand 24.10.2026\n- Mit DragonTools lassen sich Videodateien analysieren, konvertieren, umbenennen und für eine Mediathek aufbereiten. Diese Übersicht beschreibt die Entwicklung der Funktionen nach Fachbereichen.",
+        "Nachbesserung 24.10.2026\n- TVDB-Titelprüfung berücksichtigt hinterlegte Titel-Aliasse auch bei der Validierung der Detaildaten. Die Prüfung des Serienjahrs bleibt erhalten; alternative Staffelzählungen werden nicht zusätzlich ausgewertet.",
         "Neu in 9.9.2\n- Konfigurierbare Standarduntertitel und verbesserte Erkennung der Audiosprache; Whisper-Aufträge werden bei paralleler Verarbeitung abgestimmt.\n- Stabilere Serienzuordnung und TVDB-Suche, einschließlich ähnlicher Seriennamen und Jahresangaben.\n- Verbesserte Verschiebeabläufe für lange Dateinamen und Aktualisierung der Mediathek nach reinen Verschiebeaufträgen.\n- Fortschrittsanzeige beim Mediathekimport und dauerhafte Statusanzeige in der Warteschlange.\n- Verbesserte Bestätigung von Laufzeiten und Auswertung von MakeMKV-Titeln.\n- Korrigierte Werkzeugpfade, Start von Hilfsaktionen sowie Ausnahmebehandlung einzelner Aufträge.\n- Verbesserte Pausen-, Beendigungs- und Windows-Neustartsteuerung.",
         "Ältere Versionen\n- Die getrennten Historien für V8 und V1–V7 bleiben über Hilfe → Änderungshistorie erreichbar."
       ]

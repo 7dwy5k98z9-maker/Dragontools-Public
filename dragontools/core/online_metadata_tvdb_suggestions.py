@@ -146,9 +146,19 @@ class TvdbSuggestionMixin:
 
     @staticmethod
     def _title_match_is_plausible(query: str, *names: Any) -> bool:
-        query_key = compare_metadata_text(query)
+        from ..rules.renamer_rules import apply_title_exception
+
+        # Search already uses title aliases. Keep them valid during detail
+        # validation too, before the renamer can score the explicit alias.
+        query_keys = {
+            compare_metadata_text(value)
+            for value in (query, apply_title_exception(query))
+            if str(value or "").strip()
+        }
+        query_keys.discard("")
         score = max(
             (SequenceMatcher(None, query_key, compare_metadata_text(str(name))).ratio()
+             for query_key in query_keys
              for name in names if str(name or "").strip()),
             default=0.0,
         )
@@ -157,7 +167,7 @@ class TvdbSuggestionMixin:
             floor = float(minimum_candidate_score())
         except Exception:
             floor = 0.60
-        return bool(query_key) and score >= floor
+        return bool(query_keys) and score >= floor
 
     def _select_best_result(
         self,

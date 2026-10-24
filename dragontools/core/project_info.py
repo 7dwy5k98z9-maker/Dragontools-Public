@@ -29,12 +29,12 @@ class ProjectStatistics:
 # Wird bei Dokumentations-/Release-Pflege aktualisiert und dient nur als
 # Fallback, wenn ein Frozen-Build keine .py-Quellen enthält.
 RELEASE_STATISTICS = ProjectStatistics(
-    python_files=1358,
-    total_lines=217526,
-    code_lines=183720,
-    test_package_files=409,
-    test_files=403,
-    static_tests=3577,
+    python_files=1359,
+    total_lines=217584,
+    code_lines=183765,
+    test_package_files=410,
+    test_files=404,
+    static_tests=3579,
     dynamic=False,
 )
 
